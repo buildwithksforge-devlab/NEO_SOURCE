@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_receipt_resolve_journal() FROM PUBLIC, anon, authenticated;

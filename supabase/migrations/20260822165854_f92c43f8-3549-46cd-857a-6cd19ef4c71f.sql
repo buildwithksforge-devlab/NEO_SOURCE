@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.tg_pos_item_terminal_settlement() FROM PUBLIC, anon, authenticated;

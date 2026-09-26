@@ -1,0 +1,13 @@
+REVOKE EXECUTE ON FUNCTION public.my_access_context() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_access_scope() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_branch_ids() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_department_ids() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_station_ids() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_staff_id() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.current_organisation_id() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.manages_department(uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.supervises_user(uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.is_shared_with_me(text, uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.in_my_scope(uuid,uuid,uuid,uuid,uuid,uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.role_scope_level(text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.scope_rank(text) FROM anon;

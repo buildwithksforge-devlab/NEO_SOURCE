@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.next_document_number(text, text, uuid, uuid) FROM anon;

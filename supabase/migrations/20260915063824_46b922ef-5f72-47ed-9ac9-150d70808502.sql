@@ -1,0 +1,1 @@
+ALTER TABLE public.stock_take_lines ALTER COLUMN variance DROP NOT NULL;

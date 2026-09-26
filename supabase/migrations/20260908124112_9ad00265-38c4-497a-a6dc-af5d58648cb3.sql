@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.neo_guest_create_booking(uuid, uuid, uuid, date, date, integer, integer, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.neo_guest_create_booking(uuid, uuid, uuid, date, date, integer, integer, text, text) TO authenticated;

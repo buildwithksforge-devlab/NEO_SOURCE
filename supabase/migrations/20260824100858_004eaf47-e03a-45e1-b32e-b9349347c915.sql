@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_public_menu(uuid, uuid, text) FROM anon;

@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_stock_movement_finance_trigger() FROM PUBLIC, anon, authenticated;

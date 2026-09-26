@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_block_payable_when_held() FROM PUBLIC, anon, authenticated;

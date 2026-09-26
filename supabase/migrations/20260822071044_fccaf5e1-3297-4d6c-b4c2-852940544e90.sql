@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.ops_room_state(uuid) TO service_role;

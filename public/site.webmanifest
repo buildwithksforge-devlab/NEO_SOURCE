@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "NEØ — Next-Generation Enterprise Operations",
+  "short_name": "NEØ",
+  "description": "The hospitality operating system: stay, dine, work, supply and deliver in one place.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B0D0F",
+  "theme_color": "#0B0D0F",
+  "categories": ["business", "productivity", "travel"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png?v=neo-3",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png?v=neo-3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png?v=neo-3",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png?v=neo-3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

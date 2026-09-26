@@ -1,0 +1,1 @@
+revoke all on function public.neo_link_guest_from_context() from public, anon, authenticated;

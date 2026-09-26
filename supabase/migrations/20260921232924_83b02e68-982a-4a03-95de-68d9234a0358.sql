@@ -1,0 +1,1 @@
+ALTER FUNCTION public.neo_folio_payment_trace(uuid) SECURITY INVOKER;

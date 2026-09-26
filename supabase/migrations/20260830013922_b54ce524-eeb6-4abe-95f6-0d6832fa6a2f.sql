@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_station_department_guard() FROM PUBLIC, anon, authenticated;

@@ -1,0 +1,20 @@
+INSERT INTO public.permissions (module, feature, action, label) VALUES
+  ('analytics','catalogue','view','View KPI catalogue'),
+  ('analytics','catalogue','export','Export KPI catalogue'),
+  ('human-resources','documents','view','View employee documents'),
+  ('human-resources','documents','export','Export employee documents'),
+  ('human-resources','relations','view','View employee relations'),
+  ('human-resources','relations','manage','Manage employee relations'),
+  ('human-resources','settings','view','View HR settings'),
+  ('human-resources','settings','edit','Edit HR settings'),
+  ('human-resources','performance','view','View performance records'),
+  ('human-resources','performance','create','Create performance records'),
+  ('human-resources','performance','edit','Edit performance records'),
+  ('human-resources','performance','export','Export performance records'),
+  ('human-resources','payroll','view','View payroll inputs'),
+  ('human-resources','payroll','edit','Edit payroll inputs'),
+  ('human-resources','payroll','approve','Approve payroll inputs'),
+  ('human-resources','stock_needs','view','View HR supply requests'),
+  ('human-resources','stock_needs','create','Raise HR supply requests'),
+  ('human-resources','stock_needs','edit','Edit HR supply requests')
+ON CONFLICT DO NOTHING;

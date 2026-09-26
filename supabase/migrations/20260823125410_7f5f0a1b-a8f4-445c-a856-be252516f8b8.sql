@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.neo_delivery_rider_notify(uuid,uuid,text,text,text,text);

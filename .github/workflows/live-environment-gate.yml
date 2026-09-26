@@ -1,0 +1,53 @@
+name: Live environment certification
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Configure a protected GitHub Environment called production-readiness.
+    # Use a READ-ONLY PostgreSQL user for the PG* values below.
+    environment: production-readiness
+    env:
+      PGHOST: ${{ secrets.PGHOST }}
+      PGPORT: ${{ secrets.PGPORT }}
+      PGDATABASE: ${{ secrets.PGDATABASE }}
+      PGUSER: ${{ secrets.PGUSER }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      LOVABLE_BROWSER_SUPABASE_ACCESS_TOKEN: ${{ secrets.NEO_CERTIFICATION_SESSION_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        env:
+          INSTALL_MAX_ATTEMPTS: "5"
+          FALLBACK_NPM_REGISTRY: https://registry.npmjs.org
+        run: node scripts/install-with-retry.mjs
+
+      - name: Prove required certification variables exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PGHOST PGDATABASE PGUSER PGPASSWORD SUPABASE_URL SUPABASE_PUBLISHABLE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production-readiness secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run live security/reconciliation checks
+        run: bun run test:live-security

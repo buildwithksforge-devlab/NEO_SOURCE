@@ -1,0 +1,1 @@
+DELETE FROM public.public_holidays WHERE name = 'Certification Test Holiday' AND holiday_date = DATE '2026-09-24';

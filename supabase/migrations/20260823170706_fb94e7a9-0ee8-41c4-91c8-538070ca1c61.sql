@@ -1,0 +1,1 @@
+ALTER TABLE public.event_bookings ALTER COLUMN guaranteed_guests DROP NOT NULL;

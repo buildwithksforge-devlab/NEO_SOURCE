@@ -1,0 +1,80 @@
+CREATE OR REPLACE FUNCTION public.neo_create_workspace(_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _uid uuid := auth.uid();
+  _org uuid;
+  _branch uuid;
+  _existing uuid;
+  _name text := COALESCE(NULLIF(trim(_payload->>'business_name'), ''), 'My Hospitality Group');
+  _full text := COALESCE(NULLIF(trim(_payload->>'admin_full_name'), ''), 'Workspace Administrator');
+  _role text := COALESCE(NULLIF(trim(_payload->>'business_role'), ''), 'Owner/Director');
+BEGIN
+  IF _uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+
+  SELECT organization_id INTO _existing FROM public.profiles WHERE id = _uid;
+  IF _existing IS NOT NULL THEN
+    RETURN jsonb_build_object('organization_id', _existing, 'created', false);
+  END IF;
+
+  -- Reuse the audited bootstrap routine (roles, departments, permissions, owner grant).
+  _org := public.bootstrap_tenant(_name, _full);
+
+  UPDATE public.organizations
+     SET legal_name = COALESCE(NULLIF(trim(_payload->>'legal_name'), ''), _name),
+         name = COALESCE(NULLIF(trim(_payload->>'trading_name'), ''), _name),
+         business_type = COALESCE(NULLIF(trim(_payload->>'business_type'), ''), business_type),
+         updated_at = now()
+   WHERE id = _org;
+
+  SELECT id INTO _branch FROM public.branches
+   WHERE organization_id = _org AND is_main ORDER BY created_at LIMIT 1;
+
+  IF _branch IS NOT NULL THEN
+    UPDATE public.branches
+       SET name = COALESCE(NULLIF(trim(_payload->>'property_name'), ''), name),
+           code = COALESCE(NULLIF(upper(trim(_payload->>'property_code')), ''), code),
+           address = COALESCE(NULLIF(trim(_payload->>'property_address'), ''), address),
+           phone = COALESCE(NULLIF(trim(_payload->>'property_phone'), ''), phone),
+           email = COALESCE(NULLIF(trim(_payload->>'property_email'), ''), email),
+           updated_at = now()
+     WHERE id = _branch;
+  END IF;
+
+  UPDATE public.profiles
+     SET full_name = _full,
+         phone = COALESCE(NULLIF(trim(_payload->>'admin_phone'), ''), phone),
+         job_title = _role,
+         account_type = 'staff',
+         updated_at = now()
+   WHERE id = _uid;
+
+  INSERT INTO public.system_settings (organization_id, settings)
+  VALUES (_org, jsonb_build_object(
+    'country', _payload->>'country',
+    'currency', _payload->>'currency',
+    'timezone', _payload->>'timezone',
+    'language', _payload->>'language',
+    'business_phone', _payload->>'business_phone',
+    'business_email', _payload->>'business_email',
+    'property_count', _payload->>'property_count',
+    'property_city', _payload->>'property_city',
+    'property_country', _payload->>'property_country'
+  ))
+  ON CONFLICT (organization_id) DO UPDATE
+    SET settings = public.system_settings.settings || EXCLUDED.settings,
+        updated_at = now();
+
+  INSERT INTO public.audit_logs (organization_id, branch_id, user_id, user_name, action, module, record_id, new_value)
+  VALUES (_org, _branch, _uid, _full, 'workspace.created', 'administration', _org,
+          jsonb_build_object('business_role', _role, 'business_name', _name));
+
+  RETURN jsonb_build_object('organization_id', _org, 'branch_id', _branch, 'created', true);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.neo_create_workspace(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.neo_create_workspace(jsonb) TO authenticated;

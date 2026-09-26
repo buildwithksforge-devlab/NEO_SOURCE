@@ -1,0 +1,1 @@
+revoke execute on function public.neo_document_payload(text, uuid) from anon;

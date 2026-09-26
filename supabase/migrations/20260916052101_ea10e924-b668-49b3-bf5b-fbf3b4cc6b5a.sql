@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.neo_assert_creator_workspace_recovery(uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.neo_finalize_creator_workspace(uuid) FROM PUBLIC, anon, authenticated, service_role;

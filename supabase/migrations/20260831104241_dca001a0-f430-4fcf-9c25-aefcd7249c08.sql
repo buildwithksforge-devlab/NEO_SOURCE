@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_sync_request_ordered() FROM PUBLIC, anon, authenticated;

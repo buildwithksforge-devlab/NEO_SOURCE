@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.ops_set_room_status(uuid,text,text,text,text,uuid);

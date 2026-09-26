@@ -1,0 +1,1 @@
+SELECT pg_get_functiondef(oid) AS def FROM pg_proc WHERE proname='neo_internal_ctx';

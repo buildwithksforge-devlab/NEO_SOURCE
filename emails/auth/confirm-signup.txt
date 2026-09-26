@@ -1,0 +1,17 @@
+Welcome to NEØ{{ if .Data.full_name }}, {{ .Data.full_name }}{{ end }}.
+
+Your workspace is ready. Confirm your email address to securely activate your
+account and step into your team's operating workspace.
+{{ if .Data.organisation_name }}
+You are joining {{ .Data.organisation_name }}{{ if .Data.role_title }} as {{ .Data.role_title }}{{ end }}{{ if .Data.property_name }} at {{ .Data.property_name }}{{ end }}.
+{{ end }}{{ if .Data.invited_by_name }}
+Invited by {{ .Data.invited_by_name }}.
+{{ end }}
+Confirm my email:
+{{ .ConfirmationURL }}
+
+This link can be used once and expires shortly. If you did not request access to
+a NEØ workspace, you can safely ignore this email — no account will be activated.
+
+Powered by NEØ — Next-Generation Enterprise Operations
+One System. Endless Solutions.

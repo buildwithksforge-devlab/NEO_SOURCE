@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_ap_sync_match_amounts(uuid) FROM PUBLIC, anon, authenticated;

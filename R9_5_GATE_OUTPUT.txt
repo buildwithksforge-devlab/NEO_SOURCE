@@ -1,0 +1,15 @@
+NEØ R9.5 local source gate — 25 September 2026
+Runtime: Node v24.19.0, npm 11.9.0 (the Windows handoff script still requires Node 22)
+
+npm ci --no-audit --no-fund --ignore-scripts: PASS, 546 packages installed after lockfile repair
+npm run typecheck: PASS
+npm run test:offline (with dummy VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY): PASS
+  Test Files 256 passed | 12 skipped (268)
+  Tests 3311 passed | 155 skipped (3466)
+npm run build: PASS
+npm run smoke: PASS — / and /auth returned HTTP 200 from built server
+NEO_SECRET_LEAK_SENTINEL=NEO_TEST_SENTINEL_20260925 npm run secret-scan: PASS after build, 804 public files scanned
+
+Live security tests (hr-reconciliation, index-coverage, live-security): NOT RUN against a live authenticated test environment.
+M-Pesa callback, payment settlement, bank, receipt printer, authenticated four-entry user journeys and published R9.5 visual checks: NOT RUN.
+Source changes have NOT been deployed to Lovable. No certification class is upgraded to LIVE CERTIFIED by these local gates.

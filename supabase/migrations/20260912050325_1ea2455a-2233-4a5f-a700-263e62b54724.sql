@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.neo_mpesa_apply_result(uuid, integer, text, text, timestamp with time zone, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.neo_mpesa_apply_result(uuid, integer, text, text, timestamp with time zone, jsonb, text) TO service_role;

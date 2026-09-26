@@ -1,0 +1,392 @@
+﻿route,source_file,domain,kind,buttons,links,forms,dialogs_drawers_sheets,selects,inputs,tables,tabs,static_control_total,evidence_classification,live_status
+/__root,src/routes/__root.tsx,Other,root,1,2,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/ai-insights,src/routes/_shell.ai-insights.tsx,Reports/Analytics/AI,screen,4,3,0,0,0,0,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/analytics/catalogue,src/routes/_shell.analytics.catalogue.tsx,Reports/Analytics/AI,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/analytics/,src/routes/_shell.analytics.index.tsx,Reports/Analytics/AI,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/analytics,src/routes/_shell.analytics.tsx,Reports/Analytics/AI,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/approvals,src/routes/_shell.approvals.tsx,Approvals,screen,8,0,1,1,2,3,0,1,16,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/assets,src/routes/_shell.assets.tsx,Maintenance,screen,7,1,0,0,14,13,0,0,35,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/audit-logs,src/routes/_shell.audit-logs.tsx,Administration,screen,1,0,0,0,2,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/events,src/routes/_shell.automation.events.tsx,Automation/Notifications,screen,0,0,0,0,1,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/failures,src/routes/_shell.automation.failures.tsx,Automation/Notifications,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/,src/routes/_shell.automation.index.tsx,Automation/Notifications,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/providers,src/routes/_shell.automation.providers.tsx,Automation/Notifications,screen,5,1,3,0,0,6,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/queue,src/routes/_shell.automation.queue.tsx,Automation/Notifications,screen,0,0,0,0,1,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/rules,src/routes/_shell.automation.rules.tsx,Automation/Notifications,screen,3,0,0,0,7,6,0,1,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/settings,src/routes/_shell.automation.settings.tsx,Automation/Notifications,screen,1,0,0,0,0,10,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/templates,src/routes/_shell.automation.templates.tsx,Automation/Notifications,screen,3,0,0,0,3,5,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation,src/routes/_shell.automation.tsx,Automation/Notifications,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/workflows/$id,src/routes/_shell.automation.workflows.$id.tsx,Automation/Notifications,screen,9,0,0,0,4,3,0,0,16,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/automation/workflows/,src/routes/_shell.automation.workflows.index.tsx,Automation/Notifications,screen,2,1,0,1,2,2,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/,src/routes/_shell.bar.index.tsx,Bar,screen,7,8,0,0,0,0,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/menu,src/routes/_shell.bar.menu.tsx,Bar,screen,2,2,0,0,0,2,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/queue,src/routes/_shell.bar.queue.tsx,Bar,screen,2,0,0,0,2,0,0,1,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/requisitions,src/routes/_shell.bar.requisitions.tsx,Bar,screen,8,0,0,2,3,4,1,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/sell,src/routes/_shell.bar.sell.tsx,Bar,screen,3,2,0,0,0,2,1,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/bar/wastage,src/routes/_shell.bar.wastage.tsx,Bar,screen,5,0,0,1,2,5,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/complimentary,src/routes/_shell.complimentary.tsx,Restaurant/POS,screen,4,0,0,0,4,7,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/credit-accounts,src/routes/_shell.credit-accounts.tsx,CRM,screen,3,0,0,2,2,5,2,1,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/communications,src/routes/_shell.crm.communications.tsx,CRM,screen,1,0,0,0,3,2,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/corporate,src/routes/_shell.crm.corporate.tsx,CRM,screen,9,0,0,3,2,13,0,0,27,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/customers/$id,src/routes/_shell.crm.customers.$id.tsx,CRM,screen,8,1,0,0,3,4,0,1,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/customers/,src/routes/_shell.crm.customers.index.tsx,CRM,screen,5,1,0,1,2,8,0,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/duplicates,src/routes/_shell.crm.duplicates.tsx,CRM,screen,4,0,0,0,0,1,0,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/feedback,src/routes/_shell.crm.feedback.tsx,CRM,screen,2,0,0,0,4,3,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/,src/routes/_shell.crm.index.tsx,CRM,screen,3,4,0,0,0,0,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/loyalty,src/routes/_shell.crm.loyalty.tsx,CRM,screen,3,0,0,0,3,3,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/segments,src/routes/_shell.crm.segments.tsx,CRM,screen,2,0,0,0,1,3,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm/settings,src/routes/_shell.crm.settings.tsx,CRM,screen,1,0,0,0,0,4,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/crm,src/routes/_shell.crm.tsx,CRM,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/dashboards/$key,src/routes/_shell.dashboards.$key.tsx,Other,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/,src/routes/_shell.delivery.index.tsx,Delivery,screen,3,0,0,0,0,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/maintenance,src/routes/_shell.delivery.maintenance.tsx,Delivery,screen,4,0,0,1,2,2,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/queue,src/routes/_shell.delivery.queue.tsx,Delivery,screen,4,0,0,0,0,0,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/reports,src/routes/_shell.delivery.reports.tsx,Delivery,screen,0,0,0,0,0,0,1,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/requisitions,src/routes/_shell.delivery.requisitions.tsx,Delivery,screen,8,0,0,1,2,4,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/tasks,src/routes/_shell.delivery.tasks.tsx,Delivery,screen,5,0,0,1,2,3,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/verification,src/routes/_shell.delivery.verification.tsx,Delivery,screen,3,0,0,0,0,2,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/departments,src/routes/_shell.departments.tsx,Administration,screen,3,0,1,1,2,4,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/banqueting,src/routes/_shell.events.banqueting.tsx,Events,screen,4,0,0,0,3,4,3,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/billing,src/routes/_shell.events.billing.tsx,Events,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/bookings/$id,src/routes/_shell.events.bookings.$id.tsx,Events,screen,13,2,0,0,0,1,0,1,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/bookings/,src/routes/_shell.events.bookings.index.tsx,Events,screen,3,1,0,1,1,1,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/calendar,src/routes/_shell.events.calendar.tsx,Events,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/enquiries,src/routes/_shell.events.enquiries.tsx,Events,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/feedback,src/routes/_shell.events.feedback.tsx,Events,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/,src/routes/_shell.events.index.tsx,Events,screen,1,5,0,0,0,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/my-tasks,src/routes/_shell.events.my-tasks.tsx,Events,screen,5,0,0,0,2,2,2,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/packages,src/routes/_shell.events.packages.tsx,Events,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/payments,src/routes/_shell.events.payments.tsx,Events,screen,1,0,0,0,2,3,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/quotations,src/routes/_shell.events.quotations.tsx,Events,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/readiness,src/routes/_shell.events.readiness.tsx,Events,screen,0,2,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/reconciliation,src/routes/_shell.events.reconciliation.tsx,Events,screen,1,1,0,0,0,1,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/reports,src/routes/_shell.events.reports.tsx,Events,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/resources,src/routes/_shell.events.resources.tsx,Events,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/service,src/routes/_shell.events.service.tsx,Events,screen,5,1,0,0,0,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/settings,src/routes/_shell.events.settings.tsx,Events,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/site-visits,src/routes/_shell.events.site-visits.tsx,Events,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/supplies,src/routes/_shell.events.supplies.tsx,Events,screen,3,0,0,0,0,3,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events,src/routes/_shell.events.tsx,Events,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/events/venues,src/routes/_shell.events.venues.tsx,Events,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/ap-matching,src/routes/_shell.finance.ap-matching.tsx,Finance,screen,2,0,0,0,1,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/bank-accounts,src/routes/_shell.finance.bank-accounts.tsx,Finance,screen,3,0,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/banking,src/routes/_shell.finance.banking.tsx,Finance,screen,0,0,0,0,1,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/cashbook,src/routes/_shell.finance.cashbook.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/collections,src/routes/_shell.finance.collections.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/commerce-check,src/routes/_shell.finance.commerce-check.tsx,Finance,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/deposits,src/routes/_shell.finance.deposits.tsx,Finance,screen,5,2,1,0,3,6,0,1,18,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/eod,src/routes/_shell.finance.eod.tsx,Finance,screen,4,0,0,0,0,1,2,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/general-ledger,src/routes/_shell.finance.general-ledger.tsx,Finance,screen,0,0,0,0,1,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/,src/routes/_shell.finance.index.tsx,Finance,screen,9,7,0,0,0,0,0,1,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/journals,src/routes/_shell.finance.journals.tsx,Finance,screen,6,0,0,0,4,5,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/ledger,src/routes/_shell.finance.ledger.tsx,Finance,screen,2,0,0,0,1,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/ota,src/routes/_shell.finance.ota.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/outbox,src/routes/_shell.finance.outbox.tsx,Finance,screen,4,0,0,0,0,1,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/packages,src/routes/_shell.finance.packages.tsx,Finance,screen,8,0,0,0,1,2,0,1,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/payables,src/routes/_shell.finance.payables.tsx,Finance,screen,7,0,0,0,2,6,0,1,16,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/payments,src/routes/_shell.finance.payments.tsx,Finance,screen,1,0,0,0,2,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/payroll-journal,src/routes/_shell.finance.payroll-journal.tsx,Finance,screen,0,0,0,0,1,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/posting,src/routes/_shell.finance.posting.tsx,Finance,screen,13,1,0,1,2,1,0,1,19,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/profit-loss,src/routes/_shell.finance.profit-loss.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/queue,src/routes/_shell.finance.queue.tsx,Finance,screen,2,2,0,0,1,0,0,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/quickbooks,src/routes/_shell.finance.quickbooks.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/receivables,src/routes/_shell.finance.receivables.tsx,Finance,screen,0,0,0,0,1,0,0,1,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/reconciliation,src/routes/_shell.finance.reconciliation.tsx,Finance,screen,2,1,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/register,src/routes/_shell.finance.register.tsx,Finance,screen,0,0,0,0,3,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/revenue,src/routes/_shell.finance.revenue.tsx,Finance,screen,0,2,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/sessions,src/routes/_shell.finance.sessions.tsx,Finance,screen,2,0,0,1,1,1,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/tax,src/routes/_shell.finance.tax.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/till-reconciliation,src/routes/_shell.finance.till-reconciliation.tsx,Finance,screen,4,3,0,0,0,0,4,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance/till,src/routes/_shell.finance.till.tsx,Finance,screen,3,0,0,0,1,5,1,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/finance,src/routes/_shell.finance.tsx,Finance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/front-office,src/routes/_shell.front-office.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guests,src/routes/_shell.guests.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/board,src/routes/_shell.housekeeping.board.tsx,Housekeeping,screen,3,0,0,1,5,2,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/history,src/routes/_shell.housekeeping.history.tsx,Housekeeping,screen,3,1,0,0,0,3,3,1,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/,src/routes/_shell.housekeeping.index.tsx,Housekeeping,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/inspections,src/routes/_shell.housekeeping.inspections.tsx,Housekeeping,screen,2,0,0,1,2,1,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/lost-found,src/routes/_shell.housekeeping.lost-found.tsx,Housekeeping,screen,3,0,0,2,3,5,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/my-work,src/routes/_shell.housekeeping.my-work.tsx,Housekeeping,screen,17,0,0,4,3,8,0,0,32,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/reports,src/routes/_shell.housekeeping.reports.tsx,Housekeeping,screen,0,0,0,0,0,0,1,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/requisitions,src/routes/_shell.housekeeping.requisitions.tsx,Housekeeping,screen,4,1,0,1,1,2,1,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/supplies,src/routes/_shell.housekeeping.supplies.tsx,Housekeeping,screen,3,1,0,0,0,0,1,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping/tasks,src/routes/_shell.housekeeping.tasks.tsx,Housekeeping,screen,8,0,0,3,9,3,0,0,23,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/housekeeping,src/routes/_shell.housekeeping.tsx,Housekeeping,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/attendance,src/routes/_shell.hr.attendance.tsx,HR/Payroll,screen,5,0,0,0,0,0,2,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/clock,src/routes/_shell.hr.clock.tsx,HR/Payroll,screen,2,0,0,0,0,3,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/documents,src/routes/_shell.hr.documents.tsx,HR/Payroll,screen,1,0,0,0,0,2,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/employees/$id,src/routes/_shell.hr.employees.$id.tsx,HR/Payroll,screen,2,1,0,0,0,0,1,1,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/employees/,src/routes/_shell.hr.employees.index.tsx,HR/Payroll,screen,5,1,0,1,5,2,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/,src/routes/_shell.hr.index.tsx,HR/Payroll,screen,3,1,0,0,0,0,1,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/leave,src/routes/_shell.hr.leave.tsx,HR/Payroll,screen,4,0,0,0,0,0,3,1,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/me,src/routes/_shell.hr.me.tsx,HR/Payroll,screen,4,0,0,0,0,0,4,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/movements,src/routes/_shell.hr.movements.tsx,HR/Payroll,screen,1,0,0,0,0,2,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/onboarding,src/routes/_shell.hr.onboarding.tsx,HR/Payroll,screen,5,2,0,0,0,0,3,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/payroll,src/routes/_shell.hr.payroll.tsx,HR/Payroll,screen,9,2,0,0,1,0,3,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/payslips,src/routes/_shell.hr.payslips.tsx,HR/Payroll,screen,4,0,0,1,1,0,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/performance,src/routes/_shell.hr.performance.tsx,HR/Payroll,screen,3,0,0,0,0,0,3,1,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/recruitment,src/routes/_shell.hr.recruitment.tsx,HR/Payroll,screen,4,0,0,0,0,0,4,1,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/relations,src/routes/_shell.hr.relations.tsx,HR/Payroll,screen,3,0,0,0,0,2,1,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/scheduling,src/routes/_shell.hr.scheduling.tsx,HR/Payroll,screen,5,0,0,0,0,0,5,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/settings,src/routes/_shell.hr.settings.tsx,HR/Payroll,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/supplies,src/routes/_shell.hr.supplies.tsx,HR/Payroll,screen,1,0,0,0,0,4,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr/training,src/routes/_shell.hr.training.tsx,HR/Payroll,screen,4,0,0,0,0,0,4,1,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/hr,src/routes/_shell.hr.tsx,HR/Payroll,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/by-store,src/routes/_shell.inventory.by-store.tsx,Inventory/Stores,screen,0,0,0,0,1,1,1,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/counts,src/routes/_shell.inventory.counts.tsx,Inventory/Stores,screen,6,0,0,0,2,3,2,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/,src/routes/_shell.inventory.index.tsx,Inventory/Stores,screen,4,2,0,0,0,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/issues,src/routes/_shell.inventory.issues.tsx,Inventory/Stores,screen,4,1,0,0,3,2,0,1,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/items,src/routes/_shell.inventory.items.tsx,Inventory/Stores,screen,0,0,0,0,0,0,0,1,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/levels,src/routes/_shell.inventory.levels.tsx,Inventory/Stores,screen,6,2,0,0,3,4,5,1,16,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/live,src/routes/_shell.inventory.live.tsx,Inventory/Stores,screen,1,0,0,0,0,1,1,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/needs,src/routes/_shell.inventory.needs.tsx,Inventory/Stores,screen,2,0,0,0,2,1,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/receiving,src/routes/_shell.inventory.receiving.tsx,Inventory/Stores,screen,4,0,0,0,1,8,0,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/requisitions,src/routes/_shell.inventory.requisitions.tsx,Inventory/Stores,screen,4,0,0,0,1,2,0,1,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/tasks,src/routes/_shell.inventory.tasks.tsx,Inventory/Stores,screen,3,0,0,0,1,3,0,1,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/transfers,src/routes/_shell.inventory.transfers.tsx,Inventory/Stores,screen,5,0,0,0,3,2,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory,src/routes/_shell.inventory.tsx,Inventory/Stores,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/inventory/weekly-report,src/routes/_shell.inventory.weekly-report.tsx,Inventory/Stores,screen,3,1,0,0,0,1,3,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/dashboard,src/routes/_shell.kitchen.dashboard.tsx,Kitchen,screen,0,3,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/,src/routes/_shell.kitchen.index.tsx,Kitchen,screen,0,2,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/my-station,src/routes/_shell.kitchen.my-station.tsx,Kitchen,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/needs,src/routes/_shell.kitchen.needs.tsx,Kitchen,screen,7,0,0,1,3,4,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/operations,src/routes/_shell.kitchen.operations.tsx,Kitchen,screen,1,0,0,0,0,0,1,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/production,src/routes/_shell.kitchen.production.tsx,Kitchen,screen,2,0,0,0,1,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/quality,src/routes/_shell.kitchen.quality.tsx,Kitchen,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/queue,src/routes/_shell.kitchen.queue.tsx,Kitchen,screen,3,0,0,0,4,0,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/recipes,src/routes/_shell.kitchen.recipes.tsx,Kitchen,screen,5,0,0,0,1,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/reconciliation,src/routes/_shell.kitchen.reconciliation.tsx,Kitchen,screen,2,0,0,0,0,0,2,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/reorder,src/routes/_shell.kitchen.reorder.tsx,Kitchen,screen,3,2,0,1,2,2,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/reports,src/routes/_shell.kitchen.reports.tsx,Kitchen,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/settings,src/routes/_shell.kitchen.settings.tsx,Kitchen,screen,8,0,0,2,2,2,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/stewarding,src/routes/_shell.kitchen.stewarding.tsx,Kitchen,screen,16,0,0,3,3,8,0,0,30,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/stock-count,src/routes/_shell.kitchen.stock-count.tsx,Kitchen,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/stores,src/routes/_shell.kitchen.stores.tsx,Kitchen,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen,src/routes/_shell.kitchen.tsx,Kitchen,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/kitchen/waste,src/routes/_shell.kitchen.waste.tsx,Kitchen,screen,4,0,0,0,0,0,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry/batches,src/routes/_shell.laundry.batches.tsx,Laundry,screen,7,0,0,2,5,6,1,0,20,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry/incidents,src/routes/_shell.laundry.incidents.tsx,Laundry,screen,3,0,0,0,0,0,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry/,src/routes/_shell.laundry.index.tsx,Laundry,screen,5,0,0,1,4,4,1,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry/my-work,src/routes/_shell.laundry.my-work.tsx,Laundry,screen,7,0,0,3,4,7,0,0,21,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry/supplies,src/routes/_shell.laundry.supplies.tsx,Laundry,screen,2,0,0,0,0,0,1,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/laundry,src/routes/_shell.laundry.tsx,Laundry,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/lpos/$id,src/routes/_shell.lpos.$id.tsx,Restaurant/POS,screen,3,2,0,0,0,1,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/grounds,src/routes/_shell.maintenance.grounds.tsx,Maintenance,screen,9,2,0,2,5,4,1,0,22,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/,src/routes/_shell.maintenance.index.tsx,Maintenance,screen,12,2,0,2,10,5,3,0,31,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/landscaping,src/routes/_shell.maintenance.landscaping.tsx,Maintenance,screen,5,1,0,1,4,3,1,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/my-jobs,src/routes/_shell.maintenance.my-jobs.tsx,Maintenance,screen,5,0,0,1,2,5,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/my-tasks,src/routes/_shell.maintenance.my-tasks.tsx,Maintenance,screen,4,0,0,1,0,1,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance/supplies,src/routes/_shell.maintenance.supplies.tsx,Maintenance,screen,6,0,0,1,1,4,1,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/maintenance,src/routes/_shell.maintenance.tsx,Maintenance,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/automations,src/routes/_shell.marketing.automations.tsx,Marketing,screen,7,0,0,1,3,4,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/calendar,src/routes/_shell.marketing.calendar.tsx,Marketing,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/campaigns,src/routes/_shell.marketing.campaigns.tsx,Marketing,screen,10,0,0,2,5,6,1,0,23,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/consent,src/routes/_shell.marketing.consent.tsx,Marketing,screen,3,0,0,0,3,3,1,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/content,src/routes/_shell.marketing.content.tsx,Marketing,screen,6,0,0,0,3,3,1,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/feedback,src/routes/_shell.marketing.feedback.tsx,Marketing,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/,src/routes/_shell.marketing.index.tsx,Marketing,screen,7,7,0,0,0,0,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/leads,src/routes/_shell.marketing.leads.tsx,Marketing,screen,7,0,0,2,7,12,1,0,28,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/pipeline,src/routes/_shell.marketing.pipeline.tsx,Marketing,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/promotions,src/routes/_shell.marketing.promotions.tsx,Marketing,screen,5,0,0,1,0,2,2,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/recovery,src/routes/_shell.marketing.recovery.tsx,Marketing,screen,7,0,0,1,2,4,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/referrals,src/routes/_shell.marketing.referrals.tsx,Marketing,screen,5,0,0,1,0,4,1,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/reports,src/routes/_shell.marketing.reports.tsx,Marketing,screen,1,0,0,0,3,1,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/reviews,src/routes/_shell.marketing.reviews.tsx,Marketing,screen,7,0,0,1,2,4,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/segments,src/routes/_shell.marketing.segments.tsx,Marketing,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/settings,src/routes/_shell.marketing.settings.tsx,Marketing,screen,1,0,0,0,3,6,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/supplies,src/routes/_shell.marketing.supplies.tsx,Marketing,screen,3,0,0,0,0,3,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/suppression,src/routes/_shell.marketing.suppression.tsx,Marketing,screen,5,0,0,1,2,3,1,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/tasks,src/routes/_shell.marketing.tasks.tsx,Marketing,screen,2,0,0,0,0,1,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing/templates,src/routes/_shell.marketing.templates.tsx,Marketing,screen,0,0,0,0,1,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/marketing,src/routes/_shell.marketing.tsx,Marketing,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/my-engagement,src/routes/_shell.my-engagement.tsx,Work/Common,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/my-work,src/routes/_shell.my-work.tsx,Work/Common,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/notifications,src/routes/_shell.notifications.tsx,Automation/Notifications,screen,2,0,0,0,3,1,0,1,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/custom-cakes,src/routes/_shell.pastry.custom-cakes.tsx,Pastry,screen,5,0,0,1,3,8,0,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/,src/routes/_shell.pastry.index.tsx,Pastry,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/my-production,src/routes/_shell.pastry.my-production.tsx,Pastry,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/needs,src/routes/_shell.pastry.needs.tsx,Pastry,screen,4,0,0,1,3,4,0,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/production,src/routes/_shell.pastry.production.tsx,Pastry,screen,5,0,0,1,4,4,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/queue,src/routes/_shell.pastry.queue.tsx,Pastry,screen,1,0,0,0,0,0,0,1,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/requisitions,src/routes/_shell.pastry.requisitions.tsx,Pastry,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry,src/routes/_shell.pastry.tsx,Pastry,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pastry/wastage,src/routes/_shell.pastry.wastage.tsx,Pastry,screen,5,0,0,1,1,4,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/configuration-health,src/routes/_shell.platform.configuration-health.tsx,Platform/Readiness,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/data-lifecycle,src/routes/_shell.platform.data-lifecycle.tsx,Platform/Readiness,screen,4,0,0,0,1,2,2,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/environments,src/routes/_shell.platform.environments.tsx,Platform/Readiness,screen,0,0,0,0,0,0,1,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/,src/routes/_shell.platform.index.tsx,Platform/Readiness,screen,2,0,0,0,1,1,1,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/integrations,src/routes/_shell.platform.integrations.tsx,Platform/Readiness,screen,9,1,0,1,1,7,1,0,19,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/migration,src/routes/_shell.platform.migration.tsx,Platform/Readiness,screen,10,0,0,0,0,0,2,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/operations,src/routes/_shell.platform.operations.tsx,Platform/Readiness,screen,0,0,0,0,0,0,2,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/performance,src/routes/_shell.platform.performance.tsx,Platform/Readiness,screen,1,0,0,0,1,0,1,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/printers,src/routes/_shell.platform.printers.tsx,Platform/Readiness,screen,5,0,0,0,4,4,2,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/quality,src/routes/_shell.platform.quality.tsx,Platform/Readiness,screen,3,0,0,1,4,4,4,1,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/recovery,src/routes/_shell.platform.recovery.tsx,Platform/Readiness,screen,17,1,0,0,0,5,2,0,23,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/simulation,src/routes/_shell.platform.simulation.tsx,Platform/Readiness,screen,6,0,0,1,0,1,2,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/subscription,src/routes/_shell.platform.subscription.tsx,Platform/Readiness,screen,1,0,0,0,2,0,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform/support,src/routes/_shell.platform.support.tsx,Platform/Readiness,screen,5,0,0,1,2,4,1,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform,src/routes/_shell.platform.tsx,Platform/Readiness,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/arrivals,src/routes/_shell.pms.arrivals.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/availability,src/routes/_shell.pms.availability.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/departures,src/routes/_shell.pms.departures.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/folios/$id,src/routes/_shell.pms.folios.$id.tsx,PMS/Front Office,screen,8,1,0,4,2,5,2,1,21,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/folios/,src/routes/_shell.pms.folios.index.tsx,PMS/Front Office,screen,3,3,0,0,1,0,2,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/groups,src/routes/_shell.pms.groups.tsx,PMS/Front Office,screen,6,0,0,1,3,4,3,1,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/in-house,src/routes/_shell.pms.in-house.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/,src/routes/_shell.pms.index.tsx,PMS/Front Office,screen,3,2,0,0,0,0,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/minibar,src/routes/_shell.pms.minibar.tsx,PMS/Front Office,screen,3,0,0,0,2,2,1,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/rack,src/routes/_shell.pms.rack.tsx,PMS/Front Office,screen,1,0,0,0,5,1,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/reports,src/routes/_shell.pms.reports.tsx,PMS/Front Office,screen,0,0,0,0,0,0,2,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/requests,src/routes/_shell.pms.requests.tsx,PMS/Front Office,screen,9,0,0,4,4,9,1,0,26,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/requisitions,src/routes/_shell.pms.requisitions.tsx,PMS/Front Office,screen,4,1,0,1,1,2,1,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/reservations/$id,src/routes/_shell.pms.reservations.$id.tsx,PMS/Front Office,screen,5,3,0,0,0,1,1,1,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/reservations/,src/routes/_shell.pms.reservations.index.tsx,PMS/Front Office,screen,4,3,0,0,1,0,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/reservations/new,src/routes/_shell.pms.reservations.new.tsx,PMS/Front Office,screen,6,0,0,0,7,13,0,0,26,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/rooms,src/routes/_shell.pms.rooms.tsx,PMS/Front Office,screen,6,1,0,2,1,13,0,1,24,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/supplies,src/routes/_shell.pms.supplies.tsx,PMS/Front Office,screen,6,1,0,1,1,4,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/tasks,src/routes/_shell.pms.tasks.tsx,PMS/Front Office,screen,5,0,0,1,2,3,1,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/transport,src/routes/_shell.pms.transport.tsx,PMS/Front Office,screen,3,0,0,0,2,1,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pms/waitlist,src/routes/_shell.pms.waitlist.tsx,PMS/Front Office,screen,5,0,0,2,2,3,1,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/approvals,src/routes/_shell.pos.approvals.tsx,Restaurant/POS,screen,4,0,0,0,0,0,2,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/floor,src/routes/_shell.pos.floor.tsx,Restaurant/POS,screen,7,0,0,2,3,1,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/,src/routes/_shell.pos.index.tsx,Restaurant/POS,screen,6,7,0,0,0,0,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/kds,src/routes/_shell.pos.kds.tsx,Restaurant/POS,screen,1,0,0,0,1,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/menu,src/routes/_shell.pos.menu.tsx,Restaurant/POS,screen,10,1,0,0,8,1,0,1,21,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/orders/$id,src/routes/_shell.pos.orders.$id.tsx,Restaurant/POS,screen,13,0,0,4,4,7,0,0,28,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/orders/,src/routes/_shell.pos.orders.index.tsx,Restaurant/POS,screen,2,1,0,0,1,1,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/reports,src/routes/_shell.pos.reports.tsx,Restaurant/POS,screen,1,0,0,0,0,0,2,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/requisitions,src/routes/_shell.pos.requisitions.tsx,Restaurant/POS,screen,8,0,0,2,3,4,1,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/settings,src/routes/_shell.pos.settings.tsx,Restaurant/POS,screen,2,0,0,0,0,4,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/shifts,src/routes/_shell.pos.shifts.tsx,Restaurant/POS,screen,6,0,0,2,2,7,2,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos,src/routes/_shell.pos.tsx,Restaurant/POS,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/pos/wastage,src/routes/_shell.pos.wastage.tsx,Restaurant/POS,screen,5,0,0,1,2,5,1,0,13,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/branch,src/routes/_shell.procurement.branch.tsx,Procurement,screen,2,2,0,0,0,0,2,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/dashboard,src/routes/_shell.procurement.dashboard.tsx,Procurement,screen,0,2,0,0,0,0,2,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/,src/routes/_shell.procurement.index.tsx,Procurement,screen,5,6,0,0,0,0,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/orders,src/routes/_shell.procurement.orders.tsx,Procurement,screen,8,3,0,1,0,1,2,1,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/quotations,src/routes/_shell.procurement.quotations.tsx,Procurement,screen,6,0,0,0,0,3,3,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/requests,src/routes/_shell.procurement.requests.tsx,Procurement,screen,9,0,0,2,2,2,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/supplier-portal,src/routes/_shell.procurement.supplier-portal.tsx,Procurement,screen,2,1,0,0,0,0,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/supplies,src/routes/_shell.procurement.supplies.tsx,Procurement,screen,1,0,0,0,0,4,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement/tasks,src/routes/_shell.procurement.tasks.tsx,Procurement,screen,3,1,0,0,0,1,1,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/procurement,src/routes/_shell.procurement.tsx,Procurement,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/profile,src/routes/_shell.profile.tsx,Authentication/Identity,screen,1,0,0,0,0,2,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rates,src/routes/_shell.rates.tsx,PMS/Front Office,screen,12,0,0,2,3,18,2,1,36,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/reports,src/routes/_shell.reports.tsx,Reports/Analytics/AI,screen,1,0,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/reservations,src/routes/_shell.reservations.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/roles,src/routes/_shell.roles.tsx,Administration,screen,12,0,1,2,2,4,0,0,21,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rooms,src/routes/_shell.rooms.tsx,PMS/Front Office,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/handovers,src/routes/_shell.security.handovers.tsx,Security,screen,4,0,0,1,3,4,0,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/incidents,src/routes/_shell.security.incidents.tsx,Security,screen,6,0,0,2,5,7,0,0,20,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/,src/routes/_shell.security.index.tsx,Security,screen,3,3,0,0,0,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/my-post,src/routes/_shell.security.my-post.tsx,Security,screen,3,0,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/needs,src/routes/_shell.security.needs.tsx,Security,screen,4,0,0,1,3,4,0,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/patrols,src/routes/_shell.security.patrols.tsx,Security,screen,3,0,0,1,3,4,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/posts,src/routes/_shell.security.posts.tsx,Security,screen,6,0,0,2,2,4,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security,src/routes/_shell.security.tsx,Security,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/security/visitors,src/routes/_shell.security.visitors.tsx,Security,screen,4,0,0,1,2,7,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/settings,src/routes/_shell.settings.tsx,Administration,screen,3,1,0,0,0,4,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/staff-board,src/routes/_shell.staff-board.tsx,Work/Common,screen,0,5,0,0,0,0,5,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/station-stock,src/routes/_shell.station-stock.tsx,Inventory/Stores,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/stations,src/routes/_shell.stations.tsx,Administration,screen,3,0,1,1,5,4,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/stays,src/routes/_shell.stays.tsx,PMS/Front Office,screen,1,0,0,0,0,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/tasks,src/routes/_shell.tasks.tsx,Work/Common,screen,3,0,1,1,5,3,0,1,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+,src/routes/_shell.tsx,Other,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/users,src/routes/_shell.users.tsx,Administration,screen,18,0,2,8,17,16,1,0,61,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/workspace,src/routes/_shell.workspace.tsx,Authentication/Identity,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/access-matrix,src/routes/admin.access-matrix.tsx,Administration,screen,3,0,0,0,0,3,1,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/ai-provider,src/routes/admin.ai-provider.tsx,Administration,screen,3,0,0,0,1,4,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/ai-simulator,src/routes/admin.ai-simulator.tsx,Administration,screen,0,0,0,0,1,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/app-branding,src/routes/admin.app-branding.tsx,Administration,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/approval-limits,src/routes/admin.approval-limits.tsx,Administration,screen,6,2,0,0,3,4,1,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/approval-routing,src/routes/admin.approval-routing.tsx,Administration,screen,3,1,0,0,2,2,1,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/asset-categories,src/routes/admin.asset-categories.tsx,Administration,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/branches,src/routes/admin.branches.tsx,Administration,screen,8,8,1,1,1,19,0,0,38,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/brand-identity,src/routes/admin.brand-identity.tsx,Administration,screen,5,0,0,0,0,1,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/capability-map,src/routes/admin.capability-map.tsx,Administration,screen,0,1,0,0,1,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/communication,src/routes/admin.communication.tsx,Administration,screen,3,0,0,0,0,6,0,1,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/configuration,src/routes/admin.configuration.tsx,Administration,screen,3,0,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/dashboard-appearance,src/routes/admin.dashboard-appearance.tsx,Administration,screen,5,0,0,0,0,5,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/dashboard-cards,src/routes/admin.dashboard-cards.tsx,Administration,screen,2,0,0,0,0,1,1,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/delivery-settings,src/routes/admin.delivery-settings.tsx,Administration,screen,4,1,0,0,2,3,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/delivery-zones,src/routes/admin.delivery-zones.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/documents,src/routes/admin.documents.tsx,Administration,screen,3,0,0,0,0,7,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/email-delivery,src/routes/admin.email-delivery.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/experience-studio,src/routes/admin.experience-studio.tsx,Administration,screen,8,0,0,0,0,14,0,0,22,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/finance-periods,src/routes/admin.finance-periods.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/go-live,src/routes/admin.go-live.tsx,Administration,screen,3,1,0,0,0,0,2,1,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/grounds-areas,src/routes/admin.grounds-areas.tsx,Administration,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/hotel-information,src/routes/admin.hotel-information.tsx,Administration,screen,1,0,0,0,1,8,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/housekeeping-standards,src/routes/admin.housekeeping-standards.tsx,Administration,screen,7,0,0,0,4,9,0,0,20,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/integrity,src/routes/admin.integrity.tsx,Administration,screen,4,0,0,0,0,1,6,1,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/laundry-pricing,src/routes/admin.laundry-pricing.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/linen-catalogue,src/routes/admin.linen-catalogue.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/maintenance-categories,src/routes/admin.maintenance-categories.tsx,Administration,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/meal-plans,src/routes/admin.meal-plans.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/menu-imports,src/routes/admin.menu-imports.tsx,Administration,screen,0,0,0,0,0,1,1,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/neo-listing,src/routes/admin.neo-listing.tsx,Administration,screen,2,3,0,0,1,0,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/partner-access,src/routes/admin.partner-access.tsx,Administration,screen,6,0,0,0,0,2,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/partner-billing,src/routes/admin.partner-billing.tsx,Administration,screen,5,0,0,0,2,8,0,0,15,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/partner-messages,src/routes/admin.partner-messages.tsx,Administration,screen,4,0,0,0,0,3,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/payments-mpesa,src/routes/admin.payments-mpesa.tsx,Administration,screen,8,0,0,0,2,8,0,0,18,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/procurement-policy,src/routes/admin.procurement-policy.tsx,Administration,screen,6,4,0,0,3,7,1,0,20,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/public-experience,src/routes/admin.public-experience.tsx,Administration,screen,3,0,0,0,0,7,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/regional,src/routes/admin.regional.tsx,Administration,screen,1,0,0,0,4,11,0,0,16,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/role-migration,src/routes/admin.role-migration.tsx,Administration,screen,8,0,0,0,1,0,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/role-testing,src/routes/admin.role-testing.tsx,Administration,screen,1,2,0,0,1,0,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/self-approval-exceptions,src/routes/admin.self-approval-exceptions.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/stock-policy,src/routes/admin.stock-policy.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/suppliers,src/routes/admin.suppliers.tsx,Administration,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/tax-etims,src/routes/admin.tax-etims.tsx,Administration,screen,4,0,0,0,2,8,0,0,14,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin,src/routes/admin.tsx,Administration,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/user-defaults,src/routes/admin.user-defaults.tsx,Administration,screen,1,0,0,0,0,4,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/admin/workspace-preview,src/routes/admin.workspace-preview.tsx,Administration,screen,12,3,0,0,4,0,0,0,19,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/api/public/delivery/callback/$token,src/routes/api/public/delivery.callback.$token.ts,Public API,API,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/api/public/delivery/simulator/courier,src/routes/api/public/delivery.simulator.courier.ts,Public API,API,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/api/public/mpesa/callback/$token,src/routes/api/public/mpesa.callback.$token.ts,Public API,API,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/api/public/payments/callback/$token,src/routes/api/public/payments.callback.$token.ts,Public API,API,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/api/public/payments/simulator/terminal,src/routes/api/public/payments.simulator.terminal.ts,Public API,API,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/auth/forgot-password,src/routes/auth.forgot-password.tsx,Authentication/Identity,screen,1,1,1,0,0,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/auth/reset-password,src/routes/auth.reset-password.tsx,Authentication/Identity,screen,1,0,1,0,0,2,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/auth,src/routes/auth.tsx,Authentication/Identity,screen,4,1,1,0,0,3,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/auth/verify-email,src/routes/auth.verify-email.tsx,Authentication/Identity,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/continue,src/routes/continue.tsx,Discover/Public,screen,3,0,0,0,0,0,0,0,3,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/$hotelSlug/cart,src/routes/delivery.$hotelSlug.cart.tsx,Delivery,screen,4,1,0,0,0,7,0,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/$hotelSlug/,src/routes/delivery.$hotelSlug.index.tsx,Delivery,screen,1,2,0,0,0,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/$hotelSlug/orders,src/routes/delivery.$hotelSlug.orders.tsx,Delivery,screen,0,2,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/$hotelSlug/track/$orderReference,src/routes/delivery.$hotelSlug.track.$orderReference.tsx,Delivery,screen,0,3,0,0,0,1,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/delivery/$hotelSlug,src/routes/delivery.$hotelSlug.tsx,Delivery,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/account,src/routes/guest.$hotelSlug.account.tsx,Stay & Dine / Guest,screen,0,1,0,0,0,3,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/book,src/routes/guest.$hotelSlug.book.tsx,Stay & Dine / Guest,screen,0,2,0,0,0,3,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/explore,src/routes/guest.$hotelSlug.explore.tsx,Stay & Dine / Guest,screen,2,7,0,0,0,0,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/folio,src/routes/guest.$hotelSlug.folio.tsx,Stay & Dine / Guest,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/,src/routes/guest.$hotelSlug.index.tsx,Stay & Dine / Guest,screen,0,11,0,0,0,0,0,0,11,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/laundry,src/routes/guest.$hotelSlug.laundry.tsx,Stay & Dine / Guest,screen,3,0,0,0,0,2,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/notifications,src/routes/guest.$hotelSlug.notifications.tsx,Stay & Dine / Guest,screen,2,5,0,0,0,0,0,0,7,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/order,src/routes/guest.$hotelSlug.order.tsx,Stay & Dine / Guest,screen,9,0,0,0,0,0,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/orders,src/routes/guest.$hotelSlug.orders.tsx,Stay & Dine / Guest,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/orders_/$orderReference,src/routes/guest.$hotelSlug.orders_.$orderReference.tsx,Stay & Dine / Guest,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/profile,src/routes/guest.$hotelSlug.profile.tsx,Stay & Dine / Guest,screen,0,3,0,0,0,2,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/reservations/$reservationReference,src/routes/guest.$hotelSlug.reservations.$reservationReference.tsx,Stay & Dine / Guest,screen,0,1,0,0,0,1,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/settings,src/routes/guest.$hotelSlug.settings.tsx,Stay & Dine / Guest,screen,0,5,0,0,0,4,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/signin,src/routes/guest.$hotelSlug.signin.tsx,Stay & Dine / Guest,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/stay,src/routes/guest.$hotelSlug.stay.tsx,Stay & Dine / Guest,screen,1,1,1,0,0,2,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/track,src/routes/guest.$hotelSlug.track.tsx,Stay & Dine / Guest,screen,0,1,0,0,0,0,0,0,1,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/transport,src/routes/guest.$hotelSlug.transport.tsx,Stay & Dine / Guest,screen,2,0,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug/trips,src/routes/guest.$hotelSlug.trips.tsx,Stay & Dine / Guest,screen,1,4,0,0,0,3,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/guest/$hotelSlug,src/routes/guest.$hotelSlug.tsx,Stay & Dine / Guest,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/h/$propertySlug,src/routes/h.$propertySlug.tsx,Discover/Public,screen,2,3,1,0,0,2,0,0,8,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/,src/routes/index.tsx,Discover/Public,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/onboarding,src/routes/onboarding.tsx,Authentication/Identity,screen,6,0,0,0,6,24,0,0,36,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/partner/$propertySlug,src/routes/partner.$propertySlug.tsx,Partner,screen,6,3,1,0,0,0,0,0,10,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/platform-console,src/routes/platform-console.tsx,Platform/Readiness,screen,4,1,0,0,0,1,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rider/active,src/routes/rider.active.tsx,Rider,screen,1,3,0,0,0,0,0,0,4,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rider/,src/routes/rider.index.tsx,Rider,screen,9,4,0,0,0,4,0,0,17,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rider/login,src/routes/rider.login.tsx,Rider,screen,2,0,1,0,0,2,0,0,5,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rider/profile,src/routes/rider.profile.tsx,Rider,screen,3,1,0,0,0,2,0,0,6,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/rider/support,src/routes/rider.support.tsx,Rider,screen,5,2,0,0,0,5,0,0,12,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/session-expired,src/routes/session-expired.tsx,Authentication/Identity,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/sitemap.xml,src/routes/sitemap[.]xml.ts,Discover/Public,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/start/$propertySlug,src/routes/start.$propertySlug.tsx,Discover/Public,screen,1,8,0,0,0,0,0,0,9,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/start/,src/routes/start.index.tsx,Discover/Public,screen,0,0,0,0,0,0,0,0,0,"IMPLEMENTED, NOT VERIFIED",NOT RUN
+/unauthorized,src/routes/unauthorized.tsx,Authentication/Identity,screen,1,1,0,0,0,0,0,0,2,"IMPLEMENTED, NOT VERIFIED",NOT RUN

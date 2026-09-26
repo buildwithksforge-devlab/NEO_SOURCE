@@ -1,0 +1,49 @@
+name: CI build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (retry with backoff on 429)
+        env:
+          INSTALL_MAX_ATTEMPTS: "5"
+          FALLBACK_NPM_REGISTRY: https://registry.npmjs.org
+        run: node scripts/install-with-retry.mjs
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: bun run build
+
+      - name: Retry build once after a transient failure
+        if: steps.build.outcome == 'failure'
+        env:
+          INSTALL_MAX_ATTEMPTS: "5"
+          FALLBACK_NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          echo "First build attempt failed — reinstalling and retrying once."
+          node scripts/install-with-retry.mjs
+          bun run build
+
+      - name: Build diagnostics report on failure
+        if: failure()
+        run: node scripts/build-diagnostics.mjs || true
+
+      - name: Upload diagnostics report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: docs/build-diagnostics.md
+          if-no-files-found: ignore

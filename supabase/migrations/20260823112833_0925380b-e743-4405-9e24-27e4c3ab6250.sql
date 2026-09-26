@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_event_payment_scope() FROM PUBLIC, anon;

@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_audit_actor_is_caller() FROM PUBLIC, anon, authenticated;

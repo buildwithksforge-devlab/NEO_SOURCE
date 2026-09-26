@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_approval_rule_validate() FROM PUBLIC, anon, authenticated;

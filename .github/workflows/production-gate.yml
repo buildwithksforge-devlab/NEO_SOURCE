@@ -1,0 +1,40 @@
+name: Production gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        env:
+          INSTALL_MAX_ATTEMPTS: "5"
+          FALLBACK_NPM_REGISTRY: https://registry.npmjs.org
+        run: node scripts/install-with-retry.mjs
+
+      - name: TypeScript
+        run: bun run typecheck
+
+      - name: Offline test suite
+        run: bun run test:offline
+
+      - name: Production build and SSR smoke
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: NEO_SECRET_LEAK_SENTINEL_FOR_CI_ONLY
+        run: bun run smoke
+
+      - name: Client secret boundary
+        env:
+          NEO_SECRET_LEAK_SENTINEL: NEO_SECRET_LEAK_SENTINEL_FOR_CI_ONLY
+        run: bun run secret-scan

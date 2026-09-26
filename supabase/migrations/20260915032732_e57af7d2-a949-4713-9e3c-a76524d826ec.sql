@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_delivery_canonical_progress() FROM anon, authenticated, PUBLIC;

@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.neo_hr_employee_movement(uuid, text, date, text, uuid, uuid, text, uuid, text);

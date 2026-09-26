@@ -1,0 +1,21 @@
+INSERT INTO public.permissions (module, feature, action, label) VALUES
+  ('integrations','overview','view','View automation dashboard'),
+  ('integrations','workflows','view','View workflows'),
+  ('integrations','workflows','create','Create workflows'),
+  ('integrations','workflows','edit','Edit workflows'),
+  ('integrations','templates','view','View message templates'),
+  ('integrations','templates','create','Create message templates'),
+  ('integrations','templates','edit','Edit message templates'),
+  ('integrations','queue','view','View communication queue'),
+  ('integrations','queue','edit','Manage communication queue'),
+  ('integrations','queue','export','Export communication queue'),
+  ('integrations','events','view','View automation event log'),
+  ('integrations','events','export','Export automation event log'),
+  ('integrations','rules','view','View rules and escalations'),
+  ('integrations','rules','create','Create rules and escalations'),
+  ('integrations','rules','edit','Edit rules and escalations'),
+  ('integrations','failures','view','View failed workflows'),
+  ('integrations','failures','edit','Retry failed workflows'),
+  ('integrations','settings','view','View automation settings'),
+  ('integrations','settings','edit','Edit automation settings')
+ON CONFLICT DO NOTHING;

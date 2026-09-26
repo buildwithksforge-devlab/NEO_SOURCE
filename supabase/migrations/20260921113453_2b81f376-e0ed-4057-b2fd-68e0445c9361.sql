@@ -1,0 +1,1 @@
+ALTER FUNCTION public.neo_canonical_channel(text) SET search_path = public;

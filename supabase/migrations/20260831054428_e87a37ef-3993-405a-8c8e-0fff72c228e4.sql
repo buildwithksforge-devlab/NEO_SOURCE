@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_night_audit_reference(uuid, uuid, date) FROM public, anon, authenticated;

@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_hr_leave_enforce_eligibility() FROM PUBLIC, anon, authenticated;

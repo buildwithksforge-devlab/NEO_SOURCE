@@ -1,0 +1,1 @@
+ALTER TABLE public.stock_item_groups ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'other';

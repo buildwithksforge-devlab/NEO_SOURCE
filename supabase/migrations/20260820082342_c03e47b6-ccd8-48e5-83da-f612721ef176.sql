@@ -1,0 +1,1 @@
+ALTER FUNCTION public.scope_rank(text) SET search_path = public, pg_temp;

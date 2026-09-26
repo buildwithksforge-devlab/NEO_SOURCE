@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.neo_service_charge_percent(uuid, uuid) FROM PUBLIC, anon, authenticated;

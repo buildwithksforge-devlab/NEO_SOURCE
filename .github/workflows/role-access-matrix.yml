@@ -1,0 +1,20 @@
+name: Role access matrix
+
+# Blocks any merge where sidebar visibility, route guards, saved grants or the
+# visibility contract disagree for any role.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  access-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Exhaustive role-access matrix
+        run: bunx vitest run src/lib/__tests__

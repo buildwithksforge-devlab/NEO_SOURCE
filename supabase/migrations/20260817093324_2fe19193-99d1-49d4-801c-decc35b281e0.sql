@@ -1,0 +1,4 @@
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.profiles, public.departments, public.operational_stations, public.branches, public.roles, public.user_roles, public.role_permissions, public.user_branches, public.user_departments, public.user_stations TO authenticated;
+GRANT ALL ON TABLE public.profiles, public.departments, public.operational_stations, public.branches, public.roles, public.user_roles, public.role_permissions, public.user_branches, public.user_departments, public.user_stations TO service_role;
+GRANT EXECUTE ON FUNCTION public.customer_profile_in_my_org(uuid) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.customer_profile_in_my_org(uuid) FROM PUBLIC, anon;

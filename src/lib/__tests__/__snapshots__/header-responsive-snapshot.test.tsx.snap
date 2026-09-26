@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`density control snapshots > renders the phone menu variant as a single icon button 1`] = `"<button class="inline-flex min-w-0 max-w-full items-center justify-center gap-2 whitespace-normal break-words text-center text-sm font-medium leading-tight cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 hover:bg-muted hover:text-foreground [@media(pointer:coarse)]:size-11 size-10 shrink-0 rounded-xl text-muted-foreground md:hidden" data-density-toggle="menu" aria-label="Display density" title="Display density — Comfortable" type="button" id="radix-_r_0_" aria-haspopup="menu" aria-expanded="false" data-state="closed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sliders-horizontal size-5" aria-hidden="true"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></button>"`;
+
+exports[`density control snapshots > renders the segmented control with all three modes 1`] = `"<div role="radiogroup" aria-label="Display density" data-density-toggle="true" class="neo-segment shrink-0 hidden md:inline-flex"><button type="button" role="radio" aria-checked="true" aria-label="Comfortable density" title="Comfortable density" class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:px-3 bg-chip-selected text-foreground shadow-xs"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-grid size-3.5 shrink-0" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span class="hidden md:inline">Comfortable</span></button><button type="button" role="radio" aria-checked="false" aria-label="Compact density" title="Compact density" class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:px-3 text-muted-foreground hover:text-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rows3 lucide-rows-3 size-3.5 shrink-0" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M21 9H3"></path><path d="M21 15H3"></path></svg><span class="hidden md:inline">Compact</span></button><button type="button" role="radio" aria-checked="false" aria-label="Touch optimized density" title="Touch optimized density" class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:px-3 text-muted-foreground hover:text-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hand size-3.5 shrink-0" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"></path><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"></path><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg><span class="hidden md:inline">Touch optimized</span></button></div>"`;
+
+exports[`header breakpoint contract > pins the per-breakpoint header composition 1`] = `
+{
+  "desktop": {
+    "areaSelector": "inline compact selector with truncation",
+    "density": "not in the header — dashboard toolbar slot (segmented track)",
+    "identity": "square NEØ Ø symbol, module label and inline utilities",
+  },
+  "phone": {
+    "areaSelector": "moved into the profile sheet (PropertySelector w-full)",
+    "density": "not in the header — dashboard toolbar slot (menu button below md)",
+    "identity": "square NEØ Ø symbol at a protected 28×28px, never collapsed",
+  },
+  "tablet": {
+    "areaSelector": "inline compact selector (narrow but visible)",
+    "density": "not in the header — dashboard toolbar slot (segmented from md)",
+    "identity": "square NEØ Ø symbol plus truncating module label",
+  },
+}
+`;

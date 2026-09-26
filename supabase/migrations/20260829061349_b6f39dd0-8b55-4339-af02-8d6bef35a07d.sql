@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.tg_housekeeping_single_active_room_job() FROM PUBLIC, anon, authenticated;

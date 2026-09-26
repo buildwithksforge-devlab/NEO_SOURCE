@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.neo_stores_receive_goods(uuid,uuid,jsonb,uuid,text,text);

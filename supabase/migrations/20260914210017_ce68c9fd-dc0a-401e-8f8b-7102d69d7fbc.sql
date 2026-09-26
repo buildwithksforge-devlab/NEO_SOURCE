@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.neo_guard_period_overlap() FROM PUBLIC, anon, authenticated;
