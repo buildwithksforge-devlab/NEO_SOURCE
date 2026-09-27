@@ -36,6 +36,7 @@ export function ReceiveStockDialog({
   const apply = useApplyMovement();
 
   const [item, setItem] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
   const [location, setLocation] = useState("");
   const [mode, setMode] = useState<"receipt" | "opening">("receipt");
   const [quantity, setQuantity] = useState("");
@@ -46,6 +47,11 @@ export function ReceiveStockDialog({
   const [expiry, setExpiry] = useState("");
 
   const itemRows = (items.data ?? []) as Row[];
+  const visibleItems = itemRows.filter((r) =>
+    `${String(r["name"] ?? "")} ${String(r["sku"] ?? "")}`
+      .toLowerCase()
+      .includes(itemSearch.trim().toLowerCase()),
+  );
   const locationRows = (locations.data ?? []) as Row[];
 
   const selected = useMemo(
@@ -66,6 +72,7 @@ export function ReceiveStockDialog({
 
   const reset = () => {
     setItem("");
+    setItemSearch("");
     setLocation("");
     setMode("receipt");
     setQuantity("");
@@ -119,19 +126,35 @@ export function ReceiveStockDialog({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5 sm:col-span-2">
           <Label htmlFor="receive-item">Stock item</Label>
-          <Select value={item} onValueChange={setItem}>
-            <SelectTrigger id="receive-item">
-              <SelectValue placeholder="Select an item" />
-            </SelectTrigger>
-            <SelectContent>
-              {itemRows.map((r) => (
-                <SelectItem key={String(r["id"])} value={String(r["id"])}>
-                  {String(r["name"])}
-                  {r["sku"] ? ` · ${String(r["sku"])}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Input
+            aria-label="Search stock items"
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search by item name or SKU"
+          />
+          <select
+            id="receive-item"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={item}
+            onChange={(e) => {
+              setItem(e.target.value);
+              setUnit("");
+            }}
+            disabled={items.isLoading || Boolean(items.error)}
+          >
+            <option value="">{items.isLoading ? "Loading items…" : "Select an item"}</option>
+            {item && !visibleItems.some((r) => String(r["id"]) === item) && selected ? (
+              <option value={item}>
+                {String(selected["name"])}{selected["sku"] ? ` · ${String(selected["sku"])}` : ""}
+              </option>
+            ) : null}
+            {visibleItems.map((r) => (
+              <option key={String(r["id"])} value={String(r["id"])}>
+                {String(r["name"])}{r["sku"] ? ` · ${String(r["sku"])}` : ""}
+              </option>
+            ))}
+          </select>
+          {items.error ? <p className="text-xs text-destructive">Could not load stock items.</p> : null}
           <p className="text-xs text-muted-foreground">
             Item not listed? Create it first under Inventory → Items.
           </p>
