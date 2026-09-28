@@ -254,7 +254,7 @@ function GroundsBoardPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {maintStr(r["due_at"] ?? r["service_date"])}
+                        {r["due_at"] ? maintStr(r["due_at"]) : "Not set"}
                       </TableCell>
                       <TableCell>
                         <StatusPill tone={groundsTone(status)}>
