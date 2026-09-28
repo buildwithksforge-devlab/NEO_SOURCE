@@ -273,7 +273,13 @@ export function formatMoney(symbol: string, value: unknown): string {
 
 export function formatDate(value: unknown): string {
   if (!value) return "—";
-  const d = new Date(String(value));
+  const raw = String(value);
+  // A SQL DATE is a calendar day. Parsing it as UTC midnight makes western
+  // browsers render the previous day (for example, Oct 22 as Oct 21).
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const d = day
+    ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+    : new Date(raw);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
