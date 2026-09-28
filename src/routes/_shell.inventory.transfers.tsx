@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { StockItemPicker } from "@/components/inventory/StockItemPicker";
 import {
   Select,
   SelectContent,
@@ -150,26 +151,17 @@ function Page() {
             {drafts.map((d, i) => (
               <div key={`transfer-line-${i}`} className="flex flex-wrap items-end gap-3">
                 <div className="min-w-56 flex-1 space-y-2">
-                  <Label>Item</Label>
-                  <Select
+                  <Label htmlFor={`transfer-item-${i}`}>Item</Label>
+                  <StockItemPicker
+                    id={`transfer-item-${i}`}
+                    items={itemRows}
                     value={d.stockItemId}
-                    onValueChange={(v) =>
+                    onChange={(v) =>
                       setDrafts((rows) =>
                         rows.map((r, idx) => (idx === i ? { ...r, stockItemId: v } : r)),
                       )
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Stock item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {itemRows.map((it) => (
-                        <SelectItem key={String(it["id"])} value={String(it["id"])}>
-                          {String(it["name"])}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="w-32 space-y-2">
                   <Label htmlFor={`transfer-qty-${i}`}>Quantity</Label>

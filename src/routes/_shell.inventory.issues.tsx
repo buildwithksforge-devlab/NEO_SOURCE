@@ -28,6 +28,7 @@ import {
 } from "@/components/common/RequisitionWorkspace";
 import { useStoresRequisitions, str as storesStr, type StoresRow } from "@/lib/stores-department";
 import { BottleUsageCard } from "@/components/inventory/BottleUsageCard";
+import { StockItemPicker } from "@/components/inventory/StockItemPicker";
 
 export const Route = createFileRoute("/_shell/inventory/issues")({
   head: () => ({
@@ -155,26 +156,17 @@ function Page() {
             {drafts.map((d, i) => (
               <div key={`line-${i}`} className="flex flex-wrap items-end gap-3">
                 <div className="min-w-56 flex-1 space-y-2">
-                  <Label>Item</Label>
-                  <Select
+                  <Label htmlFor={`issue-item-${i}`}>Item</Label>
+                  <StockItemPicker
+                    id={`issue-item-${i}`}
+                    items={itemRows}
                     value={d.stockItemId}
-                    onValueChange={(v) =>
+                    onChange={(v) =>
                       setDrafts((rows) =>
                         rows.map((r, idx) => (idx === i ? { ...r, stockItemId: v } : r)),
                       )
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Stock item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {itemRows.map((it) => (
-                        <SelectItem key={String(it["id"])} value={String(it["id"])}>
-                          {String(it["name"])}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="w-32 space-y-2">
                   <Label htmlFor={`qty-${i}`}>Quantity</Label>
