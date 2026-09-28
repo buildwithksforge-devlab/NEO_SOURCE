@@ -402,7 +402,7 @@ function Page() {
                             estimated_completion: newDue
                               ? new Date(`${newDue}T17:00:00`).toISOString()
                               : null,
-                            cost_estimate: newEstimate.trim() === "" ? null : Number(newEstimate),
+                            cost_estimate: newEstimate.trim() === "" ? 0 : Number(newEstimate),
                             blocks_room: newBlocks,
                           },
                           {

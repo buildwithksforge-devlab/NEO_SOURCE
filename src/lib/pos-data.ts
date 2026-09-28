@@ -729,16 +729,18 @@ export async function recalcOrderTotals(orderId: string) {
   // the authoritative database trigger on pos_orders — never recomputed here,
   // so there is only ever one arithmetic of record. This write simply asks the
   // database to re-derive them from the current live lines.
-  const { data: order } = await supabase
+  const { data: order, error: readError } = await supabase
     .from("pos_orders")
     .select("id, discount_total")
     .eq("id", orderId)
     .maybeSingle();
+  if (readError) throw readError;
   if (!order) return;
-  await supabase
+  const { error: updateError } = await supabase
     .from("pos_orders")
     .update({ discount_total: Number(order.discount_total ?? 0) })
     .eq("id", orderId);
+  if (updateError) throw updateError;
 }
 
 /**
