@@ -1,10 +1,9 @@
-import { createServerFn } from "@tanstack/react-start";
-import type { SupabaseClient } from "@supabase/supabase-js";
+﻿import { createServerFn } from "@tanstack/react-start";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { buildStaffInviteMetadata } from "@/lib/auth-email-metadata";
 import {
-  isDuplicateAccountError,
   normaliseStaffAccountInput,
   validateStaffAccountInput,
 } from "@/lib/staff-account-input";
@@ -32,7 +31,7 @@ async function requireCapability(
 }
 
 /**
- * Canonical role ↔ department ↔ property check. The interface filters the
+ * Canonical role â†” department â†” property check. The interface filters the
  * dropdowns, but a typed request must never seat a role in a department it does
  * not belong to, so the same catalogue relationships are re-evaluated in the
  * database by `neo_validate_role_assignment` before anything is written.
@@ -69,88 +68,18 @@ type CreateInput = {
   reporting_manager_profile_id?: string | null;
 };
 
-/**
- * Writes the organisational reporting line for one staff account.
- *
- * Eligibility is always re-resolved through `neo_reporting_candidates`, which
- * walks the canonical role hierarchy (including its unstaffed-role fallback),
- * so a typed request cannot seat a manager the interface would have refused.
- * A database trigger additionally refuses self-reporting, cycles, inactive
- * managers and cross-organisation managers.
- */
-async function writeReportingLine(args: {
-  supabase: CapabilityClient;
-  supabaseAdmin: SupabaseClient<Database>;
-  organizationId: string;
-  userId: string;
-  branchId: string | null;
-  departmentId: string | null;
-  stationId: string | null;
-  roleIds: string[];
-  managerId: string | null;
-}) {
-  const managerId = args.managerId || null;
-  if (managerId) {
-    if (managerId === args.userId) throw new Error("An employee cannot report to themselves");
-    const { data: candidates, error } = await args.supabase.rpc(
-      "neo_reporting_candidates" as never,
-      {
-        _user: args.userId,
-        _branch: args.branchId,
-        _department: args.departmentId,
-        _station: args.stationId,
-        _role_ids: args.roleIds,
-      } as never,
-    );
-    if (error) throw new Error(error.message);
-    const eligible = ((candidates ?? []) as { profile_id: string }[]).some(
-      (c) => c.profile_id === managerId,
-    );
-    if (!eligible) {
-      throw new Error(
-        "That manager is not eligible for this employee's roles, department or property",
-      );
-    }
-  }
-
-  let reviewRequired = false;
-  let reviewReason = "";
-  if (!managerId) {
-    const { data: meta } = await args.supabase.rpc("neo_role_reporting_meta" as never, {
-      _role_ids: args.roleIds,
-    } as never);
-    const required = ((meta ?? []) as { manager_required: boolean }[])[0]?.manager_required;
-    if (required) {
-      reviewRequired = true;
-      reviewReason = "No reporting manager recorded — confirm the reporting line.";
-    }
-  }
-
-  const { error: managerError } = await args.supabaseAdmin
-    .from("profiles")
-    .update({
-      reporting_manager_id: managerId,
-      reporting_effective_from: managerId ? new Date().toISOString().slice(0, 10) : null,
-      assignment_review_required: reviewRequired,
-      assignment_review_reason: reviewReason,
-    })
-    .eq("id", args.userId)
-    .eq("organization_id", args.organizationId);
-  if (managerError) throw new Error(managerError.message);
-  return managerId;
-}
-
 
 /**
  * Universal worker provisioning.
  *
  * The authentication account is the only thing created here; everything that
- * makes a worker functional — profile, property, department, work area, roles,
- * primary role, notification preferences and the audit record — is written by
+ * makes a worker functional â€” profile, property, department, work area, roles,
+ * primary role, notification preferences and the audit record â€” is written by
  * the single backend routine `neo_provision_worker`, which validates scope,
  * refuses to grant restricted authority incidentally and records a resumable
  * provisioning run. Retrying with the same account produces no duplicates.
  */
+
 export const createStaffUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: CreateInput) => {
@@ -163,32 +92,54 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
 
     await requireCapability(supabase, "users", "create");
-    await requireValidAssignment(supabase, data.branch_id, data.department_id, data.role_ids);
-
+    await requireValidAssignment(
+      supabase,
+      data.branch_id,
+      data.department_id,
+      data.role_ids,
+    );
 
     const { data: me } = await supabase
       .from("profiles")
       .select("organization_id, full_name")
       .eq("id", userId)
       .maybeSingle();
-    if (!me?.organization_id) throw new Error("No organization");
 
-    // Personalisation for the branded confirmation e-mail. Every lookup is
-    // read through the caller's own session, so it can only ever resolve names
-    // inside their tenant, and only display names reach the payload.
-    const [{ data: org }, { data: property }, { data: role }] = await Promise.all([
-      supabase.from("organizations").select("name").eq("id", me.organization_id).maybeSingle(),
-      data.branch_id
-        ? supabase.from("branches").select("name").eq("id", data.branch_id).maybeSingle()
-        : Promise.resolve({ data: null as { name: string } | null }),
-      data.primary_role_id ?? data.role_ids[0]
-        ? supabase
-            .from("roles")
-            .select("name")
-            .eq("id", (data.primary_role_id ?? data.role_ids[0]) as string)
-            .maybeSingle()
-        : Promise.resolve({ data: null as { name: string } | null }),
-    ]);
+    if (!me?.organization_id) {
+      throw new Error("No organization");
+    }
+
+    const [{ data: org }, { data: property }, { data: role }] =
+      await Promise.all([
+        supabase
+          .from("organizations")
+          .select("name")
+          .eq("id", me.organization_id)
+          .maybeSingle(),
+
+        data.branch_id
+          ? supabase
+              .from("branches")
+              .select("name")
+              .eq("id", data.branch_id)
+              .maybeSingle()
+          : Promise.resolve({
+              data: null as { name: string } | null,
+            }),
+
+        data.primary_role_id ?? data.role_ids[0]
+          ? supabase
+              .from("roles")
+              .select("name")
+              .eq(
+                "id",
+                (data.primary_role_id ?? data.role_ids[0]) as string,
+              )
+              .maybeSingle()
+          : Promise.resolve({
+              data: null as { name: string } | null,
+            }),
+      ]);
 
     const inviteMetadata = buildStaffInviteMetadata({
       full_name: data.full_name,
@@ -199,95 +150,105 @@ export const createStaffUser = createServerFn({ method: "POST" })
       invited_by_name: me.full_name ?? null,
     });
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    /*
+     * Worker creation uses an isolated public Auth client.
+     *
+     * Never use the administrator's authenticated Supabase client for signUp:
+     * a successful signup must not replace the administrator's session.
+     *
+     * Ordinary staff creation also does not require auth.admin or a
+     * SUPABASE_SERVICE_ROLE_KEY.
+     */
+    const supabaseUrl = process.env["SUPABASE_URL"];
+    const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
 
-    // Reuse an existing authentication account rather than failing a retry.
-    let newUserId: string | null = null;
-    const created = await supabaseAdmin.auth.admin.createUser({
+    if (!supabaseUrl || !publishableKey) {
+      throw new Error(
+        "Supabase public authentication is not configured on this server",
+      );
+    }
+
+    const signupClient = createClient<Database>(
+      supabaseUrl,
+      publishableKey,
+      {
+        auth: {
+          storage: undefined,
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
+    );
+
+    const created = await signupClient.auth.signUp({
       email: data.email,
       password: data.password,
-      email_confirm: true,
-      user_metadata: inviteMetadata,
+      options: {
+        data: inviteMetadata,
+      },
     });
+
     if (created.error) {
-      const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-      const existing = list?.users?.find((u) => (u.email ?? "").toLowerCase() === data.email);
-      if (!existing) throw new Error(created.error.message);
-
-      // Resuming an interrupted provisioning run for this workspace is safe.
-      // Adopting an account that already belongs to somebody — in this or any
-      // other workspace — is not, so that case is reported as a duplicate.
-      const { data: existingProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("id, organization_id")
-        .eq("id", existing.id)
-        .maybeSingle();
-      if (existingProfile && existingProfile.organization_id !== me.organization_id) {
-        throw new Error("That email address already belongs to another account.");
-      }
-      if (!existingProfile && !isDuplicateAccountError(created.error.message)) {
-        throw new Error(created.error.message);
-      }
-      newUserId = existing.id;
-    } else {
-      newUserId = created.data.user?.id ?? null;
+      throw new Error(created.error.message);
     }
-    if (!newUserId) throw new Error("Could not create the account");
 
-    const { data: result, error } = await supabase.rpc("neo_provision_worker", {
-      _payload: {
-        user_id: newUserId,
-        email: data.email,
-        full_name: data.full_name,
-        staff_id: data.staff_id,
-        phone: data.phone,
-        job_title: data.job_title,
-        branch_id: data.branch_id,
-        department_id: data.department_id,
-        station_id: data.station_id ?? null,
-        role_ids: data.role_ids,
-        primary_role_id: data.primary_role_id ?? data.role_ids[0] ?? null,
-        employment_status: data.employment_status,
-        idempotency_key: `worker:${data.email.toLowerCase()}`,
-      } as never,
-    });
-    if (error) throw new Error(error.message);
+    const newUser = created.data.user;
 
-    // Organisational reporting line, recorded with the account rather than as
-    // a follow-up task. Leaving it empty flags assignment review instead.
-    const managerId = await writeReportingLine({
-      supabase,
-      supabaseAdmin,
-      organizationId: me.organization_id,
-      userId: newUserId,
-      branchId: data.branch_id,
-      departmentId: data.department_id,
-      stationId: data.station_id ?? null,
-      roleIds: data.role_ids,
-      managerId: data.reporting_manager_profile_id ?? null,
-    });
-    if (managerId) {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: me.organization_id,
-        user_id: userId,
-        user_name: me.full_name ?? "",
-        action: "user.reporting_line_set",
-        module: "administration",
-        record_id: newUserId,
-        previous_value: { reporting_manager_id: null } as never,
-        new_value: {
-          reporting_manager_id: managerId,
+    /*
+     * Supabase can deliberately obscure duplicate e-mail registrations.
+     * An empty identities collection is therefore not accepted as evidence
+     * that a new worker account was created.
+     */
+    if (
+      !newUser?.id ||
+      (Array.isArray(newUser.identities) &&
+        newUser.identities.length === 0)
+    ) {
+      throw new Error(
+        "That email address already belongs to an account.",
+      );
+    }
+
+    const newUserId = newUser.id;
+
+    const { data: result, error } = await supabase.rpc(
+      "neo_provision_worker",
+      {
+        _payload: {
+          user_id: newUserId,
+          email: data.email,
+          full_name: data.full_name,
+          staff_id: data.staff_id,
+          phone: data.phone,
+          job_title: data.job_title,
           branch_id: data.branch_id,
           department_id: data.department_id,
+          station_id: data.station_id ?? null,
           role_ids: data.role_ids,
+          primary_role_id:
+            data.primary_role_id ??
+            data.role_ids[0] ??
+            null,
+          reporting_manager_profile_id:
+            data.reporting_manager_profile_id ?? null,
+          employment_status: data.employment_status,
+          idempotency_key: `worker:${data.email.toLowerCase()}`,
         } as never,
-      });
+      },
+    );
+
+    if (error) {
+      throw new Error(error.message);
     }
 
-    return { id: newUserId, provisioning: (result ?? null) as Record<string, string> | null };
-
+    return {
+      id: newUserId,
+      provisioning:
+        (result ?? null) as Record<string, string> | null,
+      emailConfirmationRequired: !created.data.session,
+    };
   });
-
 
 type AssignmentInput = {
   user_id: string;
@@ -306,7 +267,7 @@ type AssignmentInput = {
  *
  * User Management previously edited nothing but the account status, so a role,
  * property, department or station change made in the interface never reached
- * `user_roles`, `user_branches`, `user_departments` or `user_stations` — which
+ * `user_roles`, `user_branches`, `user_departments` or `user_stations` â€” which
  * is exactly why Role Testing and an actual login disagreed with the directory.
  * Everything is written together here, always org-scoped and audited.
  */
@@ -328,7 +289,7 @@ export const updateStaffAssignment = createServerFn({ method: "POST" })
     const organizationId = me?.organization_id;
     if (!organizationId) throw new Error("No organization");
 
-    // Target must live in the caller's organisation — never cross-tenant.
+    // Target must live in the caller's organisation â€” never cross-tenant.
     const { data: target } = await supabase
       .from("profiles")
       .select("id, organization_id, branch_id, department_id, job_title, employment_status")
@@ -342,7 +303,7 @@ export const updateStaffAssignment = createServerFn({ method: "POST" })
      * Everything below is validated *before* anything is written, and the
      * write itself happens inside one database routine. A station change can
      * therefore never leave the account with its role deleted because a later
-     * step failed — either the whole assignment lands or none of it does.
+     * step failed â€” either the whole assignment lands or none of it does.
      */
     let previousManagerId: string | null = null;
     let newManagerId: string | null = null;
@@ -391,7 +352,7 @@ export const updateStaffAssignment = createServerFn({ method: "POST" })
         const required = ((meta ?? []) as { manager_required: boolean }[])[0]?.manager_required;
         if (required) {
           reviewRequired = true;
-          reviewReason = "No reporting manager recorded — confirm the reporting line.";
+          reviewReason = "No reporting manager recorded â€” confirm the reporting line.";
         }
       }
     }
@@ -685,7 +646,7 @@ export const setUserPermissionOverride = createServerFn({ method: "POST" })
 /**
  * Deliberate Owner assignment.
  *
- * Authority is one canonical capability — `administration.users.assign_owner` —
+ * Authority is one canonical capability â€” `administration.users.assign_owner` â€”
  * never a role name, job title or email. The database routine re-checks that
  * capability, refuses another organisation, refuses a platform administrator,
  * allocates a missing staff identifier from the organisation-scoped allocator
@@ -728,7 +689,7 @@ export const removeOwnerRole = createServerFn({ method: "POST" })
  * Every mutation below is server-authorised through the same capability gate and
  * writes an audit record with actor, target, previous/new state and, where the
  * action carries consequence, the reason given by the administrator. No handler
- * ever reads or returns an existing password, hash or token — a password can
+ * ever reads or returns an existing password, hash or token â€” a password can
  * only be replaced, never revealed.
  */
 async function loadTarget(
@@ -843,7 +804,7 @@ export const resetStaffMfa = createServerFn({ method: "POST" })
 
 /**
  * Sign-in and security metadata for the account panel. Only non-secret
- * attributes are returned — never a password hash, recovery code or token.
+ * attributes are returned â€” never a password hash, recovery code or token.
  */
 export const getStaffSecurityMetadata = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -975,3 +936,4 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
     if (removed.error) throw new Error(removed.error.message);
     return { ok: true };
   });
+
