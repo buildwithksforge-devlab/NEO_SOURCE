@@ -1,4 +1,4 @@
-﻿-- NEØ Night Audit / EOD contract repair
+-- NEØ Night Audit / EOD contract repair
 -- Restores canonical per-day audit signing and rerun behaviour lost by the
 -- 20260901000000 replacement, while keeping Run Audit inspection-only.
 
@@ -437,7 +437,7 @@ BEGIN
     _source := rid,
     _reference := ref,
     _operational := outcome,
-    _financial := CASE WHEN outcome='completed' THEN 'posted' ELSE 'blocked' END,
+    _financial := CASE WHEN outcome='completed' THEN 'pending' ELSE 'blocked' END,
     _amount := 0,
     _currency := 'KES',
     _idempotency := 'night_audit:' || rid::text,

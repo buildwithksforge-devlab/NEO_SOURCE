@@ -312,7 +312,6 @@ export function useRunNightAudit() {
         blocking: number;
         warnings: number;
         status: string;
-        posting?: { posted?: number; blocked?: number; failed?: number; skipped?: string };
       }>(
         "neo_night_audit_run",
         { _branch: input.branch, _date: input.date, _mode: "manual" },
@@ -338,12 +337,8 @@ export function useRunNightAudit() {
     },
 
     onSuccess: (r) => {
-      // The audit now posts the day's eligible finance work, so the operator is
-      // told what actually reached the ledger, not only what is left over.
-      const posted = Number(r.posting?.posted ?? 0);
-      if (posted > 0) {
-        toast.success(`${posted} finance item(s) posted to the ledger by the audit`);
-      }
+      // Run Audit is inspection-only. It reports blockers and warnings but
+      // never posts eligible finance work or closes the business day.
       if (Number(r.blocking) > 0) {
         toast.error(
           `END-OF-DAY EXCEPTION — ${r.blocking} blocking item${Number(r.blocking) === 1 ? "" : "s"} for Finance to investigate`,

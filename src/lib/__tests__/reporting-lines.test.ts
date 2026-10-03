@@ -49,8 +49,8 @@ describe("reporting lines", () => {
 
   it("records the reporting line when the account is first created", () => {
     expect(usersFns).toContain("reporting_manager_profile_id?: string | null");
-    expect(usersFns).toContain("writeReportingLine");
-    expect(usersFns).toContain("user.reporting_line_set");
+    expect(usersFns).toContain('"neo_provision_worker"');
+    expect(usersFns).toContain("reporting_manager_profile_id:");
     expect(usersRoute).toMatch(/queryKey: \[\s*"reporting-candidates",\s*"new-user"/);
   });
 

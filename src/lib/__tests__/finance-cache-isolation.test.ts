@@ -30,7 +30,7 @@ describe("Finance query keys are tenant-bound", () => {
   for (const file of FINANCE_HOOK_FILES) {
     it(`${file} scopes every useQuery key by organizationId`, () => {
       const source = readFileSync(file, "utf8");
-      const keys = [...source.matchAll(/queryKey:\s*(\[[\s\S]*?\])\s*,\n/g)].map((m) => m[1]!);
+      const keys = [...source.matchAll(/queryKey:\s*(\[[\s\S]*?\])\s*,\r?\n/g)].map((m) => m[1]!);
       expect(keys.length).toBeGreaterThan(0);
       for (const key of keys) {
         if (NON_TENANT_KEYS.has(key)) continue;

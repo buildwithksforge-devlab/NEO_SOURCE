@@ -86,8 +86,8 @@ describe("workspace owner metadata", () => {
 describe("account-creation workflows populate the metadata", () => {
   it("staff provisioning builds and sends invite metadata", () => {
     expect(usersFn).toContain("buildStaffInviteMetadata");
-    expect(usersFn).toContain("user_metadata: inviteMetadata");
-    expect(usersFn).not.toContain("user_metadata: { full_name: data.full_name }");
+    expect(usersFn).toContain("data: inviteMetadata");
+    expect(usersFn).not.toContain("data: { full_name: data.full_name }");
   });
 
   it("public customer signup builds customer metadata", () => {
