@@ -1,0 +1,493 @@
+warning: in the working copy of 'supabase/migrations/20261003133000_repair_night_audit_eod_contract.sql', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/supabase/migrations/20261003133000_repair_night_audit_eod_contract.sql b/supabase/migrations/20261003133000_repair_night_audit_eod_contract.sql[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5cc1c38[m
+[1m--- /dev/null[m
+[1m+++ b/supabase/migrations/20261003133000_repair_night_audit_eod_contract.sql[m
+[36m@@ -0,0 +1,486 @@[m
+[32m+[m[32m﻿-- NEØ Night Audit / EOD contract repair[m
+[32m+[m[32m-- Restores canonical per-day audit signing and rerun behaviour lost by the[m
+[32m+[m[32m-- 20260901000000 replacement, while keeping Run Audit inspection-only.[m
+[32m+[m
+[32m+[m[32mCREATE OR REPLACE FUNCTION public.neo_night_audit_run([m
+[32m+[m[32m  _branch uuid,[m
+[32m+[m[32m  _date date DEFAULT NULL::date,[m
+[32m+[m[32m  _mode text DEFAULT 'manual'::text[m
+[32m+[m[32m)[m
+[32m+[m[32mRETURNS jsonb[m
+[32m+[m[32mLANGUAGE plpgsql[m
+[32m+[m[32mSECURITY DEFINER[m
+[32m+[m[32mSET search_path TO 'public'[m
+[32m+[m[32mAS $function$[m
+[32m+[m[32mDECLARE[m
+[32m+[m[32m  org uuid := public.current_org_id();[m
+[32m+[m[32m  d date := coalesce(_date,current_date);[m
+[32m+[m[32m  rid uuid;[m
+[32m+[m[32m  ref text;[m
+[32m+[m[32m  attempt int;[m
+[32m+[m[32m  started timestamptz := now();[m
+[32m+[m
+[32m+[m[32m  blockers int := 0;[m
+[32m+[m[32m  warnings int := 0;[m
+[32m+[m
+[32m+[m[32m  counts jsonb := '{}'::jsonb;[m
+[32m+[m[32m  snapshot jsonb := '[]'::jsonb;[m
+[32m+[m[32m  summary jsonb;[m
+[32m+[m[32m  digest text;[m
+[32m+[m[32m  operator text;[m
+[32m+[m[32m  err text;[m
+[32m+[m[32m  outcome text;[m
+[32m+[m[32mBEGIN[m
+[32m+[m[32m  IF org IS NULL THEN[m
+[32m+[m[32m    RAISE EXCEPTION 'No workspace context';[m
+[32m+[m[32m  END IF;[m
+[32m+[m
+[32m+[m[32m  IF NOT ([m
+[32m+[m[32m    public.has_permission('finance','eod','view')[m
+[32m+[m[32m    OR public.is_org_admin()[m
+[32m+[m[32m  ) THEN[m
+[32m+[m[32m    RAISE EXCEPTION 'Forbidden';[m
+[32m+[m[32m  END IF;[m
+[32m+[m
+[32m+[m[32m  IF _branch IS NULL OR NOT EXISTS ([m
+[32m+[m[32m    SELECT 1[m
+[32m+[m[32m    FROM public.branches b[m
+[32m+[m[32m    WHERE b.id = _branch[m
+[32m+[m[32m      AND b.organization_id = org[m
+[32m+[m[32m  ) THEN[m
+[32m+[m[32m    RAISE EXCEPTION 'Unknown property';[m
+[32m+[m[32m  END IF;[m
+[32m+[m
+[32m+[m[32m  IF NOT public.neo_branch_in_scope(_branch)[m
+[32m+[m[32m     AND NOT public.is_org_admin() THEN[m
+[32m+[m[32m    RAISE EXCEPTION 'That property is outside your access scope'[m
+[32m+[m[32m      USING ERRCODE='42501';[m
+[32m+[m[32m  END IF;[m
+[32m+[m
+[32m+[m[32m  -- Audit only belongs to an explicitly OPEN business day.[m
+[32m+[m[32m  IF NOT EXISTS ([m
+[32m+[m[32m    SELECT 1[m
+[32m+[m[32m    FROM public.business_days bd[m
+[32m+[m[32m    WHERE bd.organization_id = org[m
+[32m+[m[32m      AND bd.branch_id = _branch[m
+[32m+[m[32m      AND bd.business_date = d[m
+[32m+[m[32m      AND bd.status = 'open'[m
+[32m+[m[32m  ) THEN[m
+[32m+[m[32m    RETURN jsonb_build_object([m
+[32m+[m[32m      'status','not_open',[m
+[32m+[m[32m      'business_date',d,[m
+[32m+[m[32m      'blocking',1,[m
+[32m+[m[32m      'warnings',0,[m
+[32m+[m[32m      'message','Open this business day before running End of Day.'[m
+[32m+[m[32m    );[m
+[32m+[m[32m  END IF;[m
+[32m+[m
+[32m+[m[32m  SELECT coalesce(p.full_name,p.email)[m
+[32m+[m[32m  INTO operator[m
+[32m+[m[32m  FROM public.profiles p[m
+[32m+[m[32m  WHERE p.id = auth.uid();[m
+[32m+[m
+[32m+[m[32m  -- One canonical run per organisation/property/business date.[m
+[32m+[m[32m  -- Rerunning refreshes that record instead of creating duplicates.[m
+[32m+[m[32m  INSERT INTO public.night_audit_runs([m
+[32m+[m[32m    organization_id,[m
+[32m+[m[32m    branch_id,[m
+[32m+[m[32m    business_date,[m
+[32m+[m[32m    run_mode,[m
+[32m+[m[32m    created_by,[m
+[32m+[m[32m    started_at,[m
+[32m+[m[32m    operator_name,[m
+[32m+[m[32m    run_reference,[m
+[32m+[m[32m    status,[m
+[32m+[m[32m    stage,[m
+[32m+[m[32m    rerun_count[m
+[32m+[m[32m  )[m
+[32m+[m[32m  VALUES([m
+[32m+[m[32m    org,[m
+[32m+[m[32m    _branch,[m
+[32m+[m[32m    d,[m
+[32m+[m[32m    coalesce(_mode,'manual'),[m
+[32m+[m[32m    auth.uid(),[m
+[32m+[m[32m    started,[m
+[32m+[m[32m    operator,[m
+[32m+[m[32m    public.neo_night_audit_reference(org,_branch,d),[m
+[32m+[m[32m    'running',[m
+[32m+[m[32m    'collecting',[m
+[32m+[m[32m    0[m
+[32m+[m[32m  )[m
+[32m+[m[32m  ON CONFLICT(organization_id,branch_id,business_date)[m
+[32m+[m[32m  DO UPDATE SET[m
+[32m+[m[32m    run_mode = excluded.run_mode,[m
+[32m+[m[32m    created_by = auth.uid(),[m
+[32m+[m[32m    started_at = started,[m
+[32m+[m[32m    completed_at = NULL,[m
+[32m+[m[32m    operator_name = excluded.operator_name,[m
+[32m+[m[32m    status = 'running',[m
+[32m+[m[32m    stage = 'collecting',[m
+[32m+[m[32m    blocking_count = 0,[m
+[32m+[m[32m    warning_count = 0,[m
+[32m+[m[32m    result_digest = NULL,[m
+[32m+[m[32m    signed_at = NULL,[m
+[32m+[m[32m    rerun_count = public.night_audit_runs.rerun_count + 1[m
+[32m+[m[32m  RETURNING[m
+[32m+[m[32m    id,[m
+[32m+[m[32m    run_reference,[m
+[32m+[m[32m    rerun_count + 1[m
+[32m+[m[32m  INTO rid,ref,attempt;[m
+[32m+[m
+[32m+[m[32m  INSERT INTO public.night_audit_attempts([m
+[32m+[m[32m    run_id,[m
+[32m+[m[32m    organization_id,[m
+[32m+[m[32m    branch_id,[m
+[32m+[m[32m    business_date,[m
+[32m+[m[32m    attempt_number,[m
+[32m+[m[32m    stage,[m
+[32m+[m[32m    status,[m
+[32m+[m[32m    started_at,[m
+[32m+[m[32m    actor_id[m
+[32m+[m[32m  )[m
+[32m+[m[32m  VALUES([m
+[32m+[m[32m    rid,org,_branch,d,attempt,'collecting','running',started,auth.uid()[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  BEGIN[m
+[32m+[m[32m    -- Refresh exceptions for this canonical audit.[m
+[32m+[m[32m    DELETE FROM public.night_audit_exceptions[m
+[32m+[m[32m    WHERE run_id = rid;[m
+[32m+[m
+[32m+[m[32m    -- OPEN CASHIER / TILL: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'cashier-session','blocking',[m
+[32m+[m[32m      coalesce(s.shift_number,s.id::text),[m
+[32m+[m[32m      'Cashier session is still open for the audited business day.',[m
+[32m+[m[32m      s.expected_cash[m
+[32m+[m[32m    FROM public.pos_shifts s[m
+[32m+[m[32m    WHERE s.organization_id = org[m
+[32m+[m[32m      AND s.branch_id = _branch[m
+[32m+[m[32m      AND coalesce(s.status,'open') <> 'closed'[m
+[32m+[m[32m      AND s.opened_at::date <= d;[m
+[32m+[m
+[32m+[m[32m    -- CASH VARIANCE: warning.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'cash-variance','warning',[m
+[32m+[m[32m      coalesce(s.shift_number,s.id::text),[m
+[32m+[m[32m      CASE[m
+[32m+[m[32m        WHEN s.variance < 0 THEN 'Cash shortage recorded on a closed cashier session.'[m
+[32m+[m[32m        ELSE 'Cash overage recorded on a closed cashier session.'[m
+[32m+[m[32m      END,[m
+[32m+[m[32m      s.variance[m
+[32m+[m[32m    FROM public.pos_shifts s[m
+[32m+[m[32m    WHERE s.organization_id = org[m
+[32m+[m[32m      AND s.branch_id = _branch[m
+[32m+[m[32m      AND s.status = 'closed'[m
+[32m+[m[32m      AND s.closed_at::date = d[m
+[32m+[m[32m      AND coalesce(s.variance,0) <> 0;[m
+[32m+[m
+[32m+[m[32m    -- UNSETTLED POS / BAR / RESTAURANT: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'unsettled-bill','blocking',[m
+[32m+[m[32m      coalesce(o.order_number,o.id::text),[m
+[32m+[m[32m      'POS order is not fully settled.',[m
+[32m+[m[32m      greatest([m
+[32m+[m[32m        coalesce(o.grand_total,0) - coalesce(o.paid_total,0),[m
+[32m+[m[32m        0[m
+[32m+[m[32m      )[m
+[32m+[m[32m    FROM public.pos_orders o[m
+[32m+[m[32m    WHERE o.organization_id = org[m
+[32m+[m[32m      AND o.branch_id = _branch[m
+[32m+[m[32m      AND o.created_at::date <= d[m
+[32m+[m[32m      AND coalesce(o.status,'draft')[m
+[32m+[m[32m          NOT IN ('cancelled','voided','charged-to-room','credit')[m
+[32m+[m[32m      AND coalesce(o.payment_status,'unpaid')[m
+[32m+[m[32m          NOT IN ('paid','settled','credit','transferred')[m
+[32m+[m[32m      AND greatest([m
+[32m+[m[32m        coalesce(o.grand_total,0) - coalesce(o.paid_total,0),[m
+[32m+[m[32m        0[m
+[32m+[m[32m      ) > 0;[m
+[32m+[m
+[32m+[m[32m    -- OPEN FOLIOS: warning for review.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'open-folio','warning',[m
+[32m+[m[32m      coalesce(f.folio_number,f.id::text),[m
+[32m+[m[32m      'Guest folio carries an outstanding balance.',[m
+[32m+[m[32m      f.balance[m
+[32m+[m[32m    FROM public.folios f[m
+[32m+[m[32m    WHERE f.organization_id = org[m
+[32m+[m[32m      AND f.branch_id = _branch[m
+[32m+[m[32m      AND f.status = 'open'[m
+[32m+[m[32m      AND coalesce(f.balance,0) <> 0;[m
+[32m+[m
+[32m+[m[32m    -- CANONICAL FINANCE EXCEPTIONS: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'finance-posting','blocking',[m
+[32m+[m[32m      e.reference,[m
+[32m+[m[32m      coalesce(e.detail,e.reason,'Finance exception requires resolution.'),[m
+[32m+[m[32m      e.amount[m
+[32m+[m[32m    FROM public.neo_finance_exception_register(_branch,d,d) e;[m
+[32m+[m
+[32m+[m[32m    -- ELIGIBLE BUT UNPOSTED ITEMS: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'finance-posting','blocking',[m
+[32m+[m[32m      q.reference,[m
+[32m+[m[32m      coalesce(q.required_action,'Eligible finance item has not yet been posted.'),[m
+[32m+[m[32m      q.amount[m
+[32m+[m[32m    FROM public.neo_finance_posting_queue(_branch,d,d) q[m
+[32m+[m[32m    WHERE q.eligible;[m
+[32m+[m
+[32m+[m[32m    -- PENDING CONTROLLED APPROVALS: warning.[m
+[32m+[m[32m    -- Correct identifier is approval_requests.reference, not request_number.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'approval','warning',[m
+[32m+[m[32m      coalesce(nullif(a.reference,''),a.id::text),[m
+[32m+[m[32m      'Controlled transaction is still awaiting approval.',[m
+[32m+[m[32m      a.amount[m
+[32m+[m[32m    FROM public.approval_requests a[m
+[32m+[m[32m    WHERE a.organization_id = org[m
+[32m+[m[32m      AND a.branch_id = _branch[m
+[32m+[m[32m      AND a.created_at::date <= d[m
+[32m+[m[32m      AND public.neo_approval_normalize_status(a.status) = 'pending';[m
+[32m+[m
+[32m+[m[32m    -- DELIVERY CASH NOT HANDED OVER / RECONCILED: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'delivery-cash','blocking',[m
+[32m+[m[32m      r.id::text,[m
+[32m+[m[32m      'Rider cash remittance has not been reconciled.',[m
+[32m+[m[32m      NULL[m
+[32m+[m[32m    FROM public.rider_cash_remittances r[m
+[32m+[m[32m    WHERE r.organization_id = org[m
+[32m+[m[32m      AND r.branch_id = _branch[m
+[32m+[m[32m      AND r.submitted_at::date <= d[m
+[32m+[m[32m      AND r.status <> 'reconciled';[m
+[32m+[m
+[32m+[m[32m    -- REFUNDS STILL FINANCIALLY UNSETTLED: blocking.[m
+[32m+[m[32m    INSERT INTO public.night_audit_exceptions([m
+[32m+[m[32m      run_id,organization_id,branch_id,business_date,[m
+[32m+[m[32m      category,severity,reference,detail,amount[m
+[32m+[m[32m    )[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      rid,org,_branch,d,[m
+[32m+[m[32m      'refund','blocking',[m
+[32m+[m[32m      r.id::text,[m
+[32m+[m[32m      'Refund is awaiting approval or settlement.',[m
+[32m+[m[32m      NULL[m
+[32m+[m[32m    FROM public.cash_refund_requests r[m
+[32m+[m[32m    WHERE r.organization_id = org[m
+[32m+[m[32m      AND r.branch_id = _branch[m
+[32m+[m[32m      AND r.created_at::date <= d[m
+[32m+[m[32m      AND r.status IN ('pending_approval','approved');[m
+[32m+[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      count(*) FILTER (WHERE severity='blocking'),[m
+[32m+[m[32m      count(*) FILTER (WHERE severity='warning'),[m
+[32m+[m[32m      coalesce([m
+[32m+[m[32m        jsonb_agg(to_jsonb(e) ORDER BY e.created_at),[m
+[32m+[m[32m        '[]'::jsonb[m
+[32m+[m[32m      )[m
+[32m+[m[32m    INTO blockers,warnings,snapshot[m
+[32m+[m[32m    FROM public.night_audit_exceptions e[m
+[32m+[m[32m    WHERE e.run_id = rid;[m
+[32m+[m
+[32m+[m[32m    SELECT[m
+[32m+[m[32m      coalesce(jsonb_object_agg(source_module,c),'{}'::jsonb)[m
+[32m+[m[32m    INTO counts[m
+[32m+[m[32m    FROM ([m
+[32m+[m[32m      SELECT source_module,count(*) c[m
+[32m+[m[32m      FROM public.canonical_transaction_states[m
+[32m+[m[32m      WHERE organization_id = org[m
+[32m+[m[32m        AND branch_id = _branch[m
+[32m+[m[32m        AND occurred_at::date = d[m
+[32m+[m[32m      GROUP BY source_module[m
+[32m+[m[32m    ) x;[m
+[32m+[m
+[32m+[m[32m    summary := jsonb_build_object([m
+[32m+[m[32m      'reference',ref,[m
+[32m+[m[32m      'operator',operator,[m
+[32m+[m[32m      'started_at',started,[m
+[32m+[m[32m      'finished_at',now(),[m
+[32m+[m[32m      'source_counts',counts,[m
+[32m+[m[32m      'blocking',blockers,[m
+[32m+[m[32m      'warnings',warnings,[m
+[32m+[m[32m      'outcome',[m
+[32m+[m[32m        CASE WHEN blockers > 0 THEN 'exception' ELSE 'completed' END[m
+[32m+[m[32m    );[m
+[32m+[m
+[32m+[m[32m    digest := encode([m
+[32m+[m[32m      digest(convert_to(summary::text,'UTF8'),'sha256'),[m
+[32m+[m[32m      'hex'[m
+[32m+[m[32m    );[m
+[32m+[m
+[32m+[m[32m    -- Signing means the inspection snapshot itself is immutable evidence.[m
+[32m+[m[32m    -- It does NOT mean the business day has been closed.[m
+[32m+[m[32m    UPDATE public.night_audit_runs[m
+[32m+[m[32m    SET[m
+[32m+[m[32m      blocking_count = blockers,[m
+[32m+[m[32m      warning_count = warnings,[m
+[32m+[m[32m      status = CASE WHEN blockers > 0 THEN 'exception' ELSE 'completed' END,[m
+[32m+[m[32m      stage = 'signed',[m
+[32m+[m[32m      completed_at = now(),[m
+[32m+[m[32m      source_counts = counts,[m
+[32m+[m[32m      exception_snapshot = snapshot,[m
+[32m+[m[32m      summary = summary,[m
+[32m+[m[32m      result_digest = digest,[m
+[32m+[m[32m      signed_at = now()[m
+[32m+[m[32m    WHERE id = rid;[m
+[32m+[m
+[32m+[m[32m    UPDATE public.night_audit_attempts[m
+[32m+[m[32m    SET[m
+[32m+[m[32m      stage = 'signed',[m
+[32m+[m[32m      status = CASE WHEN blockers > 0 THEN 'exception' ELSE 'completed' END,[m
+[32m+[m[32m      source_counts = counts,[m
+[32m+[m[32m      exception_snapshot = snapshot,[m
+[32m+[m[32m      result_digest = digest,[m
+[32m+[m[32m      completed_at = now()[m
+[32m+[m[32m    WHERE run_id = rid[m
+[32m+[m[32m      AND attempt_number = attempt;[m
+[32m+[m
+[32m+[m[32m  EXCEPTION WHEN OTHERS THEN[m
+[32m+[m[32m    err := SQLERRM;[m
+[32m+[m[32m    blockers := 1;[m
+[32m+[m
+[32m+[m[32m    UPDATE public.night_audit_runs[m
+[32m+[m[32m    SET[m
+[32m+[m[32m      blocking_count = 1,[m
+[32m+[m[32m      status = 'failed',[m
+[32m+[m[32m      stage = 'failed',[m
+[32m+[m[32m      completed_at = now(),[m
+[32m+[m[32m      summary = jsonb_build_object([m
+[32m+[m[32m        'reference',ref,[m
+[32m+[m[32m        'failed_stage','collecting',[m
+[32m+[m[32m        'error',err[m
+[32m+[m[32m      ),[m
+[32m+[m[32m      result_digest = NULL,[m
+[32m+[m[32m      signed_at = NULL[m
+[32m+[m[32m    WHERE id = rid;[m
+[32m+[m
+[32m+[m[32m    UPDATE public.night_audit_attempts[m
+[32m+[m[32m    SET[m
+[32m+[m[32m      stage = 'failed',[m
+[32m+[m[32m      status = 'failed',[m
+[32m+[m[32m      error = err,[m
+[32m+[m[32m      completed_at = now()[m
+[32m+[m[32m    WHERE run_id = rid[m
+[32m+[m[32m      AND attempt_number = attempt;[m
+[32m+[m[32m  END;[m
+[32m+[m
+[32m+[m[32m  outcome :=[m
+[32m+[m[32m    CASE[m
+[32m+[m[32m      WHEN err IS NOT NULL THEN 'failed'[m
+[32m+[m[32m      WHEN blockers > 0 THEN 'exception'[m
+[32m+[m[32m      ELSE 'completed'[m
+[32m+[m[32m    END;[m
+[32m+[m
+[32m+[m[32m  PERFORM public.emit_domain_event([m
+[32m+[m[32m    org,[m
+[32m+[m[32m    _branch,[m
+[32m+[m[32m    'night_audit.' || outcome,[m
+[32m+[m[32m    'finance',[m
+[32m+[m[32m    rid,[m
+[32m+[m[32m    jsonb_build_object([m
+[32m+[m[32m      'reference',ref,[m
+[32m+[m[32m      'business_date',d,[m
+[32m+[m[32m      'attempt',attempt,[m
+[32m+[m[32m      'blocking',blockers,[m
+[32m+[m[32m      'warnings',warnings,[m
+[32m+[m[32m      'digest',digest,[m
+[32m+[m[32m      'error',err[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    'night_audit:' || rid::text || ':' || attempt::text[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  PERFORM public.neo_canonical_transaction_set([m
+[32m+[m[32m    _org := org,[m
+[32m+[m[32m    _branch := _branch,[m
+[32m+[m[32m    _module := 'finance',[m
+[32m+[m[32m    _source := rid,[m
+[32m+[m[32m    _reference := ref,[m
+[32m+[m[32m    _operational := outcome,[m
+[32m+[m[32m    _financial := CASE WHEN outcome='completed' THEN 'posted' ELSE 'blocked' END,[m
+[32m+[m[32m    _amount := 0,[m
+[32m+[m[32m    _currency := 'KES',[m
+[32m+[m[32m    _idempotency := 'night_audit:' || rid::text,[m
+[32m+[m[32m    _actor := auth.uid(),[m
+[32m+[m[32m    _owner := 'Finance',[m
+[32m+[m[32m    _next_action :=[m
+[32m+[m[32m      CASE[m
+[32m+[m[32m        WHEN outcome='completed' THEN 'Close the business day'[m
+[32m+[m[32m        ELSE 'Clear blocking exceptions and rerun'[m
+[32m+[m[32m      END,[m
+[32m+[m[32m    _blocker :=[m
+[32m+[m[32m      CASE[m
+[32m+[m[32m        WHEN outcome='completed' THEN NULL[m
+[32m+[m[32m        ELSE coalesce(err,blockers || ' blocking exception(s)')[m
+[32m+[m[32m      END,[m
+[32m+[m[32m    _journal := NULL,[m
+[32m+[m[32m    _receipt := NULL,[m
+[32m+[m[32m    _downstream := jsonb_build_object('night_audit.close_day',outcome),[m
+[32m+[m[32m    _metadata := jsonb_build_object([m
+[32m+[m[32m      'entity_kind','night_audit',[m
+[32m+[m[32m      'business_date',d,[m
+[32m+[m[32m      'attempt',attempt,[m
+[32m+[m[32m      'source_counts',counts[m
+[32m+[m[32m    )[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  RETURN jsonb_build_object([m
+[32m+[m[32m    'run_id',rid,[m
+[32m+[m[32m    'reference',ref,[m
+[32m+[m[32m    'business_date',d,[m
+[32m+[m[32m    'blocking',blockers,[m
+[32m+[m[32m    'warnings',warnings,[m
+[32m+[m[32m    'status',outcome,[m
+[32m+[m[32m    'stage',[m
+[32m+[m[32m      CASE WHEN err IS NOT NULL THEN 'failed' ELSE 'signed' END,[m
+[32m+[m[32m    'digest',digest,[m
+[32m+[m[32m    'error',err[m
+[32m+[m[32m  );[m
+[32m+[m[32mEND;[m
+[32m+[m[32m$function$;[m
+[32m+[m
+[32m+[m[32mREVOKE ALL ON FUNCTION public.neo_night_audit_run(uuid,date,text)[m
+[32m+[m[32mFROM PUBLIC, anon;[m
+[32m+[m
+[32m+[m[32mGRANT EXECUTE ON FUNCTION public.neo_night_audit_run(uuid,date,text)[m
+[32m+[m[32mTO authenticated;[m
