@@ -8,6 +8,7 @@ import { AddItemDialog } from "@/components/pos/AddItemDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { usePosReceiptPrintState } from "@/lib/printing";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -43,6 +44,7 @@ import {
   usePaymentIntentStatus,
 } from "@/lib/payment-intents";
 import { paymentMethod } from "@/lib/payment-methods";
+import { SendToPrinterButton } from "@/components/common/SendToPrinterButton";
 import { COURSES, EXTERNAL_METHODS, allowedTransitions, money, titleCase } from "@/lib/pos";
 import {
   useAddOrderItem,
@@ -126,6 +128,9 @@ function OrderTerminal() {
   const canManualConfirm = can("pos", "orders.approve");
   const discountPolicies = usePosDiscountPolicies();
   const applyDiscount = useApplyPosDiscount();
+  const receiptPrintState = usePosReceiptPrintState(id);
+  const hasCompletedReceiptPrint = receiptPrintState.data?.hasCompletedPrint ?? false;
+  const canReprintReceipt = can("pos", "receipts.reprint");
   const [discountChoice, setDiscountChoice] = useState("none");
 
   const [category, setCategory] = useState("all");
@@ -194,18 +199,39 @@ function OrderTerminal() {
             : "Loading order"
         }
         actions={
-          data ? (
-            <>
-              <OrderStatusBadge status={data.status} />
-              <DocumentPrintButton
-                type="pos_receipt"
-                id={data.id}
-                label="Print receipt"
-                size="default"
-              />
-            </>
-          ) : null
-        }
+  data ? (
+    <>
+      <OrderStatusBadge status={data.status} />
+
+      <DocumentPrintButton
+        type="pos_receipt"
+        id={data.id}
+        label="Receipt PDF"
+        size="default"
+      />
+
+      {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
+        <SendToPrinterButton
+          type="pos_receipt"
+          id={data.id}
+          documentNumber={data.order_number}
+          role="restaurant"
+          label="Send to receipt printer"
+        />
+      ) : !receiptPrintState.isLoading &&
+        hasCompletedReceiptPrint &&
+        canReprintReceipt ? (
+        <SendToPrinterButton
+          type="pos_receipt"
+          id={data.id}
+          documentNumber={data.order_number}
+          role="restaurant"
+          label="Reprint receipt"
+        />
+      ) : null}
+    </>
+  ) : null
+}
       />
 
       <QueryState

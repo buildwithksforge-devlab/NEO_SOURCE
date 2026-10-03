@@ -424,58 +424,75 @@ export async function buildBusinessDocumentPdf(
   // merely restates the emphasised balance, is dropped so the band below is
   // the only place the amount owed is stated.
   const totalsRaw = (Array.isArray(payload.totals) ? payload.totals : []).filter(
-    (total) => total && total.amount !== null && total.amount !== undefined && Number(total.amount) !== 0,
-  );
-  const emphasised = totalsRaw.find((total) => total.emphasis);
-  const seenLabels = new Set<string>();
-  const totals = totalsRaw.filter((total) => {
-    const key = String(total.label ?? "").trim().toLowerCase();
-    if (seenLabels.has(key)) return false;
-    seenLabels.add(key);
-    if (!total.emphasis && emphasised && Number(total.amount) === Number(emphasised.amount)) {
-      return false;
-    }
-    return true;
-  });
+  (total) => total && total.amount !== null && total.amount !== undefined && Number(total.amount) !== 0,
+);
 
-  if (totals.length) {
-    const panelWidth = 240;
-    const boxX = pageWidth - margin - panelWidth;
-    ensure(totals.length * 16 + 30);
-    for (const total of totals) {
-      const value = money(total.amount, currency);
-      const size = total.emphasis ? 11 : 9;
-      const font = total.emphasis ? bold : regular;
-      if (total.emphasis) {
-        page.drawRectangle({ x: boxX, y: y - 6, width: panelWidth, height: 22, color: brown });
-      }
-      page.drawText(total.label, {
-        x: boxX + (total.emphasis ? 10 : 4),
-        y: total.emphasis ? y + 1 : y,
-        size,
-        font,
-        color: total.emphasis ? rgb(1, 1, 1) : muted,
-      });
-      const width = font.widthOfTextAtSize(value, size);
-      page.drawText(value, {
-        x: pageWidth - margin - width - (total.emphasis ? 10 : 4),
-        y: total.emphasis ? y + 1 : y,
-        size,
-        font,
-        color: total.emphasis ? rgb(1, 1, 1) : dark,
-      });
-      y -= total.emphasis ? 28 : 14;
-      if (!total.emphasis) {
-        page.drawLine({
-          start: { x: boxX + 4, y: y + 8 },
-          end: { x: pageWidth - margin - 4, y: y + 8 },
-          thickness: 0.35,
-          color: rule,
-        });
-      }
-    }
-    y -= 6;
+const seenLabels = new Set<string>();
+
+const totals = totalsRaw.filter((total) => {
+  const key = String(total.label ?? "").trim().toLowerCase();
+
+  if (seenLabels.has(key)) {
+    return false;
   }
+
+  seenLabels.add(key);
+
+  return true;
+});
+
+if (totals.length) {
+  const panelWidth = 240;
+  const boxX = pageWidth - margin - panelWidth;
+  ensure(totals.length * 16 + 30);
+
+  for (const total of totals) {
+    const value = money(total.amount, currency);
+    const size = total.emphasis ? 11 : 9;
+    const font = total.emphasis ? bold : regular;
+
+    if (total.emphasis) {
+      page.drawRectangle({
+        x: boxX,
+        y: y - 6,
+        width: panelWidth,
+        height: 22,
+        color: brown,
+      });
+    }
+
+    page.drawText(total.label, {
+      x: boxX + (total.emphasis ? 10 : 4),
+      y: total.emphasis ? y + 1 : y,
+      size,
+      font,
+      color: total.emphasis ? rgb(1, 1, 1) : muted,
+    });
+
+    const width = font.widthOfTextAtSize(value, size);
+
+    page.drawText(value, {
+      x: pageWidth - margin - width - (total.emphasis ? 10 : 4),
+      y: total.emphasis ? y + 1 : y,
+      size,
+      font,
+      color: total.emphasis ? rgb(1, 1, 1) : dark,
+    });
+
+    y -= total.emphasis ? 28 : 14;
+
+    if (!total.emphasis) {
+      page.drawLine({
+        start: { x: boxX + 4, y: y + 8 },
+        end: { x: pageWidth - margin - 4, y: y + 8 },
+        thickness: 0.35,
+        color: rule,
+      });
+    }
+  }
+
+  y -= 6;
+}
 
   // ---- Payment information, terms and operational detail ----
   const shownInHeader = new Set(["due_date", "reservation", "confirmation", "reference", "room", "stay"]);
