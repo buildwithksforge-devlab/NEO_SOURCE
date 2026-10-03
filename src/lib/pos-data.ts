@@ -315,6 +315,7 @@ export function useStationTickets(stationId: string | "all") {
 /** Live invalidation for POS surfaces — one channel, torn down on unmount. */
 export function usePosRealtime() {
   const qc = useQueryClient();
+
   useScopedRealtime("pos-live", [
     {
       table: "pos_orders",
@@ -330,8 +331,26 @@ export function usePosRealtime() {
         void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
       },
     },
-    { table: "station_tickets", onChange: () => void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] }) },
-    { table: "restaurant_tables", onChange: () => void qc.invalidateQueries({ queryKey: ["pos", "tables"] }) },
+    {
+      table: "pos_payments",
+      onChange: () => {
+        void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+        void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+        void qc.invalidateQueries({ queryKey: ["pos", "shifts"] });
+      },
+    },
+    {
+      table: "station_tickets",
+      onChange: () => {
+        void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
+      },
+    },
+    {
+      table: "restaurant_tables",
+      onChange: () => {
+        void qc.invalidateQueries({ queryKey: ["pos", "tables"] });
+      },
+    },
   ]);
 }
 
@@ -955,8 +974,15 @@ export function useUpdateOrderStatus() {
  */
 export type SettlementResult = {
   payment_id: string;
+  receipt_number?: string | null;
   status: string;
   duplicate: boolean;
+
+  provider_backed?: boolean;
+  shift_id?: string | null;
+  destination_account_id?: string | null;
+  finance?: unknown;
+
   grand_total: number;
   paid_total: number;
   pending_total: number;
@@ -968,19 +994,47 @@ export type SettlementResult = {
 
 function settlementToast(r: SettlementResult) {
   if (r.duplicate) {
-    toast.info("That payment was already recorded — nothing was charged twice.");
+    toast.info(
+      r.receipt_number
+        ? `That payment was already recorded as receipt ${r.receipt_number} — nothing was charged twice.`
+        : "That payment was already recorded — nothing was charged twice.",
+    );
     return;
   }
+
   if (r.status !== "confirmed") {
-    toast.success("Payment recorded as pending verification.");
+    toast.success(
+      "Payment recorded as awaiting confirmation. The bill has not been marked paid.",
+    );
     return;
   }
-  if (r.closed) toast.success("Bill fully settled and closed.");
-  else if (r.balance > 0) toast.success(`Payment recorded. Balance outstanding ${r.balance.toFixed(2)}.`);
-  else if (r.open_items > 0)
-    toast.success(`Bill fully paid. ${r.open_items} item(s) are still open, so it stays on the floor until they are served or voided.`);
-  else toast.success("Payment recorded.");
+
+  const receipt = r.receipt_number
+    ? ` Receipt ${r.receipt_number}.`
+    : "";
+
+  if (r.closed) {
+    toast.success(`Bill fully settled and closed.${receipt}`);
+    return;
+  }
+
+  if (r.balance > 0) {
+    toast.success(
+      `Payment recorded.${receipt} Balance outstanding ${Number(r.balance).toFixed(2)}.`,
+    );
+    return;
+  }
+
+  if (r.open_items > 0) {
+    toast.success(
+      `Bill fully paid.${receipt} ${r.open_items} item(s) are still open, so the order remains active until they are served or voided.`,
+    );
+    return;
+  }
+
+  toast.success(`Payment recorded.${receipt}`);
 }
+
 
 /**
  * Records a settlement attempt through `pos_record_payment_attempt`. Validation
@@ -1029,19 +1083,36 @@ export function useRecordPayment() {
 /** Confirms a pending external payment manually, with a mandatory note. */
 export function useConfirmManualPayment() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: async (input: { paymentId: string; note: string }) => {
-      const { data, error } = await guardedRpc(supabase, "pos_confirm_manual_payment", {
-        _payment_id: input.paymentId,
-        _note: input.note,
-      });
+      const note = input.note.trim();
+
+      if (!note) {
+        throw new Error(
+          "A verification note is required before manually confirming a payment.",
+        );
+      }
+
+      const { data, error } = await guardedRpc(
+        supabase,
+        "pos_confirm_manual_payment",
+        {
+          _payment_id: input.paymentId,
+          _note: note,
+        },
+      );
+
       if (error) throw error;
+
       return data as unknown as SettlementResult;
     },
+
     onSuccess: (r) => {
       settlementToast(r);
       void qc.invalidateQueries({ queryKey: ["pos"] });
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 }
