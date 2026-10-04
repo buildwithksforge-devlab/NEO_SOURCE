@@ -230,7 +230,7 @@ export function useAssignGuardToPost() {
 
 /** Guards available to assign, read from the department's staff records. */
 export function useSecurityStaff() {
-  return useScopedWorkerOptions({ jobTitlePattern: "security|guard|patrol" });
+  return useScopedWorkerOptions({ departmentKey: "security", jobTitlePattern: "security|guard|patrol" });
 }
 
 /* ------------------------------------------------------------------ *

@@ -365,9 +365,13 @@ export function useDepartmentsLite() {
   return { ...departments, data: departments.data ?? [] };
 }
 
-export function useAssignableStaff() {
-  // Canonical profiles.id options limited to the active property.
-  return useScopedWorkerOptions();
+export function useAssignableStaff(departmentId?: string | null) {
+  // Guest-request assignment follows the selected property -> department ->
+  // worker chain. When no department is selected, do not expose a
+  // property-wide worker catalogue to this selector.
+  return useScopedWorkerOptions({
+    departmentId: departmentId || null,
+  });
 }
 
 export function useAssignRequest() {

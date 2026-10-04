@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { BankTransferMatching } from "@/components/finance/BankTransferMatching";
+import { Button } from "@/components/ui/button";
 import { PageHeader, SectionCard, StatCard } from "@/components/common/DataDisplay";
 import {
   Select,
@@ -54,7 +55,7 @@ function BankingPage() {
   const transfers = useCashTransfers();
   const gl = useAccounts();
 
-  const createAccount = useFinanceInsert("bank_accounts", "finance.bank_account.created");
+
   const createReconciliation = useFinanceInsert(
     "reconciliations",
     "finance.reconciliation.created",
@@ -63,32 +64,6 @@ function BankingPage() {
 
   const unreconciled = (entries.data ?? []).filter((e) => e["status"] === "unreconciled");
   const variances = (counts.data ?? []).filter((c) => Math.abs(num(c["variance"])) > 0.005);
-
-  const accountFields: FieldSpec[] = [
-    { name: "name", label: "Account name", required: true, placeholder: "Main current account" },
-    {
-      name: "account_kind",
-      label: "Account kind",
-      type: "select",
-      required: true,
-      options: ["bank", "mpesa", "card_settlement", "petty_cash", "wallet"].map((v) => ({
-        value: v,
-        label: titleCase(v),
-      })),
-    },
-    { name: "bank_name", label: "Bank / provider" },
-    { name: "account_number_masked", label: "Account number (masked)", placeholder: "•••• 4321" },
-    { name: "currency", label: "Currency", placeholder: "KES" },
-    {
-      name: "gl_account_id",
-      label: "General ledger account",
-      type: "select",
-      options: (gl.data ?? []).map((a) => ({
-        value: String(a["id"]),
-        label: `${a["code"]} — ${a["name"]}`,
-      })),
-    },
-  ];
 
   const reconciliationFields: FieldSpec[] = [
     {
@@ -159,21 +134,9 @@ function BankingPage() {
         title="Accounts"
         description="Every collection channel is represented by an account mapped to the general ledger."
         actions={
-          <FormDialog
-            title="New account"
-            description="Register a bank, M-Pesa, card settlement or wallet account."
-          >
-            {(close) => (
-              <RecordForm
-                fields={accountFields}
-                submitLabel="Create account"
-                busy={createAccount.isPending}
-                onSubmit={(values) =>
-                  createAccount.mutate({ ...values, active: true }, { onSuccess: close })
-                }
-              />
-            )}
-          </FormDialog>
+          <Button asChild variant="secondary">
+            <Link to="/finance/bank-accounts">Manage bank accounts</Link>
+          </Button>
         }
       >
         <FinanceQueryState

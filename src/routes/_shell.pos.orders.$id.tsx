@@ -222,67 +222,67 @@ function OrderTerminal() {
             : "Loading order"
         }
         actions={
-  data ? (
-    <>
-      <OrderStatusBadge status={data.status} />
+          data ? (
+            <>
+              <OrderStatusBadge status={data.status} />
 
-      <DocumentPrintButton
-        type="pos_receipt"
-        id={data.id}
-        label="Receipt PDF"
-        size="default"
-      />
+              <DocumentPrintButton
+                type="pos_receipt"
+                id={data.id}
+                label="Receipt PDF"
+                size="default"
+              />
 
-      {fiscalEligible && fiscalAccepted ? (
-        <>
-          <span className="text-xs text-muted-foreground">
-            KRA accepted
-            {fiscalStatus.data?.kra_reference
-              ? ` · ${fiscalStatus.data.kra_reference}`
-              : ""}
-          </span>
+              {fiscalEligible && fiscalAccepted ? (
+                <>
+                  <span className="text-xs text-muted-foreground">
+                    KRA accepted
+                    {fiscalStatus.data?.kra_reference
+                      ? ` · ${fiscalStatus.data.kra_reference}`
+                      : ""}
+                  </span>
 
-          <DocumentPrintButton
-            type="pos_receipt"
-            id={data.id}
-            label="Fiscal Receipt PDF"
-            size="default"
-          />
-        </>
-      ) : fiscalEligible && fiscalPending ? (
-        <span className="text-xs text-muted-foreground">
-          Fiscalisation pending
-        </span>
-      ) : fiscalEligible ? (
-        <FileWithKraButton
-          posOrderId={data.id}
-          label={fiscalFailed ? "Retry fiscalisation" : "File with KRA"}
-          size="default"
-        />
-      ) : null}
+                  <DocumentPrintButton
+                    type="pos_receipt"
+                    id={data.id}
+                    label="Fiscal Receipt PDF"
+                    size="default"
+                  />
+                </>
+              ) : fiscalEligible && fiscalPending ? (
+                <span className="text-xs text-muted-foreground">
+                  Fiscalisation pending
+                </span>
+              ) : fiscalEligible ? (
+                <FileWithKraButton
+                  posOrderId={data.id}
+                  label={fiscalFailed ? "Retry fiscalisation" : "File with KRA"}
+                  size="default"
+                />
+              ) : null}
 
-      {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
-        <SendToPrinterButton
-          type="pos_receipt"
-          id={data.id}
-          documentNumber={data.order_number}
-          role="restaurant"
-          label="Send to receipt printer"
-        />
-      ) : !receiptPrintState.isLoading &&
-        hasCompletedReceiptPrint &&
-        canReprintReceipt ? (
-        <SendToPrinterButton
-          type="pos_receipt"
-          id={data.id}
-          documentNumber={data.order_number}
-          role="restaurant"
-          label="Reprint receipt"
-        />
-      ) : null}
-    </>
-  ) : null
-}
+              {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
+                <SendToPrinterButton
+                  type="pos_receipt"
+                  id={data.id}
+                  documentNumber={data.order_number}
+                  role="restaurant"
+                  label="Send to receipt printer"
+                />
+              ) : !receiptPrintState.isLoading &&
+                hasCompletedReceiptPrint &&
+                canReprintReceipt ? (
+                <SendToPrinterButton
+                  type="pos_receipt"
+                  id={data.id}
+                  documentNumber={data.order_number}
+                  role="restaurant"
+                  label="Reprint receipt"
+                />
+              ) : null}
+            </>
+          ) : null
+        }
       />
 
       <QueryState
@@ -704,7 +704,7 @@ function OrderTerminal() {
                             {titleCase(p.status)}
                           </StatusPill>
                           {canManualConfirm &&
-                          (p.status === "pending" || p.status === "initiated") ? (
+                            (p.status === "pending" || p.status === "initiated") ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -1139,12 +1139,12 @@ function PaymentDialog({
                   ...(ownReference ? { externalReference: ownReference } : {}),
                   ...(isManualCard
                     ? {
-                        paymentMetadata: {
-                          terminal: cardTerminal.trim(),
-                          network: cardNetwork as "Visa" | "Mastercard" | "Other",
-                          ...(cardLast4 ? { last4: cardLast4 } : {}),
-                        },
-                      }
+                      paymentMetadata: {
+                        terminal: cardTerminal.trim(),
+                        network: cardNetwork as "Visa" | "Mastercard" | "Other",
+                        ...(cardLast4 ? { last4: cardLast4 } : {}),
+                      },
+                    }
                     : {}),
                   shiftId,
                   idempotencyKey: `pos-pay:${orderId}:${attemptKey}`,
@@ -1188,7 +1188,7 @@ function PaymentDialog({
                                     if (!sent.ok) {
                                       setIntentProblem(
                                         sent.detail ??
-                                          "The request could not be sent to the processor, so this payment stays awaiting confirmation.",
+                                        "The request could not be sent to the processor, so this payment stays awaiting confirmation.",
                                       );
                                     }
                                   },
@@ -1198,7 +1198,7 @@ function PaymentDialog({
                             } else {
                               setIntentProblem(
                                 opened.detail ??
-                                  "No processor is connected for this method, so the payment stays awaiting confirmation.",
+                                "No processor is connected for this method, so the payment stays awaiting confirmation.",
                               );
                             }
                           },

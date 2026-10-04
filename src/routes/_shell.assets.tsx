@@ -182,7 +182,6 @@ function AssetsPage() {
   const rooms = useRooms();
   const suppliers = useSuppliers();
   const departments = useScopedDepartments();
-  const workers = useScopedWorkers();
   const saveAsset = useSaveAsset();
   const moveAsset = useMoveAsset();
   const setStatus = useSetAssetStatus();
@@ -212,6 +211,16 @@ function AssetsPage() {
   const [transferCustodian, setTransferCustodian] = useState("");
   const [transferReason, setTransferReason] = useState("");
 
+  const editingWorkers = useScopedWorkers({
+    departmentId: editing.department_id || null,
+    enabled: Boolean(editing.department_id),
+  });
+
+  const transferWorkers = useScopedWorkers({
+    departmentId: transferDepartment || null,
+    enabled: Boolean(transferDepartment),
+  });
+
   const [statusDialog, setStatusDialog] = useState(false);
   const [nextStatus, setNextStatus] = useState("active");
   const [statusReason, setStatusReason] = useState("");
@@ -228,12 +237,15 @@ function AssetsPage() {
   const departmentList = departments.data ?? [];
   const roomList = (rooms.data ?? []) as Row[];
   const supplierList = (suppliers.data ?? []) as Row[];
-  const workerList = workers.data ?? [];
+  const editingWorkerList = editingWorkers.data ?? [];
+  const transferWorkerList = transferWorkers.data ?? [];
 
   const departmentName = (id: unknown) =>
     departmentList.find((d) => d.id === id)?.name ?? "Unassigned";
   const custodianName = (id: unknown) =>
-    workerList.find((w) => w.id === id)?.full_name ?? "Unassigned";
+    editingWorkerList.find((w) => w.id === id)?.full_name ??
+    transferWorkerList.find((w) => w.id === id)?.full_name ??
+    "Unassigned";
   const roomLabel = (id: unknown) =>
     roomList.find((r) => r["id"] === id)?.["room_number"] ?? null;
 
@@ -1042,7 +1054,13 @@ function AssetsPage() {
             <Label>Department</Label>
             <Select
               value={editing.department_id || "none"}
-              onValueChange={(v) => setEditing((prev) => ({ ...prev, department_id: v === "none" ? "" : v }))}
+              onValueChange={(v) =>
+                setEditing((prev) => ({
+                  ...prev,
+                  department_id: v === "none" ? "" : v,
+                  custodian_id: "",
+                }))
+              }
             >
               <SelectTrigger aria-label="Department">
                 <SelectValue />
@@ -1061,14 +1079,22 @@ function AssetsPage() {
             <Label>Custodian</Label>
             <Select
               value={editing.custodian_id || "none"}
-              onValueChange={(v) => setEditing((prev) => ({ ...prev, custodian_id: v === "none" ? "" : v }))}
+              onValueChange={(v) =>
+                setEditing((prev) => ({
+                  ...prev,
+                  custodian_id: v === "none" ? "" : v,
+                }))
+              }
+              disabled={!editing.department_id}
             >
               <SelectTrigger aria-label="Custodian">
-                <SelectValue />
+                <SelectValue
+                  placeholder={editing.department_id ? "Select custodian" : "Select department first"}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Unassigned</SelectItem>
-                {workerList.map((w) => (
+                {editingWorkerList.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.full_name}
                   </SelectItem>
@@ -1154,7 +1180,10 @@ function AssetsPage() {
             <Label>Department</Label>
             <Select
               value={transferDepartment || "none"}
-              onValueChange={(v) => setTransferDepartment(v === "none" ? "" : v)}
+              onValueChange={(v) => {
+                setTransferDepartment(v === "none" ? "" : v);
+                setTransferCustodian("");
+              }}
             >
               <SelectTrigger aria-label="New department">
                 <SelectValue />
@@ -1174,13 +1203,16 @@ function AssetsPage() {
             <Select
               value={transferCustodian || "none"}
               onValueChange={(v) => setTransferCustodian(v === "none" ? "" : v)}
+              disabled={!transferDepartment}
             >
               <SelectTrigger aria-label="New custodian">
-                <SelectValue />
+                <SelectValue
+                  placeholder={transferDepartment ? "Select custodian" : "Select department first"}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Unassigned</SelectItem>
-                {workerList.map((w) => (
+                {transferWorkerList.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.full_name}
                   </SelectItem>

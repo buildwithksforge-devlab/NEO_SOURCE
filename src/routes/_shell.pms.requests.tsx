@@ -227,12 +227,13 @@ function RequestsPage() {
 }
 
 function AssignDialog({ requestId, onClose }: { requestId: string | null; onClose: () => void }) {
-  const staff = useAssignableStaff();
-  const departments = useDepartmentsLite();
-  const assign = useAssignRequest();
   const [assignee, setAssignee] = useState("");
   const [department, setDepartment] = useState("");
   const [reason, setReason] = useState("");
+
+  const departments = useDepartmentsLite();
+  const staff = useAssignableStaff(department || null);
+  const assign = useAssignRequest();
 
   return (
     <Dialog open={Boolean(requestId)} onOpenChange={(o) => !o && onClose()}>
@@ -246,7 +247,13 @@ function AssignDialog({ requestId, onClose }: { requestId: string | null; onClos
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label>Department</Label>
-            <Select value={department} onValueChange={setDepartment}>
+            <Select
+              value={department}
+              onValueChange={(value) => {
+                setDepartment(value);
+                setAssignee("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Keep current department" />
               </SelectTrigger>
@@ -261,9 +268,13 @@ function AssignDialog({ requestId, onClose }: { requestId: string | null; onClos
           </div>
           <div className="grid gap-1.5">
             <Label>Assign to</Label>
-            <Select value={assignee} onValueChange={setAssignee}>
+            <Select
+              value={assignee}
+              onValueChange={setAssignee}
+              disabled={!department}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Select a worker" />
+                <SelectValue placeholder={department ? "Select a worker" : "Select department first"} />
               </SelectTrigger>
               <SelectContent>
                 {(staff.data ?? []).map((p) => (

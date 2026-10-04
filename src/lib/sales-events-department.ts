@@ -151,7 +151,7 @@ export function useBanquetEventOptions() {
  * ------------------------------------------------------------------ */
 
 export function useBanquetingStaffOptions() {
-  const workers = useScopedWorkerOptions({ jobTitlePattern: "banquet|event|sales" });
+  const workers = useScopedWorkerOptions({ departmentKey: "sales-events-banqueting", jobTitlePattern: "banquet|event|sales" });
   const data = (workers.data ?? []).map((w) => ({
     id: w.id,
     name: w.full_name,

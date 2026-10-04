@@ -147,6 +147,11 @@ function TasksPage() {
   const nameOf = (id: string | null) =>
     (staff.data ?? []).find((s) => s.id === id)?.full_name ?? "Unassigned";
 
+  const workersForDepartment = (departmentId: string | null) =>
+    departmentId
+      ? (staff.data ?? []).filter((worker) => worker.department_id === departmentId)
+      : [];
+
   const renderList = (items: (Task & { departments: { name: string } | null })[]) =>
     tasksQuery.isLoading ? (
       <LoadingState variant="rows" rows={3} />
@@ -182,15 +187,18 @@ function TasksPage() {
               <div className="flex items-center gap-2">
                 <Select
                   value={t.assignee_id ?? ""}
+                  disabled={!t.department_id}
                   onValueChange={(v) =>
                     update.mutate({ id: t.id, patch: { assignee_id: v, status: "assigned" } })
                   }
                 >
                   <SelectTrigger className="h-8 w-full sm:w-40" aria-label="Reassign">
-                    <SelectValue placeholder="Assign" />
+                    <SelectValue
+                      placeholder={t.department_id ? "Assign" : "Set department first"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {(staff.data ?? []).map((s) => (
+                    {workersForDepartment(t.department_id).map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.full_name || "Unnamed"}
                       </SelectItem>
@@ -322,7 +330,7 @@ function NewTaskDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  staff: { id: string; full_name: string }[];
+  staff: { id: string; full_name: string; department_id: string | null }[];
   departments: { id: string; name: string }[];
   onCreate: (payload: {
     title: string;
@@ -340,6 +348,10 @@ function NewTaskDialog({
   const [dueAt, setDueAt] = useState("");
   const [priority, setPriority] = useState("normal");
 
+  const eligibleStaff = department
+    ? staff.filter((worker) => worker.department_id === department)
+    : [];
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -355,6 +367,10 @@ function NewTaskDialog({
       onOpenChange(false);
       setTitle("");
       setDescription("");
+      setAssignee("");
+      setDepartment("");
+      setDueAt("");
+      setPriority("normal");
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -383,12 +399,18 @@ function NewTaskDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Assign to</Label>
-              <Select value={assignee} onValueChange={setAssignee}>
+              <Select
+                value={assignee}
+                disabled={!department}
+                onValueChange={setAssignee}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
+                  <SelectValue
+                    placeholder={department ? "Unassigned" : "Select department first"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {staff.map((s) => (
+                  {eligibleStaff.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.full_name || "Unnamed"}
                     </SelectItem>
@@ -398,7 +420,22 @@ function NewTaskDialog({
             </div>
             <div className="space-y-2">
               <Label>Department</Label>
-              <Select value={department} onValueChange={setDepartment}>
+              <Select
+                value={department}
+                onValueChange={(value) => {
+                  setDepartment(value);
+                  if (
+                    assignee &&
+                    !staff.some(
+                      (worker) =>
+                        worker.id === assignee &&
+                        worker.department_id === value,
+                    )
+                  ) {
+                    setAssignee("");
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="None" />
                 </SelectTrigger>

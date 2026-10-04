@@ -39,7 +39,7 @@ export const Route = createFileRoute("/_shell/finance/bank-accounts")({
   ),
 });
 
-const ACCOUNT_KINDS = ["bank", "mpesa", "card_settlement", "petty_cash", "wallet"] as const;
+const ACCOUNT_KINDS = ["bank", "mpesa", "card_clearing", "cash", "ota_clearing"] as const;
 
 function BankAccountsPage() {
   const { can, isAdmin } = useAuth();

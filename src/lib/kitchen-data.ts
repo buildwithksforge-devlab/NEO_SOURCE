@@ -1191,7 +1191,7 @@ export function useKitchenAiInsights() {
 }
 
 export function useKitchenStaff() {
-  return useScopedWorkerOptions({ jobTitlePattern: "chef|cook|kitchen|steward" });
+  return useScopedWorkerOptions({ departmentKey: "main-kitchen", jobTitlePattern: "chef|cook|kitchen|steward" });
 }
 
 /** One realtime channel for every kitchen surface, torn down on unmount. */

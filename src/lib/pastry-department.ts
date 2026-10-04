@@ -562,5 +562,5 @@ export function usePastryRequisitions() {
 export function usePastryStaff() {
   // Property-scoped canonical workers; pastry job titles are preferred but the
   // rest of the property's staff stay selectable.
-  return useScopedWorkerOptions({ jobTitlePattern: "pastry|baker|patiss" });
+  return useScopedWorkerOptions({ departmentKey: "pastry-and-bakery", jobTitlePattern: "pastry|baker|patiss" });
 }

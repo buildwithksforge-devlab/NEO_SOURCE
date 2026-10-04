@@ -161,9 +161,13 @@ export function scopeWorkers(
   departmentKey?: string | null,
 ): ScopedWorker[] {
   return workers
-    .filter((w) => !branchId || w.branch_id === branchId || w.branch_id === null)
+    // A property-specific selector must contain only workers explicitly attached
+    // to that property. An unassigned worker is not silently treated as valid.
+    .filter((w) => !branchId || w.branch_id === branchId)
     .filter((w) => {
-      if (departmentId) return w.department_id === departmentId || w.department_id === null;
+      // A department-specific selector is equally strict: only workers whose
+      // staff record resolves to that exact department may be assigned.
+      if (departmentId) return w.department_id === departmentId;
       if (departmentKey) {
         if (!w.department_id) return false;
         return slugifyDepartment(w.department_name ?? "") === departmentKey;
@@ -245,6 +249,7 @@ export function useScopedWorkers(options?: {
   departmentId?: string | null;
   departmentKey?: string | null;
   branch?: string | null;
+  enabled?: boolean;
 }) {
   const { organizationId } = useAuth();
   const { branchId: active } = useActivePropertyFilter();
@@ -253,7 +258,7 @@ export function useScopedWorkers(options?: {
   const departmentKey = options?.departmentKey ?? null;
   return useQuery({
     queryKey: ["scope", "workers", organizationId, branchId, departmentId, departmentKey],
-    enabled: Boolean(organizationId),
+    enabled: Boolean(organizationId) && (options?.enabled ?? true),
     queryFn: async () => {
       const { data, error } = await guardedRpc(db, "neo_scoped_workers", {
         _branch: branchId ?? null,
@@ -338,7 +343,13 @@ export function useScopedDepartmentByKey(pattern: string, branchOverride?: strin
           branch_name: hit.branch_name,
         }
       : null;
-  }, [rows, branchId, pattern]);
+  }, [
+    rows,
+    branchId,
+    pattern,
+    options?.departmentId,
+    options?.departmentKey,
+  ]);
   return { ...query, data } as Omit<typeof query, "data"> & { data: ResolvedDepartment | null };
 }
 
@@ -354,6 +365,7 @@ export function useScopedWorkerOptions(options?: {
   departmentId?: string | null;
   departmentKey?: string | null;
   branch?: string | null;
+  enabled?: boolean;
   /** Regular-expression source matched against the job title, as a preference. */
   jobTitlePattern?: string | null;
 }) {
@@ -361,16 +373,28 @@ export function useScopedWorkerOptions(options?: {
     ...(options?.departmentId !== undefined ? { departmentId: options.departmentId } : {}),
     ...(options?.departmentKey !== undefined ? { departmentKey: options.departmentKey } : {}),
     ...(options?.branch !== undefined ? { branch: options.branch } : {}),
+    ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
   });
   const { branchId } = useActivePropertyFilter();
   const rows = query.data;
   const pattern = options?.jobTitlePattern ?? null;
   const data = useMemo<ScopedWorker[]>(() => {
-    const scoped = scopeWorkers(rows ?? [], branchId);
+    const scoped = scopeWorkers(
+      rows ?? [],
+      branchId,
+      options?.departmentId ?? null,
+      options?.departmentKey ?? null,
+    );
     if (!pattern) return scoped;
     const test = new RegExp(pattern, "i");
     const preferred = scoped.filter((w) => test.test(w.job_title ?? ""));
     return preferred.length > 0 ? preferred : scoped;
-  }, [rows, branchId, pattern]);
+  }, [
+    rows,
+    branchId,
+    pattern,
+    options?.departmentId,
+    options?.departmentKey,
+  ]);
   return { ...query, data } as Omit<typeof query, "data"> & { data: ScopedWorker[] };
 }
