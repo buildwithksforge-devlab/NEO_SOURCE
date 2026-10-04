@@ -1054,21 +1054,47 @@ export function useRecordPayment() {
       manualConfirm?: boolean;
       note?: string;
       idempotencyKey?: string;
-      /** Which of the hotel's accounts received the money. */
+      /** Which bank account the acquirer is expected to settle into later. */
       destinationAccountId?: string | null;
+      /** Safe manual-terminal metadata only. Never PAN/CVV/PIN/track data. */
+      paymentMetadata?: {
+        terminal?: string;
+        network?: "Visa" | "Mastercard" | "Other";
+        last4?: string;
+      };
     }) => {
-      const { data, error } = await guardedRpc(supabase, "pos_record_payment_attempt", {
-        _order_id: input.orderId,
-        _amount: input.amount,
-        _method: input.method,
-        _manual_confirm: Boolean(input.manualConfirm),
-        ...(input.destinationAccountId ? { _account: input.destinationAccountId } : {}),
-        ...(input.tendered === undefined ? {} : { _tendered: input.tendered }),
-        ...(input.externalReference ? { _reference: input.externalReference } : {}),
-        ...(input.shiftId ? { _shift_id: input.shiftId } : {}),
-        ...(input.idempotencyKey ? { _idempotency_key: input.idempotencyKey } : {}),
-        ...(input.note ? { _note: input.note } : {}),
-      });
+      const rpcArgs = input.paymentMetadata
+        ? {
+            _order_id: input.orderId,
+            _amount: input.amount,
+            _method: input.method,
+            _tendered: input.tendered ?? null,
+            _reference: input.externalReference ?? null,
+            _shift_id: input.shiftId ?? null,
+            _idempotency_key: input.idempotencyKey ?? null,
+            _manual_confirm: Boolean(input.manualConfirm),
+            _note: input.note ?? null,
+            _account: input.destinationAccountId ?? null,
+            _payment_metadata: input.paymentMetadata,
+          }
+        : {
+            _order_id: input.orderId,
+            _amount: input.amount,
+            _method: input.method,
+            _manual_confirm: Boolean(input.manualConfirm),
+            ...(input.destinationAccountId ? { _account: input.destinationAccountId } : {}),
+            ...(input.tendered === undefined ? {} : { _tendered: input.tendered }),
+            ...(input.externalReference ? { _reference: input.externalReference } : {}),
+            ...(input.shiftId ? { _shift_id: input.shiftId } : {}),
+            ...(input.idempotencyKey ? { _idempotency_key: input.idempotencyKey } : {}),
+            ...(input.note ? { _note: input.note } : {}),
+          };
+
+      const { data, error } = await guardedRpc(
+        supabase,
+        "pos_record_payment_attempt",
+        rpcArgs,
+      );
       if (error) throw error;
       return data as unknown as SettlementResult;
     },

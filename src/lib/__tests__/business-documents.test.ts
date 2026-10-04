@@ -43,6 +43,7 @@ describe("branded business documents", () => {
       "_shell.pms.folios.$id.tsx": "folio_statement",
       "_shell.events.bookings.$id.tsx": "beo",
       "_shell.lpos.$id.tsx": "purchase_order",
+      "_shell.inventory.receiving.tsx": "goods_receipt",
       "_shell.inventory.requisitions.tsx": "requisition",
     };
     for (const [file, type] of Object.entries(expected)) {

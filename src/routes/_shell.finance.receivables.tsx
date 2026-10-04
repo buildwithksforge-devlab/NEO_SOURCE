@@ -43,10 +43,12 @@ import {
   useCreditNotes,
   useFinanceInsert,
   useInvoices,
+  useEtimsSubmissions,
   useStatements,
 } from "@/lib/finance-data";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { RecordReceiptDialog } from "@/components/finance/RecordReceiptDialog";
+import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
 import { useCampaigns } from "@/lib/marketing-data";
 
 export const Route = createFileRoute("/_shell/finance/receivables")({
@@ -68,6 +70,7 @@ function ReceivablesPage() {
   const [bucket, setBucket] = useState<Bucket>("all");
   const [inspectId, setInspectId] = useState<string | null>(null);
   const invoices = useInvoices(status);
+  const submissions = useEtimsSubmissions();
   const creditNotes = useCreditNotes();
   const applications = useCreditApplications();
   const statements = useStatements();
@@ -213,6 +216,16 @@ function ReceivablesPage() {
                 {filteredRows.map((i) => {
                   const cust = i["customers"] as { full_name?: string } | null;
                   const corp = i["corporate_accounts"] as { legal_name?: string } | null;
+                  const fiscal = (submissions.data ?? []).find(
+                    (s) => String(s["invoice_id"] ?? "") === String(i["id"]),
+                  );
+                  const fiscalStatus = String(
+                    fiscal?.["status"] ?? i["etims_status"] ?? "not_required",
+                  );
+                  const fiscalFailed = ["failed", "retry_required", "rejected"].includes(fiscalStatus);
+                  const fiscalPending = ["queued", "submitted", "pending"].includes(fiscalStatus);
+                  const fiscalAccepted = fiscalStatus === "accepted";
+
                   return (
                     <tr
                       key={String(i["id"])}
@@ -231,7 +244,39 @@ function ReceivablesPage() {
                         {money(i["balance"], String(i["currency"] ?? "KES"))}
                       </td>
                       <td className="py-2 pr-4">
-                        <FinStatus value={String(i["etims_status"] ?? "not_required")} />
+                        <div className="space-y-1">
+                          <FinStatus value={fiscalStatus} />
+
+                          {fiscalAccepted ? (
+                            <div className="space-y-0.5 text-xs text-muted-foreground">
+                              {fiscal?.["kra_reference"] ? (
+                                <div>
+                                  KRA Ref:{" "}
+                                  <span className="font-mono">
+                                    {String(fiscal["kra_reference"])}
+                                  </span>
+                                </div>
+                              ) : null}
+
+                              {fiscal?.["control_unit_reference"] ? (
+                                <div>
+                                  Control Unit:{" "}
+                                  <span className="font-mono">
+                                    {String(fiscal["control_unit_reference"])}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : fiscalPending ? (
+                            <div className="text-xs text-muted-foreground">
+                              Fiscalisation pending.
+                            </div>
+                          ) : fiscalFailed ? (
+                            <div className="text-xs text-destructive">
+                              Fiscalisation failed.
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-2 pr-4">
                         <FinStatus value={String(i["status"])} />
@@ -240,7 +285,20 @@ function ReceivablesPage() {
                         <RecordReceiptDialog invoice={i} campaigns={campaignChoices} />
                       </td>
                       <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
-                        <DocumentPrintButton type="invoice" id={String(i["id"])} label="PDF" />
+                        <div className="flex flex-wrap gap-2">
+                          <DocumentPrintButton
+                            type="invoice"
+                            id={String(i["id"])}
+                            label={fiscalAccepted ? "Fiscal PDF" : "Invoice PDF"}
+                          />
+
+                          {!fiscalAccepted && !fiscalPending ? (
+                            <FileWithKraButton
+                              invoiceId={String(i["id"])}
+                              label={fiscalFailed ? "Retry fiscalisation" : "File with KRA"}
+                            />
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );

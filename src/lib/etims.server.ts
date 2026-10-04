@@ -22,7 +22,7 @@ export type EtimsCredentials = {
 
 export type EtimsDocument = {
   submissionId: string;
-  documentKind: "invoice" | "credit_note" | "debit_note";
+  documentKind: "invoice" | "credit_note" | "debit_note" | "pos_receipt";
   documentNumber: string;
   issueDate: string;
   currency: string;

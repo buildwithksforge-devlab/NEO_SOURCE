@@ -256,7 +256,7 @@ function MyWorkPage() {
       {
         description: lostDescription,
         location_found: lostLocation || null,
-        status: "found",
+        status: "reported",
         found_at: new Date().toISOString(),
       },
       {

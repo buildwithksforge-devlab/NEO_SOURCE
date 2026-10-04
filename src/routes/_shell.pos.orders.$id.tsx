@@ -1,8 +1,12 @@
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
 import { BedDouble, Send, Trash2 } from "lucide-react";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
+import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
+import { getPosFiscalStatus } from "@/lib/etims.functions";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { AddItemDialog } from "@/components/pos/AddItemDialog";
 import { Button } from "@/components/ui/button";
@@ -131,6 +135,25 @@ function OrderTerminal() {
   const receiptPrintState = usePosReceiptPrintState(id);
   const hasCompletedReceiptPrint = receiptPrintState.data?.hasCompletedPrint ?? false;
   const canReprintReceipt = can("pos", "receipts.reprint");
+  const loadPosFiscalStatus = useServerFn(getPosFiscalStatus);
+
+  const fiscalEligible =
+    Boolean(order.data) &&
+    !order.data?.folio_id &&
+    ["closed", "paid", "settled", "completed"].includes(String(order.data?.status ?? "")) &&
+    (order.data?.payment_status === "paid" ||
+      Number(order.data?.paid_total ?? 0) >= Number(order.data?.grand_total ?? 0));
+
+  const fiscalStatus = useQuery({
+    queryKey: ["pos", "etims", id],
+    queryFn: () => loadPosFiscalStatus({ data: { posOrderId: id } }),
+    enabled: fiscalEligible,
+  });
+
+  const fiscalState = String(fiscalStatus.data?.status ?? "not_filed");
+  const fiscalAccepted = fiscalState === "accepted";
+  const fiscalPending = ["queued", "submitted", "pending"].includes(fiscalState);
+  const fiscalFailed = ["failed", "retry_required", "rejected"].includes(fiscalState);
   const [discountChoice, setDiscountChoice] = useState("none");
 
   const [category, setCategory] = useState("all");
@@ -209,6 +232,34 @@ function OrderTerminal() {
         label="Receipt PDF"
         size="default"
       />
+
+      {fiscalEligible && fiscalAccepted ? (
+        <>
+          <span className="text-xs text-muted-foreground">
+            KRA accepted
+            {fiscalStatus.data?.kra_reference
+              ? ` · ${fiscalStatus.data.kra_reference}`
+              : ""}
+          </span>
+
+          <DocumentPrintButton
+            type="pos_receipt"
+            id={data.id}
+            label="Fiscal Receipt PDF"
+            size="default"
+          />
+        </>
+      ) : fiscalEligible && fiscalPending ? (
+        <span className="text-xs text-muted-foreground">
+          Fiscalisation pending
+        </span>
+      ) : fiscalEligible ? (
+        <FileWithKraButton
+          posOrderId={data.id}
+          label={fiscalFailed ? "Retry fiscalisation" : "File with KRA"}
+          size="default"
+        />
+      ) : null}
 
       {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
         <SendToPrinterButton
@@ -808,6 +859,9 @@ function PaymentDialog({
   const [amount, setAmount] = useState(String(balance.toFixed(2)));
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
+  const [cardTerminal, setCardTerminal] = useState("");
+  const [cardNetwork, setCardNetwork] = useState<"Visa" | "Mastercard" | "Other" | "">("");
+  const [cardLast4, setCardLast4] = useState("");
   const [manualConfirm, setManualConfirm] = useState(false);
   const [note, setNote] = useState("");
   // Where the money lands. Separate from the method, which is how it was paid.
@@ -831,11 +885,18 @@ function PaymentDialog({
   const amountValue = Number(amount);
   const overpaying = amountValue > balance + 0.005;
   const isCash = method === "cash";
+  const isManualCard = method === "card";
+  const cardLast4Invalid = Boolean(cardLast4) && !/^[0-9]{4}$/.test(cardLast4);
   const selfService = Boolean(till.data?.self_service);
   const blocked =
     !amountValue ||
     amountValue <= 0 ||
     overpaying ||
+    (isManualCard &&
+      (!cardTerminal.trim() ||
+        !cardNetwork ||
+        !reference.trim() ||
+        cardLast4Invalid)) ||
     (manualConfirm && !note.trim()) ||
     record.isPending ||
     routeCash.isPending;
@@ -866,6 +927,11 @@ function PaymentDialog({
               setIntentId(null);
               setIntentProblem(null);
               setManualConfirm(false);
+              if (next !== "card") {
+                setCardTerminal("");
+                setCardNetwork("");
+                setCardLast4("");
+              }
             }}
           />
           <div className="grid gap-1.5">
@@ -900,16 +966,22 @@ function PaymentDialog({
           ) : (
             <div className="grid gap-1.5">
               <Label htmlFor="pay-ref">
-                {terminalMethod ? "Your own reference (optional)" : "Reference"}
+                {isManualCard
+                  ? "Approval / terminal reference"
+                  : terminalMethod
+                    ? "Your own reference (optional)"
+                    : "Reference"}
               </Label>
               <Input
                 id="pay-ref"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder={
-                  terminalMethod
-                    ? "The processor supplies its own reference"
-                    : "Slip, transfer or voucher number"
+                  isManualCard
+                    ? "e.g. 123456 or terminal slip reference"
+                    : terminalMethod
+                      ? "The processor supplies its own reference"
+                      : "Slip, transfer or voucher number"
                 }
               />
               {!providerBacked ? (
@@ -920,6 +992,64 @@ function PaymentDialog({
               ) : null}
             </div>
           )}
+          {isManualCard ? (
+            <div className="grid gap-3 rounded-lg border border-border p-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="card-terminal-name">Terminal</Label>
+                <Input
+                  id="card-terminal-name"
+                  value={cardTerminal}
+                  onChange={(e) => setCardTerminal(e.target.value)}
+                  placeholder="e.g. ABSA POS 1"
+                  maxLength={80}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="card-network">Card network</Label>
+                <Select
+                  value={cardNetwork}
+                  onValueChange={(value) =>
+                    setCardNetwork(value as "Visa" | "Mastercard" | "Other")
+                  }
+                >
+                  <SelectTrigger id="card-network">
+                    <SelectValue placeholder="Select network" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Visa">Visa</SelectItem>
+                    <SelectItem value="Mastercard">Mastercard</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="card-last4">Last 4 digits (optional)</Label>
+                <Input
+                  id="card-last4"
+                  value={cardLast4}
+                  onChange={(e) =>
+                    setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))
+                  }
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="e.g. 4242"
+                  maxLength={4}
+                />
+                {cardLast4Invalid ? (
+                  <p className="text-xs text-destructive">
+                    Enter exactly four digits or leave this blank.
+                  </p>
+                ) : null}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Record only the terminal result. Never enter a full card number,
+                CVV, PIN or magnetic-stripe data.
+              </p>
+            </div>
+          ) : null}
           {external ? (
             <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
               {EXTERNAL_METHODS[method]} confirms this payment itself. It is held as{" "}
@@ -1007,6 +1137,15 @@ function PaymentDialog({
                   ...(account ? { destinationAccountId: account } : {}),
                   ...(Number(tendered) ? { tendered: Number(tendered) } : {}),
                   ...(ownReference ? { externalReference: ownReference } : {}),
+                  ...(isManualCard
+                    ? {
+                        paymentMetadata: {
+                          terminal: cardTerminal.trim(),
+                          network: cardNetwork as "Visa" | "Mastercard" | "Other",
+                          ...(cardLast4 ? { last4: cardLast4 } : {}),
+                        },
+                      }
+                    : {}),
                   shiftId,
                   idempotencyKey: `pos-pay:${orderId}:${attemptKey}`,
                   manualConfirm: manualConfirm && external,

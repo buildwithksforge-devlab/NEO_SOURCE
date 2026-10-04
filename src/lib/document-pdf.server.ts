@@ -7,11 +7,13 @@
  * enforces property scope. Nothing on this path is recomputed client-side.
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { DOCUMENT_BROWN, wireframeSegments } from "./document-artwork";
 import { NEO_SYMBOL_BASE64 } from "./document-symbol";
 import { documentTraceCode } from "./document-trace";
+import { documentLayout } from "./document-layouts";
 
 
 export const DOCUMENT_TYPES = [
@@ -181,6 +183,7 @@ export async function buildBusinessDocumentPdf(
 
   const documentNumber = text(payload.document?.number) || "Unnumbered";
   const documentTitle = text(payload.document?.title) || "Document";
+  const layout = documentLayout(input.type);
 
   const startPage = () => {
     if (pageNumber > 0) page = pdf.addPage([pageWidth, pageHeight]);
@@ -327,22 +330,32 @@ export async function buildBusinessDocumentPdf(
 
   // ---- Line items ----
   const lines = Array.isArray(payload.lines) ? payload.lines : [];
-  const showMoney = lines.some((line) => line.unit_price !== undefined && line.unit_price !== null);
-  const columns = showMoney
+  const showMoney = lines.some(
+    (line) => line.unit_price !== undefined && line.unit_price !== null,
+  );
+
+  const fallbackColumns = showMoney
     ? [
-        { key: "description", label: "Description", x: margin, width: 232, align: "left" as const },
-        { key: "quantity", label: "Qty", x: margin + 244, width: 46, align: "right" as const },
-        { key: "unit_price", label: "Unit", x: margin + 300, width: 78, align: "right" as const },
-        { key: "tax", label: "Tax", x: margin + 386, width: 54, align: "right" as const },
-        { key: "total", label: "Amount", x: margin + 448, width: 60, align: "right" as const },
+        { key: "description", label: "Description", width: 232, align: "left" as const },
+        { key: "quantity", label: "Qty", width: 56, align: "right" as const },
+        { key: "unit_price", label: "Unit price", width: 90, align: "right" as const },
+        { key: "tax", label: "Tax", width: 60, align: "right" as const },
+        { key: "total", label: "Amount", width: 67, align: "right" as const },
       ]
     : [
-        { key: "description", label: "Description", x: margin, width: 300, align: "left" as const },
-        { key: "quantity", label: "Qty", x: margin + 320, width: 60, align: "right" as const },
-        { key: "note", label: "Detail", x: margin + 390, width: 118, align: "right" as const },
+        { key: "description", label: "Description", width: 300, align: "left" as const },
+        { key: "quantity", label: "Qty", width: 80, align: "right" as const },
+        { key: "note", label: "Detail", width: 125, align: "right" as const },
       ];
 
-  const descriptionColumn = columns[0]!;
+  let nextColumnX = margin;
+  const columns = (layout.columns ?? fallbackColumns).map((column) => {
+    const positioned = { ...column, x: nextColumnX };
+    nextColumnX += column.width;
+    return positioned;
+  });
+  const descriptionColumn =
+    columns.find((column) => column.key === "description") ?? columns[0]!;
   const drawHeader = () => {
     page.drawRectangle({ x: margin - 6, y: y - 5, width: contentWidth + 12, height: 18, color: rgb(0.95, 0.97, 0.98) });
     for (const column of columns) {
@@ -366,7 +379,12 @@ export async function buildBusinessDocumentPdf(
       const description = text(line.description) || "—";
       const wrapped = wrap(description, regular, 9, descriptionColumn.width);
       const noteText = text(line.note);
-      const noteLines = showMoney && noteText ? wrap(noteText, regular, 7.5, descriptionColumn.width) : [];
+      const noteIsColumn = columns.some((column) => column.key === "note");
+      const unitIsColumn = columns.some((column) => column.key === "unit");
+      const noteLines =
+        !noteIsColumn && noteText
+          ? wrap(noteText, regular, 7.5, descriptionColumn.width)
+          : [];
       const rowHeight = wrapped.length * 11 + noteLines.length * 9 + 8;
       if (y - rowHeight < 48) {
         startPage();
@@ -385,10 +403,16 @@ export async function buildBusinessDocumentPdf(
           color: muted,
         });
       }
-      for (const column of columns.slice(1)) {
+      for (const column of columns.filter((column) => column.key !== "description")) {
         let value = "";
-        if (column.key === "quantity") {
-          value = [quantity(line.quantity), text(line.unit)].filter(Boolean).join(" ");
+        if (column.key === "date") {
+          value = dateLabel(line.date);
+        } else if (column.key === "quantity") {
+          value = unitIsColumn
+            ? quantity(line.quantity)
+            : [quantity(line.quantity), text(line.unit)].filter(Boolean).join(" ");
+        } else if (column.key === "unit") {
+          value = text(line.unit);
         } else if (column.key === "unit_price") {
           value = money(line.unit_price, currency);
         } else if (column.key === "tax") {
@@ -496,8 +520,14 @@ if (totals.length) {
 
   // ---- Payment information, terms and operational detail ----
   const shownInHeader = new Set(["due_date", "reservation", "confirmation", "reference", "room", "stay"]);
+  const qrPayload = text(metaSource["qr_payload"]);
   const meta = Object.entries(payload.meta ?? {}).filter(
-    ([label, value]) => !shownInHeader.has(label) && value !== null && value !== "" && value !== undefined,
+    ([label, value]) =>
+      label !== "qr_payload" &&
+      !shownInHeader.has(label) &&
+      value !== null &&
+      value !== "" &&
+      value !== undefined,
   );
   if (meta.length) {
     ensure(40);
@@ -514,6 +544,39 @@ if (totals.length) {
       y -= 2;
     }
     y -= 6;
+  }
+
+  if (qrPayload) {
+    ensure(120);
+
+    try {
+      const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 220,
+      });
+
+      const encoded = qrDataUrl.split(",", 2)[1] ?? "";
+      const qrBytes = Uint8Array.from(atob(encoded), (character) =>
+        character.charCodeAt(0),
+      );
+      const qrImage = await pdf.embedPng(qrBytes);
+
+      draw("KRA eTIMS VERIFICATION", margin, 7.5, bold, muted);
+      y -= 98;
+
+      page.drawImage(qrImage, {
+        x: margin,
+        y,
+        width: 88,
+        height: 88,
+      });
+
+      y -= 12;
+    } catch {
+      draw("KRA eTIMS QR could not be rendered.", margin, 8, regular, muted);
+      y -= 12;
+    }
   }
 
   // ---- Footer: property contact, then quiet provenance ----

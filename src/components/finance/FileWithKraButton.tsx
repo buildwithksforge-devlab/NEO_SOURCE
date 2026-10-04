@@ -1,5 +1,5 @@
 /**
- * Files an invoice or credit note with KRA eTIMS.
+ * Files an invoice, credit note or POS receipt with KRA eTIMS.
  *
  * The button only asks the server to file; the fiscal status shown everywhere
  * else comes from the KRA result recorded server-side, never from this click.
@@ -14,6 +14,7 @@ import { fileTaxDocument } from "@/lib/etims.functions";
 type Props = {
   invoiceId?: string | null;
   creditNoteId?: string | null;
+  posOrderId?: string | null;
   label?: string;
   size?: "sm" | "default";
   variant?: "default" | "outline" | "secondary";
@@ -23,6 +24,7 @@ type Props = {
 export function FileWithKraButton({
   invoiceId = null,
   creditNoteId = null,
+  posOrderId = null,
   label = "File with KRA",
   size = "sm",
   variant = "outline",
@@ -32,12 +34,13 @@ export function FileWithKraButton({
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async () => file({ data: { invoiceId, creditNoteId } }),
+    mutationFn: async () => file({ data: { invoiceId, creditNoteId, posOrderId } }),
     onSuccess: (result) => {
       if (result.ok) toast.success(result.detail);
       else toast.error(result.detail);
       void queryClient.invalidateQueries({ queryKey: ["finance", "etims"] });
       void queryClient.invalidateQueries({ queryKey: ["finance", "invoices"] });
+      void queryClient.invalidateQueries({ queryKey: ["pos", "etims"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });

@@ -123,7 +123,11 @@ export const testEtimsConnection = createServerFn({ method: "POST" })
     return { authorised: true as const, ok: result.ok, detail: result.detail };
   });
 
-type FileInput = { invoiceId?: string | null; creditNoteId?: string | null };
+type FileInput = {
+  invoiceId?: string | null;
+  creditNoteId?: string | null;
+  posOrderId?: string | null;
+};
 
 /**
  * Queues a document through the guarded routine, then files it with KRA and
@@ -135,16 +139,18 @@ export const fileTaxDocument = createServerFn({ method: "POST" })
   .inputValidator((input: FileInput) => ({
     invoiceId: input?.invoiceId ? String(input.invoiceId) : null,
     creditNoteId: input?.creditNoteId ? String(input.creditNoteId) : null,
+    posOrderId: input?.posOrderId ? String(input.posOrderId) : null,
   }))
   .handler(async ({ data, context }) => {
     const client = context.supabase as unknown as Rpc;
-    if (!data.invoiceId && !data.creditNoteId) {
+    if (!data.invoiceId && !data.creditNoteId && !data.posOrderId) {
       return { ok: false, status: "failed", detail: "Nothing to file." };
     }
 
     const { data: queued, error: queueError } = await client.rpc("neo_etims_queue_document", {
       _invoice: data.invoiceId,
       _credit_note: data.creditNoteId,
+      _pos_order: data.posOrderId,
     });
     if (queueError) throw new Error(queueError.message);
     if (!queued?.queued) {
@@ -216,11 +222,35 @@ export const fileTaxDocument = createServerFn({ method: "POST" })
     return { ok: result.ok, status: result.status, submissionId, detail: result.detail };
   });
 
+export const getPosFiscalStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { posOrderId: string }) => ({
+    posOrderId: String(input.posOrderId),
+  }))
+  .handler(async ({ data, context }) => {
+    const client = context.supabase as unknown as Rpc;
+    const { data: result, error } = await client.rpc("neo_pos_etims_status", {
+      _pos_order: data.posOrderId,
+    });
+    if (error) throw new Error(error.message);
+
+    return (result ?? {
+      found: false,
+      status: "not_filed",
+    }) as {
+      found: boolean;
+      status: string;
+      submission_id?: string;
+      kra_reference?: string;
+      control_unit_reference?: string;
+      error_details?: string;
+    };
+  });
 /** Reads the invoice or credit note behind a submission and shapes it for KRA. */
 async function buildDocument(admin: Rpc, submissionId: string) {
   const { data: submission } = await admin
     .from("etims_submissions")
-    .select("id, document_kind, document_number, invoice_id, credit_note_id")
+    .select("id, document_kind, document_number, invoice_id, credit_note_id, pos_order_id")
     .eq("id", submissionId)
     .maybeSingle();
   if (!submission) return null;
@@ -263,6 +293,56 @@ async function buildDocument(admin: Rpc, submissionId: string) {
     };
   }
 
+  if (submission.pos_order_id) {
+    const { data: order } = await admin
+      .from("pos_orders")
+      .select(
+        "id, order_number, closed_at, created_at, currency, guest_name, subtotal, discount_total, tax_total, service_charge_total, grand_total",
+      )
+      .eq("id", submission.pos_order_id)
+      .maybeSingle();
+
+    if (!order) return null;
+
+    const { data: lines } = await admin
+      .from("pos_order_items")
+      .select(
+        "id, item_name, quantity, unit_price, discount_amount, tax_rate, tax_amount, line_total, status, created_at",
+      )
+      .eq("order_id", order.id)
+      .neq("status", "voided")
+      .order("created_at");
+
+    const issueDate = String(order.closed_at ?? order.created_at ?? new Date().toISOString())
+      .slice(0, 10);
+
+    return {
+      submissionId,
+      documentKind: "pos_receipt" as const,
+      documentNumber: String(order.order_number),
+      issueDate,
+      currency: String(order.currency ?? "KES"),
+      customerName: String(order.guest_name ?? "Walk-in customer"),
+      customerPin: null,
+
+      // Fiscal amounts come directly from the posted POS transaction.
+      // Do not rebuild or infer the sale from menu prices.
+      subtotal: Number(order.subtotal ?? 0),
+      taxTotal: Number(order.tax_total ?? 0),
+      total: Number(order.grand_total ?? 0),
+
+      lines: (lines ?? []).map((line: any, index: number) => ({
+        lineNumber: index + 1,
+        description: String(line.item_name ?? "Item"),
+        quantity: Number(line.quantity ?? 1),
+        unitPrice: Number(line.unit_price ?? 0),
+        discount: Number(line.discount_amount ?? 0),
+        taxRate: Number(line.tax_rate ?? 0),
+        taxAmount: Number(line.tax_amount ?? 0),
+        total: Number(line.line_total ?? 0),
+      })),
+    };
+  }
   const { data: note } = await admin
     .from("credit_notes")
     .select("id, note_number, issue_date, currency, subtotal, tax_total, total, reason")

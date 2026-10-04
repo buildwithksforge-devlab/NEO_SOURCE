@@ -6,6 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
 import { PackageCheck } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { QueryState } from "@/components/pms/PmsShared";
 import { ReconciliationPanel } from "@/components/common/ReconciliationPanel";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import { reconcileDelivery, useLedgerOnHand } from "@/lib/delivery-reconciliatio
 import { useProcurementReconciliation } from "@/lib/ops-reconciliation";
 import { useStockLocations } from "@/lib/inventory-data";
 import { formatMoney, statusTone, titleCase, type Row } from "@/lib/inventory";
+import { useRecentGoodsReceipts } from "@/lib/procurement-data";
 import { useTenant } from "@/lib/tenant";
 import {
   newAttemptKey,
@@ -63,6 +65,7 @@ function Page() {
   const locations = useStockLocations();
   const receive = useReceiveGoods();
   const health = useProcurementReconciliation(branchId);
+  const recentReceipts = useRecentGoodsReceipts();
   const [directOpen, setDirectOpen] = useState(false);
 
   const [openOrder, setOpenOrder] = useState<string | null>(null);
@@ -441,6 +444,59 @@ function Page() {
           </div>
         </SectionCard>
       ) : null}
+
+      <SectionCard
+        title="Recent GRNs"
+        description="Posted goods receipts for this property. Retrieve the canonical GRN document at any time after posting."
+      >
+        <QueryState
+          isLoading={recentReceipts.isLoading}
+          error={recentReceipts.error}
+          isEmpty={(recentReceipts.data ?? []).length === 0}
+          empty={
+            <p className="py-4 text-sm text-muted-foreground">
+              No posted goods receipts yet.
+            </p>
+          }
+        >
+          <ul className="divide-y divide-border">
+            {((recentReceipts.data ?? []) as Row[]).map((grn) => (
+              <li
+                key={String(grn["id"])}
+                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium">
+                    {String(grn["grn_number"] ?? "Goods receipt")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {String((grn["suppliers"] as Row | null)?.["name"] ?? "Supplier")}
+                    {" · "}
+                    {String((grn["purchase_orders"] as Row | null)?.["order_number"] ?? "No LPO")}
+                    {" · "}
+                    {formatMoney(grn["total_value"], symbol)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {grn["received_at"] ? String(grn["received_at"]) : ""}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <StatusPill tone={statusTone(String(grn["status"] ?? ""))}>
+                    {titleCase(String(grn["status"] ?? ""))}
+                  </StatusPill>
+
+                  <DocumentPrintButton
+                    type="goods_receipt"
+                    id={String(grn["id"])}
+                    label="Download PDF"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </QueryState>
+      </SectionCard>
 
       <ReconciliationPanel
         title="Receiving and stock integrity"

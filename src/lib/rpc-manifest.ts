@@ -626,6 +626,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_etims_settings_save: "authenticated",
   neo_etims_record_check: "authenticated",
   neo_etims_queue_document: "authenticated",
+  neo_pos_etims_status: "authenticated",
   neo_etims_apply_result: "service_role",
   neo_outbox_health: "authenticated",
   neo_outbox_failures: "authenticated",
