@@ -25,7 +25,7 @@ DECLARE
 
   counts jsonb := '{}'::jsonb;
   snapshot jsonb := '[]'::jsonb;
-  summary jsonb;
+  run_summary jsonb;
   digest text;
   operator text;
   err text;
@@ -332,7 +332,7 @@ BEGIN
       GROUP BY source_module
     ) x;
 
-    summary := jsonb_build_object(
+    run_summary := jsonb_build_object(
       'reference',ref,
       'operator',operator,
       'started_at',started,
@@ -345,7 +345,7 @@ BEGIN
     );
 
     digest := encode(
-      digest(convert_to(summary::text,'UTF8'),'sha256'),
+      digest(convert_to(run_summary::text,'UTF8'),'sha256'),
       'hex'
     );
 
@@ -360,7 +360,7 @@ BEGIN
       completed_at = now(),
       source_counts = counts,
       exception_snapshot = snapshot,
-      summary = summary,
+      summary = run_summary,
       result_digest = digest,
       signed_at = now()
     WHERE id = rid;

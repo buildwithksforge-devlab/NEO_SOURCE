@@ -24,6 +24,7 @@ import {
 import { FinanceEmpty, FinanceQueryState, financeHead } from "@/components/finance/FinanceShared";
 import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useBranchScope } from "@/lib/branches";
 import { money, titleCase } from "@/lib/finance";
 import {
   EXCEPTION_LABELS,
@@ -54,6 +55,7 @@ const today = () => {
 function EndOfDayPage() {
   const { can } = useAuth();
   const { branchId } = useActivePropertyFilter();
+  const { setActiveBranchId } = useBranchScope();
   const runs = useNightAuditRuns();
   const days = useBusinessDays();
   const runAudit = useRunNightAudit();
@@ -70,7 +72,21 @@ function EndOfDayPage() {
   // table and the close control can never disagree with one another.
   const dateRun = rows.find((r) => r.business_date === date) ?? null;
   const latest = dateRun ?? rows[0] ?? null;
-  const activeRun = selectedRun ?? latest?.id ?? null;
+
+  const selectedRunRecord =
+    selectedRun !== null
+      ? rows.find((r) => r.id === selectedRun) ?? null
+      : null;
+
+  const displayedRun =
+    selectedRunRecord &&
+      selectedRunRecord.business_date === date &&
+      (!branchId || selectedRunRecord.branch_id === branchId)
+      ? selectedRunRecord
+      : latest;
+
+  const activeRun = displayedRun?.id ?? null;
+
 
   const exceptions = useNightAuditExceptions(activeRun);
   // The outstanding list is always about the date on screen, even when the
@@ -87,40 +103,52 @@ function EndOfDayPage() {
   const isOpen = selectedDay?.status === "open";
   const isClosed = selectedDay?.status === "closed";
 
-  const summary = (latest?.summary ?? {}) as Record<string, unknown>;
-  const num = (key: string) => Number((summary[key] as number | undefined) ?? 0);
-  const blockingOnDate = dateRun?.blocking_count ?? 0;
+  const summary = (displayedRun?.summary ?? {}) as Record<string, unknown>;
+  const num = (key: string) =>
+    Number((summary[key] as number | undefined) ?? 0); const blockingOnDate = dateRun?.blocking_count ?? 0;
 
-  const record: [string, string][] = latest
+  const record: [string, string][] = displayedRun
     ? [
-        ["Audit ID", latest.run_reference ?? "Not numbered"],
-        ["Business date", latest.business_date],
-        ["Operator", latest.operator_name ?? "—"],
-        ["Started", new Date(latest.started_at).toLocaleString()],
-        [
-          "Finished",
-          latest.completed_at ? new Date(latest.completed_at).toLocaleString() : "Running",
-        ],
-        ["Rooms revenue", money(num("rooms_revenue"))],
-        ["Point of sale revenue", money(num("pos_revenue"))],
-        ["Collections", money(num("collections"))],
-        ["Till variance", money(num("till_variance"))],
-        ["Outstanding folios", money(num("outstanding_balances"))],
-        [
-          "Unposted transactions",
-          `${num("unposted_count")} · ${money(num("unposted_amount"))}`,
-        ],
-        ["Failed postings", String(num("failed_postings"))],
-        ["Accounts payable", money(num("accounts_payable"))],
-        ["Accounts receivable", money(num("accounts_receivable"))],
-        ["Goods received not invoiced", money(num("grni_balance"))],
-        ["Blocking exceptions", String(latest.blocking_count)],
-        ["Warnings", String(latest.warning_count)],
-        ["Stage", titleCase(latest.stage)],
-        ["Attempts", String(latest.rerun_count + 1)],
-        ["Signed result", latest.result_digest ? latest.result_digest.slice(0, 16) + "…" : "Not signed"],
-        ["Outcome", latest.status === "exception" ? "Exception" : titleCase(latest.status)],
-      ]
+      ["Audit ID", displayedRun.run_reference ?? "Not numbered"],
+      ["Business date", displayedRun.business_date],
+      ["Operator", displayedRun.operator_name ?? "—"],
+      ["Started", new Date(displayedRun.started_at).toLocaleString()],
+      [
+        "Finished",
+        displayedRun.completed_at
+          ? new Date(displayedRun.completed_at).toLocaleString()
+          : "Running",
+      ],
+      ["Rooms revenue", money(num("rooms_revenue"))],
+      ["Point of sale revenue", money(num("pos_revenue"))],
+      ["Collections", money(num("collections"))],
+      ["Till variance", money(num("till_variance"))],
+      ["Outstanding folios", money(num("outstanding_balances"))],
+      [
+        "Unposted transactions",
+        `${num("unposted_count")} · ${money(num("unposted_amount"))}`,
+      ],
+      ["Failed postings", String(num("failed_postings"))],
+      ["Accounts payable", money(num("accounts_payable"))],
+      ["Accounts receivable", money(num("accounts_receivable"))],
+      ["Goods received not invoiced", money(num("grni_balance"))],
+      ["Blocking exceptions", String(displayedRun.blocking_count)],
+      ["Warnings", String(displayedRun.warning_count)],
+      ["Stage", titleCase(displayedRun.stage)],
+      ["Attempts", String(displayedRun.rerun_count + 1)],
+      [
+        "Signed result",
+        displayedRun.result_digest
+          ? displayedRun.result_digest.slice(0, 16) + "…"
+          : "Not signed",
+      ],
+      [
+        "Outcome",
+        displayedRun.status === "exception"
+          ? "Exception"
+          : titleCase(displayedRun.status),
+      ],
+    ]
     : [];
 
   // Everything standing between this date and a locked day, in the order it
@@ -156,9 +184,8 @@ function EndOfDayPage() {
     if (e.severity !== "blocking") continue;
     outstanding.push({
       title: EXCEPTION_LABELS[e.category] ?? titleCase(e.category),
-      detail: `${e.detail}${e.reference ? ` · ${e.reference}` : ""}${
-        e.amount === null ? "" : ` · ${money(e.amount)}`
-      }`,
+      detail: `${e.detail}${e.reference ? ` · ${e.reference}` : ""}${e.amount === null ? "" : ` · ${money(e.amount)}`
+        }`,
     });
   }
   const canOpen = Boolean(branchId) && mayOpen && !selectedDay && !otherOpenDay;
@@ -460,7 +487,15 @@ function EndOfDayPage() {
                     <TableCell className="text-right">{r.blocking_count}</TableCell>
                     <TableCell className="text-right">{r.warning_count}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => setSelectedRun(r.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setActiveBranchId(r.branch_id);
+                          setDate(r.business_date);
+                          setSelectedRun(r.id);
+                        }}
+                      >
                         View
                       </Button>
                     </TableCell>
