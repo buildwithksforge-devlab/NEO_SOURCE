@@ -609,7 +609,9 @@ const BATCH_POST_REASONS: Record<string, string> = {
   not_found: "That batch no longer exists.",
   forbidden: "That batch belongs to another property.",
   not_permitted: "You do not have permission to post production to stock.",
-  no_actual_quantity: "Record how much was actually produced before posting.",
+  no_actual_quantity: "Record the gross quantity produced before posting.",
+  negative_waste: "Waste quantity cannot be negative.",
+  waste_exceeds_production: "Waste quantity cannot be greater than the gross quantity produced.",
   no_recipe: "This batch has no recipe, so its ingredients are unknown.",
   no_output_stock_item:
     "The recipe has no produced stock item, so there is nothing to receive into the store.",

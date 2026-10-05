@@ -3,7 +3,7 @@
  *
  * One rule for the whole OS: every relational selector filters by the active
  * property first, then narrows by the parent relationship on that form
- * (property → department → station → worker). Only an organisation-scoped
+ * (property â†’ department â†’ station â†’ worker). Only an organisation-scoped
  * account may view "All Properties"; administrative rights alone never widen
  * property reach — that decision belongs to `useBranchScope()` and is simply
  * consumed here.
@@ -292,7 +292,7 @@ export function useRequireProperty() {
   return useCallback(() => {
     if (!branchId) {
       throw new Error(
-        "Select a property in the header before saving this record — “All Properties” is a viewing mode only.",
+        "Select a property in the header before saving this record — â€œAll Propertiesâ€ is a viewing mode only.",
       );
     }
     return branchId;
@@ -347,8 +347,6 @@ export function useScopedDepartmentByKey(pattern: string, branchOverride?: strin
     rows,
     branchId,
     pattern,
-    options?.departmentId,
-    options?.departmentKey,
   ]);
   return { ...query, data } as Omit<typeof query, "data"> & { data: ResolvedDepartment | null };
 }
@@ -393,8 +391,6 @@ export function useScopedWorkerOptions(options?: {
     rows,
     branchId,
     pattern,
-    options?.departmentId,
-    options?.departmentKey,
   ]);
   return { ...query, data } as Omit<typeof query, "data"> & { data: ScopedWorker[] };
 }

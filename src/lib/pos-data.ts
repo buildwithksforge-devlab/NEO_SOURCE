@@ -1471,10 +1471,26 @@ export type MenuRecipeStatus =
 export type ConsumptionMode = "none" | "direct_stock" | "recipe" | "batch";
 
 export const CONSUMPTION_MODES: { value: ConsumptionMode; label: string; hint: string }[] = [
-  { value: "none", label: "No stock consumption", hint: "Sold without touching inventory." },
-  { value: "direct_stock", label: "Direct stock", hint: "One sale takes a finished product off the shelf." },
-  { value: "recipe", label: "Recipe", hint: "A sale consumes the listed ingredients." },
-  { value: "batch", label: "Produced / batch item", hint: "A sale takes from a produced batch." },
+  {
+    value: "none",
+    label: "No inventory deduction",
+    hint: "Use only when selling this item should not reduce stock.",
+  },
+  {
+    value: "recipe",
+    label: "Recipe ingredients",
+    hint: "Each sale deducts the raw ingredients configured in this item's recipe.",
+  },
+  {
+    value: "batch",
+    label: "Prepared batch / container stock",
+    hint: "Use for items prepared in advance and stored as stock, such as pancake batter, pizza sauce, pastry cream or dough. Raw ingredients are consumed during batch production; each sale deducts only the prepared stock.",
+  },
+  {
+    value: "direct_stock",
+    label: "Purchased / direct stock",
+    hint: "Use for ready-to-use purchased stock such as sliced bread, buns, tots, bottled drinks or packaged products.",
+  },
 ];
 
 export function consumptionModeLabel(mode: string | null | undefined): string {

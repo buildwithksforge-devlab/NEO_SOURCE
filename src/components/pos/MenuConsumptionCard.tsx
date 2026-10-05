@@ -98,7 +98,7 @@ export function MenuConsumptionCard({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label>How a sale consumes stock</Label>
+        <Label>Inventory method</Label>
         <Select
           value={mode}
           onValueChange={(v) => {
@@ -129,7 +129,7 @@ export function MenuConsumptionCard({
       {needsStock ? (
         <div className="space-y-3 rounded-lg border border-border/60 p-3">
           <div className="space-y-1.5">
-            <Label>Stock item</Label>
+            <Label>{mode === "batch" ? "Prepared batch stock item" : "Purchased stock item"}</Label>
             <Input
               value={search}
               placeholder="Search stock by name or code"
@@ -148,7 +148,7 @@ export function MenuConsumptionCard({
               }
             >
               <SelectTrigger aria-label={`Stock item for ${item.name}`}>
-                <SelectValue placeholder="Choose the stock item this sale deducts" />
+                <SelectValue placeholder={mode === "batch" ? "Choose the prepared batch this sale uses" : "Choose the purchased stock this sale uses"} />
               </SelectTrigger>
               <SelectContent>
                 {filtered.map((r) => (
@@ -205,7 +205,7 @@ export function MenuConsumptionCard({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Issuing store</Label>
+            <Label>Stock / container location</Label>
             <Select
               value={item.issuing_location_id ?? "auto"}
               onValueChange={(v) => write({ issuing_location_id: v === "auto" ? null : v })}
@@ -214,7 +214,7 @@ export function MenuConsumptionCard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Use the station&apos;s store</SelectItem>
+                <SelectItem value="auto">Use the station&apos;s stock location</SelectItem>
                 {locationRows.map((l) => (
                   <SelectItem key={String(l["id"])} value={String(l["id"])}>
                     {String(l["name"])}

@@ -85,7 +85,7 @@ function Page() {
       type: "number" as const,
       required: true,
     },
-    { name: "actual_quantity", label: "Actual produced", type: "number" as const },
+    { name: "actual_quantity", label: "Gross quantity produced", type: "number" as const },
     { name: "unit", label: "Unit", placeholder: "portions, kg, litres" },
     { name: "prepared_at", label: "Prepared at", type: "datetime-local" as const },
     { name: "use_by", label: "Use by", type: "datetime-local" as const },

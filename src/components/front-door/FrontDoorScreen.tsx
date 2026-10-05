@@ -30,6 +30,7 @@ import {
   fetchMyEntrances,
   fetchPublicDestinations,
   fetchPublicDirectory,
+  type Destination,
   type DirectoryProperty,
   type MyEntrance,
 } from "@/lib/front-door";
@@ -122,7 +123,27 @@ export function FrontDoorScreen() {
     queryFn: () => fetchPublicDirectory({ search, place, service }),
     staleTime: 60_000,
   });
-  const results = useMemo(() => directory.data ?? [], [directory.data]);
+  /**
+   * Discover represents properties, not join rows.
+   *
+   * The public directory RPC may legitimately join rooms, services, rates or
+   * publishing records. Even if an upstream join ever returns the same branch
+   * more than once, the front door must render that hotel exactly once.
+   *
+   * branch_id is the canonical property identity; never dedupe by display
+   * name because different hotels may share a brand or similar name.
+   */
+  const results = useMemo(() => {
+    const unique = new Map<string, DirectoryProperty>();
+
+    for (const property of directory.data ?? []) {
+      if (!unique.has(property.branch_id)) {
+        unique.set(property.branch_id, property);
+      }
+    }
+
+    return [...unique.values()];
+  }, [directory.data]);
 
   const mine = useQuery({
     queryKey: ["neo-my-entrances"],
@@ -147,10 +168,48 @@ export function FrontDoorScreen() {
     queryFn: fetchPublicDestinations,
     staleTime: 300_000,
   });
-  const destinations = useMemo(
-    () => (destinationQuery.data ?? []).slice(0, 10),
-    [destinationQuery.data],
-  );
+  /**
+   * Destination identity is case-insensitive.
+   *
+   * Hotels may have legacy city values such as "Nairobi" and "NAIROBI".
+   * Those are the same destination and must never appear as separate chips.
+   * Preserve the better human-readable spelling and combine hotel counts;
+   * do not mutate the hotel's stored address.
+   */
+  const destinations = useMemo(() => {
+    const unique = new Map<string, Destination>();
+
+    for (const destination of destinationQuery.data ?? []) {
+      const key = destination.place.trim().toLocaleLowerCase();
+
+      if (!key) continue;
+
+      const existing = unique.get(key);
+
+      if (!existing) {
+        unique.set(key, destination);
+        continue;
+      }
+
+      const existingIsAllCaps =
+        existing.place === existing.place.toLocaleUpperCase() &&
+        existing.place !== existing.place.toLocaleLowerCase();
+
+      const candidateIsAllCaps =
+        destination.place === destination.place.toLocaleUpperCase() &&
+        destination.place !== destination.place.toLocaleLowerCase();
+
+      unique.set(key, {
+        place:
+          existingIsAllCaps && !candidateIsAllCaps
+            ? destination.place
+            : existing.place,
+        hotels: existing.hotels + destination.hotels,
+      });
+    }
+
+    return [...unique.values()].slice(0, 10);
+  }, [destinationQuery.data]);
   const dining = useMemo(
     () => results.filter((p) => serves(p, ["dining", "restaurant", "delivery", "room_service"])),
     [results],
