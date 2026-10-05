@@ -1255,6 +1255,22 @@ export function useAssetTagPrefixes(assets: Row[]): string[] {
   return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([prefix]) => prefix);
 }
 
+export function useAssetCustodianNames() {
+  const { organizationId } = useCtx();
+
+  return useQuery({
+    queryKey: ["ops", "asset-custodian-names", organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(db, "neo_asset_custodian_names");
+
+      if (error) throw error;
+
+      return rows(data);
+    },
+  });
+}
+
 export function useSaveAsset() {
   const qc = useQueryClient();
   const ctx = useCtx();
@@ -1320,7 +1336,7 @@ export function useAssetServiceHistory(assetId?: string | null) {
 
 export function useMoveAsset() {
   const qc = useQueryClient();
-  const ctx = useCtx();
+
   return useMutation({
     mutationFn: async (input: {
       asset: Row;
@@ -1330,23 +1346,32 @@ export function useMoveAsset() {
       movementType?: string;
       reason: string;
     }) => {
-      const { error } = await db.from("asset_movements").insert({
-        organization_id: ctx.organization_id,
-        asset_id: input.asset["id"],
-        movement_type: input.movementType ?? "transfer",
-        previous_location: input.asset["location_label"] ?? null,
-        new_location: input.newLocation,
-        previous_department_id: input.asset["department_id"] ?? null,
-        new_department_id: input.newDepartmentId ?? input.asset["department_id"] ?? null,
-        new_custodian: input.newCustodian ?? null,
-        reason: input.reason,
-        performed_by: ctx.userId,
+      const targetDepartment =
+        input.newDepartmentId ?? (input.asset["department_id"] as string | null) ?? null;
+
+      const { data, error } = await guardedRpc(db, "neo_asset_move", {
+        _asset: input.asset["id"],
+        _new_location: input.newLocation,
+        _new_department_id: targetDepartment,
+        _new_custodian: input.newCustodian ?? null,
+        _movement_type: input.movementType ?? "transfer",
+        _reason: input.reason,
       });
+
       if (error) throw error;
-      const patch: Row = { location_label: input.newLocation, custodian_id: input.newCustodian ?? null };
-      if (input.newDepartmentId !== undefined) patch["department_id"] = input.newDepartmentId;
-      const { error: uErr } = await db.from("assets").update(patch).eq("id", input.asset["id"]);
-      if (uErr) throw uErr;
+
+      const result = (data ?? {}) as Row;
+
+      if (result["ok"] !== true || !result["movement_id"]) {
+        throw new Error("The asset movement was not persisted.");
+      }
+
+      const patch: Row = {
+        location_label: input.newLocation,
+        department_id: targetDepartment,
+        custodian_id: input.newCustodian ?? null,
+      };
+
       await logAudit({
         action: "asset.moved",
         module: "maintenance",
@@ -1360,6 +1385,8 @@ export function useMoveAsset() {
         reason: input.reason,
         branchId: (input.asset["branch_id"] as string) ?? null,
       });
+
+      return result;
     },
     onSuccess: () => {
       toast.success("Asset movement recorded");

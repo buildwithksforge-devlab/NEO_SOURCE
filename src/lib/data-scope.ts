@@ -66,6 +66,24 @@ export type TableScopeColumns = {
 };
 
 export const TABLE_SCOPE_COLUMNS: Record<string, TableScopeColumns> = {
+  // ---- People / workforce -------------------------------------------------
+  // `profiles.id` is the canonical login identity. Organisation-wide staff
+  // may legitimately have no branch, so property treatment remains owned by
+  // branch-filter.ts; these columns add department/team narrowing when the
+  // caller uses the full data-scope contract.
+  profiles: {
+    branch: "branch_id",
+    department: "department_id",
+    users: ["id"],
+  },
+  // Employee rows are property-owned. `profile_id` links them back to the
+  // canonical user identity used by self/team visibility.
+  employees: {
+    branch: "branch_id",
+    department: "department_id",
+    users: ["profile_id"],
+  },
+
   // ---- Restaurant / bar / POS ---------------------------------------------
   pos_orders: {
     branch: "branch_id",

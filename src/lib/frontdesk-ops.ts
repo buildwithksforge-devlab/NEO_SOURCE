@@ -371,6 +371,7 @@ export function useAssignableStaff(departmentId?: string | null) {
   // property-wide worker catalogue to this selector.
   return useScopedWorkerOptions({
     departmentId: departmentId || null,
+    enabled: Boolean(departmentId),
   });
 }
 

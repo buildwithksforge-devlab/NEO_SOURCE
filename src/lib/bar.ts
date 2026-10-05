@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useScopedWorkerOptions } from "@/lib/scoped-options";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -126,42 +127,21 @@ export function useReassignBarTicket() {
   });
 }
 
-/** Bar attendants in the caller's organisation, for reassignment. */
+/** Active Bar workers in the selected property, for manager reassignment. */
 export function useBarAttendants() {
-  const { organizationId, branchId } = useBarContext();
-  return useQuery({
-    queryKey: ["bar", "attendants", organizationId, branchId],
-    enabled: Boolean(organizationId),
-    queryFn: async () => {
-      // `user_roles` has no foreign key to `profiles`, so PostgREST cannot embed
-      // them in one request. Read the role rows first, then the matching profiles.
-      const { data: roleRows, error: roleError } = await db
-        .from("user_roles")
-        .select("user_id, roles!inner(name)")
-        .limit(500);
-      if (roleError) throw new Error(roleError.message);
-      const barUserIds = ((roleRows ?? []) as BarRow[])
-        .filter((r) => String((r["roles"] as { name?: string } | null)?.name ?? "").toLowerCase().includes("bar"))
-        .map((r) => String(r["user_id"]))
-        .filter(Boolean);
-      if (barUserIds.length === 0) return [] as { id: string; name: string; branchId: string | null }[];
-      const { data: profileRows, error: profileError } = await db
-        .from("profiles")
-        .select("id, full_name, branch_id")
-        .in("id", Array.from(new Set(barUserIds)));
-      if (profileError) throw new Error(profileError.message);
-      return ((profileRows ?? []) as BarRow[])
-        .map((p) => ({
-          id: String(p["id"]),
-          name: (p["full_name"] as string | null) ?? "Unnamed",
-          branchId: (p["branch_id"] as string | null) ?? null,
-        }))
-        .filter((p) => (branchId ? !p.branchId || p.branchId === branchId : true));
-    },
-
+  const workers = useScopedWorkerOptions({
+    departmentKey: "bar",
   });
-}
 
+  return {
+    ...workers,
+    data: (workers.data ?? []).map((worker) => ({
+      id: worker.id,
+      name: worker.full_name,
+      branchId: worker.branch_id,
+    })),
+  };
+}
 /**
  * The bar-scoped slice of the canonical menu catalogue.
  *

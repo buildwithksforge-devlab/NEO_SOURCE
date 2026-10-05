@@ -1805,18 +1805,33 @@ body[data-scroll-locked] {
    The POS variant of the canonical document: same numbers, reduced
    furniture, printed to the roll width rather than A4. */
 .neo-doc-thermal {
+  box-sizing: border-box;
   width: 80mm;
   max-width: 100%;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
 @media print {
   body:has([data-document-thermal]) {
     background: white !important;
   }
+
   [data-document-thermal] {
+    box-sizing: border-box !important;
     width: 72mm !important;
+    max-width: 72mm !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    font-size: 10.5px !important;
+  }
+
+  [data-document-thermal] * {
+    break-inside: avoid;
   }
 }
 

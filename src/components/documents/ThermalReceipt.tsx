@@ -51,55 +51,78 @@ export function ThermalReceipt({
   return (
     <article
       data-document-thermal
-      className={cn("neo-doc-thermal mx-auto bg-white p-2 text-[11px] leading-tight text-black", className)}
+      className={cn(
+        "neo-doc-thermal mx-auto bg-white px-2 py-3 text-[11px] leading-[1.35] text-black",
+        className,
+      )}
     >
       <header className="text-center">
-        <p data-document-trading-name className="text-[13px] font-extrabold uppercase">
+        <p
+          data-document-trading-name
+          className="text-[14px] font-black uppercase leading-tight tracking-[0.04em]"
+        >
           {b.tradingName}
         </p>
-        {b.propertyAddress ? <p className="opacity-80">{b.propertyAddress}</p> : null}
-        {b.propertyPhone ? <p className="opacity-80">{b.propertyPhone}</p> : null}
+        {b.propertyAddress ? <p className="mt-0.5 text-[10px]">{b.propertyAddress}</p> : null}
+        {b.propertyPhone ? <p className="text-[10px]">{b.propertyPhone}</p> : null}
         {b.taxId ? (
-          <p className="opacity-80">
+          <p className="text-[10px]">
             {b.taxLabel}: {b.taxId}
           </p>
         ) : null}
       </header>
 
-      <p className="mt-2 border-y border-dashed border-black/50 py-1 text-center font-bold uppercase">
-        {documentType}
-      </p>
-      {documentNumber ? <p className="text-center font-semibold">{documentNumber}</p> : null}
-      {meta.map((m) => (
-        <p key={m.label} className="flex justify-between gap-2">
-          <span>{m.label}</span>
-          <span>{m.value}</span>
+      <div className="my-2 border-y border-dashed border-black py-1.5 text-center">
+        <p className="font-extrabold uppercase tracking-[0.08em]">
+          {documentType === "pos_receipt" ? "RECEIPT" : documentType.replace(/_/g, " ")}
         </p>
-      ))}
+        {documentNumber ? (
+          <p className="mt-0.5 font-mono text-[10px] font-semibold">{documentNumber}</p>
+        ) : null}
+      </div>
+      {meta.length ? (
+        <div className="space-y-0.5">
+          {meta.map((m) => (
+            <p key={m.label} className="flex items-start justify-between gap-3">
+              <span className="shrink-0 text-[10px]">{m.label}</span>
+              <span className="min-w-0 text-right text-[10px] font-medium">{m.value}</span>
+            </p>
+          ))}
+        </div>
+      ) : null}
 
-      <ul className="mt-2 space-y-1 border-t border-dashed border-black/50 pt-2">
-        {lines.map((l, i) => (
-          <li key={i} className="flex justify-between gap-2">
-            <span className="min-w-0 break-words">
-              {l.quantity ? `${l.quantity} × ` : ""}
-              {l.description}
-            </span>
-            <span className="shrink-0 tabular-nums">{l.amount}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-2 border-t border-dashed border-black pt-1.5">
+        <div className="mb-1 flex justify-between gap-2 border-b border-black pb-1 text-[9px] font-bold uppercase">
+          <span>Item</span>
+          <span>Amount</span>
+        </div>
 
-      <div className="mt-2 space-y-0.5 border-t border-dashed border-black/50 pt-2">
+        <ul className="space-y-1.5">
+          {lines.map((l, i) => (
+            <li key={i} className="flex items-start justify-between gap-2">
+              <span className="min-w-0 flex-1 break-words pr-1">
+                {l.quantity ? (
+                  <span className="mr-1 font-semibold">{l.quantity} ×</span>
+                ) : null}
+                {l.description}
+              </span>
+              <span className="shrink-0 font-medium tabular-nums">{l.amount}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-2 space-y-0.5 border-t border-dashed border-black pt-1.5">
         {totals.map((t) => (
-          <p key={t.label} className="flex justify-between gap-2">
+          <p key={t.label} className="flex justify-between gap-3">
             <span>{t.label}</span>
-            <span className="tabular-nums">{t.value}</span>
+            <span className="font-medium tabular-nums">{t.value}</span>
           </p>
         ))}
         {headline ? (
           <p
             data-document-total-band
-            className="flex justify-between gap-2 border-t border-black/60 pt-1 text-[12px] font-extrabold uppercase"
+            className="mt-1 flex justify-between gap-3 border-y-2 border-black py-1.5 text-[13px] font-black uppercase"
           >
             <span>{headline.label}</span>
             <span className="tabular-nums">{headline.value}</span>
@@ -107,14 +130,20 @@ export function ThermalReceipt({
         ) : null}
       </div>
 
-      {notes ? <div className="mt-2 text-center opacity-80">{notes}</div> : null}
-      {trace ? (
-        <p data-document-trace className="mt-2 text-center font-mono text-[8px] opacity-70">
-          {trace}
-        </p>
-      ) : null}
-      <p className="mt-2 text-center text-[9px] tracking-[0.08em] opacity-70">Powered by NEØ</p>
-      <p className="text-center text-[8px] opacity-60">Built by AI, Data &amp; Marketing by Wambui</p>
+      {notes ? <div className="mt-2 text-center text-[10px]">{notes}</div> : null}
+
+      <div className="mt-3 border-t border-dashed border-black pt-2 text-center">
+        <p className="font-semibold">Thank you for your business.</p>
+
+        {trace ? (
+          <p data-document-trace className="mt-2 break-all font-mono text-[7px]">
+            {trace}
+          </p>
+        ) : null}
+
+        <p className="mt-2 text-[8px] tracking-[0.08em]">Powered by NEØ</p>
+        <p className="text-[7px]">Built by AI, Data &amp; Marketing by Wambui</p>
+      </div>
     </article>
   );
 }

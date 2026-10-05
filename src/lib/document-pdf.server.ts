@@ -111,6 +111,24 @@ export async function buildBusinessDocumentPdf(
   supabase: SupabaseClient<Database>,
   input: { type: BusinessDocumentType; id: string },
 ): Promise<{ filename: string; base64: string; documentNumber: string }> {
+  /**
+   * POS receipts are physically different documents.
+   *
+   * They retain the same canonical backend payload, numbering and financial
+   * truth, but render to a continuous 80 mm roll instead of forcing the A4
+   * business-document furniture onto a thermal printer.
+   */
+  if (input.type === "pos_receipt") {
+    const { buildThermalReceiptPdf } = await import(
+      "./document-thermal-pdf.server"
+    );
+
+    return buildThermalReceiptPdf(supabase, {
+      type: "pos_receipt",
+      id: input.id,
+    });
+  }
+
   const { data, error } = await supabase.rpc("neo_document_payload" as never, {
     _type: input.type,
     _id: input.id,

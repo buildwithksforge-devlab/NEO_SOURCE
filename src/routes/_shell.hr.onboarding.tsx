@@ -31,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useAuth } from "@/lib/auth";
 import { useBranchScope } from "@/lib/branches";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useEmployees, usePayrollPeriods } from "@/lib/hr-data";
 import { usePositionGrades } from "@/lib/hr-terms";
 import { usePayrollEnrolment } from "@/lib/hr-payroll";
@@ -86,6 +87,7 @@ type CardRow = { employee_id: string; card_number: string; status: string };
 function StaffOnboardingPage() {
   const { profile, can } = useAuth();
   const { branches } = useBranchScope();
+  const { applyTo, filterKey } = useActivePropertyFilter();
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [termsFor, setTermsFor] = useState<Row | null>(null);
@@ -95,21 +97,26 @@ function StaffOnboardingPage() {
   const org = profile?.organization_id ?? null;
 
   const roster = useQuery({
-    queryKey: ["hr", "onboarding", org ?? "none"],
+    queryKey: ["hr", "onboarding", org ?? "none", filterKey],
     enabled: Boolean(org),
     queryFn: async () => {
-      const accounts = await supabase
-        .from("profiles")
-        .select("id, full_name, email, job_title, branch_id, department_id, account_status, created_at")
+      const accounts = await applyTo(
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, job_title, branch_id, department_id, account_status, created_at"),
+        "profiles",
+      )
         .eq("organization_id", org!)
         .eq("account_type", "staff")
         .order("created_at", { ascending: false });
       if (accounts.error) throw new Error(accounts.error.message);
 
-      const employees = await supabase
-        .from("employees")
-        .select("id, profile_id, employee_number, branch_id")
-        .eq("organization_id", org!);
+      const employees = await applyTo(
+        supabase
+          .from("employees")
+          .select("id, profile_id, employee_number, branch_id"),
+        "employees",
+      ).eq("organization_id", org!);
       if (employees.error) throw new Error(employees.error.message);
 
       const cards = await supabase

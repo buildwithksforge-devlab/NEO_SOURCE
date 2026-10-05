@@ -55,6 +55,7 @@ import {
   useAssetTagPrefixes,
   useAssetWorkOrders,
   useAssets,
+  useAssetCustodianNames,
   useMoveAsset,
   useSaveAsset,
   useSetAssetStatus,
@@ -178,6 +179,7 @@ function AssetsPage() {
   const { branding } = useBranding();
 
   const assets = useAssets();
+  const assetCustodianNames = useAssetCustodianNames();
   const categories = useAssetCategories();
   const rooms = useRooms();
   const suppliers = useSuppliers();
@@ -239,13 +241,27 @@ function AssetsPage() {
   const supplierList = (suppliers.data ?? []) as Row[];
   const editingWorkerList = editingWorkers.data ?? [];
   const transferWorkerList = transferWorkers.data ?? [];
+  const assetCustodianList = assetCustodianNames.data ?? [];
+
+  const assetCustodianNameByAssetId = new Map(
+    assetCustodianList.map((row) => [
+      String(row["asset_id"]),
+      String(row["full_name"] ?? "Unassigned"),
+    ]),
+  );
 
   const departmentName = (id: unknown) =>
     departmentList.find((d) => d.id === id)?.name ?? "Unassigned";
-  const custodianName = (id: unknown) =>
-    editingWorkerList.find((w) => w.id === id)?.full_name ??
-    transferWorkerList.find((w) => w.id === id)?.full_name ??
-    "Unassigned";
+  const custodianName = (asset: Record<string, unknown>) => {
+    if (!asset["custodian_id"]) return "Unassigned";
+
+    return (
+      assetCustodianNameByAssetId.get(String(asset["id"])) ??
+      editingWorkerList.find((w) => w.id === asset["custodian_id"])?.full_name ??
+      transferWorkerList.find((w) => w.id === asset["custodian_id"])?.full_name ??
+      "Custodian assigned"
+    );
+  };
   const roomLabel = (id: unknown) =>
     roomList.find((r) => r["id"] === id)?.["room_number"] ?? null;
 
@@ -716,7 +732,7 @@ function AssetsPage() {
                           {departmentName(inspected["department_id"])}
                         </InspectorField>
                         <InspectorField label="Custodian">
-                          {custodianName(inspected["custodian_id"])}
+                          {custodianName(inspected)}
                         </InspectorField>
                         <InspectorField label="Criticality">
                           {titleCase(String(inspected["criticality"] ?? "normal"))}

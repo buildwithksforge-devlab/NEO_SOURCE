@@ -208,6 +208,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_reservation_deposit_record: "authenticated",
   neo_checkin_deposit_override: "authenticated",
   neo_maintenance_work_order_create: "authenticated",
+  neo_asset_move: "authenticated",
+  neo_asset_custodian_names: "authenticated",
   neo_delivery_dispatch_board: "authenticated",
   neo_delivery_shift_schedule: "authenticated",
   neo_delivery_shift_cancel: "authenticated",
