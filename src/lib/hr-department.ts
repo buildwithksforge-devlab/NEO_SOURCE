@@ -303,6 +303,7 @@ export function useOpenHrCase() {
 
 export function useReviewHrCase() {
   const invalidate = useHrInvalidate();
+
   return useMutation({
     mutationFn: async (input: {
       kind: "disciplinary" | "grievance";
@@ -311,23 +312,113 @@ export function useReviewHrCase() {
       notes?: string;
       outcome?: string;
     }) => {
-      const { error } = await guardedRpc(db, "neo_hr_case_review", {
-        _kind: input.kind,
-        _case: input.caseId,
-        _status: input.status,
-        _notes: input.notes ?? null,
-        _outcome: input.outcome ?? null,
-      });
-      if (error) throw new Error(error.message);
+      const table =
+        input.kind === "disciplinary"
+          ? "disciplinary_cases"
+          : "grievance_cases";
+
+      const { data: rpcResult, error: rpcError } = await guardedRpc(
+        db,
+        "neo_hr_case_review",
+        {
+          _kind: input.kind,
+          _case: input.caseId,
+          _status: input.status,
+          _notes: input.notes ?? null,
+          _outcome: input.outcome ?? null,
+        },
+      );
+
+      if (rpcError) {
+        throw new Error(rpcError.message);
+      }
+
+      // An RPC can return an application-level rejection without
+      // a transport error. Do not report success in that case.
+      if (
+        rpcResult &&
+        typeof rpcResult === "object" &&
+        !Array.isArray(rpcResult)
+      ) {
+        const result = rpcResult as Record<string, unknown>;
+
+        if (result["ok"] === false) {
+          throw new Error(
+            String(
+              result["detail"] ??
+                result["reason"] ??
+                "HR case review was rejected.",
+            ),
+          );
+        }
+      }
+
+      // Verify the persisted database state.
+      // A successful HTTP response alone is not sufficient.
+      const outcomeColumn =
+        input.kind === "disciplinary"
+          ? "resolution"
+          : "outcome";
+
+      const { data: persisted, error: readError } = await db
+        .from(table)
+        .select(`id, status, ${outcomeColumn}`)
+        .eq("id", input.caseId)
+        .maybeSingle();
+
+      if (readError) {
+        throw new Error(
+          `Unable to verify the HR case update: ${readError.message}`,
+        );
+      }
+
+      if (!persisted) {
+        throw new Error(
+          "HR case update could not be verified. The record is unavailable or access was denied.",
+        );
+      }
+
+      const actualStatus = String(persisted["status"] ?? "");
+
+      if (actualStatus !== input.status) {
+        throw new Error(
+          `HR case did not advance. Expected "${input.status}", but the database still shows "${actualStatus}".`,
+        );
+      }
+
+      if (
+        input.status === "resolved" &&
+        input.outcome?.trim() &&
+        String(persisted[outcomeColumn] ?? "").trim() !== input.outcome.trim()
+      ) {
+        throw new Error(
+          "The case status changed, but its recorded outcome does not match the submitted resolution. HR must review the case.",
+        );
+      }
+
+      return {
+        caseId: input.caseId,
+        kind: input.kind,
+        status: actualStatus,
+      };
     },
-    onSuccess: () => {
+
+    onSuccess: (result) => {
       invalidate();
-      toast.success("Case updated");
+
+      toast.success(
+        result.status === "resolved"
+          ? "HR case resolved and verified."
+          : "HR case status updated and verified.",
+      );
     },
-    onError: (e: Error) => toast.error(e.message),
+
+    onError: (error: Error) => {
+      invalidate();
+      toast.error(error.message);
+    },
   });
 }
-
 /* ------------------------------------------------------------------ *
  * Onboarding
  * ------------------------------------------------------------------ */

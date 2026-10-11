@@ -586,6 +586,74 @@ export function useSaveBatch() {
   const ctx = useCtx();
   return useMutation({
     mutationFn: async (row: Record<string, unknown>) => {
+      const parseQuantity = (value: unknown, label: string): number => {
+        if (value === null || value === undefined || value === "") {
+          return 0;
+        }
+
+        if (
+          typeof value !== "number" &&
+          typeof value !== "string"
+        ) {
+          throw new Error(`${label} must be a number.`);
+        }
+
+        const quantity = Number(value);
+
+        if (!Number.isFinite(quantity)) {
+          throw new Error(`${label} must be a valid number.`);
+        }
+
+        if (quantity < 0) {
+          throw new Error(`${label} cannot be negative.`);
+        }
+
+        return quantity;
+      };
+
+      const planned = parseQuantity(
+        row["planned_quantity"],
+        "Planned quantity",
+      );
+
+      const produced = parseQuantity(
+        row["actual_quantity"],
+        "Gross quantity produced",
+      );
+
+      const waste = parseQuantity(
+        row["waste_quantity"],
+        "Waste quantity",
+      );
+
+      const status = String(row["status"] ?? "planned")
+        .trim()
+        .toLowerCase();
+
+      if (planned <= 0) {
+        throw new Error("Planned quantity must be greater than zero.");
+      }
+
+      if (waste > produced) {
+        throw new Error(
+          "Waste quantity cannot be greater than the gross quantity produced.",
+        );
+      }
+
+      if (
+        [
+          "completed",
+          "partially-used",
+          "fully-used",
+          "closed",
+        ].includes(status) &&
+        produced <= 0
+      ) {
+        throw new Error(
+          "Record the gross quantity produced before completing the batch.",
+        );
+      }
+
       const payload = {
         batch_number: nextRequestNumber("BATCH"),
         ...row,
@@ -593,7 +661,11 @@ export function useSaveBatch() {
         branch_id: ctx.branch_id,
         created_by: ctx.userId,
       };
-      const { error } = await supabase.from("production_batches").upsert(payload as never);
+
+      const { error } = await supabase
+        .from("production_batches")
+        .upsert(payload as never);
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -641,7 +713,7 @@ export function usePostProductionBatch() {
     onSuccess: (result) => {
       toast.success(
         result.reason === "already_posted"
-          ? "This batch was already posted to stock."
+          ? "This production batch was already recorded."
           : `Posted to stock — ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
@@ -676,59 +748,70 @@ export function useSaveIngredientRequest() {
   const ctx = useCtx();
   return useMutation({
     mutationFn: async (row: Record<string, unknown>) => {
-      const payload = {
-        request_number: nextRequestNumber("KR"),
-        ...row,
-        organization_id: ctx.organization_id,
-        branch_id: ctx.branch_id,
-        requested_by: ctx.userId,
-      };
-      const { error } = await supabase.from("kitchen_ingredient_requests").upsert(payload as never);
-      if (error) throw error;
+      if (!ctx.branch_id) {
+        throw new Error("Select a property before sending a request to Stores");
+      }
 
-      // The kitchen's own list is only half the story: the request has to land
-      // on the Stores desk as a real requisition, otherwise nobody can issue
-      // against it. The ingredient is matched to a stock item by exact name
-      // when one exists; otherwise Stores sees the written description.
-      if (!ctx.branch_id) throw new Error("Select a property before sending a request to Stores");
+      // The atomic creation RPC intentionally does not edit existing records.
+      // Never create another Stores requisition as a side-effect of editing.
+      if (row["id"]) {
+        throw new Error(
+          "Editing an existing Kitchen request requires the linked-requisition workflow. No changes were saved.",
+        );
+      }
+
       const name = String(row["ingredient_name"] ?? "").trim();
       const quantity = Number(row["quantity"] ?? 0);
+
       if (!name || !Number.isFinite(quantity) || quantity <= 0) {
         throw new Error("Give the ingredient and a quantity above zero");
       }
-      const { data: match } = await supabase
-        .from("stock_items")
-        .select("id")
-        .eq("organization_id", ctx.organization_id)
-        .ilike("name", name)
-        .limit(1)
-        .maybeSingle();
 
-      const { data: req, error: reqError } = await guardedRpc(
+      // The caller supplies an attempt ID. Retrying the same submission
+      // must reuse this UUID, never generate a different one.
+      const attemptId = String(row["submission_attempt_id"] ?? "").trim();
+
+      if (!attemptId) {
+        throw new Error(
+          "A submission attempt ID is required. Please reopen the request form.",
+        );
+      }
+
+      const { data, error } = await guardedRpc(
         supabase,
-        "neo_department_requisition_create",
+        "neo_kitchen_ingredient_request_create",
         {
           _branch: ctx.branch_id,
-          _lines: [
-            {
-              stock_item_id: (match as Row | null)?.["id"] ?? null,
-              description: name,
-              unit: String(row["unit"] ?? "").trim() || null,
-              quantity_requested: quantity,
-              notes: String(row["reason"] ?? "").trim() || null,
-            },
-          ],
-          _department: null,
-          _required_date: null,
-          _priority: String(row["priority"] ?? "normal"),
-          _reason: String(row["reason"] ?? "").trim() || `Kitchen request for ${name}`,
-          _destination: null,
+          _request: {
+            submission_attempt_id: attemptId,
+            ingredient_name: name,
+            station_id: row["station_id"] || null,
+            required_by: row["required_by"] || null,
+            quantity,
+            unit: String(row["unit"] ?? "").trim() || "unit",
+            priority: String(row["priority"] ?? "normal"),
+            reason: String(row["reason"] ?? "").trim() || null,
+          },
         },
       );
-      if (reqError) throw new Error(reqError.message);
-      return (req ?? {}) as Row;
-    },
-    onSuccess: (data) => {
+
+      if (error) throw new Error(error.message);
+
+      const result = (data ?? {}) as Record<string, unknown>;
+
+      if (
+        result["ok"] !== true ||
+        !result["kitchen_request_id"] ||
+        !result["requisition_id"] ||
+        !result["request_number"]
+      ) {
+        throw new Error(
+          String(result["reason"] ?? "Kitchen and Stores did not confirm the request."),
+        );
+      }
+
+      return result as Row;
+    },    onSuccess: (data) => {
       const number = String((data as Row)?.["request_number"] ?? "");
       toast.success(number ? `Request sent to Stores as ${number}` : "Request sent to Stores.");
       void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });

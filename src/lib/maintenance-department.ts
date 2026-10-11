@@ -529,7 +529,11 @@ export function useMaintenanceMaterialNeeds() {
         .eq("module", "maintenance")
         .order("created_at", { ascending: false })
         .limit(200);
-      if (branchId) q = q.eq("branch_id", branchId);
+      if (branchId) {
+        q = q.or(
+          `branch_id.eq.${branchId},branch_id.is.null`,
+        );
+      }
       const { data, error } = await q;
       if (error) throw new Error(error.message);
       return (data ?? []) as MaintRow[];

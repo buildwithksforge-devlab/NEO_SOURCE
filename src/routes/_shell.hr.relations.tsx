@@ -215,8 +215,10 @@ function CasePanel({ kind }: { kind: "disciplinary" | "grievance" }) {
                                   review.mutate({
                                     kind,
                                     caseId: String(row["id"]),
-                                    status: "resolved",
-                                    outcome: "Resolved by HR",
+                                    status: kind === "grievance" ? "resolved" : "closed",
+                                    outcome: kind === "grievance"
+                                      ? "Resolved by HR"
+                                      : "Disciplinary case closed by HR",
                                   })
                                 }
                               >

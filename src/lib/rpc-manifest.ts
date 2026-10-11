@@ -489,6 +489,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
 
   // Food & Beverage — department requisitions and wastage
   neo_department_requisition_create: "authenticated",
+  neo_kitchen_ingredient_request_create: "authenticated",
   neo_pos_refund_decide: "authenticated",
   neo_waste_record: "authenticated",
   neo_waste_review: "authenticated",

@@ -70,7 +70,15 @@ function Page() {
 
   const insights = buildOperationsInsights(m, workOrders.data ?? [], jobs.data ?? []);
   const active = (jobs.data ?? []).filter(
-    (j) => !["completed", "cancelled"].includes(String(j["status"])),
+    (j) => ![
+      "completed",
+      "inspected",
+      "closed",
+      "cancelled",
+      "superseded",
+    ].includes(
+      String(j["status"] ?? "").trim().toLowerCase(),
+    ),
   );
 
   /**

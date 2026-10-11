@@ -100,7 +100,19 @@ function Page() {
     for (const j of jobs.data ?? []) {
       const room = j["room_id"] ? String(j["room_id"]) : null;
       if (!room) continue;
-      if (["completed", "cancelled"].includes(String(j["status"]))) continue;
+      if (
+        [
+          "completed",
+          "inspected",
+          "closed",
+          "cancelled",
+          "superseded",
+        ].includes(
+          String(j["status"] ?? "").trim().toLowerCase(),
+        )
+      ) {
+        continue;
+      }
       map.set(room, j);
     }
     return map;

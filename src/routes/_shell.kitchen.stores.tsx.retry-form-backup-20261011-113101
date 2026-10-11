@@ -1,0 +1,202 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AlertTriangle, Plus } from "lucide-react";
+import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
+import { RecordDialog } from "@/components/kitchen/RecordDialog";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { titleCase, type Row } from "@/lib/kitchen";
+import {
+  useIngredientRequests,
+  useKitchenStations,
+  useReportShortage,
+  useSaveIngredientRequest,
+  useShortageAlerts,
+} from "@/lib/kitchen-data";
+
+export const Route = createFileRoute("/_shell/kitchen/stores")({
+  head: () => ({
+    meta: [
+      { title: "Stores requests & shortages — NEØ" },
+      {
+        name: "description",
+        content: "Ingredient requests raised by the kitchen and routed to Stores and Procurement.",
+      },
+      { property: "og:title", content: "Stores requests & shortages — NEØ" },
+      {
+        property: "og:description",
+        content: "Ingredient requests raised by the kitchen and routed to Stores and Procurement.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: () => (
+    <KitchenGuard action="ingredient_request.view">
+      <Page />
+    </KitchenGuard>
+  ),
+});
+
+function Page() {
+  const { can } = useAuth();
+  const requests = useIngredientRequests();
+  const shortages = useShortageAlerts();
+  const stations = useKitchenStations();
+  const saveRequest = useSaveIngredientRequest();
+  const reportShortage = useReportShortage();
+
+  const requestRows = (requests.data ?? []) as Row[];
+  const shortageRows = (shortages.data ?? []) as Row[];
+  const stationOptions = (stations.data ?? []).map((s) => ({
+    value: String(s["id"]),
+    label: String(s["name"]),
+  }));
+
+  const requestFields = [
+    { name: "ingredient_name", label: "Ingredient", required: true },
+    { name: "quantity", label: "Quantity", type: "number" as const, required: true },
+    { name: "unit", label: "Unit", required: true, placeholder: "kg, litres, pieces" },
+    { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+    {
+      name: "priority",
+      label: "Priority",
+      type: "select" as const,
+      options: ["low", "normal", "high", "urgent"].map((p) => ({ value: p, label: titleCase(p) })),
+    },
+    { name: "required_by", label: "Required by", type: "datetime-local" as const },
+    { name: "reason", label: "Reason", type: "textarea" as const },
+  ];
+
+  const shortageFields = [
+    { name: "ingredient_name", label: "Ingredient", required: true },
+    { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+    { name: "available_quantity", label: "Available quantity", type: "number" as const },
+    { name: "minimum_level", label: "Minimum level", type: "number" as const },
+    { name: "unit", label: "Unit", placeholder: "kg, litres, pieces" },
+    {
+      name: "severity",
+      label: "Severity",
+      type: "select" as const,
+      options: ["low", "medium", "high", "critical"].map((s) => ({
+        value: s,
+        label: titleCase(s),
+      })),
+    },
+    { name: "affected_menu_items", label: "Affected menu items", type: "textarea" as const },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Kitchen"
+        title="Stores requests & shortages"
+        description="Ingredient requests raised by the kitchen and routed to Stores and Procurement."
+        actions={
+          <>
+            {can("kitchen", "ingredient_request.create") ? (
+              <RecordDialog
+                title="Request ingredients from Stores"
+                description="Sent to Stores as a live requisition. Stores issues against it and the trail stays on the record."
+                submitLabel="Send request"
+                pending={saveRequest.isPending}
+                fields={requestFields}
+                onSubmit={(values) =>
+                  saveRequest.mutateAsync({
+                    ...values,
+                    priority: values["priority"] ?? "normal",
+                    status: "submitted",
+                  })
+                }
+                trigger={
+                  <Button>
+                    <Plus className="mr-2 size-4" /> New request
+                  </Button>
+                }
+              />
+            ) : null}
+            {can("kitchen", "ingredient_request.create") ? (
+              <RecordDialog
+                title="Report a shortage"
+                description="Alerts Stores, Procurement and the Kitchen Manager so menu availability can be adjusted."
+                submitLabel="Report shortage"
+                pending={reportShortage.isPending}
+                fields={shortageFields}
+                onSubmit={(values) =>
+                  reportShortage.mutateAsync({
+                    ...values,
+                    severity: values["severity"] ?? "medium",
+                    status: "open",
+                  })
+                }
+                trigger={
+                  <Button variant="outline">
+                    <AlertTriangle className="mr-2 size-4" /> Report shortage
+                  </Button>
+                }
+              />
+            ) : null}
+          </>
+        }
+      />
+
+      <SectionCard
+        title="Ingredient requests"
+        description="Requisitions raised by kitchen stations."
+      >
+        <QueryState
+          isLoading={requests.isLoading}
+          error={requests.error}
+          isEmpty={requestRows.length === 0}
+          empty={
+            <p className="py-6 text-sm text-muted-foreground">No ingredient requests raised yet.</p>
+          }
+        >
+          <ul className="divide-y divide-border">
+            {requestRows.map((r) => (
+              <li key={r["id"]} className="flex items-start justify-between gap-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium">{`${r["request_number"] ?? "Request"} · ${r["ingredient_name"] ?? ""}`}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {`${r["quantity"] ?? 0} ${r["unit"] ?? ""} · ${r["operational_stations"]?.name ?? "Kitchen"} · ${titleCase(String(r["priority"] ?? "normal"))}`}
+                  </p>
+                </div>
+                <StatusPill tone={String(r["status"]) === "issued" ? "success" : "default"}>
+                  {titleCase(String(r["status"] ?? "draft"))}
+                </StatusPill>
+              </li>
+            ))}
+          </ul>
+        </QueryState>
+      </SectionCard>
+
+      <SectionCard
+        title="Shortage alerts"
+        description="Open shortages affecting menu availability."
+      >
+        <QueryState
+          isLoading={shortages.isLoading}
+          error={shortages.error}
+          isEmpty={shortageRows.length === 0}
+          empty={<p className="py-6 text-sm text-muted-foreground">No shortages reported.</p>}
+        >
+          <ul className="divide-y divide-border">
+            {shortageRows.map((r) => (
+              <li key={r["id"]} className="flex items-start justify-between gap-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium">{String(r["ingredient_name"] ?? "Ingredient")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {`${r["available_quantity"] ?? 0} ${r["unit"] ?? ""} available · minimum ${r["minimum_level"] ?? 0} · ${r["operational_stations"]?.name ?? "Kitchen"}`}
+                  </p>
+                </div>
+                <StatusPill tone={String(r["status"]) === "resolved" ? "success" : "warning"}>
+                  {titleCase(String(r["severity"] ?? "medium"))}
+                </StatusPill>
+              </li>
+            ))}
+          </ul>
+        </QueryState>
+      </SectionCard>
+    </div>
+  );
+}

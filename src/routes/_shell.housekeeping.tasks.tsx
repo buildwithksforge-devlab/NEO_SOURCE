@@ -154,7 +154,18 @@ function Page() {
   const list = useMemo(() => {
     return (jobs.data ?? []).filter((j) => {
       if (scope === "mine" && j["assignee_id"] !== user?.id) return false;
-      if (status === "open" && ["completed", "cancelled"].includes(String(j["status"])))
+      if (
+        status === "open" &&
+        [
+          "completed",
+          "inspected",
+          "closed",
+          "cancelled",
+          "superseded",
+        ].includes(
+          String(j["status"] ?? "").trim().toLowerCase(),
+        )
+      )
         return false;
       if (status !== "open" && status !== "all" && String(j["status"]) !== status) return false;
       return true;

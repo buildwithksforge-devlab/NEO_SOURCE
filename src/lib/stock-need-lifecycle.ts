@@ -101,7 +101,24 @@ export function useFulfilNeed() {
         _attempt: input.attemptKey,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("The database did not confirm the operation.");
+      }
+
+      const result = data as Record<string, unknown>;
+
+      if (result["ok"] === false) {
+        throw new Error(
+          String(
+            result["detail"] ??
+              result["reason"] ??
+              "The operation was rejected.",
+          ),
+        );
+      }
+
+      return result;
     },
     onSuccess: (data) => {
       invalidate();
@@ -124,7 +141,24 @@ export function useRouteNeedToProcurement() {
         _notes: notes ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("The database did not confirm the operation.");
+      }
+
+      const result = data as Record<string, unknown>;
+
+      if (result["ok"] === false) {
+        throw new Error(
+          String(
+            result["detail"] ??
+              result["reason"] ??
+              "The operation was rejected.",
+          ),
+        );
+      }
+
+      return result;
     },
     onSuccess: (data) => {
       invalidate();

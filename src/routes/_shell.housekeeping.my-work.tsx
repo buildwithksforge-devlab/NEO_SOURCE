@@ -98,8 +98,23 @@ export const taskStatus = (task: HkRow): string => {
   return ["open", "pending", "assigned", "scheduled", "not-started"].includes(s) ? "open" : s;
 };
 
-const jobDone = (job: HkRow) =>
-  ["completed", "inspected", "closed"].includes(String(job["status"] ?? ""));
+const TERMINAL_HK_JOB_STATUSES = new Set([
+  "completed",
+  "inspected",
+  "closed",
+  "cancelled",
+  "superseded",
+]);
+
+const jobDone = (job: HkRow): boolean =>
+  TERMINAL_HK_JOB_STATUSES.has(
+    String(job["status"] ?? "").trim().toLowerCase(),
+  );
+
+const jobCompleted = (job: HkRow): boolean =>
+  ["completed", "inspected", "closed"].includes(
+    String(job["status"] ?? "").trim().toLowerCase(),
+  );
 
 /**
  * Pure filter used by the page and by the regression tests. Every predicate is
@@ -129,8 +144,15 @@ export function filterMyJobs(rows: HkRow[], filter: MyWorkFilter, now = new Date
       return rows.filter((j) => String(j["status"]) === "in-progress");
     case "completed-today": {
       return rows.filter((j) => {
+        if (!jobCompleted(j)) return false;
+
         const done = at(j["completed_at"]);
-        return done !== null && done >= dayStart && done < dayEnd;
+
+        return (
+          done !== null &&
+          done >= dayStart &&
+          done < dayEnd
+        );
       });
     }
     default:
@@ -162,7 +184,16 @@ function MyWorkPage() {
 
   const allRows = (jobs.data ?? []) as HkRow[];
   const openTasks = ((tasks.data ?? []) as HkRow[]).filter(
-    (t) => !["completed", "cancelled"].includes(String(t["status"] ?? "open")),
+    (task) =>
+      ![
+        "completed",
+        "cancelled",
+        "rejected",
+        "superseded",
+        "closed",
+      ].includes(
+        String(task["status"] ?? "open").trim().toLowerCase(),
+      ),
   );
   // A task that belongs to a room cleaning job is a reminder, not a second
   // workflow: it closes when the clean does, so it is never actionable here.

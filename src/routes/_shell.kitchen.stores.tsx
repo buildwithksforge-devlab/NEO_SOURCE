@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useRef } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
@@ -44,6 +45,11 @@ function Page() {
   const shortages = useShortageAlerts();
   const stations = useKitchenStations();
   const saveRequest = useSaveIngredientRequest();
+
+  // One attempt UUID per logical submission. A failed/uncertain retry
+  // reuses it; successful creation releases it.
+  const ingredientAttemptRef = useRef<string | null>(null);
+  const ingredientPayloadRef = useRef<string | null>(null);
   const reportShortage = useReportShortage();
 
   const requestRows = (requests.data ?? []) as Row[];
@@ -101,13 +107,68 @@ function Page() {
                 submitLabel="Send request"
                 pending={saveRequest.isPending}
                 fields={requestFields}
-                onSubmit={(values) =>
-                  saveRequest.mutateAsync({
+                onSubmit={async (values) => {
+                  const payload = {
                     ...values,
                     priority: values["priority"] ?? "normal",
                     status: "submitted",
-                  })
-                }
+                  };
+
+                  // Recover an uncertain submission after a page reload.
+                  // Keep the same attempt UUID for identical request data.
+                  const fingerprint = JSON.stringify(payload);
+                  const storageKey = "neo:kitchen:ingredient-request:pending";
+
+                  if (!ingredientAttemptRef.current) {
+                    try {
+                      const saved = sessionStorage.getItem(storageKey);
+                      if (saved) {
+                        const parsed = JSON.parse(saved) as {
+                          fingerprint?: string;
+                          attemptId?: string;
+                        };
+                        if (parsed.fingerprint === fingerprint && parsed.attemptId) {
+                          ingredientAttemptRef.current = parsed.attemptId;
+                          ingredientPayloadRef.current = parsed.fingerprint;
+                        }
+                      }
+                    } catch {
+                      // Damaged browser storage must not authorise a replay.
+                    }
+                  }
+
+                  if (ingredientPayloadRef.current !== fingerprint) {
+                    ingredientAttemptRef.current = crypto.randomUUID();
+                    ingredientPayloadRef.current = fingerprint;
+                  }
+
+                  const attemptId = ingredientAttemptRef.current;
+
+                  if (attemptId) {
+                    sessionStorage.setItem(
+                      storageKey,
+                      JSON.stringify({ fingerprint, attemptId }),
+                    );
+                  }
+
+                  if (!attemptId) {
+                    throw new Error("Unable to prepare the request identifier.");
+                  }
+
+                  const result = await saveRequest.mutateAsync({
+                    ...payload,
+                    submission_attempt_id: attemptId,
+                  });
+
+                  // Only a confirmed database success starts a new attempt.
+                  if (result["ok"] === true) {
+                    sessionStorage.removeItem("neo:kitchen:ingredient-request:pending");
+                    ingredientAttemptRef.current = null;
+                    ingredientPayloadRef.current = null;
+                  }
+
+                  return result;
+                }}
                 trigger={
                   <Button>
                     <Plus className="mr-2 size-4" /> New request

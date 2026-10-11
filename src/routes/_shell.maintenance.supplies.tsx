@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
+import { isOpenStockNeed } from "@/lib/stock-needs";
 import { titleCase } from "@/lib/operations";
 import {
   MAINTENANCE_MATERIALS,
@@ -67,6 +68,7 @@ export const Route = createFileRoute("/_shell/maintenance/supplies")({
 });
 
 const TONE: Record<string, "success" | "warning" | "destructive" | "default"> = {
+  reported: "warning",
   requisitioned: "success",
   acknowledged: "warning",
   pending: "warning",
@@ -91,8 +93,8 @@ function MaintenanceSuppliesPage() {
   const [notes, setNotes] = useState("");
 
   const rows = (needs.data ?? []) as MaintRow[];
-  const openCount = rows.filter((r) =>
-    ["pending", "acknowledged"].includes(String(r["status"])),
+  const openCount = rows.filter((row) =>
+    isOpenStockNeed(row["status"] ?? "reported"),
   ).length;
 
   return (
@@ -171,7 +173,7 @@ function MaintenanceSuppliesPage() {
                       </TableCell>
                       {mayReview ? (
                         <TableCell className="text-right">
-                          {["pending", "acknowledged"].includes(status) ? (
+                          {isOpenStockNeed(status) ? (
                             <div className="flex justify-end gap-2">
                               <Button
                                 size="sm"

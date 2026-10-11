@@ -909,27 +909,19 @@ export function useReviseBeo() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async ({ beo, changeSummary }: { beo: Row; changeSummary: string }) => {
-      const { id: _id, created_at: _c, updated_at: _u, ...rest } = beo;
-      const { error: supErr } = await db
-        .from("banquet_event_orders")
-        .update({ status: "superseded" })
-        .eq("id", beo["id"]);
-      if (supErr) throw supErr;
-      const { data, error } = await db
-        .from("banquet_event_orders")
-        .insert({
-          ...rest,
-          organization_id: organizationId,
-          revision: Number(beo["revision"] ?? 1) + 1,
-          change_summary: changeSummary,
-          status: "draft",
-          published_at: null,
-          locked: false,
-        })
-        .select("id")
-        .maybeSingle();
-      if (error) throw error;
-      return data?.["id"] as string;
+      const beoId = String(beo["id"] ?? "");
+      if (!beoId) throw new Error("Choose a BEO to revise.");
+      if (!changeSummary.trim()) throw new Error("Provide a summary of the revision.");
+
+      const { data, error } = await guardedRpc(db, "neo_beo_revise", {
+        _beo: beoId,
+        _change_summary: changeSummary.trim(),
+      });
+
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("The BEO revision was not created.");
+
+      return String(data);
     },
     onSuccess: (id) => {
       invalidate();
@@ -996,7 +988,18 @@ export function usePublishBeo() {
     },
     onSuccess: (result) => {
       invalidate();
-      toast.success("Published — kitchen, housekeeping, front office and billing notified");
+      const billingWarning = String(result["billing_warning"] ?? "").trim();
+
+      if (billingWarning) {
+        toast.warning(
+          "BEO published, but the billing handoff needs attention.",
+          { description: billingWarning },
+        );
+      } else {
+        toast.success(
+          "BEO published. Departmental handoffs completed.",
+        );
+      }
       void logAudit({
         organizationId,
         userId,
@@ -1461,7 +1464,7 @@ export function useBanquetService() {
             "id, beo_number, revision, status, setup_at, guest_arrival_at, start_at, end_at, breakdown_at, serving_times, seating_layout, guaranteed_guests, final_guests, setup_done_at, service_started_at, service_ended_at, cleanup_done_at, booking_id, event_bookings(event_reference, event_name, event_date, status, expected_guests, event_venues(name))",
           ),
         )
-        .neq("status", "superseded")
+        .eq("status", "published")
         .order("start_at", { ascending: false })
         .limit(200);
       if (branchId) q = q.eq("branch_id", branchId);

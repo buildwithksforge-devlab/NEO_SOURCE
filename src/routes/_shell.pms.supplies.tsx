@@ -31,6 +31,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PmsGuard, QueryState } from "@/components/pms/PmsShared";
 import { useAuth } from "@/lib/auth";
+import { isOpenStockNeed } from "@/lib/stock-needs";
 import { titleCase } from "@/lib/pms";
 import {
   FO_PRIORITIES,
@@ -94,7 +95,9 @@ function FrontDeskSuppliesPage() {
   const [notes, setNotes] = useState("");
 
   const rows = (needs.data ?? []) as FrontOfficeRow[];
-  const pending = rows.filter((r) => String(r["status"] ?? "pending") === "pending");
+  const pending = rows.filter((row) =>
+    isOpenStockNeed(row["status"] ?? "reported"),
+  );
 
   const submitNeed = () =>
     report.mutate(

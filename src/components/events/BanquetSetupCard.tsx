@@ -34,7 +34,25 @@ export function BanquetSetupCard({ bookingId }: { bookingId: string | null }) {
   const save = useSetBeoTimings();
 
   const rows = (beos.data ?? []) as Row[];
-  const current = rows.find((r) => String(r["status"]) !== "superseded") ?? rows[0] ?? null;
+  const current =
+    [...rows]
+      .filter(
+        (row) =>
+          !["superseded", "cancelled"].includes(
+            String(row["status"] ?? "").trim().toLowerCase(),
+          ),
+      )
+      .sort(
+        (a, b) =>
+          Number(b["revision"] ?? 0) -
+          Number(a["revision"] ?? 0),
+      )[0] ??
+    [...rows].sort(
+      (a, b) =>
+        Number(b["revision"] ?? 0) -
+        Number(a["revision"] ?? 0),
+    )[0] ??
+    null;
 
   const [setupAt, setSetupAt] = useState("");
   const [arrivalAt, setArrivalAt] = useState("");
