@@ -1,0 +1,348 @@
+﻿C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\auth\CreateWorkspaceWizard.tsx:217: options: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DensityPreference.tsx:11: const OPTIONS: { value: Pref; label: string; hint: string; icon: typeof Rows3 }[] = [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DensityPreference.tsx:59: {OPTIONS.map((o) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DensityToggle.tsx:15: const OPTIONS: { value: Density; icon: typeof Rows3 }[] = [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DensityToggle.tsx:69: {OPTIONS.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DensityToggle.tsx:87: {OPTIONS.map((o) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\config\ConfigCollection.tsx:70: options?: { value: string; label: string }[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\config\ConfigCollection.tsx:72: * Resolves the options of a `select` from another canonical table instead of
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\config\ConfigCollection.tsx:84: * Names the field that chooses the parent. The options of this select are
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\config\ConfigCollection.tsx:663: {(field.lookup ? (lookups.data?.[field.name] ?? []) : (field.options ?? []))
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\config\ConfigCollection.tsx:669: // A parent chosen: its own options, plus options that
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\dashboard\DashboardFrame.tsx:85: const options = useScopeOptions(organizationId);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\dashboard\DashboardFrame.tsx:124: const departments = (options.data?.departments ?? [])
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\dashboard\DashboardFrame.tsx:127: const stations = (options.data?.stations ?? [])
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\dashboard\DashboardFrame.tsx:211: {(options.data?.branches ?? []).map((b) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\events\EventsShared.tsx:108: options?: { value: string; label: string }[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\events\EventsShared.tsx:273: {(f.options ?? []).map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\finance\RecordReceiptDialog.tsx:51: { name: "method", label: "How it was received", type: "select", required: true, options: METHODS },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\finance\RecordReceiptDialog.tsx:59: options: (accounts.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\finance\RecordReceiptDialog.tsx:74: options: campaigns.map((c) => ({ value: c.id, label: c.name })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\housekeeping\CleaningChecklist.tsx:102: const OPTIONS: { value: string; label: string }[] = [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\housekeeping\CleaningChecklist.tsx:143: {OPTIONS.map((option) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\RecordDialog.tsx:21: options?: { value: string; label: string }[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\RecordDialog.tsx:125: {(f.options ?? []).map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\layout\LiveClock.tsx:17: const fmt = (options: Intl.DateTimeFormatOptions) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\layout\LiveClock.tsx:19: return new Intl.DateTimeFormat("en-GB", { timeZone, ...options }).formatToParts(date);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\layout\LiveClock.tsx:21: return new Intl.DateTimeFormat("en-GB", options).formatToParts(date);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\layout\PropertySelector.tsx:22: * Global property selector. Options come straight from `public.branches`
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\layout\PropertySelector.tsx:60: {/* Presentation only — the value, options and switching behaviour above
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\notifications\WorkerPushSettings.tsx:71: const currentKey = existing.options.applicationServerKey;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:56: options,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:65: options: MasterOption[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:83: ? proposeCanonical(request.value, request.policy, options, request.batchValues ?? [])
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:85: [request, options],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:94: return options
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\CreateMasterDialog.tsx:105: }, [typed, options]);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\ImportWizard.tsx:690: options={createRequest ? masterFor(createRequest.target as never) : []}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\ImportWizard.tsx:901: {intent.options.map((option) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\ImportWizard.tsx:1291: options={masterFor(group.target)}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\MasterPicker.tsx:23: options,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\MasterPicker.tsx:33: options: MasterOption[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\MasterPicker.tsx:52: const selected = options.find((option) => option.id === value);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\MasterPicker.tsx:57: Boolean(onCreate) && !options.some((o) => o.label.toLowerCase() === typed.toLowerCase() && typed);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\onboarding\MasterPicker.tsx:101: {options.map((option) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\payments\ReceivingAccountSelect.tsx:34: const options = accounts.data ?? [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\payments\ReceivingAccountSelect.tsx:36: const unmapped = value ? options.find((a) => a.id === value && !a.gl_code) : undefined;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\payments\ReceivingAccountSelect.tsx:38: if (!accounts.isLoading && options.length === 0) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\payments\ReceivingAccountSelect.tsx:60: {options.map((a) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pms\RatePlanPicker.tsx:54: const options = selectableRatePlans(plans, roomTypeId);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pms\RatePlanPicker.tsx:66: if (options.length === 0) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pms\RatePlanPicker.tsx:78: {options.map((plan) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:70: * cleared the moment the selection above it makes it invalid, and the options
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:91: // Only judge a selection once the options it would be judged against have
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:479: const current = recipes.options.find((o) => o.menuItemId === item.id);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:481: }, [open, item?.id, recipes.options]);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:497: // selection is only cleared once the options are actually known.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx:701: {recipes.options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\public\CustomerAuthPanel.tsx:60: options: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\data.ts:21: import { useScopedDepartments, useScopedWorkers } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:220: options: MasterOption[],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:242: const exact = options.find(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:265: const scored = options
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:507: options: PrepareOptions,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:514: const suspect = options.suspectFields ?? new Set<string>();
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:515: const rowDecisions = options.rowDecisions ?? {};
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:518: options.identifierChoice ?? (options.generateIdentifiers ? "generate" : "blank");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:527: if (options.ignoredFields.has(field.key)) continue;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:530: let value = applyTransforms(field, source, options.transforms);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:535: const fill = (options.valueFills ?? []).find(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:540: const cleaned = applyTransforms(field, supplied, options.transforms);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:640: const decided = options.decisions[decisionKey];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:641: const master = options.masters[field.relationship] ?? [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:666: resolution.confidence >= Math.max(options.autoAcceptFrom, policy.accept)
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\engine.ts:712: const existing = options.existingKeys.get(key);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:75: options: IntentOption[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:227: const options: IntentOption[] = [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:230: options.push({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:242: options.push({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:251: options.push({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:261: options.push({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:268: options.push({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\intent.ts:275: return { verdict, headline, explanation, selected: selectedFit, best, alternatives, secondaryEntities, options };
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\resolution.ts:189: options: MasterOption[],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\resolution.ts:195: if (!context.length || !options.length) return [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\resolution.ts:197: const scored = options.map((option) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\resolution.ts:242: const options = field.relationship ? ((context.masters ?? {})[field.relationship] ?? []) : [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\onboarding\resolution.ts:245: for (const candidate of rankByRowEvidence(row, options, field.key)) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\active-property-scoping.test.tsx:6: * the selector options. These tests pin three things:
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\assets-register.test.tsx:80: it("the register consumes ASSET_STATUSES for its status options", () => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\availability-router.test.tsx:245: const opts = (Route as any).options;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\delivery-reports-query-wiring.test.tsx:63: const Page = () => (Route.options as any).component() as ReactNode;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\delivery-reports-render.test.tsx:59: const Page = () => <>{(Route.options as any).component()}</>;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fnb-stock-item-options.test.ts:4: describe("F&B stock item options", () => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\folio-document-action.test.tsx:140: const Page = () => <>{(Route.options as any).component()}</>;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\folio-settlement-actions.test.tsx:146: const Page = () => <>{(Route.options as any).component()}</>;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\form-feedback-density-contract.test.ts:40: it("does not clear the stored category before options have loaded", () => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\global-scoping.test.ts:15: } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\mpesa-callback-integration.test.ts:88: const handler = (Route.options as any).server.handlers.POST;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\onboarding-intent.test.ts:48: const kinds = intent.options.map((o) => o.kind);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\onboarding-intent.test.ts:52: expect(intent.options.filter((o) => o.recommended).length).toBeGreaterThan(0);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\onboarding-intent.test.ts:57: const extract = intent.options.find((o) => o.kind === "extract_values");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\property-chain-and-write-scope.test.tsx:201: const FolioList = () => <>{(FolioListRoute.options as any).component()}</>;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\property-switch-scoping-e2e.test.ts:20: } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\registry-scoping-and-pos-approvals.test.ts:15: it("filters the station registry, its department options and its property list", () => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\selector-scoping-audit.test.ts:5: * the shared scoped catalogue in `src/lib/scoped-options.ts`, so a branch-scoped
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\selector-scoping-audit.test.ts:81: const body = readFileSync(join(ROOT, "lib", "scoped-options.ts"), "utf8");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\analytics-data.ts:645: * Scope options
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\availability-search.ts:109: options: { timeZone?: string; now?: Date } = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\availability-search.ts:116: : propertyToday(options.timeZone ?? PROPERTY_TIME_ZONE, options.now ?? new Date());
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bar.ts:16: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\branches.ts:86: * Property options for module selectors.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\dashboard-data.ts:8: } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\dashboard-data.ts:414: // enforces. Branch-scoped operators never see another property's options.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:16: import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:267: queryKey: ["delivery-department", "rider-options", organizationId, branchId],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery.ts:285: options?: { branchId?: string | null | undefined; cashOrder?: boolean | undefined },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery.ts:290: const branchId = options?.branchId ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery.ts:337: if (options?.cashOrder && rider.cash_handling_allowed === false) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:370: export function useFinanceInsert(table: string, action: string, options?: { branchScoped?: boolean }) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:378: ...(options?.branchScoped !== false && ctx.branchId ? { branch_id: values["branch_id"] ?? ctx.branchId } : {}),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\front-office-department.ts:19: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\frontdesk-ops.ts:6: import { useScopedDepartments, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\guest-ordering.ts:202: options: GuestModifierOption[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\guest-ordering.ts:206: * Read-only projection of the property's published item options. Only the
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\guest-ordering.ts:260: * chosen options are priced from the published catalogue — the browser never
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\guest-ordering.ts:261: * states a price, and options that are not published for the item are
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\housekeeping-department.ts:20: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\hr-data.ts:68: export function useHrWrite(table: string, options?: { action?: string; module?: string }) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\hr-data.ts:92: action: options?.action ?? `${table}.${input.id ? "update" : "create"}`,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\hr-data.ts:93: module: options?.module ?? "human-resources",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\hr-department.ts:16: import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\keyboard-shortcuts.ts:52: options: { typing: boolean },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\keyboard-shortcuts.ts:61: if (options.typing) return null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts:11: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\laundry-department.ts:20: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\lovable-error-reporting.ts:11: options?: LovableErrorOptions,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\marketing-data.ts:16: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\marketing-data.ts:1874: // Canonical profiles.id options for the active property only.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\marketing-department.ts:22: import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\marketing-department.ts:299: queryKey: ["marketing-department", "campaign-options", organizationId],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\money-format.ts:79: options: { code?: boolean } = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\money-format.ts:81: const prefix = options.code === false ? "" : `${moneyPrefix(currency)} `;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\money-format.ts:109: options: { code?: boolean } = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\money-format.ts:111: const label = formatMoneyCompact(value, currency, options);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\operations-data.ts:20: import { useScopedDepartments, useScopedWorkers } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\operations-data.ts:1703: * routine expects. Options are limited to the property currently selected in
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\packages-data.ts:10: import { useScopedDepartments } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pastry-department.ts:26: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\perf-telemetry.ts:113: options: { propertyId?: string | null; retries?: number } = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\perf-telemetry.ts:122: propertyId: options.propertyId ?? null,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\perf-telemetry.ts:126: retries: options.retries ?? 0,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\platform-data.ts:51: function useList(table: string, options?: { order?: string; ascending?: boolean; filters?: Row; limit?: number }) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\platform-data.ts:53: queryKey: [KEY, table, options ?? null],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\platform-data.ts:56: for (const [k, v] of Object.entries(options?.filters ?? {})) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\platform-data.ts:59: q = q.order(options?.order ?? "created_at", { ascending: options?.ascending ?? false });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\platform-data.ts:60: if (options?.limit) q = q.limit(options.limit);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:192: * The modifier groups configured for one menu item, with their options.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\procurement-department.ts:54: import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\realtime-scope.ts:114: options: { propertyId?: string | null; onResync?: () => void } = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\realtime-scope.ts:122: const latest = useRef({ bindings, options });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\realtime-scope.ts:123: latest.current = { bindings, options };
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\realtime-scope.ts:138: latest.current.options.onResync?.();
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\realtime-scope.ts:157: recordPropagation(binding.table, payload, latest.current.options.propertyId ?? null);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\recipe-master.ts:308: const options = ((catalogue.data ?? []) as Row[])
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\recipe-master.ts:317: return { ...catalogue, options };
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\role-migration.ts:44: options: { role_key: string; label: string }[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-guard.ts:42: options?: unknown,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-guard.ts:62: const result = (await (options === undefined
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-guard.ts:64: : client.rpc(name, args, options))) as {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts:25: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts:132: queryKey: ["sales-events", "event-options", organizationId, branchId],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:248: export function useScopedWorkers(options?: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:256: const branchId = options?.branch !== undefined ? options.branch : active;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:257: const departmentId = options?.departmentId ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:258: const departmentKey = options?.departmentKey ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:261: enabled: Boolean(organizationId) && (options?.enabled ?? true),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:355: * Canonical worker options for any assignee selector in the OS.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:362: export function useScopedWorkerOptions(options?: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:371: ...(options?.departmentId !== undefined ? { departmentId: options.departmentId } : {}),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:372: ...(options?.departmentKey !== undefined ? { departmentKey: options.departmentKey } : {}),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:373: ...(options?.branch !== undefined ? { branch: options.branch } : {}),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:374: ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:378: const pattern = options?.jobTitlePattern ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:383: options?.departmentId ?? null,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\scoped-options.ts:384: options?.departmentKey ?? null,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\security-department.ts:27: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\session-exit.ts:36: options: SessionExitOptions = {},
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\session-exit.ts:38: const destination = options.to ?? (options.reauthenticate ? "/auth" : "/");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\session-exit.ts:63: (options?: SessionExitOptions) => neoSignOut(queryClient, options),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-department.ts:21: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\use-dirty-form.ts:35: export function useDirtyForm(current: FormValues, options?: { enabled?: boolean }) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\use-dirty-form.ts:36: const enabled = options?.enabled ?? true;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\users.functions.ts:224: options: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\users.functions.ts:581: options: { redirectTo: data.redirect_to ?? "" },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workforce.ts:82: export function useWorkforcePeople(options?: { departmentId?: string | null; branchId?: string | null }) {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workforce.ts:84: const scope = options?.branchId === undefined ? branchId : options.branchId;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workforce.ts:85: const department = options?.departmentId ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workforce.ts:111: return { ...query, people: query.data ?? [], options: options_ };
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:33: { key: "sidebarStyle", label: "Sidebar colours", options: ["dark", "light", "brand"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:34: { key: "headerStyle", label: "Header colours", options: ["translucent", "solid", "brand"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:35: { key: "backgroundStyle", label: "Dashboard background", options: ["ivory", "white", "soft-grey"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:36: { key: "cardStyle", label: "Card style", options: ["elevated", "flat", "outlined"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:37: { key: "layout", label: "Dashboard layout", options: ["comfortable", "compact", "wide"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:38: { key: "chartStyle", label: "Chart appearance", options: ["area", "bar", "line"] },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.dashboard-appearance.tsx:95: {group.options.map((opt) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.finance-periods.tsx:82: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.finance-periods.tsx:117: options: yearOptions,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.finance-periods.tsx:126: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.maintenance-categories.tsx:73: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.meal-plans.tsx:62: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.workspace-preview.tsx:74: const options = useScopeOptions(organizationId);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.workspace-preview.tsx:87: const branches = options.data?.branches ?? [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.workspace-preview.tsx:88: const departments = (options.data?.departments ?? []).filter(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\admin.workspace-preview.tsx:91: const stations = (options.data?.stations ?? []).filter(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\auth.tsx:80: aria-label="Authentication options"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\guest.$hotelSlug.checkout.tsx:18: {bill.isLoading?<div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-white/80"/></div>:bill.isError?<div className="mt-6"><PublicEmptyState title="Could not load your bill" description="Your balance has not been checked. Try again." action={<button className="neo-commerce-primary" onClick={() => void bill.refetch()}>Retry</button>}/></div>:!folio?<div className="mt-6"><PublicEmptyState title="Nothing to settle" description="Your checkout appears when the hotel has opened a folio for your stay."/></div>:<div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]"><section className="neo-commerce-surface p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[.18em] text-slate-500">Folio {folio.folio_number??""}</p><h2 className="mt-2 text-2xl font-bold text-slate-950">{money(due,folio.currency??"KES")} outstanding</h2><div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600"><div className="flex justify-between"><span>Gross billed</span><strong className="text-slate-950">{money(folio.gross_obligation,folio.currency??"KES")}</strong></div><div className="mt-2 flex justify-between"><span>Collected</span><strong className="text-slate-950">{money(folio.collected,folio.currency??"KES")}</strong></div></div><Link to="/guest/$hotelSlug/folio" params={{hotelSlug}} className="mt-4 inline-block text-sm font-bold text-slate-700 underline">View itemised bill</Link></section><aside className="neo-commerce-summary lg:sticky lg:top-24 lg:self-start"><div className="flex items-center gap-2 text-sm font-bold text-slate-950"><ShieldCheck className="size-4"/> Secure payment</div>{started && due <= 0?<div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-950"><strong>Balance settled.</strong><p className="mt-1">Open your itemised bill to see the recorded receipt.</p></div>:started?<div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-950"><strong>Payment request created.</strong><p className="mt-1">Approve the prompt on your phone. The folio remains outstanding until the provider confirms it.</p>{started.status?<p className="mt-2 text-xs font-bold uppercase">{started.status}</p>:null}</div>:avail.isPending?<div role="status" className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-700">Checking payment options…</div>:avail.data?.available?<><label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="folio-phone">M-Pesa number</label><Input id="folio-phone" className="mt-2" inputMode="tel" placeholder="07xx xxx xxx" value={phone} onChange={e=>setPhone(e.target.value)}/><button className="neo-commerce-primary mt-4 w-full" disabled={pay.isPending||phone.replace(/\D/g,"").length<9||due<=0} onClick={async()=>{if(!folio)return;try { const r=await pay.mutateAsync({organizationId:ws.organization_id,folioId:folio.id,msisdn:phone,amount:due});setStarted(r); } catch { /* mutation displays the provider error */ }}}> {pay.isPending?<Loader2 className="size-4 animate-spin"/>:null} Pay {money(due,folio.currency??"KES")}</button><p className="mt-3 text-xs leading-relaxed text-slate-500">A request is not a receipt. Confirmation must come from the configured provider.</p></>:<div className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-700">Online payment is not configured for this property. Please settle at the front desk.</div>}</aside></div>}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\guest.$hotelSlug.order.tsx:701: * Per-item customisation. Options come from the property's published option
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\guest.$hotelSlug.order.tsx:729: group.options.map((option) => option.option_id),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\guest.$hotelSlug.order.tsx:748: !group.options.some((option) =>
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\guest.$hotelSlug.order.tsx:766: {group.options.map((option) => {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.approvals.tsx:35: import { useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.approvals.tsx:197: // Canonical profiles.id options for the active property only.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.assets.tsx:49: import { useScopedDepartments, useScopedWorkers } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.automation.rules.tsx:19: import { useScopedDepartments } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.bar.requisitions.tsx:116: const options = (items.data ?? []) as FnbRow[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.bar.requisitions.tsx:334: const item = options.find((o) => String(o["id"]) === v);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.bar.requisitions.tsx:347: {options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.delivery.requisitions.tsx:128: const options = (items.data ?? []) as FnbRow[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.delivery.requisitions.tsx:397: const item = options.find((o) => String(o["id"]) === v);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.delivery.requisitions.tsx:410: {options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.$id.tsx:514: options: DEPARTMENT_KEYS.map((d) => ({ value: d, label: titleCase(d) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.$id.tsx:521: options: ((departments.data ?? []) as Row[]).map((d) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.$id.tsx:598: options: READINESS_STATES.map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.$id.tsx:643: options: SERVICE_STYLES.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx:132: options: ((types.data ?? []) as Row[]).map((t) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx:141: options: ((customers.data ?? []) as Row[]).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx:150: options: ((venues.data ?? []) as Row[]).map((v) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx:166: options: SERVICE_STYLES.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx:172: options: SEATING_LAYOUTS.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.enquiries.tsx:114: options: ((types.data ?? []) as Row[]).map((t) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.enquiries.tsx:130: options: ((venues.data ?? []) as Row[]).map((v) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.enquiries.tsx:139: options: ((customers.data ?? []) as Row[]).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.enquiries.tsx:149: options: LEAD_SOURCES.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.packages.tsx:73: options: ((types.data ?? []) as Row[]).map((t) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.packages.tsx:82: options: PRICE_BASIS.map((p) => ({ value: p, label: titleCase(p) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.payments.tsx:88: const options = useMemo(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.payments.tsx:190: isEmpty={options.length === 0}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.payments.tsx:201: {options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.resources.tsx:83: options: RESOURCE_CATEGORIES.map((c) => ({ value: c, label: titleCase(c) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.settings.tsx:75: options: SERVICE_STYLES.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.site-visits.tsx:87: options: ((enquiries.data ?? []) as Row[]).map((e) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.site-visits.tsx:96: options: ((customers.data ?? []) as Row[]).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.site-visits.tsx:105: options: ((venues.data ?? []) as Row[]).map((v) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.bank-accounts.tsx:112: options: ACCOUNT_KINDS.map((v) => ({ value: v, label: titleCase(v) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.bank-accounts.tsx:127: options: (gl.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.banking.tsx:74: options: RECONCILIATION_WORKSPACES.map((w) => ({ value: w, label: titleCase(w) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.banking.tsx:80: options: (accounts.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.banking.tsx:99: options: (gl.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.ledger.tsx:74: options: ACCOUNT_CATEGORIES.map((c) => ({ value: c, label: titleCase(c) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.ledger.tsx:81: options: (accounts.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.ledger.tsx:90: options: (taxCodes.data ?? []).map((t) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:123: const options = (list: Row[] | undefined, labelKey: string) =>
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:138: options: PACKAGE_TYPES.map((p) => ({ value: p.value, label: p.label })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:145: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:154: options: options(branches.data, "name"),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:160: options: options(roomTypes.data, "name"),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:166: options: options(ratePlans.data, "name"),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:172: options: options(mealPlans.data, "name"),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:178: options: options(corporates.data, "legal_name"),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:184: options: OCCUPANCY_TYPES.map((o) => ({ value: o, label: titleCase(o) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:190: options: GUEST_CATEGORIES.map((g) => ({ value: g, label: titleCase(g) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:199: options: DISCOUNT_RULES.map((d) => ({ value: d.value, label: d.label })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:338: options: COMPONENT_TYPES.map((c) => ({ value: c.value, label: c.label })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:350: options: (departments.data ?? []).map((d) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:360: options: (accounts.data ?? [])
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:371: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.packages.tsx:382: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.payables.tsx:216: options: (suppliers.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.payables.tsx:225: options: schedulableInvoices.map((i) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.payables.tsx:237: options: SUPPLIER_PAYMENT_METHODS.map((m) => ({ value: m, label: paymentMethodLabel(m) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.receivables.tsx:131: options: (corporates.data ?? []).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.receivables.tsx:141: options: ["call", "email", "visit", "letter", "promise", "dispute"].map((v) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.tax.tsx:68: options: ["standard", "zero_rated", "exempt", "reverse_charge", "levy"].map((v) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.tax.tsx:80: options: (accounts.data ?? []).map((a) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.housekeeping.board.tsx:36: import { scopeWorkers, workerLabel, type ScopedWorker } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.housekeeping.tasks.tsx:28: import { scopeWorkers, workerLabel, type ScopedWorker } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.inventory.items.tsx:144: options: STORE_TYPE_OPTIONS,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.inventory.items.tsx:277: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.inventory.items.tsx:304: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.production.tsx:68: options: (recipes.data ?? []).map((r) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.production.tsx:77: options: (stations.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.production.tsx:97: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:61: options: (checklists.data ?? []).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:66: { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:72: options: ["passed", "passed-with-notes", "failed"].map((r) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:83: { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:88: options: ["per-shift", "daily", "weekly", "per-batch"].map((f) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx:97: options: ["food-safety", "presentation", "temperature", "hygiene"].map((t) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx:154: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx:164: options: (menuItems.data ?? []).map((m) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx:173: options: (menuCategories.data ?? []).map((c) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx:188: options: (stockItems.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx:197: options: (stations.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx:60: { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx:65: options: ["low", "normal", "high", "urgent"].map((p) => ({ value: p, label: titleCase(p) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx:73: { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx:81: options: ["low", "medium", "high", "critical"].map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx:61: options: [
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx:82: options: (menuItems.data ?? []).map((m) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx:94: options: (stations.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx:103: options: (stockItems.data ?? []).map((s) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx:112: options: (locations.data ?? []).map((l) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.maintenance.my-jobs.tsx:101: const options = issuable.data ?? [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.maintenance.my-jobs.tsx:102: const picked = options.find((o) => `${o.stock_item_id}:${o.location_id}` === partPick) ?? null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.maintenance.my-jobs.tsx:242: ) : options.length === 0 ? (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.maintenance.my-jobs.tsx:254: {options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.marketing.pipeline.tsx:162: const options: (typeof PIPELINE_STAGES)[number][] = [];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.marketing.pipeline.tsx:163: if (forward && forward !== "won" && forward !== "lost") options.push(forward);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.marketing.pipeline.tsx:164: if (stage !== "won" && stage !== "lost") options.push("won", "lost");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.marketing.pipeline.tsx:165: return options;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pms.folios.$id.tsx:658: const options = ((folios.data ?? []) as Record<string, any>[]).filter(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pms.folios.$id.tsx:680: {options.map((f) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx:379: options: (areas.data ?? []).map((a) => ({ value: a.id, label: a.name })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx:406: options: (tables.data ?? []).map((t) => ({ value: t.id, label: t.code })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx:411: options: RESERVATION_STATUSES.map((s) => ({ value: s, label: titleCase(s) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx:449: type SelectDef = { name: string; label: string; options: { value: string; label: string }[] };
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx:502: {s.options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.menu.tsx:736: Options and extras attached to items.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.menu.tsx:763: .join(", ") || "No options yet"}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.menu.tsx:1018: options: branchMenus.map((m) => ({
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.menu.tsx:1060: options: (groups.data ?? []).map((g) => ({ value: g.id, label: g.name })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.orders.index.tsx:244: options: MANUAL_ORDER_TYPES.map((t) => ({ value: t, label: titleCase(t) })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.orders.index.tsx:249: options: (tables.data ?? []).map((t) => ({ value: t.id, label: t.code })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.requisitions.tsx:111: const options = (items.data ?? []) as FnbRow[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.requisitions.tsx:324: const item = options.find((o) => String(o["id"]) === v);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.requisitions.tsx:337: {options.map((o) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.settings.tsx:198: options: (stations.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.roles.tsx:31: import { useScopedDepartments } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:101: queryKey: ["departments", organizationId, branchId ?? "all", "station-chain-options"],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:116: queryKey: ["branches", organizationId, branchId ?? "all", "station-options"],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:241: const options = menuDepartmentsForBranch(departments.data ?? [], station.branch_id);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:245: !options.some((d) => d.id === station.department_id);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:317: {options.map((department) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:391: const options = menuDepartmentsForBranch(departments, branchId || null);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx:467: {options.map((department) => (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.tasks.tsx:38: import { useScopedDepartments, useScopedWorkerOptions } from "@/lib/scoped-options";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.tasks.tsx:114: // Canonical profiles.id options for the active property only.
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.users.tsx:48: import { useScopedDepartments, useScopedStations } from "@/lib/scoped-options";
