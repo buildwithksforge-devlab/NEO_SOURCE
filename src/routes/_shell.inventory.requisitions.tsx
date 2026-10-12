@@ -36,7 +36,6 @@ import {
   useSetIssuingStore,
   useRaiseReplenishment,
   useRejectRequisition,
-  useReleaseRequisitionToStores,
   useStoresAvailability,
   useStoresRequisitions,
   type StoresRow,
@@ -103,7 +102,6 @@ function StoresRequisitionsPage() {
   const issue = useIssueRequisition();
   const reject = useRejectRequisition();
   const replenish = useRaiseReplenishment();
-  const release = useReleaseRequisitionToStores();
   const setStore = useSetIssuingStore();
   const locationsQuery = useStockLocations();
 
@@ -344,15 +342,6 @@ function StoresRequisitionsPage() {
       ),
       footer: (
         <>
-          {awaitingApproval && mayRelease ? (
-            <Button
-              size="sm"
-              disabled={release.isPending}
-              onClick={() => release.mutate({ requisitionId: id })}
-            >
-              Approve &amp; send to Stores
-            </Button>
-          ) : null}
           {canIssue ? (
             <>
               <Button

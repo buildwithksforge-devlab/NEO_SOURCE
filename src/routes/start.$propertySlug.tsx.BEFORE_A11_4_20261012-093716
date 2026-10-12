@@ -1,0 +1,631 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { canonicalLink, canonicalUrl, robotsDirective } from "@/lib/route-visibility";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import {
+  BedDouble,
+  Bike,
+  Briefcase,
+  ConciergeBell,
+  Handshake,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Shirt,
+  UtensilsCrossed,
+} from "lucide-react";
+import {
+  doorLabels,
+  doorRefusal,
+  fetchPropertyDoors,
+  fetchPropertyForVisitor,
+  type DoorKey,
+  fetchPublicPropertyRooms,
+  type PublicProperty,
+} from "@/lib/front-door";
+import { PoweredByNeo } from "@/components/public/PublicAppShell";
+import { supabase } from "@/integrations/supabase/client";
+import { enterProperty } from "@/lib/property-entrance";
+import { writePropertySelection } from "@/lib/property-selection";
+import { brandInitials } from "@/lib/public-apps";
+import { brandStyle, serviceEnabled } from "@/lib/experience-brand";
+import { useTrackEntry } from "@/lib/traffic";
+import {
+  CoverMedia,
+  Display,
+  Eyebrow,
+  PublicSurface,
+  PublicTopBar,
+} from "@/components/public/NeoPublic";
+
+const doorKeys: DoorKey[] = ["stay_dine", "work", "partner", "rider"];
+
+export const Route = createFileRoute("/start/$propertySlug")({
+  ssr: false,
+  // Which entrance the visitor was heading for. It survives signing in and is
+  // re-checked here afterwards: it is a memory of intent, never a permission.
+  validateSearch: (search: Record<string, unknown>): { enter?: DoorKey | undefined } => ({
+    enter: doorKeys.includes(search["enter"] as DoorKey) ? (search["enter"] as DoorKey) : undefined,
+  }),
+  head: ({ params }) => ({
+    meta: [
+      { title: "Hotel — NEØ" },
+      {
+        name: "description",
+        content:
+          "This hotel on NEØ: rooms and booking, the restaurant menu and ordering, hotel services, and how to find and contact the property.",
+      },
+      { property: "og:title", content: "Hotel — NEØ" },
+      {
+        property: "og:description",
+        content: "Stay, dine and use this hotel's services — powered by NEØ.",
+      },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: canonicalUrl(`/start/${params.propertySlug}`) },
+      { name: "twitter:card", content: "summary" },
+      { name: "robots", content: robotsDirective(`/start/${params.propertySlug}`) },
+    ],
+    links: [canonicalLink(`/start/${params.propertySlug}`)],
+  }),
+  component: PropertyHomePage,
+});
+
+const staffDoorIcons: Record<Exclude<DoorKey, "stay_dine">, typeof Briefcase> = {
+  work: Briefcase,
+  partner: Handshake,
+  rider: Bike,
+};
+
+const staffDoorBlurb: Record<Exclude<DoorKey, "stay_dine">, string> = {
+  work: "For people employed here",
+  partner: "Suppliers, corporate clients and agents",
+  rider: "Authorised delivery riders",
+};
+
+function PropertyHomePage() {
+  const { propertySlug } = Route.useParams();
+  useTrackEntry(propertySlug, "discover");
+  const { enter } = Route.useSearch();
+  const navigate = useNavigate();
+  const [refused, setRefused] = useState<DoorKey | null>(null);
+
+  // The public page first; when the hotel has never opened one, the person's
+  // own relationship with it. Public listing is a marketing decision, so it
+  // must never stand between an employee, partner or rider and their hotel.
+  const property = useQuery({
+    queryKey: ["neo-visitor-property", propertySlug],
+    queryFn: () => fetchPropertyForVisitor(propertySlug),
+    staleTime: 60_000,
+  });
+
+  const branchId = property.data?.branch_id ?? null;
+  const doors = useQuery({
+    queryKey: ["neo-property-doors", branchId],
+    queryFn: () => fetchPropertyDoors(branchId!),
+    enabled: Boolean(branchId),
+  });
+
+  const pub = property.data;
+  const state = doors.data;
+  const hereWithEntrance = (key: DoorKey) =>
+    `/start/${encodeURIComponent(propertySlug)}?enter=${key}`;
+
+  /**
+   * Opens an operational entrance. Only ever called once the database has
+   * confirmed the person may use it, or — when nobody is signed in — to send
+   * them to sign in and bring them straight back to this same entrance.
+   */
+  const openDoor = useCallback(
+    (key: DoorKey) => {
+      if (!pub) return;
+      const allowed = key === "stay_dine" ? state?.stay_dine?.available : state?.[key]?.allowed;
+      const signedIn = state?.signed_in ?? false;
+
+      if (!allowed && key !== "stay_dine") {
+        if (!signedIn) {
+          if (key === "rider") {
+            void navigate({ to: "/rider/login", search: { next: hereWithEntrance(key) } });
+          } else {
+            void navigate({ to: "/auth", search: { redirect: hereWithEntrance(key) } });
+          }
+          return;
+        }
+        setRefused(key);
+        return;
+      }
+
+      if (key === "stay_dine") {
+        void navigate({ to: "/guest/$hotelSlug", params: { hotelSlug: pub.public_slug } });
+        return;
+      }
+      if (key === "work") {
+        // Already signed in and confirmed staff here: apply this hotel as the
+        // working context and go straight in. Asking for the password again
+        // merely because the context changed is not an access check.
+        if (signedIn) {
+          void (async () => {
+            try {
+              const result = await enterProperty(pub.branch_id);
+              if (result.allowed) {
+                const { data } = await supabase.auth.getUser();
+                writePropertySelection(data.user?.id ?? null, result.branch_id);
+                void navigate({ to: "/workspace" });
+                return;
+              }
+            } catch {
+              /* fall through to the hotel's own staff entrance */
+            }
+            if (pub.portal_slug) {
+              void navigate({ to: "/h/$propertySlug", params: { propertySlug: pub.portal_slug } });
+            } else {
+              void navigate({ to: "/workspace" });
+            }
+          })();
+          return;
+        }
+        if (pub.portal_slug) {
+          void navigate({ to: "/h/$propertySlug", params: { propertySlug: pub.portal_slug } });
+        } else {
+          void navigate({ to: "/workspace" });
+        }
+        return;
+      }
+      if (key === "rider") {
+        void navigate({ to: "/rider" });
+        return;
+      }
+      void navigate({ to: "/partner/$propertySlug", params: { propertySlug: pub.public_slug } });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pub, state, navigate, propertySlug],
+  );
+
+  // Returning from sign-in with an entrance in mind: re-check it here and
+  // either continue through it, or say plainly why it stays closed.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!enter || resumed.current) return;
+    if (!pub || !state) return;
+    resumed.current = true;
+    const allowed = enter === "stay_dine" ? state.stay_dine?.available : state[enter]?.allowed;
+    if (allowed) openDoor(enter);
+    else setRefused(enter);
+  }, [enter, pub, state, openDoor]);
+
+  const services = useMemo(() => pub?.services ?? {}, [pub]);
+  const on = (key: string) => serviceEnabled(services, key);
+
+  if (property.isLoading) {
+    return (
+      <Shell>
+        <div className="flex items-center gap-2 text-sm text-white/70">
+          <Loader2 className="size-4 animate-spin" /> Opening this hotel…
+        </div>
+      </Shell>
+    );
+  }
+
+  if (!property.data) {
+    return (
+      <Shell>
+        <div className="rounded-2xl bg-white/5 p-6">
+          <h1 className="text-lg font-semibold text-white">Hotel not found</h1>
+          <p className="mt-2 text-sm text-white/70">
+            This address is not recognised, or the hotel has not opened its public page.
+          </p>
+          <Link to="/start" className="mt-4 inline-block text-sm font-semibold text-white underline">
+            Back to the hotel list
+          </Link>
+        </div>
+      </Shell>
+    );
+  }
+
+  const p = property.data;
+  const guest = { hotelSlug: p.public_slug };
+  const guestOpen = p.publicly_listed !== false && (state?.stay_dine?.available ?? true);
+  const canBook = guestOpen && on("booking");
+  const canRooms = guestOpen && (on("rooms") || on("booking"));
+  const canMenu = guestOpen && (on("menu") || on("food_ordering"));
+  const canOrder = guestOpen && on("food_ordering");
+  const laundry = guestOpen && (on("laundry_resident") || on("laundry_public"));
+  const requests = guestOpen && on("guest_requests");
+  const anyService = laundry || requests;
+  const contact = p.phone || p.email || p.address || p.city || p.country;
+
+  return (
+    <Shell style={brandStyle(p.brand)}>
+      {/* ------------------------------------------------------------ home */}
+      <PropertySchema property={p} />
+      <CoverMedia
+        src={p.media?.hero_url ?? p.cover_image_url}
+        alt={p.property_name}
+        initials={brandInitials(p.property_name)}
+        priority
+        sizes="(min-width: 1024px) 1024px, 100vw"
+        className="aspect-[16/11] w-full rounded-3xl sm:aspect-[21/9]"
+      >
+        <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 p-5 sm:p-8">
+          {p.media?.logo_url || p.logo_url ? (
+            <img
+              src={p.media?.logo_url ?? p.logo_url ?? undefined}
+              alt=""
+              width={56}
+              height={56}
+              decoding="async"
+              className="size-14 shrink-0 rounded-2xl bg-white object-contain p-1"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <Display className="truncate text-3xl sm:text-5xl">{p.property_name}</Display>
+            <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-white/70">
+              {p.organization_name}
+              {p.city || p.country ? (
+                <span className="ml-2 inline-flex items-center gap-1 normal-case tracking-normal">
+                  <MapPin className="size-3.5" aria-hidden />
+                  {[p.city, p.country].filter(Boolean).join(", ")}
+                </span>
+              ) : null}
+            </p>
+          </div>
+        </div>
+      </CoverMedia>
+
+      {p.content?.welcome_title || p.tagline ? (
+        <h2 className="neo-pub-display mt-7 max-w-2xl text-2xl text-white sm:text-3xl">
+          {p.content?.welcome_title ?? p.tagline}
+        </h2>
+      ) : null}
+      {p.content?.welcome_message || p.summary ? (
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/70 sm:text-base">
+          {p.content?.welcome_message ?? p.summary}
+        </p>
+      ) : null}
+
+      {guestOpen ? (
+        <div className="mt-7 flex flex-wrap gap-3">
+          {canBook ? (
+            <Link
+              to="/guest/$hotelSlug/book"
+              params={guest}
+              className="rounded-full px-5 py-3 text-sm font-semibold text-white"
+              style={{ background: "var(--pb-primary, #18C4C8)" }}
+            >
+              Book a stay
+            </Link>
+          ) : null}
+          {canOrder ? (
+            <Link
+              to="/guest/$hotelSlug/order"
+              params={guest}
+               search={{ item: undefined }}
+              className="rounded-full border border-white/25 px-5 py-3 text-sm font-semibold text-white"
+            >
+              Order food
+            </Link>
+          ) : canMenu ? (
+            <Link
+              to="/guest/$hotelSlug/explore"
+              params={guest}
+              className="rounded-full border border-white/25 px-5 py-3 text-sm font-semibold text-white"
+            >
+              View the menu
+            </Link>
+          ) : null}
+          <Link
+            to="/guest/$hotelSlug"
+            params={guest}
+            className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white/80"
+          >
+            My stay
+          </Link>
+        </div>
+      ) : (
+        <p className="mt-7 text-sm text-white/60">
+          This hotel has not opened its guest experience on NEØ yet.
+        </p>
+      )}
+
+      {/* ------------------------------------------------------------ stay */}
+      {canRooms ? (
+        <Section eyebrow="Stay" title="Rooms & accommodation">
+          <p className="text-sm leading-relaxed text-white/65">
+            {p.content?.stay_note ??
+              "Choose your dates and see the rooms this hotel has available, with its own rates and policies."}
+          </p>
+          <SectionLinks>
+            {canBook ? (
+              <SectionLink to="/guest/$hotelSlug/book" params={guest} icon={BedDouble}>
+                Check dates & availability
+              </SectionLink>
+            ) : (
+              <SectionLink to="/guest/$hotelSlug" params={guest} icon={BedDouble}>
+                See rooms
+              </SectionLink>
+            )}
+            <SectionLink to="/guest/$hotelSlug/stay" params={guest} icon={ConciergeBell}>
+              I already have a booking
+            </SectionLink>
+          </SectionLinks>
+          <RoomsAndRates slug={p.public_slug} />
+        </Section>
+      ) : null}
+
+
+      {/* ------------------------------------------------------------ dine */}
+      {canMenu ? (
+        <Section eyebrow="Dine" title="Restaurant & room service">
+          <p className="text-sm leading-relaxed text-white/65">
+            The hotel's live menu — the same items and prices its own kitchen and tills use.
+          </p>
+          <SectionLinks>
+            <SectionLink to="/guest/$hotelSlug/explore" params={guest} icon={UtensilsCrossed}>
+              View the menu
+            </SectionLink>
+            {canOrder ? (
+              <SectionLink to="/guest/$hotelSlug/order" params={guest} icon={UtensilsCrossed}>
+                Order{" "}
+                {[on("room_service") ? "room service" : null, on("pickup") ? "collection" : null, on("delivery") ? "delivery" : null]
+                  .filter(Boolean)
+                  .join(" · ") || "online"}
+              </SectionLink>
+            ) : null}
+          </SectionLinks>
+        </Section>
+      ) : null}
+
+      {/* -------------------------------------------------------- services */}
+      {anyService ? (
+        <Section eyebrow="Services" title="Hotel services">
+          <SectionLinks>
+            {laundry ? (
+              <SectionLink to="/guest/$hotelSlug/laundry" params={guest} icon={Shirt}>
+                Laundry & pressing
+              </SectionLink>
+            ) : null}
+            {requests ? (
+              <SectionLink to="/guest/$hotelSlug/trips" params={guest} icon={ConciergeBell}>
+                Ask the hotel for something
+              </SectionLink>
+            ) : null}
+          </SectionLinks>
+        </Section>
+      ) : null}
+
+      {/* ----------------------------------------------------------- about */}
+      {on("hotel_information") && p.summary && p.content?.welcome_message ? (
+        <Section eyebrow="About" title={`About ${p.property_name}`}>
+          <p className="text-sm leading-relaxed text-white/65">{p.summary}</p>
+        </Section>
+      ) : null}
+
+      {/* --------------------------------------------------------- contact */}
+      {contact ? (
+        <Section eyebrow="Contact" title="Find us & get in touch">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {p.address || p.city || p.country ? (
+              <ContactRow icon={MapPin}>
+                {[p.address, p.city, p.country].filter((part, index, parts) => part && !parts.slice(0, index).some((earlier) => earlier && String(earlier).toLowerCase().split(/,\s*/).includes(String(part).toLowerCase()))).join(", ")}
+              </ContactRow>
+            ) : null}
+            {p.phone ? (
+              <a href={`tel:${p.phone}`} className="block">
+                <ContactRow icon={Phone}>{p.phone}</ContactRow>
+              </a>
+            ) : null}
+            {p.email ? (
+              <a href={`mailto:${p.email}`} className="block">
+                <ContactRow icon={Mail}>{p.email}</ContactRow>
+              </a>
+            ) : null}
+          </div>
+        </Section>
+      ) : null}
+
+      {/* ---------------------------------------------------------- access */}
+      <div className="mt-14 border-t border-white/10 pt-6">
+        <Eyebrow>Working with this hotel?</Eyebrow>
+        {refused ? (
+          <p className="mt-3 text-sm text-white/70">
+            <span className="font-semibold text-white">{doorLabels[refused]} is closed for you.</span>{" "}
+            {doorRefusal[refused]}
+          </p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2.5">
+          {(["work", "partner", "rider"] as const).map((key) => {
+            const Icon = staffDoorIcons[key];
+            const info = state?.[key];
+            const signedIn = state?.signed_in ?? false;
+            const enabled = (info?.allowed ?? false) || !signedIn;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => enabled && openDoor(key)}
+                disabled={!enabled || doors.isLoading}
+                title={enabled ? staffDoorBlurb[key] : doorRefusal[key]}
+                className="flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Icon className="size-3.5" aria-hidden />
+                {doorLabels[key]} access
+              </button>
+            );
+          })}
+        </div>
+        {state?.signed_in ? null : (
+          <p className="mt-3 text-xs text-white/70">
+            You will be asked to sign in, then brought straight back here.
+          </p>
+        )}
+      </div>
+    </Shell>
+  );
+}
+
+function Section({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-12">
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2 className="neo-pub-display mt-2 text-2xl text-white sm:text-3xl">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function SectionLinks({ children }: { children: React.ReactNode }) {
+  return <div className="mt-4 grid gap-3 sm:grid-cols-2">{children}</div>;
+}
+
+function SectionLink({
+  to,
+  params,
+  icon: Icon,
+  children,
+}: {
+  to: string;
+  params: { hotelSlug: string };
+  icon: typeof BedDouble;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      to={to as never}
+      params={params as never}
+      className="neo-pub-card flex items-center gap-3 p-4 text-sm font-semibold text-white"
+    >
+      <span
+        className="flex size-9 shrink-0 items-center justify-center rounded-xl"
+        style={{ background: "var(--pb-primary, #18C4C8)" }}
+      >
+        <Icon className="size-4 text-white" aria-hidden />
+      </span>
+      <span className="min-w-0">{children}</span>
+    </Link>
+  );
+}
+
+/**
+ * Machine-readable description of this hotel, built only from what the
+ * property itself published. Anything it has not configured is left out
+ * rather than guessed, so an assistant reading the page cannot repeat an
+ * invented address, telephone number or photograph.
+ */
+function PropertySchema({ property }: { property: PublicProperty }) {
+  const image = property.media?.hero_url ?? property.cover_image_url;
+  const address = {
+    "@type": "PostalAddress",
+    ...(property.address ? { streetAddress: property.address } : {}),
+    ...(property.city ? { addressLocality: property.city } : {}),
+    ...(property.country ? { addressCountry: property.country } : {}),
+  };
+  const schema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Hotel",
+    name: property.property_name,
+    ...(property.organization_name ? { brand: property.organization_name } : {}),
+    ...(property.summary ? { description: property.summary } : {}),
+    ...(image ? { image } : {}),
+    ...(property.phone ? { telephone: property.phone } : {}),
+    ...(property.email ? { email: property.email } : {}),
+    ...(property.address || property.city || property.country ? { address } : {}),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // Serialised property facts only — no user input is interpolated.
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }}
+    />
+  );
+}
+
+function ContactRow({ icon: Icon, children }: { icon: typeof MapPin; children: React.ReactNode }) {
+  return (
+    <div className="neo-pub-card flex items-start gap-3 p-4 text-sm text-white/75">
+      <Icon className="mt-0.5 size-4 shrink-0 text-white/70" aria-hidden />
+      <span className="min-w-0">{children}</span>
+    </div>
+  );
+}
+
+function Shell({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <PublicSurface>
+      <PublicTopBar homeTo="/" width="max-w-4xl" />
+      <main className="mx-auto w-full max-w-4xl px-5 pb-8 pt-8" style={style}>
+        {children}
+      </main>
+      <div className="flex justify-center pb-14">
+        <PoweredByNeo tone="light" />
+      </div>
+    </PublicSurface>
+  );
+}
+
+/**
+ * The rooms this hotel has actually configured, with its own lowest active
+ * rate. Nothing here is estimated: a room with no published rate simply shows
+ * no price, and a hotel with no rooms configured shows nothing at all.
+ */
+function RoomsAndRates({ slug }: { slug: string }) {
+  const rooms = useQuery({
+    queryKey: ["public-rooms", slug],
+    queryFn: () => fetchPublicPropertyRooms(slug),
+    staleTime: 60_000,
+  });
+
+  if (rooms.isLoading) {
+    return (
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="neo-pub-card h-28 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  if (rooms.isError || !rooms.data?.length) return null;
+
+  return (
+    <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+      {rooms.data.map((room) => (
+        <li key={room.room_type_id} className="neo-pub-card p-4">
+          <p className="text-sm font-semibold text-white">{room.name}</p>
+          <p className="mt-1 text-xs text-white/70">
+            {[
+              room.max_occupancy ? `Sleeps ${room.max_occupancy}` : null,
+              room.bed_configuration,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {room.from_rate != null ? (
+            <p className="mt-2 text-sm font-semibold text-neo-gold">
+              From {room.currency ?? ""}{" "}
+              {Number(room.from_rate).toLocaleString(undefined, { maximumFractionDigits: 0 })} /
+              night
+            </p>
+          ) : null}
+          {room.amenities.length ? (
+            <p className="mt-2 text-xs leading-relaxed text-white/70">
+              {room.amenities.join(" · ")}
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -345,6 +345,7 @@ import { Route as ShellProcurementBranchRouteImport } from './routes/_shell.proc
 import { Route as ShellProcurementDashboardRouteImport } from './routes/_shell.procurement.dashboard'
 import { Route as ShellProcurementOrdersRouteImport } from './routes/_shell.procurement.orders'
 import { Route as ShellProcurementQuotationsRouteImport } from './routes/_shell.procurement.quotations'
+import { Route as ShellProcurementReconciliationRouteImport } from './routes/_shell.procurement.reconciliation'
 import { Route as ShellProcurementRequestsRouteImport } from './routes/_shell.procurement.requests'
 import { Route as ShellProcurementSupplierPortalRouteImport } from './routes/_shell.procurement.supplier-portal'
 import { Route as ShellProcurementSuppliesRouteImport } from './routes/_shell.procurement.supplies'
@@ -2121,6 +2122,12 @@ const ShellProcurementQuotationsRoute =
     path: '/quotations',
     getParentRoute: () => ShellProcurementRoute,
   } as any)
+const ShellProcurementReconciliationRoute =
+  ShellProcurementReconciliationRouteImport.update({
+    id: '/reconciliation',
+    path: '/reconciliation',
+    getParentRoute: () => ShellProcurementRoute,
+  } as any)
 const ShellProcurementRequestsRoute =
   ShellProcurementRequestsRouteImport.update({
     id: '/requests',
@@ -2747,6 +2754,7 @@ export interface FileRoutesByFullPath {
   '/procurement/dashboard': typeof ShellProcurementDashboardRoute
   '/procurement/orders': typeof ShellProcurementOrdersRoute
   '/procurement/quotations': typeof ShellProcurementQuotationsRoute
+  '/procurement/reconciliation': typeof ShellProcurementReconciliationRoute
   '/procurement/requests': typeof ShellProcurementRequestsRoute
   '/procurement/supplier-portal': typeof ShellProcurementSupplierPortalRoute
   '/procurement/supplies': typeof ShellProcurementSuppliesRoute
@@ -3123,6 +3131,7 @@ export interface FileRoutesByTo {
   '/procurement/dashboard': typeof ShellProcurementDashboardRoute
   '/procurement/orders': typeof ShellProcurementOrdersRoute
   '/procurement/quotations': typeof ShellProcurementQuotationsRoute
+  '/procurement/reconciliation': typeof ShellProcurementReconciliationRoute
   '/procurement/requests': typeof ShellProcurementRequestsRoute
   '/procurement/supplier-portal': typeof ShellProcurementSupplierPortalRoute
   '/procurement/supplies': typeof ShellProcurementSuppliesRoute
@@ -3520,6 +3529,7 @@ export interface FileRoutesById {
   '/_shell/procurement/dashboard': typeof ShellProcurementDashboardRoute
   '/_shell/procurement/orders': typeof ShellProcurementOrdersRoute
   '/_shell/procurement/quotations': typeof ShellProcurementQuotationsRoute
+  '/_shell/procurement/reconciliation': typeof ShellProcurementReconciliationRoute
   '/_shell/procurement/requests': typeof ShellProcurementRequestsRoute
   '/_shell/procurement/supplier-portal': typeof ShellProcurementSupplierPortalRoute
   '/_shell/procurement/supplies': typeof ShellProcurementSuppliesRoute
@@ -3917,6 +3927,7 @@ export interface FileRouteTypes {
     | '/procurement/dashboard'
     | '/procurement/orders'
     | '/procurement/quotations'
+    | '/procurement/reconciliation'
     | '/procurement/requests'
     | '/procurement/supplier-portal'
     | '/procurement/supplies'
@@ -4293,6 +4304,7 @@ export interface FileRouteTypes {
     | '/procurement/dashboard'
     | '/procurement/orders'
     | '/procurement/quotations'
+    | '/procurement/reconciliation'
     | '/procurement/requests'
     | '/procurement/supplier-portal'
     | '/procurement/supplies'
@@ -4689,6 +4701,7 @@ export interface FileRouteTypes {
     | '/_shell/procurement/dashboard'
     | '/_shell/procurement/orders'
     | '/_shell/procurement/quotations'
+    | '/_shell/procurement/reconciliation'
     | '/_shell/procurement/requests'
     | '/_shell/procurement/supplier-portal'
     | '/_shell/procurement/supplies'
@@ -7152,6 +7165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellProcurementQuotationsRouteImport
       parentRoute: typeof ShellProcurementRoute
     }
+    '/_shell/procurement/reconciliation': {
+      id: '/_shell/procurement/reconciliation'
+      path: '/reconciliation'
+      fullPath: '/procurement/reconciliation'
+      preLoaderRoute: typeof ShellProcurementReconciliationRouteImport
+      parentRoute: typeof ShellProcurementRoute
+    }
     '/_shell/procurement/requests': {
       id: '/_shell/procurement/requests'
       path: '/requests'
@@ -8107,6 +8127,7 @@ interface ShellProcurementRouteChildren {
   ShellProcurementDashboardRoute: typeof ShellProcurementDashboardRoute
   ShellProcurementOrdersRoute: typeof ShellProcurementOrdersRoute
   ShellProcurementQuotationsRoute: typeof ShellProcurementQuotationsRoute
+  ShellProcurementReconciliationRoute: typeof ShellProcurementReconciliationRoute
   ShellProcurementRequestsRoute: typeof ShellProcurementRequestsRoute
   ShellProcurementSupplierPortalRoute: typeof ShellProcurementSupplierPortalRoute
   ShellProcurementSuppliesRoute: typeof ShellProcurementSuppliesRoute
@@ -8119,6 +8140,7 @@ const ShellProcurementRouteChildren: ShellProcurementRouteChildren = {
   ShellProcurementDashboardRoute: ShellProcurementDashboardRoute,
   ShellProcurementOrdersRoute: ShellProcurementOrdersRoute,
   ShellProcurementQuotationsRoute: ShellProcurementQuotationsRoute,
+  ShellProcurementReconciliationRoute: ShellProcurementReconciliationRoute,
   ShellProcurementRequestsRoute: ShellProcurementRequestsRoute,
   ShellProcurementSupplierPortalRoute: ShellProcurementSupplierPortalRoute,
   ShellProcurementSuppliesRoute: ShellProcurementSuppliesRoute,

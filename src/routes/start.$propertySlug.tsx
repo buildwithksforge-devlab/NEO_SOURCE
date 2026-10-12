@@ -188,7 +188,16 @@ function PropertyHomePage() {
     if (!enter || resumed.current) return;
     if (!pub || !state) return;
     resumed.current = true;
-    const allowed = enter === "stay_dine" ? state.stay_dine?.available : state[enter]?.allowed;
+    const allowed =
+      enter === "stay_dine"
+        ? state.stay_dine?.available
+        : enter === "work"
+          ? state.work?.allowed
+          : enter === "partner"
+            ? state.partner?.allowed
+            : enter === "rider"
+              ? state.rider?.allowed
+              : false;
     if (allowed) openDoor(enter);
     else setRefused(enter);
   }, [enter, pub, state, openDoor]);

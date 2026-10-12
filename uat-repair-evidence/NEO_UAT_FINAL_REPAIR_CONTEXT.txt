@@ -1,0 +1,1197 @@
+
+==========================================
+FILE: src/routes/_shell.inventory.requisitions.tsx
+==========================================
+L220:         id: lineId,
+L221:         name: str(
+L222:           (line["stock_items"] as StoresRow | null)?.["name"],
+L223:           str(line["description"], "Item"),
+L224:         ),
+L225:         unit: str(line["unit"], "unit"),
+L226:         requested: num(line["quantity_requested"]),
+L227:         outstanding,
+L228:         available: onHand,
+L229:         shortage: short,
+L230:         control:
+L231:           canIssue && outstanding > 0 ? (
+L232:             <Input
+L233:               className="ml-auto h-8 w-24 text-right"
+L234:               inputMode="decimal"
+L235:               placeholder={String(Math.min(outstanding, onHand))}
+L236:               value={drafts[lineId] ?? ""}
+L237:               onChange={(e) => setDrafts((prev) => ({ ...prev, [lineId]: e.target.value }))}
+L238:             />
+L239:           ) : (
+L240:             <span className="text-xs text-muted-foreground">â€”</span>
+L241:           ),
+L242:       };
+L243:     });
+L244: 
+L245:     return {
+L246:       title: `${str(requisition["request_number"], "Requisition")} â€” ${department}`,
+L247:       subtitle: `${titleCase(str(requisition["priority"], "normal"))} priority`,
+L248:       chips: (
+L249:         <>
+L250:           <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>
+L251:           {requisition["purchase_request_id"] ? (
+L252:             <StatusPill tone="info">Replenishment raised</StatusPill>
+L253:           ) : null}
+L254:         </>
+L255:       ),
+L256:       sections: (
+L257:         <>
+L258:           <InspectorSection
+L259:             title="Request"
+L260:             actions={
+L261:               <DocumentPrintButton
+L262:                 type="requisition"
+L263:                 id={id}
+L264:                 label="Print requisition"
+L265:                 variant="ghost"
+L266:               />
+L267:             }
+L268:           >
+L269:             <p className="text-sm text-muted-foreground">
+L270:               {str(requisition["reason"], "No reason given")}
+L271:             </p>
+L272:           </InspectorSection>
+L273: 
+L274:           <InspectorSection title="Line items & availability">
+L275:             <RequisitionLineItems lines={lineRows} />
+L276:             <p className="mt-2 text-xs text-muted-foreground">
+L277:               Leave a quantity blank to issue the full outstanding amount. A partial issue keeps
+L278:               the balance open.
+L279:             </p>
+L280:           </InspectorSection>
+L281: 
+L282:           <InspectorSection title="Progress">
+L283:             <div className="space-y-1 text-sm">
+L284:               <p>
+L285:                 <span className="text-muted-foreground">Stage: </span>
+L286:                 {awaitingApproval
+L287:                   ? "Waiting on departmental approval before Stores can issue"
+L288:                   : fullyIssued
+L289:                     ? "Issued in full â€” this request is closed"
+L290:                     : totalIssued > 0
+L291:                       ? "Partly issued â€” the balance stays open until the rest is released"
+L292:                       : "Approved and with Stores, waiting to be issued"}
+L293:               </p>
+L294:               <p className="text-muted-foreground">
+L295:                 {totalIssued} of {totalRequested} requested issued
+L296:                 {requisition["issued_at"]
+L297:                   ? ` Â· last issued ${new Date(String(requisition["issued_at"])).toLocaleString()}`
+L298:                   : ""}
+L299:               </p>
+L300:             </div>
+L301:           </InspectorSection>
+L302: 
+L303:           {canIssue ? (
+L304:             <InspectorSection title="Issuing store">
+L305:               <p className="mb-2 text-sm text-muted-foreground">
+L306:                 Stock leaves from: <span className="text-foreground">{sourceStoreName}</span>
+L307:               </p>
+L308:               <Select
+L309:                 value={sourceStoreId}
+L310:                 onValueChange={(v) => setStore.mutate({ requisitionId: id, locationId: v })}
+L311:               >
+L312:                 <SelectTrigger className="h-9">
+L313:                   <SelectValue placeholder="Choose the store this will be issued from" />
+L314:                 </SelectTrigger>
+L315:                 <SelectContent>
+L316:                   {storeOptions.map((l) => (
+L317:                     <SelectItem key={String(l["id"])} value={String(l["id"])}>
+L318:                       {str(l["name"], "Store")}
+L319:                       {l["code"] ? ` Â· ${str(l["code"])}` : ""}
+L320:                     </SelectItem>
+L321:                   ))}
+L322:                 </SelectContent>
+L323:               </Select>
+L324:               {!sourceStoreId ? (
+L325:                 <p className="mt-2 text-xs text-muted-foreground">
+L326:                   Choose a store before issuing â€” stock has to come off a real shelf.
+L327:                 </p>
+L328:               ) : null}
+L329:             </InspectorSection>
+L330:           ) : null}
+L331: 
+L332: 
+L333:           {canIssue ? (
+L334:             <InspectorSection title="Reason">
+L335:               <Textarea
+L336:                 rows={2}
+L337:                 placeholder="Reason â€” required to return this request, or to explain the shortage sent to Procurement"
+L338:                 value={reason}
+L339:                 onChange={(e) => setReason(e.target.value)}
+L340:               />
+L341:             </InspectorSection>
+L342:           ) : null}
+L343:         </>
+L344:       ),
+L345:       footer: (
+L346:         <>
+L347:           {awaitingApproval && mayRelease ? (
+L348:             <Button
+L349:               size="sm"
+L350:               disabled={release.isPending}
+L351:               onClick={() => release.mutate({ requisitionId: id })}
+L352:             >
+L353:               Approve &amp; send to Stores
+L354:             </Button>
+L355:           ) : null}
+L356:           {canIssue ? (
+L357:             <>
+L358:               <Button
+L359:                 disabled={issue.isPending || issueLines.length === 0 || !sourceStoreId}
+L360:                 onClick={() => issue.mutate({ requisitionId: id, lines: issueLines })}
+L361:               >
+L362:                 {sourceStoreId
+L363:                   ? `Issue ${issueLines.length} line${issueLines.length === 1 ? "" : "s"}`
+L364:                   : "Choose an issuing store first"}
+L365:               </Button>
+L366:               <Button
+L367:                 variant="outline"
+L368:                 disabled={reject.isPending || reason.trim() === ""}
+L369:                 onClick={() => reject.mutate({ requisitionId: id, reason: reason.trim() })}
+L370:               >
+L371:                 Return with reason
+L372:               </Button>
+L373:               {shortage ? (
+L374:                 <Button
+L375:                   variant="outline"
+L376:                   disabled={replenish.isPending || Boolean(requisition["purchase_request_id"])}
+L377:                   onClick={() =>
+L378:                     replenish.mutate({
+L379:                       requisition,
+L380:                       notes:
+L381:                         reason.trim() || "Stock unavailable to fulfil a department requisition",
+L382:                     })
+L383:                   }
+L384:                 >
+L385:                   Send shortage to Procurement
+L386:                 </Button>
+L387:               ) : null}
+L388:             </>
+L389:           ) : null}
+L390:         </>
+L391:       ),
+L392:     };
+L393:   };
+L394: 
+L395:   return (
+L396:     <div className="space-y-6">
+L397:       <PageHeader
+L398:         eyebrow="Inventory & Stores"
+L399:         title="Department requests"
+L400:         description="Every department asks Stores for what it needs. Check availability, issue in full or in part, return the request with a reason, or route the shortage to Procurement."
+L401:         actions={
+L402:           <Tabs value={scope} onValueChange={(v) => setScope(v as "open" | "all")}>
+L403:             <TabsList>
+L404:               <TabsTrigger value="open">Open</TabsTrigger>
+L405:               <TabsTrigger value="all">All</TabsTrigger>
+L406:             </TabsList>
+L407:           </Tabs>
+L408:         }
+L409:       />
+L410: 
+
+==========================================
+FILE: src/lib/kitchen-data.ts
+==========================================
+L855:       return (data ?? []) as unknown as Row[];
+L856:     },
+L857:   });
+L858: }
+L859: 
+L860: export function useReportShortage() {
+L861:   const qc = useQueryClient();
+L862:   const ctx = useCtx();
+L863:   return useMutation({
+L864:     mutationFn: async (row: Record<string, unknown>) => {
+L865:       const { error } = await supabase.from("ingredient_shortage_alerts").insert({
+L866:         ...row,
+L867:         organization_id: ctx.organization_id,
+L868:         branch_id: ctx.branch_id,
+L869:         reported_by: ctx.userId,
+L870:       } as never);
+L871:       if (error) throw error;
+L872:     },
+L873:     onSuccess: () => {
+L874:       toast.success("Shortage reported to Stores and the Kitchen Manager.");
+L875:       void qc.invalidateQueries({ queryKey: ["kitchen", "shortages"] });
+L876:     },
+L877:     onError: (e: Error) => toast.error(e.message),
+L878:   });
+L879: }
+L880: 
+L881: export function useWasteRecords() {
+L882:   const { organizationId } = useCtx();
+L883:   return useQuery({
+L884:     queryKey: ["kitchen", "waste", organizationId],
+L885:     enabled: Boolean(organizationId),
+L886:     queryFn: async () => {
+L887:       const { data, error } = await supabase
+L888:         .from("waste_records")
+L889:         .select(sel("*, operational_stations(name), menu_items(name)"))
+L890:         .order("occurred_at", { ascending: false });
+L891:       if (error) throw error;
+L892:       return (data ?? []) as unknown as Row[];
+L893:     },
+L894:   });
+L895: }
+L896: 
+L897: export function useRecordWaste() {
+L898:   const qc = useQueryClient();
+L899:   const ctx = useCtx();
+L900:   return useMutation({
+L901:     mutationFn: async (row: Record<string, unknown>) => {
+L902:       const payload = {
+L903:         waste_number: nextRequestNumber("WST"),
+L904:         ...row,
+L905:         organization_id: ctx.organization_id,
+L906:         branch_id: ctx.branch_id,
+L907:         recorded_by: ctx.userId,
+L908:       };
+L909:       const { error } = await supabase.from("waste_records").insert(payload as never);
+L910:       if (error) throw error;
+L911:     },
+L912:     onSuccess: () => {
+L913:       toast.success("Waste record created.");
+L914:       void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
+L915:     },
+L916:     onError: (e: Error) => toast.error(e.message),
+L917:   });
+L918: }
+L919: 
+L920: export function useReviewWaste() {
+L921:   const qc = useQueryClient();
+L922:   const ctx = useCtx();
+L923:   return useMutation({
+L924:     mutationFn: async ({ id, action, comment }: { id: string; action: "approved" | "rejected"; comment?: string }) => {
+L925:       const { error } = await supabase
+L926:         .from("waste_records")
+L927:         .update({
+L928:           status: action,
+L929:           reviewed_by: ctx.userId,
+L930:           reviewed_at: new Date().toISOString(),
+L931:         } as never)
+L932:         .eq("id", id);
+L933:       if (error) throw error;
+L934:       const { error: actErr } = await supabase.from("waste_approval_actions").insert({
+L935:         organization_id: ctx.organization_id,
+L936:         waste_record_id: id,
+L937:         action,
+L938:         comment: comment ?? null,
+L939:         acted_by: ctx.userId,
+L940:       } as never);
+L941:       if (actErr) throw actErr;
+L942:     },
+L943:     onSuccess: () => {
+L944:       toast.success("Waste record reviewed.");
+L945:       void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
+L946:     },
+L947:     onError: (e: Error) => toast.error(e.message),
+L948:   });
+L949: }
+L950: 
+L951: /**
+L952:  * Take an approved waste record off stock. The database decides the store, the
+L953:  * cost and whether it has already been posted â€” posting twice is refused there,
+L954:  * not here, so a double click cannot double-deduct.
+L955:  */
+
+==========================================
+FILE: src/routes/_shell.kitchen.stores.tsx
+==========================================
+L210:           error={requests.error}
+L211:           isEmpty={requestRows.length === 0}
+L212:           empty={
+L213:             <p className="py-6 text-sm text-muted-foreground">No ingredient requests raised yet.</p>
+L214:           }
+L215:         >
+L216:           <ul className="divide-y divide-border">
+L217:             {requestRows.map((r) => (
+L218:               <li key={r["id"]} className="flex items-start justify-between gap-3 py-3 text-sm">
+L219:                 <div>
+L220:                   <p className="font-medium">{`${r["request_number"] ?? "Request"} Â· ${r["ingredient_name"] ?? ""}`}</p>
+L221:                   <p className="text-xs text-muted-foreground">
+L222:                     {`${r["quantity"] ?? 0} ${r["unit"] ?? ""} Â· ${r["operational_stations"]?.name ?? "Kitchen"} Â· ${titleCase(String(r["priority"] ?? "normal"))}`}
+L223:                   </p>
+L224:                 </div>
+L225:                 <StatusPill tone={String(r["status"]) === "issued" ? "success" : "default"}>
+L226:                   {titleCase(String(r["status"] ?? "draft"))}
+L227:                 </StatusPill>
+L228:               </li>
+L229:             ))}
+L230:           </ul>
+L231:         </QueryState>
+L232:       </SectionCard>
+L233: 
+L234:       <SectionCard
+L235:         title="Shortage alerts"
+L236:         description="Open shortages affecting menu availability."
+L237:       >
+L238:         <QueryState
+L239:           isLoading={shortages.isLoading}
+L240:           error={shortages.error}
+L241:           isEmpty={shortageRows.length === 0}
+L242:           empty={<p className="py-6 text-sm text-muted-foreground">No shortages reported.</p>}
+L243:         >
+L244:           <ul className="divide-y divide-border">
+L245:             {shortageRows.map((r) => (
+L246:               <li key={r["id"]} className="flex items-start justify-between gap-3 py-3 text-sm">
+L247:                 <div>
+L248:                   <p className="font-medium">{String(r["ingredient_name"] ?? "Ingredient")}</p>
+L249:                   <p className="text-xs text-muted-foreground">
+L250:                     {`${r["available_quantity"] ?? 0} ${r["unit"] ?? ""} available Â· minimum ${r["minimum_level"] ?? 0} Â· ${r["operational_stations"]?.name ?? "Kitchen"}`}
+L251:                   </p>
+L252:                 </div>
+L253:                 <StatusPill tone={String(r["status"]) === "resolved" ? "success" : "warning"}>
+L254:                   {titleCase(String(r["severity"] ?? "medium"))}
+L255:                 </StatusPill>
+L256:               </li>
+L257:             ))}
+L258:           </ul>
+L259:         </QueryState>
+L260:       </SectionCard>
+L261:     </div>
+L262:   );
+L263: }
+
+==========================================
+FILE: src/lib/stores-department.ts
+==========================================
+L220: 
+L221: /** Route a shortage to Procurement as a purchase request. */
+L222: export function useRaiseReplenishment() {
+L223:   const invalidate = useStoresInvalidate();
+L224:   return useMutation({
+L225:     mutationFn: async (input: { requisition: StoresRow; notes: string }) => {
+L226:       // The database builds the request and its lines in one statement, so
+L227:       // Procurement never receives a purchase request with no items on it.
+L228:       const { data, error } = await guardedRpc(db, "neo_stores_shortage_to_pr", {
+L229:         _requisition: String(input.requisition["id"]),
+L230:         _notes: input.notes,
+L231:       });
+L232:       if (error) throw new Error(error.message);
+L233:       return (data ?? {}) as StoresRow;
+L234:     },
+L235:     onSuccess: (data) => {
+L236:       invalidate();
+L237:       const number = str(data["request_number"], "purchase request");
+L238:       toast.success(
+L239:         data["created"] === false
+L240:           ? `Already with Procurement as ${number}`
+L241:           : `Shortage sent to Procurement as ${number} â€” ${num(data["lines"])} line(s)`,
+L242:       );
+L243:     },
+L244:     onError: (e: Error) => toast.error(e.message),
+L245:   });
+L246: }
+L247: 
+L248: /* ------------------------------------------------------------------ *
+L249:  * Stock needs reported by departments, across every module
+L250:  * ------------------------------------------------------------------ */
+L251: 
+L252: export function useAllDepartmentStockNeeds(status = "pending") {
+L253:   const { organizationId, branchId } = useStoresContext();
+L254:   return useQuery({
+L255:     queryKey: ["stores-department", "stock-needs", organizationId, branchId, status],
+L256:     enabled: Boolean(organizationId),
+L257:     queryFn: async () => {
+L258:       let q = db
+L259:         .from("department_stock_needs")
+L260:         .select("*, departments(name)")
+L261:         .order("created_at", { ascending: false })
+L262:         .limit(200);
+L263:       if (branchId) q = q.eq("branch_id", branchId);
+L264:       q = applyStockNeedStatus(q, status);
+L265:       const { data, error } = await q;
+L266:       if (error) throw new Error(error.message);
+L267:       return (data ?? []) as StoresRow[];
+L268:     },
+L269:   });
+L270: }
+L271: 
+L272: /* ------------------------------------------------------------------ *
+L273:  * Stock counts and variances â€” controlled, never silent
+L274:  * ------------------------------------------------------------------ */
+L275: 
+L276: export function useStoresStockTakes() {
+L277:   const { organizationId, branchId } = useStoresContext();
+L278:   return useQuery({
+L279:     queryKey: ["stores-department", "stock-takes", organizationId, branchId],
+L280:     enabled: Boolean(organizationId),
+L281:     queryFn: async () => {
+L282:       let q = db
+L283:         .from("stock_takes")
+L284:         .select(
+L285:           "id, reference, count_type, status, scheduled_for, started_at, completed_at, variance_value, location_id, notes, created_at, stock_locations(name)",
+L286:         )
+L287:         .order("created_at", { ascending: false })
+L288:         .limit(60);
+L289:       if (branchId) q = q.eq("branch_id", branchId);
+L290:       const { data, error } = await q;
+L291:       if (error) throw new Error(error.message);
+L292:       return (data ?? []) as StoresRow[];
+L293:     },
+L294:   });
+L295: }
+
+==========================================
+FILE: src/lib/stores-lifecycle.ts
+==========================================
+L1: /**
+L2:  * Stores â†” Procurement lifecycle.
+L3:  *
+L4:  * Requisition â†’ approval â†’ purchase order â†’ receipt â†’ stock, plus store issues
+L5:  * and returns. Every write goes through one transactional database routine that
+L6:  * checks capability and property scope itself, and every submission carries a
+L7:  * fresh attempt key so a retry replays the original outcome instead of creating
+L8:  * a second document or a second stock movement.
+L9:  */
+L10: import { guardedRpc } from "@/lib/rpc-guard";
+L11: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+L12: import { toast } from "sonner";
+L13: import { supabase } from "@/integrations/supabase/client";
+L14: import { useAuth } from "@/lib/auth";
+L15: import { useActivePropertyFilter } from "@/lib/branch-filter";
+L16: 
+L17: // The procurement trail spans many generated table types; call sites narrow.
+L18: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+L19: const db = supabase as any;
+L20: 
+L21: export type LifecycleResult = Record<string, unknown>;
+L22: 
+L23: /** One key per user submission, not per attempt â€” retries must reuse it. */
+L24: export function newAttemptKey(): string {
+L25:   return crypto.randomUUID();
+L26: }
+L27: 
+L28: export type ReceiptLineInput = {
+L29:   order_line_id: string;
+L30:   quantity_received: number;
+L31:   quantity_rejected?: number;
+L32:   rejection_reason?: string;
+L33:   quantity_damaged?: number;
+L34:   unit_price?: number;
+L35:   batch_number?: string;
+L36:   expiry_date?: string;
+L37:   notes?: string;
+L38:   /** Written justification for exceeding the outstanding quantity on THIS line. */
+L39:   over_receipt_reason?: string;
+L40: };
+L41: 
+L42: export type IssueLineInput = { stock_item_id: string; quantity: number; unit?: string };
+L43: 
+L44: function useLifecycleInvalidate() {
+L45:   const qc = useQueryClient();
+L46:   return () => {
+L47:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+L48:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+L49:     void qc.invalidateQueries({ queryKey: ["reconciliation"] });
+L50:   };
+L51: }
+L52: 
+L53: function replayNote(data: LifecycleResult, message: string) {
+L54:   if (data["replayed"] === true) toast.info("Already recorded â€” showing the original result.");
+L55:   else toast.success(message);
+L56: }
+L57: 
+L58: /* ------------------------------ requisitions ------------------------------ */
+L59: 
+L60: export function useSubmitRequisition() {
+L61:   const invalidate = useLifecycleInvalidate();
+L62:   return useMutation({
+L63:     mutationFn: async ({ requestId, attemptKey }: { requestId: string; attemptKey: string }) => {
+L64:       const { data, error } = await guardedRpc(db, "neo_procurement_request_submit", {
+L65:         _request: requestId,
+L66:         _attempt: attemptKey,
+L67:       });
+L68:       if (error) throw new Error(error.message);
+L69:       return (data ?? {}) as LifecycleResult;
+L70:     },
+L71:     onSuccess: (data) => {
+L72:       invalidate();
+L73:       replayNote(data, `Requisition ${String(data["request_number"] ?? "")} sent for approval`);
+L74:     },
+L75:     onError: (e: Error) => toast.error(e.message),
+L76:   });
+L77: }
+L78: 
+L79: export function useDecideRequisition() {
+L80:   const invalidate = useLifecycleInvalidate();
+L81:   return useMutation({
+L82:     mutationFn: async ({
+L83:       requestId,
+L84:       decision,
+L85:       reason,
+L86:     }: {
+L87:       requestId: string;
+L88:       decision: "approve" | "reject";
+L89:       reason?: string;
+L90:     }) => {
+L91:       const { data, error } = await guardedRpc(db, "neo_procurement_request_decide", {
+L92:         _request: requestId,
+L93:         _decision: decision,
+L94:         _reason: reason ?? null,
+L95:       });
+L96:       if (error) throw new Error(error.message);
+L97:       return (data ?? {}) as LifecycleResult;
+L98:     },
+L99:     onSuccess: (data) => {
+L100:       invalidate();
+L101:       toast.success(`Requisition ${String(data["status"] ?? "updated")}`);
+L102:     },
+L103:     onError: (e: Error) => toast.error(e.message),
+L104:   });
+L105: }
+L106: 
+L107: export function useCreateOrderFromRequest() {
+L108:   const invalidate = useLifecycleInvalidate();
+L109:   return useMutation({
+L110:     mutationFn: async (input: {
+L111:       requestId: string;
+L112:       supplierId: string;
+L113:       expectedDate?: string | null;
+L114:       locationId?: string | null;
+L115:       attemptKey: string;
+L116:     }) => {
+L117:       const { data, error } = await guardedRpc(db, "neo_procurement_order_from_request", {
+L118:         _request: input.requestId,
+L119:         _supplier: input.supplierId,
+L120:         _expected: input.expectedDate ?? null,
+L121:         _attempt: input.attemptKey,
+L122:         _location: input.locationId ?? null,
+L123:       });
+L124:       if (error) throw new Error(error.message);
+L125:       return (data ?? {}) as LifecycleResult;
+L126:     },
+L127:     onSuccess: (data) => {
+L128:       invalidate();
+L129:       replayNote(data, `Purchase order ${String(data["order_number"] ?? "")} raised`);
+L130:     },
+L131:     onError: (e: Error) => toast.error(e.message),
+L132:   });
+L133: }
+L134: 
+L135: export function useApproveOrder() {
+L136:   const invalidate = useLifecycleInvalidate();
+L137:   return useMutation({
+L138:     mutationFn: async ({ orderId, reason }: { orderId: string; reason?: string }) => {
+L139:       const { data, error } = await guardedRpc(db, "neo_procurement_order_approve", {
+L140:         _order: orderId,
+L141:         _reason: reason ?? null,
+L142:       });
+L143:       if (error) throw new Error(error.message);
+L144:       return (data ?? {}) as LifecycleResult;
+L145:     },
+L146:     onSuccess: () => {
+L147:       invalidate();
+L148:       toast.success("Purchase order approved");
+L149:     },
+L150:     onError: (e: Error) => toast.error(e.message),
+L151:   });
+L152: }
+L153: 
+L154: /**
+L155:  * Procurement prices a requested line before the request goes for approval.
+L156:  * The request total is recalculated by the database, never by the screen.
+L157:  */
+L158: export function useSetRequestLinePrice() {
+L159:   const invalidate = useLifecycleInvalidate();
+L160:   return useMutation({
+L161:     mutationFn: async ({ lineId, unitPrice }: { lineId: string; unitPrice: number }) => {
+L162:       const { data, error } = await guardedRpc(db, "neo_procurement_request_price_line", {
+L163:         _line: lineId,
+L164:         _price: unitPrice,
+L165:       });
+
+==========================================
+FILE: src/lib/stock-needs.ts
+==========================================
+L1: /**
+L2:  * Department stock needs â€” one status vocabulary.
+L3:  *
+L4:  * A need is *reported* by a department, *acknowledged* by whoever reviews it,
+L5:  * and leaves the queue only once it is *requisitioned* (or declined). Screens
+L6:  * had been asking for the literal status `pending`, which no record ever
+L7:  * carries, so every open-needs summary answered zero and a kitchen need could
+L8:  * never be turned into a requisition. Callers now ask for a queue â€” "open" â€”
+L9:  * and this module decides which persisted statuses that means.
+L10:  */
+L11: 
+L12: /** Statuses that still require someone to act. */
+L13: export const OPEN_STOCK_NEED_STATUSES = ["reported", "acknowledged", "pending"] as const;
+L14: 
+L15: /** Statuses that have left the queue. */
+L16: export const CLOSED_STOCK_NEED_STATUSES = ["requisitioned", "declined", "fulfilled"] as const;
+L17: 
+L18: /**
+L19:  * Read older shortage records safely.
+L20:  *
+L21:  * Needs reported before the lifecycle fields existed carry no urgency, origin,
+L22:  * issued quantity or catalogue link. Normalising on read keeps the original
+L23:  * department, description, quantity, unit, reporter and property intact while
+L24:  * giving every record the shape the queue works with.
+L25:  */
+L26: export function normaliseNeedRow<T extends Record<string, unknown>>(row: T): T {
+L27:   return {
+L28:     ...row,
+L29:     urgency: row["urgency"] ?? row["priority"] ?? "normal",
+L30:     origin: row["origin"] ?? "reported",
+L31:     status: String(row["status"] ?? "reported"),
+L32:     fulfilled_quantity: Number(row["fulfilled_quantity"] ?? 0),
+L33:     stock_item_id: row["stock_item_id"] ?? null,
+L34:     purchase_request_id: row["purchase_request_id"] ?? null,
+L35:   } as T;
+L36: }
+L37: 
+L38: export function isOpenStockNeed(status: unknown): boolean {
+L39:   return (OPEN_STOCK_NEED_STATUSES as readonly string[]).includes(
+L40:     String(status ?? "").trim().toLowerCase(),
+L41:   );
+L42: }
+L43: 
+L44: /**
+L45:  * Apply a requested status filter to a `department_stock_needs` query.
+L46:  *
+L47:  * `all` filters nothing; `open` (and the legacy alias `pending`) expands to the
+L48:  * open statuses; anything else is an exact status the caller asked for.
+L49:  */
+L50: // The Supabase query builder is generic across every department call site.
+L51: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+L52: export function applyStockNeedStatus<T extends { eq: any; in: any }>(query: T, status: string): T {
+L53:   const wanted = status.trim().toLowerCase();
+L54:   if (wanted === "all" || wanted === "") return query;
+L55:   if (wanted === "open" || wanted === "pending")
+L56:     return query.in("status", OPEN_STOCK_NEED_STATUSES as unknown as string[]) as T;
+L57:   return query.eq("status", wanted) as T;
+L58: }
+
+==========================================
+FILE: src/routes/_shell.kitchen.needs.tsx
+==========================================
+L1: import { useMemo, useState } from "react";
+L2: import { createFileRoute } from "@tanstack/react-router";
+L3: import { PageHeader, StatusPill } from "@/components/common/DataDisplay";
+L4: import { SummaryStrip, type SummaryFigure } from "@/components/common/SummaryStrip";
+L5: import {
+L6:   InspectorField,
+L7:   InspectorSection,
+L8:   InspectorSheet,
+L9: } from "@/components/common/InspectorSheet";
+L10: import { EmptyState, KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
+L11: import { Button } from "@/components/ui/button";
+L12: import { Checkbox } from "@/components/ui/checkbox";
+L13: import {
+L14:   Dialog,
+L15:   DialogContent,
+L16:   DialogDescription,
+L17:   DialogFooter,
+L18:   DialogHeader,
+L19:   DialogTitle,
+L20: } from "@/components/ui/dialog";
+L21: import { Input } from "@/components/ui/input";
+L22: import { Label } from "@/components/ui/label";
+L23: import {
+L24:   Select,
+L25:   SelectContent,
+L26:   SelectItem,
+L27:   SelectTrigger,
+L28:   SelectValue,
+L29: } from "@/components/ui/select";
+L30: import { Textarea } from "@/components/ui/textarea";
+L31: import { useAuth } from "@/lib/auth";
+L32: import { titleCase } from "@/lib/kitchen";
+L33: import {
+L34:   kitchenNum,
+L35:   kitchenStr,
+L36:   needTone,
+L37:   useKitchenStockNeeds,
+L38:   useReportKitchenNeed,
+L39:   useRequisitionKitchenNeeds,
+L40:   useReviewKitchenNeed,
+L41:   type KitchenRow,
+L42: } from "@/lib/main-kitchen";
+L43: 
+L44: export const Route = createFileRoute("/_shell/kitchen/needs")({
+L45:   head: () => ({
+L46:     meta: [
+L47:       { title: "Kitchen Stock Needs â€” NEÃ˜" },
+L48:       {
+L49:         name: "description",
+L50:         content:
+L51:           "Report Main Kitchen stock needs and, as Head Chef, consolidate them into a single Stores requisition.",
+L52:       },
+L53:       { property: "og:title", content: "Kitchen Stock Needs â€” NEÃ˜" },
+L54:       {
+L55:         property: "og:description",
+L56:         content: "One route from a chef's reported shortage to an approved Stores requisition.",
+L57:       },
+L58:       { property: "og:type", content: "website" },
+L59:       { name: "twitter:card", content: "summary" },
+L60:     ],
+L61:   }),
+L62:   component: () => (
+L63:     <KitchenGuard action="needs.view">
+L64:       <KitchenNeedsPage />
+L65:     </KitchenGuard>
+L66:   ),
+L67: });
+L68: 
+L69: const UNITS = ["kg", "g", "litre", "ml", "piece", "pack", "crate", "tray"];
+L70: 
+L71: type Lens = "none" | "urgent" | "requisitioned";
+L72: 
+L73: function KitchenNeedsPage() {
+L74:   const { can } = useAuth();
+L75:   const [status, setStatus] = useState("all");
+L76:   const needs = useKitchenStockNeeds(status);
+L77:   const report = useReportKitchenNeed();
+L78:   const review = useReviewKitchenNeed();
+L79:   const requisition = useRequisitionKitchenNeeds();
+L80: 
+L81:   // Only the Kitchen Manager / Head Chef holds the requisition capability.
+L82:   const mayRequisition = can("kitchen", "requisitions", "create");
+L83:   const mayReview = can("kitchen", "needs", "edit");
+L84: 
+L85:   const [open, setOpen] = useState(false);
+L86:   const [item, setItem] = useState("");
+L87:   const [quantity, setQuantity] = useState("1");
+L88:   const [unit, setUnit] = useState("kg");
+L89:   const [priority, setPriority] = useState("normal");
+L90:   const [notes, setNotes] = useState("");
+L91:   const [selected, setSelected] = useState<Record<string, boolean>>({});
+L92:   const [lens, setLens] = useState<Lens>("none");
+L93:   const [inspectId, setInspectId] = useState<string | null>(null);
+L94: 
+L95:   const rows = (needs.data ?? []) as KitchenRow[];
+L96:   const selectable = rows.filter((r) => ["reported", "acknowledged"].includes(String(r["status"])));
+L97:   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
+L98:   const requisitionedCount = rows.filter((r) => String(r["status"]) === "requisitioned").length;
+L99:   const urgentCount = selectable.filter((r) => String(r["priority"]) === "urgent").length;
+L100: 
+L101:   const toggleLens = (next: Lens) => setLens((prev) => (prev === next ? "none" : next));
+L102: 
+L103:   const visible = useMemo(
+L104:     () =>
+L105:       rows.filter((r) => {
+L106:         if (lens === "urgent") return String(r["priority"]) === "urgent";
+L107:         if (lens === "requisitioned") return String(r["status"]) === "requisitioned";
+L108:         return true;
+L109:       }),
+L110:     [rows, lens],
+L111:   );
+L112: 
+L113:   const inspected = rows.find((r) => String(r["id"]) === inspectId) ?? null;
+L114:   const inspectedStatus = inspected ? String(inspected["status"] ?? "reported") : "reported";
+L115: 
+L116:   const leadFigure: SummaryFigure = {
+L117:     id: "open",
+L118:     label: "Open needs",
+L119:     value: needs.isLoading ? "â€¦" : selectable.length,
+L120:     hint: "Reported or acknowledged",
+L121:   };
+L122:   const figures: SummaryFigure[] = [
+L123:     {
+L124:       id: "urgent",
+L125:       label: "Urgent",
+L126:       value: needs.isLoading ? "â€¦" : urgentCount,
+L127:       tone: urgentCount ? "warning" : "success",
+L128:       onSelect: () => toggleLens("urgent"),
+L129:       active: lens === "urgent",
+L130:     },
+L131:     {
+L132:       id: "requisitioned",
+L133:       label: "Requisitioned",
+L134:       value: needs.isLoading ? "â€¦" : requisitionedCount,
+L135:       tone: "success",
+L136:       onSelect: () => toggleLens("requisitioned"),
+L137:       active: lens === "requisitioned",
+L138:     },
+L139:   ];
+L140: 
+L141:   return (
+L142:     <div>
+L143:       <PageHeader
+L144:         eyebrow="Main Kitchen"
+L145:         title="Stock needs & requisitions"
+L146:         description="Chefs and supervisors report what the kitchen is short of. The Kitchen Manager / Head Chef is the only role that turns those needs into a Stores requisition."
+L147:         actions={<Button onClick={() => setOpen(true)}>Report a need</Button>}
+L148:       />
+L149: 
+L150:       <SummaryStrip
+L151:         lead={leadFigure}
+L152:         figures={figures}
+L153:         actions={
+L154:           <>
+L155:             <Select value={status} onValueChange={setStatus}>
+L156:               <SelectTrigger className="w-40">
+L157:                 <SelectValue />
+L158:               </SelectTrigger>
+L159:               <SelectContent>
+L160:                 {["all", "reported", "acknowledged", "requisitioned", "declined", "closed"].map((s) => (
+L161:                   <SelectItem key={s} value={s}>
+L162:                     {titleCase(s)}
+L163:                   </SelectItem>
+L164:                 ))}
+L165:               </SelectContent>
+L166:             </Select>
+L167:             {mayRequisition ? (
+L168:               <Button
+L169:                 disabled={requisition.isPending || selectedIds.length === 0}
+L170:                 onClick={() =>
+L171:                   requisition.mutate({ needIds: selectedIds }, { onSuccess: () => setSelected({}) })
+L172:                 }
+L173:               >
+L174:                 Requisition {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}
+L175:               </Button>
+L176:             ) : null}
+L177:           </>
+L178:         }
+L179:       />
+L180: 
+
+==========================================
+FILE: src/lib/capabilities.ts
+==========================================
+L110:   { prefix: "/kitchen", module: "kitchen", feature: "overview" },
+L111:   { prefix: "/kitchen/queue", module: "kitchen", feature: "queue" },
+L112:   { prefix: "/kitchen/my-station", module: "kitchen", feature: "my-station" },
+L113:   { prefix: "/kitchen/stewarding", module: "kitchen", feature: "stewarding" },
+L114:   { prefix: "/kitchen/needs", module: "kitchen", feature: "needs" },
+L115:   { prefix: "/kitchen/reorder", module: "kitchen", feature: "needs" },
+L116:   { prefix: "/kitchen/stock-count", module: "kitchen", feature: "stores" },
+L117:   { prefix: "/kitchen/production", module: "kitchen", feature: "production" },
+L118:   { prefix: "/kitchen/recipes", module: "kitchen", feature: "recipes" },
+L119:   { prefix: "/kitchen/quality", module: "kitchen", feature: "quality" },
+L120:   { prefix: "/kitchen/waste", module: "kitchen", feature: "waste" },
+L121:   { prefix: "/kitchen/stores", module: "kitchen", feature: "stores" },
+L122:   { prefix: "/kitchen/reports", module: "kitchen", feature: "reports" },
+L123:   { prefix: "/kitchen/settings", module: "kitchen", feature: "settings", action: "edit" },
+L124: 
+L125:   // ---------- Pastry & Bakery (a kitchen department with its own tiers) ----------
+L126:   { prefix: "/pastry", module: "kitchen", feature: "pastry-production" },
+L127:   { prefix: "/pastry/queue", module: "kitchen", feature: "pastry-production" },
+L128:   { prefix: "/pastry/production", module: "kitchen", feature: "pastry-schedule" },
+L129:   { prefix: "/pastry/my-production", module: "kitchen", feature: "pastry-production" },
+L130:   { prefix: "/pastry/custom-cakes", module: "kitchen", feature: "pastry-custom-orders" },
+L131:   { prefix: "/pastry/wastage", module: "kitchen", feature: "pastry-waste" },
+L132:   { prefix: "/pastry/needs", module: "kitchen", feature: "pastry-needs" },
+L133:   { prefix: "/pastry/requisitions", module: "kitchen", feature: "pastry-requisition" },
+L134: 
+L135:   // ---------- Security (Supervisor owns the department, Guard sees their post) ----------
+L136:   { prefix: "/security", module: "security-ops", feature: "overview" },
+L137:   { prefix: "/security/my-post", module: "security-ops", feature: "my-post" },
+L138:   { prefix: "/security/incidents", module: "security-ops", feature: "incidents" },
+L139:   { prefix: "/security/posts", module: "security-ops", feature: "posts" },
+L140:   { prefix: "/security/patrols", module: "security-ops", feature: "patrols" },
+L141:   { prefix: "/security/visitors", module: "security-ops", feature: "visitors" },
+L142:   { prefix: "/security/handovers", module: "security-ops", feature: "handovers" },
+L143:   { prefix: "/security/needs", module: "security-ops", feature: "stock-needs" },
+L144: 
+L145:   // ---------- Housekeeping / Laundry / Maintenance ----------
+L146:   { prefix: "/housekeeping", module: "housekeeping", feature: "overview" },
+L147:   { prefix: "/housekeeping/board", module: "housekeeping", feature: "board" },
+L148:   // The personal housekeeping surface is the "assigned work" feature every
+L149:   // cleaner legitimately holds; managers additionally hold `my-work.view`,
+L150:   // which is registered as an alternative below.
+L151:   { prefix: "/housekeeping/my-work", module: "housekeeping", feature: "assigned" },
+L152:   { prefix: "/housekeeping/supplies", module: "housekeeping", feature: "supplies" },
+L153:   { prefix: "/housekeeping/requisitions", module: "housekeeping", feature: "requisitions" },
+L154:   { prefix: "/housekeeping/tasks", module: "housekeeping", feature: "tasks" },
+L155:   { prefix: "/housekeeping/inspections", module: "housekeeping", feature: "inspections" },
+L156:   {
+L157:     prefix: "/housekeeping/lost-found",
+L158:     module: "housekeeping",
+L159:     feature: "lost-found",
+L160:     // The central register is a supervisory surface: reporting an item
+L161:     // (`lost-found.report`) must never open it.
+L162:     action: "manage",
+L163:   },
+L164:   { prefix: "/housekeeping/history", module: "housekeeping", feature: "reports" },
+L165:   { prefix: "/housekeeping/reports", module: "housekeeping", feature: "reports" },
+L166:   { prefix: "/laundry", module: "laundry", feature: "guest" },
+L167:   { prefix: "/laundry/my-work", module: "laundry", feature: "my-work" },
+L168:   { prefix: "/laundry/batches", module: "laundry", feature: "batches" },
+L169:   { prefix: "/laundry/incidents", module: "laundry", feature: "incidents" },
+L170:   { prefix: "/laundry/supplies", module: "laundry", feature: "supplies" },
+L171:   { prefix: "/maintenance", module: "maintenance", feature: "overview" },
+L172:   { prefix: "/maintenance/my-jobs", module: "maintenance", feature: "my-jobs" },
+L173:   { prefix: "/maintenance/grounds", module: "maintenance", feature: "grounds" },
+L174:   { prefix: "/maintenance/my-tasks", module: "maintenance", feature: "my-tasks" },
+L175:   { prefix: "/maintenance/landscaping", module: "maintenance", feature: "landscaping" },
+L176:   { prefix: "/maintenance/supplies", module: "maintenance", feature: "supplies" },
+L177:   // Viewing the category list is part of seeing the asset register; editing it
+L178:   // is gated inside the page on `maintenance.assets.manage`. There is no
+L179:   // `maintenance.assets.edit` permission, so gating the route on one hid the
+L180:   // page from every account, including the owner.
+L181:   { prefix: "/admin/asset-categories", module: "maintenance", feature: "assets", action: "view" },
+L182:   { prefix: "/admin/maintenance-categories", module: "maintenance", feature: "work_orders", action: "view" },
+L183:   { prefix: "/admin/grounds-areas", module: "maintenance", feature: "grounds", action: "view" },
+L184:   // The hotel's own room-cleaning standards: housekeeping management configures
+L185:   // them, attendants only ever execute the copy frozen on their job.
+L186:   { prefix: "/admin/housekeeping-standards", module: "housekeeping", feature: "checklists", action: "view" },
+L187:   // The hotel's own linen items. Laundry management configures them; laundry,
+L188:   // housekeeping and incident reporting all read the same canonical list.
+L189:   { prefix: "/admin/linen-catalogue", module: "laundry", feature: "overview", action: "view" },
+L190:   { prefix: "/admin/stock-policy", module: "stores", feature: "settings", action: "edit" },
+L191:   // The hotel's own public front door: discovery, customer services and which
+L192:   // of the four entrances appear. Administration owns it.
+L193:   { prefix: "/admin/public-experience", module: "administration", feature: "workspace", action: "view" },
+L194:   // One property's brand, media, words, services and publishing, in one place.
+L195:   { prefix: "/admin/experience-studio", module: "administration", feature: "workspace", action: "view" },
+L196:   // Joining the public NEÃ˜ platform: listing readiness for one property.
+L197:   { prefix: "/admin/neo-listing", module: "administration", feature: "workspace", action: "view" },
+L198:   { prefix: "/admin/partner-access", module: "administration", feature: "workspace", action: "view" },
+L199:   // Billing a corporate partner on credit, and the hotel side of partner messages.
+L200:   { prefix: "/admin/partner-billing", module: "finance", feature: "invoices", action: "view" },
+L201:   // The hotel's inbox of partner conversations.
+L202:   { prefix: "/admin/partner-messages", module: "procurement", feature: "suppliers", action: "view" },
+L203:   // What this property charges guests for laundry.
+L204:   { prefix: "/admin/laundry-pricing", module: "laundry", feature: "overview", action: "view" },
+L205: 
+L206:   { prefix: "/assets", module: "maintenance", feature: "assets" },
+L207: 
+L208:   // ---------- Supply chain ----------
+L209:   { prefix: "/inventory", module: "stores", feature: "overview" },
+L210:   { prefix: "/inventory/items", module: "stores", feature: "items" },
+L211:   { prefix: "/inventory/levels", module: "stores", feature: "overview" },
+L212:   { prefix: "/inventory/by-store", module: "stores", feature: "overview" },
+L213:   { prefix: "/inventory/live", module: "stores", feature: "overview" },
+L214:   { prefix: "/inventory/weekly-report", module: "stores", feature: "overview" },
+L215: 
+L216:   { prefix: "/inventory/receiving", module: "procurement", feature: "receiving" },
+L217:   { prefix: "/inventory/issues", module: "stores", feature: "issues" },
+L218:   { prefix: "/inventory/transfers", module: "stores", feature: "issues" },
+L219:   { prefix: "/inventory/needs", module: "stores", feature: "requisitions" },
+L220:   { prefix: "/inventory/requisitions", module: "stores", feature: "requisitions" },
+L221:   { prefix: "/inventory/counts", module: "stores", feature: "counts" },
+L222:   { prefix: "/inventory/tasks", module: "stores", feature: "tasks" },
+L223:   { prefix: "/inventory/reconciliation", module: "stores", feature: "reconciliation" },
+L224:   { prefix: "/inventory/settings", module: "stores", feature: "settings", action: "edit" },
+L225:   { prefix: "/procurement", module: "procurement", feature: "overview" },
+L226:   { prefix: "/procurement/dashboard", module: "procurement", feature: "overview" },
+L227:   { prefix: "/procurement/requests", module: "procurement", feature: "requests" },
+L228:   { prefix: "/procurement/orders", module: "procurement", feature: "orders" },
+L229:   { prefix: "/procurement/supplier-portal", module: "procurement", feature: "orders" },
+L230:   { prefix: "/procurement/branch", module: "procurement", feature: "overview" },
+
+==========================================
+FILE: supabase/migrations/20261004082000_storekeeper_requisition_permissions.sql
+==========================================
+L1: -- Align Stores requisition actions with the Storekeeper's canonical authority:
+L2: -- stores / issues / create.
+L3: -- Preserve legacy Stores permissions and org-admin authority for compatibility.
+L4: 
+L5: CREATE OR REPLACE FUNCTION public.req_issue(
+L6:   _requisition uuid,
+L7:   _lines jsonb DEFAULT '[]'::jsonb
+L8: )
+L9: RETURNS jsonb
+L10: LANGUAGE plpgsql
+L11: SECURITY DEFINER
+L12: SET search_path = public
+L13: AS $$
+L14: DECLARE
+L15:   v_org uuid := current_org_id();
+L16:   v_req record;
+L17:   v_line jsonb;
+L18:   v_row record;
+L19:   v_qty numeric;
+L20:   v_issued int := 0;
+L21:   v_partial boolean := false;
+L22:   v_dest uuid;
+L23: BEGIN
+L24:   IF NOT (
+L25:     public.has_permission('stores','issues','create')
+L26:     OR public.has_permission('stores','edit')
+L27:     OR public.has_permission('stores','approve')
+L28:     OR public.is_org_admin()
+L29:   ) THEN
+L30:     RAISE EXCEPTION 'Only Stores may issue requisition items';
+L31:   END IF;
+L32: 
+L33:   SELECT *
+L34:     INTO v_req
+L35:   FROM public.internal_requisitions
+L36:   WHERE id = _requisition
+L37:     AND organization_id = v_org
+L38:   FOR UPDATE;
+L39: 
+L40:   IF v_req IS NULL THEN
+L41:     RAISE EXCEPTION 'Unknown requisition';
+L42:   END IF;
+L43: 
+L44:   IF v_req.source_location_id IS NULL THEN
+L45:     RAISE EXCEPTION 'Set the issuing store before issuing';
+L46:   END IF;
+L47: 
+L48:   v_dest := v_req.destination_location_id;
+L49: 
+L50:   FOR v_line IN
+L51:     SELECT *
+L52:     FROM jsonb_array_elements(COALESCE(_lines, '[]'::jsonb))
+L53:   LOOP
+L54:     SELECT *
+L55:       INTO v_row
+L56:     FROM public.internal_requisition_lines
+L57:     WHERE id = (v_line->>'id')::uuid
+L58:       AND requisition_id = _requisition
+L59:     FOR UPDATE;
+L60: 
+L61:     CONTINUE WHEN v_row IS NULL;
+L62: 
+L63:     v_qty := COALESCE((v_line->>'quantity_issued')::numeric, 0);
+L64: 
+L65:     IF v_qty <= 0 THEN
+L66:       CONTINUE;
+L67:     END IF;
+L68: 
+L69:     IF v_qty >
+L70:        COALESCE(v_row.quantity_approved, v_row.quantity_requested)
+L71:        - v_row.quantity_issued
+L72:     THEN
+L73:       RAISE EXCEPTION 'Cannot issue more than the approved quantity';
+L74:     END IF;
+L75: 
+L76:     IF v_row.stock_item_id IS NOT NULL THEN
+L77:       PERFORM public.inventory_apply_movement(
+L78:         v_row.stock_item_id,
+L79:         v_req.source_location_id,
+L80:         -v_qty,
+L81:         v_row.unit,
+L82:         CASE WHEN v_dest IS NULL THEN 'issue' ELSE 'transfer-out' END,
+L83:         NULL,
+L84:         'internal-requisition',
+L85:         _requisition,
+L86:         'Requisition issue',
+L87:         'req-out:' || v_row.id::text || ':' || v_qty::text
+L88:       );
+L89: 
+L90:       IF v_dest IS NOT NULL THEN
+L91:         PERFORM public.inventory_apply_movement(
+L92:           v_row.stock_item_id,
+L93:           v_dest,
+L94:           v_qty,
+L95:           v_row.unit,
+L96:           'transfer-in',
+L97:           NULL,
+L98:           'internal-requisition',
+L99:           _requisition,
+L100:           'Requisition transfer to mini-store',
+L101:           'req-in:' || v_row.id::text || ':' || v_qty::text
+L102:         );
+L103:       END IF;
+L104:     END IF;
+L105: 
+L106:     UPDATE public.internal_requisition_lines
+L107:        SET quantity_issued = quantity_issued + v_qty
+L108:      WHERE id = v_row.id;
+L109: 
+L110:     v_issued := v_issued + 1;
+L111:   END LOOP;
+L112: 
+L113:   SELECT EXISTS (
+L114:     SELECT 1
+L115:     FROM public.internal_requisition_lines
+L116:     WHERE requisition_id = _requisition
+L117:       AND quantity_issued <
+L118:           COALESCE(quantity_approved, quantity_requested)
+L119:   )
+L120:   INTO v_partial;
+L121: 
+L122:   UPDATE public.internal_requisitions
+L123:      SET status = CASE
+L124:                     WHEN v_partial THEN 'partially-issued'
+L125:                     ELSE 'issued'
+L126:                   END,
+L127:          issued_by = auth.uid(),
+L128:          issued_at = now()
+L129:    WHERE id = _requisition;
+L130: 
+L131:   RETURN jsonb_build_object(
+L132:     'ok', true,
+L133:     'lines_issued', v_issued,
+L134:     'partial', v_partial
+L135:   );
+L136: END;
+L137: $$;
+L138: 
+L139: REVOKE ALL ON FUNCTION public.req_issue(uuid,jsonb) FROM PUBLIC, anon;
+L140: GRANT EXECUTE ON FUNCTION public.req_issue(uuid,jsonb) TO authenticated, service_role;
+L141: 
+L142: 
+L143: CREATE OR REPLACE FUNCTION public.neo_stores_requisition_reject(
+L144:   _requisition uuid,
+L145:   _reason text
+L146: )
+L147: RETURNS jsonb
+L148: LANGUAGE plpgsql
+L149: SECURITY DEFINER
+L150: SET search_path = public
+L151: AS $$
+L152: DECLARE
+L153:   v_org uuid := current_org_id();
+L154:   v_req record;
+L155: BEGIN
+L156:   IF _reason IS NULL OR btrim(_reason) = '' THEN
+L157:     RAISE EXCEPTION 'A reason is required when returning a requisition';
+L158:   END IF;
+L159: 
+L160:   IF NOT (
+L161:     public.has_permission('stores','issues','create')
+L162:     OR public.has_permission('stores','edit')
+L163:     OR public.has_permission('stores','approve')
+L164:     OR public.is_org_admin()
+L165:   ) THEN
+L166:     RAISE EXCEPTION 'Only Stores may return a department requisition';
+L167:   END IF;
+L168: 
+L169:   SELECT *
+L170:     INTO v_req
+L171:   FROM public.internal_requisitions
+L172:   WHERE id = _requisition
+L173:     AND organization_id = v_org
+L174:   FOR UPDATE;
+L175: 
+L176:   IF v_req IS NULL THEN
+L177:     RAISE EXCEPTION 'Unknown requisition';
+L178:   END IF;
+L179: 
+L180:   IF v_req.status IN ('issued','received','closed','cancelled','rejected') THEN
+
+==========================================
+FILE: supabase/migrations/20260925190000_grn_reversal_property_scope.sql
+==========================================
+L1: -- R9.2 certification hardening: a receiver/admin may reverse only a GRN in
+L2: -- their current branch scope. Organisation membership alone is insufficient.
+L3: CREATE OR REPLACE FUNCTION public.neo_grn_reverse(_receipt uuid, _reason text)
+L4: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+L5: DECLARE
+L6:   v_org uuid := current_org_id(); r record; l record; pol public.procurement_matching_policies;
+L7:   v_accepted numeric; v_value numeric := 0; v_res jsonb;
+L8: BEGIN
+L9:   IF NOT (has_permission('procurement','receiving.manage') OR is_org_admin()) THEN RAISE EXCEPTION 'Not permitted to reverse a goods receipt'; END IF;
+L10:   IF COALESCE(btrim(_reason),'') = '' THEN RAISE EXCEPTION 'A reason is required to reverse a receipt'; END IF;
+L11:   SELECT * INTO r FROM goods_receipts WHERE id=_receipt AND organization_id=v_org;
+L12:   IF r IS NULL THEN RAISE EXCEPTION 'Receipt not found'; END IF;
+L13:   IF NOT public.in_my_branch_scope(r.branch_id) THEN RAISE EXCEPTION 'Receipt is outside your property scope'; END IF;
+L14:   IF r.status <> 'posted' THEN RAISE EXCEPTION 'Only a posted receipt can be reversed'; END IF;
+L15:   IF EXISTS (SELECT 1 FROM supplier_invoices si WHERE si.receipt_id=_receipt AND si.journal_id IS NOT NULL) THEN RAISE EXCEPTION 'This receipt is already invoiced. Raise a supplier credit note instead.'; END IF;
+L16:   pol := public.neo_matching_policy(v_org,r.branch_id);
+L17:   FOR l IN SELECT * FROM goods_receipt_lines WHERE receipt_id=_receipt LOOP
+L18:     v_accepted:=COALESCE(l.quantity_accepted,GREATEST(COALESCE(l.quantity_received,0)-COALESCE(l.quantity_rejected,0)-COALESCE(l.quantity_damaged,0)-COALESCE(l.quantity_returned,0),0));
+L19:     IF v_accepted>0 THEN
+L20:       PERFORM inventory_apply_movement(l.stock_item_id,COALESCE(l.location_id,r.location_id),-v_accepted,l.unit,'reversal',NULLIF(l.unit_price,0),'goods_receipt_reversal',_receipt,_reason,'grn-reverse:'||_receipt::text||':'||l.id::text,l.batch_number,l.expiry_date);
+L21:       v_value:=v_value+(v_accepted*COALESCE(l.unit_price,0));
+L22:     END IF;
+L23:     IF l.order_line_id IS NOT NULL THEN UPDATE purchase_order_lines SET received_quantity=GREATEST(COALESCE(received_quantity,0)-COALESCE(l.quantity_received,0),0),accepted_quantity=GREATEST(COALESCE(accepted_quantity,0)-v_accepted,0) WHERE id=l.order_line_id; END IF;
+L24:   END LOOP;
+L25:   IF round(v_value,2)>0 THEN
+L26:     v_res:=public.neo_gl_post(v_org,r.branch_id,'procurement','goods_receipt',_receipt,'accrual:reversal',CURRENT_DATE,'KES','Reversal of goods receipt '||COALESCE(r.grn_number,_receipt::text)||' â€” '||_reason,jsonb_build_array(jsonb_build_object('code',pol.grni_account_code,'debit',round(v_value,2),'description','Reverse goods received not invoiced'),jsonb_build_object('code',pol.inventory_account_code,'credit',round(v_value,2),'description','Reverse stock received')),NULL,r.accrual_journal_id);
+L27:   END IF;
+L28:   UPDATE goods_receipts SET status='reversed',reversed_at=now(),reversed_by=auth.uid(),reversal_reason=_reason,reversal_journal_id=(v_res->>'journal_id')::uuid WHERE id=_receipt;
+L29:   IF r.order_id IS NOT NULL THEN UPDATE purchase_orders po SET status=CASE WHEN EXISTS(SELECT 1 FROM purchase_order_lines pl WHERE pl.order_id=po.id AND COALESCE(pl.accepted_quantity,0)>0) THEN 'partially-received' ELSE 'sent' END WHERE po.id=r.order_id AND po.status NOT IN('closed','cancelled','voided'); END IF;
+L30:   RETURN jsonb_build_object('ok',true,'reversed_value',round(v_value,2),'journal_id',v_res->>'journal_id');
+L31: END $$;

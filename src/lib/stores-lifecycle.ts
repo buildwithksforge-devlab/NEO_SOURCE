@@ -1,7 +1,7 @@
 /**
- * Stores ↔ Procurement lifecycle.
+ * Stores â†” Procurement lifecycle.
  *
- * Requisition → approval → purchase order → receipt → stock, plus store issues
+ * Requisition â†’ approval â†’ purchase order â†’ receipt â†’ stock, plus store issues
  * and returns. Every write goes through one transactional database routine that
  * checks capability and property scope itself, and every submission carries a
  * fresh attempt key so a retry replays the original outcome instead of creating
@@ -20,7 +20,7 @@ const db = supabase as any;
 
 export type LifecycleResult = Record<string, unknown>;
 
-/** One key per user submission, not per attempt — retries must reuse it. */
+/** One key per user submission, not per attempt â€” retries must reuse it. */
 export function newAttemptKey(): string {
   return crypto.randomUUID();
 }
@@ -51,7 +51,7 @@ function useLifecycleInvalidate() {
 }
 
 function replayNote(data: LifecycleResult, message: string) {
-  if (data["replayed"] === true) toast.info("Already recorded — showing the original result.");
+  if (data["replayed"] === true) toast.info("Already recorded â€” showing the original result.");
   else toast.success(message);
 }
 
@@ -259,7 +259,7 @@ export function useLowStockScan() {
     onSuccess: (data) => {
       const found = Number(data["items_below_minimum"] ?? 0);
       if (found === 0) toast.success("Nothing is below its minimum level");
-      else toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum — buyers notified`);
+      else toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum â€” buyers notified`);
     },
     onError: (e: Error) => toast.error(e.message),
     meta: { organizationId },
@@ -271,22 +271,34 @@ export function useLowStockScan() {
 /** Purchase orders that are open for receiving, with their outstanding lines. */
 export function useReceivableOrders() {
   const { organizationId } = useAuth();
-  const { applyTo, filterKey } = useActivePropertyFilter();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
   return useQuery({
-    queryKey: ["procurement", "receivable", organizationId, filterKey],
+    queryKey: ["procurement", "blind-receiving", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(
-        db
-          .from("purchase_orders")
-          .select("*, suppliers(name), purchase_order_lines(*, stock_items(name, base_unit))")
-          .in("status", ["approved", "pending-delivery", "sent", "partially-received", "partially_received"]),
-        "purchase_orders",
-      )
-        .order("expected_date", { ascending: true })
-        .limit(100);
+      const { data, error } = await guardedRpc(
+        db,
+        "neo_blind_receiving_orders",
+        {},
+      );
+
       if (error) throw new Error(error.message);
-      return (data ?? []) as Record<string, unknown>[];
+
+      const rows = Array.isArray(data) ? data : [];
+
+      return rows
+        .filter((order: any) =>
+          !branchId || order.branch_id === branchId
+        )
+        .map((order: any) => ({
+          id: order.id,
+          order_number: order.order_number,
+          supplier_name: order.supplier_name,
+          branch_id: order.branch_id,
+          deliver_to_location_id: order.deliver_to_location_id,
+          items: Array.isArray(order.items) ? order.items : [],
+        }));
     },
   });
 }

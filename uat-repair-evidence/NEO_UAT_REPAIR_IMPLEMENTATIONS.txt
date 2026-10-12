@@ -1,0 +1,1882 @@
+
+================================================
+FILE: supabase/migrations/20260825123408_e8e11d12-c155-4222-bb8d-67e8ffcdf715.sql
+LINES: 1 - 145
+================================================
+L1: -- 1a. Raising a requisition
+L2: CREATE OR REPLACE FUNCTION public.neo_requisition_supervisor_authority()
+L3: RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+L4:   SELECT public.is_org_admin()
+L5:       OR public.has_permission('stores','approve')
+L6:       OR public.has_permission('housekeeping','approve')
+L7:       OR public.has_permission('maintenance','approve')
+L8:       OR public.has_permission('restaurant','approve')
+L9:       OR public.has_permission('bar','approve')
+L10:       OR public.has_permission('pos','approve')
+L11:       OR public.has_permission('kitchen','approve')
+L12:       OR public.has_permission('delivery','approve')
+L13:       OR public.has_permission('pms','approve')
+L14:       OR public.has_permission('front-office','approve')
+L15:       OR public.has_permission('events','approve')
+L16:       OR public.has_permission('security','approve');
+L17: $$;
+L18: 
+L19: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+L20:   _branch uuid, _lines jsonb, _department uuid DEFAULT NULL::uuid,
+L21:   _required_date date DEFAULT NULL::date, _priority text DEFAULT 'normal'::text,
+L22:   _reason text DEFAULT NULL::text, _destination uuid DEFAULT NULL::uuid)
+L23: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+L24: DECLARE
+L25:   v_org uuid := current_org_id();
+L26:   v_req uuid;
+L27:   v_line jsonb;
+L28:   v_count int := 0;
+L29:   v_number text;
+L30:   v_status text;
+L31:   v_self boolean := public.neo_requisition_supervisor_authority();
+L32: BEGIN
+L33:   IF v_org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;
+L34:   IF NOT (has_permission('restaurant','requisitions.create')
+L35:           OR has_permission('restaurant','create')
+L36:           OR has_permission('stores','create')
+L37:           OR is_org_admin()) THEN
+L38:     RAISE EXCEPTION 'Not permitted to raise a requisition';
+L39:   END IF;
+L40:   IF _branch IS NULL OR NOT (_branch = ANY (current_branch_ids())) THEN
+L41:     RAISE EXCEPTION 'Requisitions may only be raised for your own property';
+L42:   END IF;
+L43:   IF _lines IS NULL OR jsonb_array_length(_lines) = 0 THEN
+L44:     RAISE EXCEPTION 'Add at least one item';
+L45:   END IF;
+L46: 
+L47:   v_number := 'REQ-' || to_char(now(), 'YYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text,'-',''), 1, 5));
+L48:   v_status := CASE WHEN v_self THEN 'awaiting-stores' ELSE 'pending-supervisor' END;
+L49: 
+L50:   INSERT INTO public.internal_requisitions
+L51:     (organization_id, branch_id, request_number, department_id, destination_location_id,
+L52:      fulfilment_model, requested_by, request_date, required_date, priority, reason, status,
+L53:      supervisor_approved_by, supervisor_approved_at)
+L54:   VALUES (v_org, _branch, v_number, _department, _destination,
+L55:           'stores-issue', auth.uid(), current_date, _required_date,
+L56:           coalesce(_priority, 'normal'), _reason, v_status,
+L57:           CASE WHEN v_self THEN auth.uid() END,
+L58:           CASE WHEN v_self THEN now() END)
+L59:   RETURNING id INTO v_req;
+L60: 
+L61:   FOR v_line IN SELECT * FROM jsonb_array_elements(_lines) LOOP
+L62:     IF coalesce((v_line->>'quantity_requested')::numeric, 0) <= 0 THEN CONTINUE; END IF;
+L63:     INSERT INTO public.internal_requisition_lines
+L64:       (organization_id, requisition_id, stock_item_id, description, unit, quantity_requested, notes)
+L65:     VALUES (v_org, v_req,
+L66:             nullif(v_line->>'stock_item_id','')::uuid,
+L67:             nullif(v_line->>'description',''),
+L68:             nullif(v_line->>'unit',''),
+L69:             (v_line->>'quantity_requested')::numeric,
+L70:             nullif(v_line->>'notes',''));
+L71:     v_count := v_count + 1;
+L72:   END LOOP;
+L73: 
+L74:   IF v_count = 0 THEN RAISE EXCEPTION 'Add at least one item with a quantity'; END IF;
+L75: 
+L76:   PERFORM public.neo_notify(v_org, NULL, _branch, 'operational-alert',
+L77:     CASE WHEN v_self THEN 'Requisition awaiting Stores â€” ' || v_number
+L78:          ELSE 'Requisition awaiting departmental approval â€” ' || v_number END,
+L79:     coalesce(_reason, 'A department has requested stock from Stores.'),
+L80:     '/inventory/requisitions', coalesce(_priority,'normal'), true,
+L81:     'stores', v_req, 'stores.requisition_raised', 'req:' || v_req::text || ':raised');
+L82: 
+L83:   RETURN jsonb_build_object('ok', true, 'requisition_id', v_req,
+L84:                             'request_number', v_number, 'lines', v_count,
+L85:                             'status', v_status);
+L86: END $$;
+L87: 
+L88: -- 1b. Supervisor approval open to departmental approvers
+L89: CREATE OR REPLACE FUNCTION public.req_approve(
+L90:   _requisition uuid, _lines jsonb DEFAULT '[]'::jsonb, _stage text DEFAULT 'supervisor'::text)
+L91: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+L92: DECLARE v_org uuid := current_org_id(); v_req record; v_line jsonb; v_partial boolean := false;
+L93: BEGIN
+L94:   IF _stage = 'supervisor' THEN
+L95:     IF NOT public.neo_requisition_supervisor_authority() THEN
+L96:       RAISE EXCEPTION 'Not permitted to approve requisitions';
+L97:     END IF;
+L98:   ELSIF NOT (has_permission('stores','approve') OR has_permission('housekeeping','approve')
+L99:              OR has_permission('maintenance','approve') OR is_org_admin()) THEN
+L100:     RAISE EXCEPTION 'Not permitted to approve requisitions';
+L101:   END IF;
+L102: 
+L103:   SELECT * INTO v_req FROM internal_requisitions WHERE id=_requisition AND organization_id=v_org FOR UPDATE;
+L104:   IF v_req IS NULL THEN RAISE EXCEPTION 'Unknown requisition'; END IF;
+L105: 
+L106:   FOR v_line IN SELECT * FROM jsonb_array_elements(COALESCE(_lines,'[]'::jsonb)) LOOP
+L107:     UPDATE internal_requisition_lines
+L108:        SET quantity_approved = (v_line->>'quantity_approved')::numeric
+L109:      WHERE id = (v_line->>'id')::uuid AND requisition_id = _requisition;
+L110:   END LOOP;
+L111: 
+L112:   UPDATE internal_requisition_lines
+L113:      SET quantity_approved = COALESCE(quantity_approved, quantity_requested)
+L114:    WHERE requisition_id = _requisition;
+L115: 
+L116:   SELECT EXISTS (SELECT 1 FROM internal_requisition_lines
+L117:                   WHERE requisition_id=_requisition AND quantity_approved < quantity_requested)
+L118:     INTO v_partial;
+L119: 
+L120:   IF _stage = 'supervisor' THEN
+L121:     UPDATE internal_requisitions
+L122:        SET status='awaiting-stores', supervisor_approved_by=auth.uid(), supervisor_approved_at=now()
+L123:      WHERE id=_requisition;
+L124:     PERFORM public.neo_notify(v_org, NULL, v_req.branch_id, 'operational-alert',
+L125:       'Requisition released to Stores â€” ' || coalesce(v_req.request_number,''),
+L126:       'A departmental supervisor approved the request. Stores can now review and issue.',
+L127:       '/inventory/requisitions', coalesce(v_req.priority,'normal'), true,
+L128:       'stores', _requisition, 'stores.requisition_released',
+L129:       'req:' || _requisition::text || ':released');
+L130:   ELSE
+L131:     UPDATE internal_requisitions
+L132:        SET status = CASE WHEN v_partial THEN 'partially-approved' ELSE 'ready-for-issue' END,
+L133:            store_reviewed_by=auth.uid(), store_reviewed_at=now()
+L134:      WHERE id=_requisition;
+L135:   END IF;
+L136:   RETURN jsonb_build_object('ok', true, 'partial', v_partial, 'stage', _stage);
+L137: END $$;
+L138: 
+L139: UPDATE public.internal_requisitions
+L140:    SET status = 'awaiting-stores', supervisor_approved_at = coalesce(supervisor_approved_at, now())
+L141:  WHERE status = 'pending-supervisor';
+L142: 
+L143: -- 2. Event confirmation builds billing
+L144: CREATE OR REPLACE FUNCTION public.neo_event_confirm_build_billing()
+L145: RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+
+================================================
+FILE: src/lib/stores-department.ts
+LINES: 1 - 220
+================================================
+L1: /**
+L2:  * Inventory & Stores department layer.
+L3:  *
+L4:  * The department has two roles. The Storekeeper controls what is held in
+L5:  * Stores: they receive department requisitions, check availability, issue in
+L6:  * full or in part, return a request with a reason, run stock counts and route
+L7:  * shortages to Procurement as a purchase request. The Receiving Clerk works
+L8:  * only on stock coming INTO the organisation â€” supplier deliveries against an
+L9:  * approved order â€” and never issues stock or approves an exception.
+L10:  *
+L11:  * Every write goes through an existing authoritative routine (req_issue,
+L12:  * req_approve, neo_stores_requisition_reject, neo_stores_count_submit_variance)
+L13:  * so stock balances and the audit trail stay owned by the database.
+L14:  */
+L15: import { guardedRpc } from "@/lib/rpc-guard";
+L16: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+L17: import { toast } from "sonner";
+L18: import { supabase } from "@/integrations/supabase/client";
+L19: import { useAuth } from "@/lib/auth";
+L20: import { useActivePropertyFilter } from "@/lib/branch-filter";
+L21: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+L22: import { applyStockNeedStatus } from "@/lib/stock-needs";
+L23: 
+L24: // The Stores trail spans many generated table types; call sites narrow.
+L25: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+L26: const db = supabase as any;
+L27: 
+L28: export type StoresRow = Record<string, unknown>;
+L29: 
+L30: /** Requisition states that are visible in the Stores queue. */
+L31: export const STORES_OPEN_STATUSES = [
+L32:   "pending-supervisor",
+L33:   "awaiting-stores",
+L34:   "approved",
+L35:   "partially-approved",
+L36:   "ready-for-issue",
+L37:   "partially-issued",
+L38: ] as const;
+L39: 
+L40: export function str(value: unknown, fallback = "â€”"): string {
+L41:   const s = value === null || value === undefined ? "" : String(value);
+L42:   return s.trim() === "" ? fallback : s;
+L43: }
+L44: 
+L45: export function num(value: unknown): number {
+L46:   const n = Number(value ?? 0);
+L47:   return Number.isFinite(n) ? n : 0;
+L48: }
+L49: 
+L50: export function useStoresContext() {
+L51:   const { organizationId, profile } = useAuth();
+L52:   const { branchId } = useActivePropertyFilter();
+L53:   const fallback = (profile as { branch_id?: string | null } | null)?.branch_id ?? null;
+L54:   return { organizationId, branchId: branchId ?? fallback };
+L55: }
+L56: 
+L57: function useStoresInvalidate() {
+L58:   const qc = useQueryClient();
+L59:   return () => {
+L60:     void qc.invalidateQueries({ queryKey: ["stores-department"] });
+L61:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+L62:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+L63:     void qc.invalidateQueries({ queryKey: ["ops"] });
+L64:   };
+L65: }
+L66: 
+L67: /* ------------------------------------------------------------------ *
+L68:  * Department requisitions â€” the Storekeeper's inbox
+L69:  * ------------------------------------------------------------------ */
+L70: 
+L71: export function useStoresRequisitions(scope: "open" | "all" = "open") {
+L72:   const { organizationId, branchId } = useStoresContext();
+L73:   return useQuery({
+L74:     queryKey: ["stores-department", "requisitions", organizationId, branchId, scope],
+L75:     enabled: Boolean(organizationId),
+L76:     queryFn: async () => {
+L77:       let q = db
+L78:         .from("internal_requisitions")
+L79:         .select(
+L80:           "id, request_number, status, priority, request_date, required_date, reason, department_id, source_location_id, destination_location_id, requested_by, issued_at, issued_by, shortage_notes, purchase_request_id, departments(name), source_store:stock_locations!internal_requisitions_source_location_id_fkey(name), internal_requisition_lines(id, description, unit, quantity_requested, quantity_approved, quantity_issued, stock_item_id, stock_items(name, base_unit))",
+L81:         )
+L82:         .order("request_date", { ascending: false })
+L83:         .limit(200);
+L84:       if (branchId) q = q.eq("branch_id", branchId);
+L85:       if (scope === "open") q = q.in("status", STORES_OPEN_STATUSES as unknown as string[]);
+L86:       const { data, error } = await q;
+L87:       if (error) throw new Error(error.message);
+L88:       return (data ?? []) as StoresRow[];
+L89:     },
+L90:   });
+L91: }
+L92: 
+L93: /** On-hand quantity per stock item across the active property's locations. */
+L94: export function useStoresAvailability() {
+L95:   const { organizationId } = useStoresContext();
+L96:   return useQuery({
+L97:     queryKey: ["stores-department", "availability", organizationId],
+L98:     enabled: Boolean(organizationId),
+L99:     queryFn: async () => {
+L100:       const { data, error } = await db
+L101:         .from("stock_levels")
+L102:         .select("stock_item_id, quantity_on_hand, location_id")
+L103:         .limit(5000);
+L104:       if (error) throw new Error(error.message);
+L105:       const byItem = new Map<string, number>();
+L106:       for (const row of (data ?? []) as StoresRow[]) {
+L107:         const key = String(row["stock_item_id"] ?? "");
+L108:         if (!key) continue;
+L109:         byItem.set(key, (byItem.get(key) ?? 0) + num(row["quantity_on_hand"]));
+L110:       }
+L111:       return byItem;
+L112:     },
+L113:   });
+L114: }
+L115: 
+L116: /** Release a requisition still waiting on departmental approval into the Stores queue. */
+L117: export function useReleaseRequisitionToStores() {
+L118:   const invalidate = useStoresInvalidate();
+L119:   return useMutation({
+L120:     mutationFn: async (input: { requisitionId: string }) => {
+L121:       const { error } = await guardedRpc(db, "req_approve", {
+L122:         _requisition: input.requisitionId,
+L123:         _lines: [],
+L124:         _stage: "supervisor",
+L125:       });
+L126:       if (error) throw new Error(error.message);
+L127:     },
+L128:     onSuccess: () => {
+L129:       invalidate();
+L130:       toast.success("Approved â€” the request is now with Stores");
+L131:     },
+L132:     onError: (e: Error) => toast.error(e.message),
+L133:   });
+L134: }
+L135: 
+L136: /**
+L137:  * Name the store the goods will actually leave from. Stock cannot be issued
+L138:  * until this is set, because a movement without an origin is not a movement.
+L139:  */
+L140: export function useSetIssuingStore() {
+L141:   const invalidate = useStoresInvalidate();
+L142:   return useMutation({
+L143:     mutationFn: async (input: { requisitionId: string; locationId: string }) => {
+L144:       const { error } = await db
+L145:         .from("internal_requisitions")
+L146:         .update({ source_location_id: input.locationId })
+L147:         .eq("id", input.requisitionId);
+L148:       if (error) throw new Error(error.message);
+L149:     },
+L150:     onSuccess: () => {
+L151:       invalidate();
+L152:       toast.success("Issuing store set â€” this request can now be issued");
+L153:     },
+L154:     onError: (e: Error) => toast.error(e.message),
+L155:   });
+L156: }
+L157: 
+L158: /** Confirm the quantities Stores will release, before issuing. */
+L159: export function useApproveRequisitionAtStores() {
+L160:   const invalidate = useStoresInvalidate();
+L161:   return useMutation({
+L162:     mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_approved: number }[] }) => {
+L163:       const { error } = await guardedRpc(db, "req_approve", {
+L164:         _requisition: input.requisitionId,
+L165:         _lines: input.lines,
+L166:         _stage: "stores",
+L167:       });
+L168:       if (error) throw new Error(error.message);
+L169:     },
+L170:     onSuccess: () => {
+L171:       invalidate();
+L172:       toast.success("Quantities confirmed â€” ready to issue");
+L173:     },
+L174:     onError: (e: Error) => toast.error(e.message),
+L175:   });
+L176: }
+L177: 
+L178: /** Issue stock against a requisition, in full or in part. */
+L179: export function useIssueRequisition() {
+L180:   const invalidate = useStoresInvalidate();
+L181:   return useMutation({
+L182:     mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_issued: number }[] }) => {
+L183:       const { data, error } = await guardedRpc(db, "req_issue", {
+L184:         _requisition: input.requisitionId,
+L185:         _lines: input.lines,
+L186:       });
+L187:       if (error) throw new Error(error.message);
+L188:       return (data ?? {}) as StoresRow;
+L189:     },
+L190:     onSuccess: (data) => {
+L191:       invalidate();
+L192:       toast.success(
+L193:         data["partial"] === true
+L194:           ? "Partly issued â€” the outstanding quantity stays open"
+L195:           : "Issued in full and posted to the stock ledger",
+L196:       );
+L197:     },
+L198:     onError: (e: Error) => toast.error(e.message),
+L199:   });
+L200: }
+L201: 
+L202: /** Return a requisition to the department with a written reason. */
+L203: export function useRejectRequisition() {
+L204:   const invalidate = useStoresInvalidate();
+L205:   return useMutation({
+L206:     mutationFn: async (input: { requisitionId: string; reason: string }) => {
+L207:       const { error } = await guardedRpc(db, "neo_stores_requisition_reject", {
+L208:         _requisition: input.requisitionId,
+L209:         _reason: input.reason,
+L210:       });
+L211:       if (error) throw new Error(error.message);
+L212:     },
+L213:     onSuccess: () => {
+L214:       invalidate();
+L215:       toast.success("Requisition returned to the department");
+L216:     },
+L217:     onError: (e: Error) => toast.error(e.message),
+L218:   });
+L219: }
+L220: 
+
+================================================
+FILE: src/routes/_shell.inventory.requisitions.tsx
+LINES: 100 - 225
+================================================
+L100:   const availabilityQuery = useStoresAvailability();
+L101:   const needs = useAllDepartmentStockNeeds("pending");
+L102: 
+L103:   const issue = useIssueRequisition();
+L104:   const reject = useRejectRequisition();
+L105:   const replenish = useRaiseReplenishment();
+L106:   const release = useReleaseRequisitionToStores();
+L107:   const setStore = useSetIssuingStore();
+L108:   const locationsQuery = useStockLocations();
+L109: 
+L110:   const [selectedId, setSelectedId] = useState<string | null>(null);
+L111:   const [drafts, setDrafts] = useState<Record<string, string>>({});
+L112:   const [reason, setReason] = useState("");
+L113: 
+L114:   const availability = useMemo(
+L115:     () => availabilityQuery.data ?? new Map<string, number>(),
+L116:     [availabilityQuery.data],
+L117:   );
+L118:   const rows = (requisitions.data ?? []) as StoresRow[];
+L119:   const needRows = (needs.data ?? []) as StoresRow[];
+L120: 
+L121:   const select = (id: string | null) => {
+L122:     setSelectedId(id);
+L123:     setDrafts({});
+L124:     setReason("");
+L125:   };
+L126: 
+L127:   const awaitingApprovalCount = rows.filter(
+L128:     (r) => str(r["status"], "") === "pending-supervisor",
+L129:   ).length;
+L130:   const readyCount = rows.filter((r) =>
+L131:     ["awaiting-stores", "ready-for-issue", "partially-approved"].includes(
+L132:       str(r["status"], ""),
+L133:     ),
+L134:   ).length;
+L135:   const issuedCount = rows.filter((r) =>
+L136:     ["issued", "received"].includes(str(r["status"], "")),
+L137:   ).length;
+L138: 
+L139:   const lead: SummaryFigure = {
+L140:     id: "total",
+L141:     label: "Department requests",
+L142:     value: requisitions.isLoading ? "â€¦" : rows.length,
+L143:     hint: scope === "open" ? "Open requests" : "All requests",
+L144:   };
+L145:   const figures: SummaryFigure[] = [
+L146:     {
+L147:       id: "awaiting",
+L148:       label: "Awaiting approval",
+L149:       value: requisitions.isLoading ? "â€¦" : awaitingApprovalCount,
+L150:       tone: awaitingApprovalCount ? "warning" : "success",
+L151:     },
+L152:     {
+L153:       id: "ready",
+L154:       label: "Ready to issue",
+L155:       value: requisitions.isLoading ? "â€¦" : readyCount,
+L156:       tone: readyCount ? "info" : "default",
+L157:     },
+L158:     {
+L159:       id: "issued",
+L160:       label: "Issued / received",
+L161:       value: requisitions.isLoading ? "â€¦" : issuedCount,
+L162:       tone: "success",
+L163:     },
+L164:   ];
+L165: 
+L166:   const workspaceRows: RequisitionRow[] = rows.map((r) => {
+L167:     const status = str(r["status"], "awaiting-stores");
+L168:     const department = str((r["departments"] as StoresRow | null)?.["name"], "Department");
+L169:     return {
+L170:       id: String(r["id"]),
+L171:       title: `${str(r["request_number"], "Requisition")} â€” ${department}`,
+L172:       subtitle: `${titleCase(str(r["priority"], "normal"))} priority Â· ${str(r["reason"], "No reason given")}`,
+L173:       chips: <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>,
+L174:     };
+L175:   });
+L176: 
+L177:   const renderInspector = (id: string) => {
+L178:     const requisition = rows.find((r) => String(r["id"]) === id);
+L179:     if (!requisition) return null;
+L180: 
+L181:     const lines = (requisition["internal_requisition_lines"] ?? []) as StoresRow[];
+L182:     const status = str(requisition["status"], "awaiting-stores");
+L183:     const awaitingApproval = status === "pending-supervisor";
+L184:     const canIssue = mayIssue && !awaitingApproval;
+L185:     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
+L186:     const sourceStoreId = str(requisition["source_location_id"], "");
+L187:     const sourceStoreName = str(
+L188:       (requisition["source_store"] as StoresRow | null)?.["name"],
+L189:       "Not chosen yet",
+L190:     );
+L191:     const storeOptions = (locationsQuery.data ?? []).filter(
+L192:       (l) => (l as StoresRow)["active"] !== false,
+L193:     ) as StoresRow[];
+L194:     const totalRequested = lines.reduce((sum, line) => sum + num(line["quantity_requested"]), 0);
+L195:     const totalIssued = lines.reduce((sum, line) => sum + num(line["quantity_issued"]), 0);
+L196:     const fullyIssued = totalRequested > 0 && totalIssued >= totalRequested;
+L197: 
+L198:     const shortage = lines.some((line) => {
+L199:       const itemId = str(line["stock_item_id"], "");
+L200:       const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+L201:       return outstandingOf(line) > onHand;
+L202:     });
+L203: 
+L204:     const issueLines = lines
+L205:       .map((line) => {
+L206:         const lineId = String(line["id"]);
+L207:         const typed = drafts[lineId];
+L208:         const quantity = typed === undefined || typed === "" ? outstandingOf(line) : Number(typed);
+L209:         return { id: lineId, quantity_issued: Number.isFinite(quantity) ? quantity : 0 };
+L210:       })
+L211:       .filter((line) => line.quantity_issued > 0);
+L212: 
+L213:     const lineRows: RequisitionLineRow[] = lines.map((line) => {
+L214:       const lineId = String(line["id"]);
+L215:       const itemId = str(line["stock_item_id"], "");
+L216:       const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+L217:       const outstanding = outstandingOf(line);
+L218:       const short = outstanding > onHand;
+L219:       return {
+L220:         id: lineId,
+L221:         name: str(
+L222:           (line["stock_items"] as StoresRow | null)?.["name"],
+L223:           str(line["description"], "Item"),
+L224:         ),
+L225:         unit: str(line["unit"], "unit"),
+
+================================================
+FILE: src/lib/kitchen-data.ts
+LINES: 700 - 860
+================================================
+L700:   return useMutation({
+L701:     mutationFn: async (input: { batchId: string; locationId?: string | null }) => {
+L702:       const { data, error } = await guardedRpc(supabase, "neo_production_batch_post", {
+L703:         _batch: input.batchId,
+L704:         _location: input.locationId ?? null,
+L705:       });
+L706:       if (error) throw new Error(error.message);
+L707:       const result = (data ?? {}) as { ok?: boolean; reason?: string };
+L708:       if (result.ok !== true) {
+L709:         throw new Error(BATCH_POST_REASONS[result.reason ?? ""] ?? "That batch could not be posted.");
+L710:       }
+L711:       return result as { ok: true; reason?: string; ingredient_lines?: number; produced?: number };
+L712:     },
+L713:     onSuccess: (result) => {
+L714:       toast.success(
+L715:         result.reason === "already_posted"
+L716:           ? "This production batch was already recorded."
+L717:           : `Posted to stock â€” ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
+L718:       );
+L719:       void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
+L720:       void qc.invalidateQueries({ queryKey: ["inventory"] });
+L721:     },
+L722:     onError: (e: Error) => toast.error(e.message),
+L723:   });
+L724: }
+L725: 
+L726: /* ------------------------------------------------------------------ *
+L727:  * Stores requests, shortages, waste, quality, equipment
+L728:  * ------------------------------------------------------------------ */
+L729: 
+L730: export function useIngredientRequests() {
+L731:   const { organizationId } = useCtx();
+L732:   return useQuery({
+L733:     queryKey: ["kitchen", "requests", organizationId],
+L734:     enabled: Boolean(organizationId),
+L735:     queryFn: async () => {
+L736:       const { data, error } = await supabase
+L737:         .from("kitchen_ingredient_requests")
+L738:         .select(sel("*, operational_stations(name)"))
+L739:         .order("created_at", { ascending: false });
+L740:       if (error) throw error;
+L741:       return (data ?? []) as unknown as Row[];
+L742:     },
+L743:   });
+L744: }
+L745: 
+L746: export function useSaveIngredientRequest() {
+L747:   const qc = useQueryClient();
+L748:   const ctx = useCtx();
+L749:   return useMutation({
+L750:     mutationFn: async (row: Record<string, unknown>) => {
+L751:       if (!ctx.branch_id) {
+L752:         throw new Error("Select a property before sending a request to Stores");
+L753:       }
+L754: 
+L755:       // The atomic creation RPC intentionally does not edit existing records.
+L756:       // Never create another Stores requisition as a side-effect of editing.
+L757:       if (row["id"]) {
+L758:         throw new Error(
+L759:           "Editing an existing Kitchen request requires the linked-requisition workflow. No changes were saved.",
+L760:         );
+L761:       }
+L762: 
+L763:       const name = String(row["ingredient_name"] ?? "").trim();
+L764:       const quantity = Number(row["quantity"] ?? 0);
+L765: 
+L766:       if (!name || !Number.isFinite(quantity) || quantity <= 0) {
+L767:         throw new Error("Give the ingredient and a quantity above zero");
+L768:       }
+L769: 
+L770:       // The caller supplies an attempt ID. Retrying the same submission
+L771:       // must reuse this UUID, never generate a different one.
+L772:       const attemptId = String(row["submission_attempt_id"] ?? "").trim();
+L773: 
+L774:       if (!attemptId) {
+L775:         throw new Error(
+L776:           "A submission attempt ID is required. Please reopen the request form.",
+L777:         );
+L778:       }
+L779: 
+L780:       const { data, error } = await guardedRpc(
+L781:         supabase,
+L782:         "neo_kitchen_ingredient_request_create",
+L783:         {
+L784:           _branch: ctx.branch_id,
+L785:           _request: {
+L786:             submission_attempt_id: attemptId,
+L787:             ingredient_name: name,
+L788:             station_id: row["station_id"] || null,
+L789:             required_by: row["required_by"] || null,
+L790:             quantity,
+L791:             unit: String(row["unit"] ?? "").trim() || "unit",
+L792:             priority: String(row["priority"] ?? "normal"),
+L793:             reason: String(row["reason"] ?? "").trim() || null,
+L794:           },
+L795:         },
+L796:       );
+L797: 
+L798:       if (error) throw new Error(error.message);
+L799: 
+L800:       const result = (data ?? {}) as Record<string, unknown>;
+L801: 
+L802:       if (
+L803:         result["ok"] !== true ||
+L804:         !result["kitchen_request_id"] ||
+L805:         !result["requisition_id"] ||
+L806:         !result["request_number"]
+L807:       ) {
+L808:         throw new Error(
+L809:           String(result["reason"] ?? "Kitchen and Stores did not confirm the request."),
+L810:         );
+L811:       }
+L812: 
+L813:       return result as Row;
+L814:     },    onSuccess: (data) => {
+L815:       const number = String((data as Row)?.["request_number"] ?? "");
+L816:       toast.success(number ? `Request sent to Stores as ${number}` : "Request sent to Stores.");
+L817:       void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });
+L818:       void qc.invalidateQueries({ queryKey: ["fnb"] });
+L819:       void qc.invalidateQueries({ queryKey: ["inventory"] });
+L820:     },
+L821:     onError: (e: Error) => toast.error(e.message),
+L822:   });
+L823: }
+L824: 
+L825: 
+L826: export function useUpdateRequestStatus() {
+L827:   const qc = useQueryClient();
+L828:   const ctx = useCtx();
+L829:   return useMutation({
+L830:     mutationFn: async ({ id, status, note }: { id: string; status: string; note?: string }) => {
+L831:       const { error } = await supabase
+L832:         .from("kitchen_ingredient_requests")
+L833:         .update({ status, stores_note: note ?? null, handled_by: ctx.userId } as never)
+L834:         .eq("id", id);
+L835:       if (error) throw error;
+L836:     },
+L837:     onSuccess: () => {
+L838:       void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });
+L839:     },
+L840:     onError: (e: Error) => toast.error(e.message),
+L841:   });
+L842: }
+L843: 
+L844: export function useShortageAlerts() {
+L845:   const { organizationId } = useCtx();
+L846:   return useQuery({
+L847:     queryKey: ["kitchen", "shortages", organizationId],
+L848:     enabled: Boolean(organizationId),
+L849:     queryFn: async () => {
+L850:       const { data, error } = await supabase
+L851:         .from("ingredient_shortage_alerts")
+L852:         .select(sel("*, operational_stations(name)"))
+L853:         .order("created_at", { ascending: false });
+L854:       if (error) throw error;
+L855:       return (data ?? []) as unknown as Row[];
+L856:     },
+L857:   });
+L858: }
+L859: 
+L860: export function useReportShortage() {
+
+================================================
+FILE: src/routes/_shell.kitchen.stores.tsx
+LINES: 1 - 225
+================================================
+L1: import { createFileRoute } from "@tanstack/react-router";
+L2: import { useRef } from "react";
+L3: import { AlertTriangle, Plus } from "lucide-react";
+L4: import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+L5: import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
+L6: import { RecordDialog } from "@/components/kitchen/RecordDialog";
+L7: import { Button } from "@/components/ui/button";
+L8: import { useAuth } from "@/lib/auth";
+L9: import { titleCase, type Row } from "@/lib/kitchen";
+L10: import {
+L11:   useIngredientRequests,
+L12:   useKitchenStations,
+L13:   useReportShortage,
+L14:   useSaveIngredientRequest,
+L15:   useShortageAlerts,
+L16: } from "@/lib/kitchen-data";
+L17: 
+L18: export const Route = createFileRoute("/_shell/kitchen/stores")({
+L19:   head: () => ({
+L20:     meta: [
+L21:       { title: "Stores requests & shortages â€” NEÃ˜" },
+L22:       {
+L23:         name: "description",
+L24:         content: "Ingredient requests raised by the kitchen and routed to Stores and Procurement.",
+L25:       },
+L26:       { property: "og:title", content: "Stores requests & shortages â€” NEÃ˜" },
+L27:       {
+L28:         property: "og:description",
+L29:         content: "Ingredient requests raised by the kitchen and routed to Stores and Procurement.",
+L30:       },
+L31:       { property: "og:type", content: "website" },
+L32:       { name: "twitter:card", content: "summary" },
+L33:     ],
+L34:   }),
+L35:   component: () => (
+L36:     <KitchenGuard action="ingredient_request.view">
+L37:       <Page />
+L38:     </KitchenGuard>
+L39:   ),
+L40: });
+L41: 
+L42: function Page() {
+L43:   const { can } = useAuth();
+L44:   const requests = useIngredientRequests();
+L45:   const shortages = useShortageAlerts();
+L46:   const stations = useKitchenStations();
+L47:   const saveRequest = useSaveIngredientRequest();
+L48: 
+L49:   // One attempt UUID per logical submission. A failed/uncertain retry
+L50:   // reuses it; successful creation releases it.
+L51:   const ingredientAttemptRef = useRef<string | null>(null);
+L52:   const ingredientPayloadRef = useRef<string | null>(null);
+L53:   const reportShortage = useReportShortage();
+L54: 
+L55:   const requestRows = (requests.data ?? []) as Row[];
+L56:   const shortageRows = (shortages.data ?? []) as Row[];
+L57:   const stationOptions = (stations.data ?? []).map((s) => ({
+L58:     value: String(s["id"]),
+L59:     label: String(s["name"]),
+L60:   }));
+L61: 
+L62:   const requestFields = [
+L63:     { name: "ingredient_name", label: "Ingredient", required: true },
+L64:     { name: "quantity", label: "Quantity", type: "number" as const, required: true },
+L65:     { name: "unit", label: "Unit", required: true, placeholder: "kg, litres, pieces" },
+L66:     { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+L67:     {
+L68:       name: "priority",
+L69:       label: "Priority",
+L70:       type: "select" as const,
+L71:       options: ["low", "normal", "high", "urgent"].map((p) => ({ value: p, label: titleCase(p) })),
+L72:     },
+L73:     { name: "required_by", label: "Required by", type: "datetime-local" as const },
+L74:     { name: "reason", label: "Reason", type: "textarea" as const },
+L75:   ];
+L76: 
+L77:   const shortageFields = [
+L78:     { name: "ingredient_name", label: "Ingredient", required: true },
+L79:     { name: "station_id", label: "Station", type: "select" as const, options: stationOptions },
+L80:     { name: "available_quantity", label: "Available quantity", type: "number" as const },
+L81:     { name: "minimum_level", label: "Minimum level", type: "number" as const },
+L82:     { name: "unit", label: "Unit", placeholder: "kg, litres, pieces" },
+L83:     {
+L84:       name: "severity",
+L85:       label: "Severity",
+L86:       type: "select" as const,
+L87:       options: ["low", "medium", "high", "critical"].map((s) => ({
+L88:         value: s,
+L89:         label: titleCase(s),
+L90:       })),
+L91:     },
+L92:     { name: "affected_menu_items", label: "Affected menu items", type: "textarea" as const },
+L93:   ];
+L94: 
+L95:   return (
+L96:     <div className="space-y-6">
+L97:       <PageHeader
+L98:         eyebrow="Kitchen"
+L99:         title="Stores requests & shortages"
+L100:         description="Ingredient requests raised by the kitchen and routed to Stores and Procurement."
+L101:         actions={
+L102:           <>
+L103:             {can("kitchen", "ingredient_request.create") ? (
+L104:               <RecordDialog
+L105:                 title="Request ingredients from Stores"
+L106:                 description="Sent to Stores as a live requisition. Stores issues against it and the trail stays on the record."
+L107:                 submitLabel="Send request"
+L108:                 pending={saveRequest.isPending}
+L109:                 fields={requestFields}
+L110:                 onSubmit={async (values) => {
+L111:                   const payload = {
+L112:                     ...values,
+L113:                     priority: values["priority"] ?? "normal",
+L114:                     status: "submitted",
+L115:                   };
+L116: 
+L117:                   // Recover an uncertain submission after a page reload.
+L118:                   // Keep the same attempt UUID for identical request data.
+L119:                   const fingerprint = JSON.stringify(payload);
+L120:                   const storageKey = "neo:kitchen:ingredient-request:pending";
+L121: 
+L122:                   if (!ingredientAttemptRef.current) {
+L123:                     try {
+L124:                       const saved = sessionStorage.getItem(storageKey);
+L125:                       if (saved) {
+L126:                         const parsed = JSON.parse(saved) as {
+L127:                           fingerprint?: string;
+L128:                           attemptId?: string;
+L129:                         };
+L130:                         if (parsed.fingerprint === fingerprint && parsed.attemptId) {
+L131:                           ingredientAttemptRef.current = parsed.attemptId;
+L132:                           ingredientPayloadRef.current = parsed.fingerprint;
+L133:                         }
+L134:                       }
+L135:                     } catch {
+L136:                       // Damaged browser storage must not authorise a replay.
+L137:                     }
+L138:                   }
+L139: 
+L140:                   if (ingredientPayloadRef.current !== fingerprint) {
+L141:                     ingredientAttemptRef.current = crypto.randomUUID();
+L142:                     ingredientPayloadRef.current = fingerprint;
+L143:                   }
+L144: 
+L145:                   const attemptId = ingredientAttemptRef.current;
+L146: 
+L147:                   if (attemptId) {
+L148:                     sessionStorage.setItem(
+L149:                       storageKey,
+L150:                       JSON.stringify({ fingerprint, attemptId }),
+L151:                     );
+L152:                   }
+L153: 
+L154:                   if (!attemptId) {
+L155:                     throw new Error("Unable to prepare the request identifier.");
+L156:                   }
+L157: 
+L158:                   const result = await saveRequest.mutateAsync({
+L159:                     ...payload,
+L160:                     submission_attempt_id: attemptId,
+L161:                   });
+L162: 
+L163:                   // Only a confirmed database success starts a new attempt.
+L164:                   if (result["ok"] === true) {
+L165:                     sessionStorage.removeItem("neo:kitchen:ingredient-request:pending");
+L166:                     ingredientAttemptRef.current = null;
+L167:                     ingredientPayloadRef.current = null;
+L168:                   }
+L169: 
+L170:                   return result;
+L171:                 }}
+L172:                 trigger={
+L173:                   <Button>
+L174:                     <Plus className="mr-2 size-4" /> New request
+L175:                   </Button>
+L176:                 }
+L177:               />
+L178:             ) : null}
+L179:             {can("kitchen", "ingredient_request.create") ? (
+L180:               <RecordDialog
+L181:                 title="Report a shortage"
+L182:                 description="Alerts Stores, Procurement and the Kitchen Manager so menu availability can be adjusted."
+L183:                 submitLabel="Report shortage"
+L184:                 pending={reportShortage.isPending}
+L185:                 fields={shortageFields}
+L186:                 onSubmit={(values) =>
+L187:                   reportShortage.mutateAsync({
+L188:                     ...values,
+L189:                     severity: values["severity"] ?? "medium",
+L190:                     status: "open",
+L191:                   })
+L192:                 }
+L193:                 trigger={
+L194:                   <Button variant="outline">
+L195:                     <AlertTriangle className="mr-2 size-4" /> Report shortage
+L196:                   </Button>
+L197:                 }
+L198:               />
+L199:             ) : null}
+L200:           </>
+L201:         }
+L202:       />
+L203: 
+L204:       <SectionCard
+L205:         title="Ingredient requests"
+L206:         description="Requisitions raised by kitchen stations."
+L207:       >
+L208:         <QueryState
+L209:           isLoading={requests.isLoading}
+L210:           error={requests.error}
+L211:           isEmpty={requestRows.length === 0}
+L212:           empty={
+L213:             <p className="py-6 text-sm text-muted-foreground">No ingredient requests raised yet.</p>
+L214:           }
+L215:         >
+L216:           <ul className="divide-y divide-border">
+L217:             {requestRows.map((r) => (
+L218:               <li key={r["id"]} className="flex items-start justify-between gap-3 py-3 text-sm">
+L219:                 <div>
+L220:                   <p className="font-medium">{`${r["request_number"] ?? "Request"} Â· ${r["ingredient_name"] ?? ""}`}</p>
+L221:                   <p className="text-xs text-muted-foreground">
+L222:                     {`${r["quantity"] ?? 0} ${r["unit"] ?? ""} Â· ${r["operational_stations"]?.name ?? "Kitchen"} Â· ${titleCase(String(r["priority"] ?? "normal"))}`}
+L223:                   </p>
+L224:                 </div>
+L225:                 <StatusPill tone={String(r["status"]) === "issued" ? "success" : "default"}>
+
+================================================
+FILE: supabase/migrations/20260812190514_e81da8a2-74d2-425f-a798-b720a4ae5799.sql
+LINES: 220 - 280
+================================================
+L220:   unit text NOT NULL,
+L221:   unit_cost numeric,
+L222:   created_at timestamptz NOT NULL DEFAULT now(),
+L223:   updated_at timestamptz NOT NULL DEFAULT now()
+L224: );
+L225: 
+L226: CREATE TABLE IF NOT EXISTS public.kitchen_ingredient_requests (
+L227:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+L228:   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+L229:   branch_id uuid REFERENCES public.branches(id) ON DELETE CASCADE,
+L230:   department_id uuid REFERENCES public.departments(id) ON DELETE SET NULL,
+L231:   station_id uuid REFERENCES public.operational_stations(id) ON DELETE SET NULL,
+L232:   request_number text NOT NULL,
+L233:   ingredient_name text NOT NULL,
+L234:   quantity numeric NOT NULL CHECK (quantity > 0),
+L235:   unit text NOT NULL,
+L236:   required_by timestamptz,
+L237:   priority text NOT NULL DEFAULT 'normal' CHECK (priority = ANY (ARRAY['low','normal','high','urgent'])),
+L238:   reason text,
+L239:   batch_id uuid REFERENCES public.production_batches(id) ON DELETE SET NULL,
+L240:   order_id uuid REFERENCES public.pos_orders(id) ON DELETE SET NULL,
+L241:   status text NOT NULL DEFAULT 'draft' CHECK (status = ANY (ARRAY['draft','submitted','stores-reviewing','available','partially-available','issued','collected','not-available','escalated-to-procurement','cancelled','closed'])),
+L242:   issued_quantity numeric,
+L243:   stores_note text,
+L244:   procurement_reference text,
+L245:   requested_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L246:   handled_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L247:   created_at timestamptz NOT NULL DEFAULT now(),
+L248:   updated_at timestamptz NOT NULL DEFAULT now(),
+L249:   UNIQUE (organization_id, request_number)
+L250: );
+L251: 
+L252: CREATE TABLE IF NOT EXISTS public.ingredient_shortage_alerts (
+L253:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+L254:   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+L255:   branch_id uuid REFERENCES public.branches(id) ON DELETE CASCADE,
+L256:   station_id uuid REFERENCES public.operational_stations(id) ON DELETE SET NULL,
+L257:   ingredient_name text NOT NULL,
+L258:   available_quantity numeric,
+L259:   minimum_level numeric,
+L260:   reorder_level numeric,
+L261:   unit text,
+L262:   severity text NOT NULL DEFAULT 'medium' CHECK (severity = ANY (ARRAY['low','medium','high','critical'])),
+L263:   affected_menu_items text,
+L264:   request_id uuid REFERENCES public.kitchen_ingredient_requests(id) ON DELETE SET NULL,
+L265:   status text NOT NULL DEFAULT 'open' CHECK (status = ANY (ARRAY['open','stores-notified','request-created','escalated','resolved','closed'])),
+L266:   reported_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L267:   resolved_at timestamptz,
+L268:   created_at timestamptz NOT NULL DEFAULT now(),
+L269:   updated_at timestamptz NOT NULL DEFAULT now()
+L270: );
+L271: 
+L272: CREATE TABLE IF NOT EXISTS public.waste_records (
+L273:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+L274:   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+L275:   branch_id uuid REFERENCES public.branches(id) ON DELETE CASCADE,
+L276:   station_id uuid REFERENCES public.operational_stations(id) ON DELETE SET NULL,
+L277:   waste_number text NOT NULL,
+L278:   occurred_at timestamptz NOT NULL DEFAULT now(),
+L279:   ingredient_name text,
+L280:   menu_item_id uuid REFERENCES public.menu_items(id) ON DELETE SET NULL,
+
+================================================
+FILE: src/lib/stock-need-lifecycle.ts
+LINES: 1 - 180
+================================================
+L1: /**
+L2:  * Stock need lifecycle.
+L3:  *
+L4:  * A need is one idea however it arose: a department reported it, or stock fell
+L5:  * to its reorder point. From the moment it is reported it has somewhere to go â€”
+L6:  * issue it from a store in full or in part, or route what cannot be covered to
+L7:  * Procurement as a purchase request. The lineage is kept, so "HR asked for 15
+L8:  * reams â€” what happened?" always has an answer.
+L9:  *
+L10:  * Routing to Procurement reuses an already-active request for the same need
+L11:  * instead of raising a second one, so repeated clicks cannot multiply demand.
+L12:  */
+L13: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+L14: import { toast } from "sonner";
+L15: import { supabase } from "@/integrations/supabase/client";
+L16: import { guardedRpc } from "@/lib/rpc-guard";
+L17: import { useAuth } from "@/lib/auth";
+L18: import { useActivePropertyFilter } from "@/lib/branch-filter";
+L19: import { applyStockNeedStatus, normaliseNeedRow } from "@/lib/stock-needs";
+L20: 
+L21: // The needs trail joins departments, items and purchase requests; call sites narrow.
+L22: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+L23: const db = supabase as any;
+L24: 
+L25: export type NeedRow = Record<string, unknown>;
+L26: 
+L27: export function newNeedAttemptKey(): string {
+L28:   return crypto.randomUUID();
+L29: }
+L30: 
+L31: function useNeedsInvalidate() {
+L32:   const qc = useQueryClient();
+L33:   return () => {
+L34:     void qc.invalidateQueries({ queryKey: ["stock-needs"] });
+L35:     void qc.invalidateQueries({ queryKey: ["stores-department"] });
+L36:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+L37:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+L38:   };
+L39: }
+L40: 
+L41: /** Every reported or system-raised need for the selected property. */
+L42: export function useStockNeeds(status: "open" | "all" = "open") {
+L43:   const { organizationId } = useAuth();
+L44:   const { branchId } = useActivePropertyFilter();
+L45:   return useQuery({
+L46:     queryKey: ["stock-needs", "list", organizationId, branchId, status],
+L47:     enabled: Boolean(organizationId),
+L48:     queryFn: async () => {
+L49:       let q = db
+L50:         .from("department_stock_needs")
+L51:         .select(
+L52:           "id, item, quantity, unit, priority, status, notes, origin, created_at, fulfilled_quantity, stock_item_id, purchase_request_id, department_id, departments(name), stock_items(name, base_unit), purchase_requests(request_number, status)",
+L53:         )
+L54:         .order("created_at", { ascending: false })
+L55:         .limit(200);
+L56:       // Needs reported before property scoping existed carry no branch; they are
+L57:       // still this workspace's needs, so a property view must not hide them.
+L58:       if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+L59:       q = applyStockNeedStatus(q, status);
+L60:       const { data, error } = await q;
+L61:       if (error) throw new Error(error.message);
+L62:       return ((data ?? []) as NeedRow[]).map(normaliseNeedRow);
+L63:     },
+L64:   });
+L65: }
+L66: 
+L67: /** Point a reported need at a real catalogue item so it can be issued. */
+L68: export function useLinkNeedItem() {
+L69:   const invalidate = useNeedsInvalidate();
+L70:   return useMutation({
+L71:     mutationFn: async ({ needId, stockItemId }: { needId: string; stockItemId: string }) => {
+L72:       const { data, error } = await guardedRpc(db, "neo_stock_need_link_item", {
+L73:         _need: needId,
+L74:         _stock_item: stockItemId,
+L75:       });
+L76:       if (error) throw new Error(error.message);
+L77:       return (data ?? {}) as Record<string, unknown>;
+L78:     },
+L79:     onSuccess: () => {
+L80:       invalidate();
+L81:       toast.success("Need linked to a stock item.");
+L82:     },
+L83:     onError: (e: Error) => toast.error(e.message),
+L84:   });
+L85: }
+L86: 
+L87: /** Issue against a need, in full or in part, from a chosen store. */
+L88: export function useFulfilNeed() {
+L89:   const invalidate = useNeedsInvalidate();
+L90:   return useMutation({
+L91:     mutationFn: async (input: {
+L92:       needId: string;
+L93:       locationId: string;
+L94:       quantity: number;
+L95:       attemptKey: string;
+L96:     }) => {
+L97:       const { data, error } = await guardedRpc(db, "neo_stock_need_fulfil", {
+L98:         _need: input.needId,
+L99:         _location: input.locationId,
+L100:         _quantity: input.quantity,
+L101:         _attempt: input.attemptKey,
+L102:       });
+L103:       if (error) throw new Error(error.message);
+L104: 
+L105:       if (!data || typeof data !== "object" || Array.isArray(data)) {
+L106:         throw new Error("The database did not confirm the operation.");
+L107:       }
+L108: 
+L109:       const result = data as Record<string, unknown>;
+L110: 
+L111:       if (result["ok"] === false) {
+L112:         throw new Error(
+L113:           String(
+L114:             result["detail"] ??
+L115:               result["reason"] ??
+L116:               "The operation was rejected.",
+L117:           ),
+L118:         );
+L119:       }
+L120: 
+L121:       return result;
+L122:     },
+L123:     onSuccess: (data) => {
+L124:       invalidate();
+L125:       if (data["replayed"] === true) toast.info("Already issued â€” showing the original result.");
+L126:       else if (String(data["status"] ?? "") === "requisitioned")
+L127:         toast.success("Issued in full â€” the need is closed.");
+L128:       else toast.success("Part of the need was issued; the balance is still outstanding.");
+L129:     },
+L130:     onError: (e: Error) => toast.error(e.message),
+L131:   });
+L132: }
+L133: 
+L134: /** Send the outstanding balance to Procurement, reusing any active request. */
+L135: export function useRouteNeedToProcurement() {
+L136:   const invalidate = useNeedsInvalidate();
+L137:   return useMutation({
+L138:     mutationFn: async ({ needId, notes }: { needId: string; notes?: string }) => {
+L139:       const { data, error } = await guardedRpc(db, "neo_stock_need_to_procurement", {
+L140:         _need: needId,
+L141:         _notes: notes ?? null,
+L142:       });
+L143:       if (error) throw new Error(error.message);
+L144: 
+L145:       if (!data || typeof data !== "object" || Array.isArray(data)) {
+L146:         throw new Error("The database did not confirm the operation.");
+L147:       }
+L148: 
+L149:       const result = data as Record<string, unknown>;
+L150: 
+L151:       if (result["ok"] === false) {
+L152:         throw new Error(
+L153:           String(
+L154:             result["detail"] ??
+L155:               result["reason"] ??
+L156:               "The operation was rejected.",
+L157:           ),
+L158:         );
+L159:       }
+L160: 
+L161:       return result;
+L162:     },
+L163:     onSuccess: (data) => {
+L164:       invalidate();
+L165:       if (data["duplicate"] === true)
+L166:         toast.info("A purchase request is already open for this need.");
+L167:       else
+L168:         toast.success(
+L169:           `Routed to Procurement as ${String(data["request_number"] ?? "a purchase request")}.`,
+L170:         );
+L171:     },
+L172:     onError: (e: Error) => toast.error(e.message),
+L173:   });
+L174: }
+
+================================================
+FILE: supabase/migrations/20260919051627_493217db-106b-4793-8fc1-2b6619008af0.sql
+LINES: 1 - 42
+================================================
+L1: -- Link a reported need to a catalogue item, so Stores can issue against it.
+L2: CREATE OR REPLACE FUNCTION public.neo_stock_need_link_item(_need uuid, _stock_item uuid)
+L3: RETURNS jsonb
+L4: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+L5: AS $function$
+L6: DECLARE
+L7:   v_org uuid := public.current_org_id();
+L8:   n public.department_stock_needs;
+L9: BEGIN
+L10:   IF v_org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;
+L11:   IF NOT public.neo_can_transfer_stock() THEN
+L12:     RAISE EXCEPTION 'Not permitted to work on stock needs';
+L13:   END IF;
+L14: 
+L15:   SELECT * INTO n FROM public.department_stock_needs
+L16:    WHERE id = _need AND organization_id = v_org FOR UPDATE;
+L17:   IF n.id IS NULL THEN RAISE EXCEPTION 'Stock need not found'; END IF;
+L18: 
+L19:   IF _stock_item IS NOT NULL THEN
+L20:     PERFORM 1 FROM public.stock_items
+L21:      WHERE id = _stock_item AND organization_id = v_org
+L22:        AND (branch_id IS NULL OR n.branch_id IS NULL OR branch_id = n.branch_id);
+L23:     IF NOT FOUND THEN RAISE EXCEPTION 'That item is not part of this property''s catalogue'; END IF;
+L24:   END IF;
+L25: 
+L26:   UPDATE public.department_stock_needs
+L27:      SET stock_item_id = _stock_item,
+L28:          status = CASE WHEN status = 'reported' THEN 'acknowledged' ELSE status END,
+L29:          reviewed_by = auth.uid(), reviewed_at = now(), updated_at = now()
+L30:    WHERE id = _need;
+L31: 
+L32:   RETURN jsonb_build_object('ok', true, 'need_id', _need, 'stock_item_id', _stock_item);
+L33: END $function$;
+L34: 
+L35: REVOKE ALL ON FUNCTION public.neo_stock_need_link_item(uuid,uuid) FROM anon;
+L36: GRANT EXECUTE ON FUNCTION public.neo_stock_need_link_item(uuid,uuid) TO authenticated;
+
+================================================
+FILE: supabase/migrations/20260920035534_4e0cb7ca-5fb9-4172-987a-206b13bf574a.sql
+LINES: 1 - 100
+================================================
+L1: CREATE OR REPLACE FUNCTION public.neo_stock_need_to_procurement(_need uuid, _notes text DEFAULT NULL::text)
+L2:  RETURNS jsonb
+L3:  LANGUAGE plpgsql
+L4:  SECURITY DEFINER
+L5:  SET search_path TO 'public'
+L6: AS $function$
+L7: DECLARE
+L8:   v_org uuid := public.current_org_id();
+L9:   n public.department_stock_needs;
+L10:   v_ref text;
+L11:   v_existing uuid;
+L12:   v_req uuid;
+L13:   v_number text;
+L14:   v_outstanding numeric;
+L15: BEGIN
+L16:   IF v_org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;
+L17:   IF NOT (public.has_permission('procurement','requests.create')
+L18:           OR public.has_permission('procurement','create')
+L19:           OR public.has_permission('stores','create')
+L20:           OR public.neo_can_transfer_stock()) THEN
+L21:     RAISE EXCEPTION 'Not permitted to route a shortage to Procurement';
+L22:   END IF;
+L23: 
+L24:   SELECT * INTO n FROM public.department_stock_needs
+L25:    WHERE id = _need AND organization_id = v_org FOR UPDATE;
+L26:   IF n.id IS NULL THEN RAISE EXCEPTION 'Stock need not found'; END IF;
+L27:   IF n.branch_id IS NULL THEN RAISE EXCEPTION 'This need has no property â€” it cannot be purchased against'; END IF;
+L28:   IF n.stock_item_id IS NULL THEN
+L29:     RAISE EXCEPTION 'Link this need to a catalogue stock item before sending it to Procurement, otherwise the delivery cannot be received into stock';
+L30:   END IF;
+L31: 
+L32:   v_outstanding := greatest(n.quantity - coalesce(n.fulfilled_quantity, 0), 0);
+L33:   IF v_outstanding <= 0 THEN RAISE EXCEPTION 'This need has already been issued in full'; END IF;
+L34: 
+L35:   v_ref := 'need:' || _need::text;
+L36: 
+L37:   SELECT pr.id INTO v_existing FROM public.purchase_requests pr
+L38:    WHERE pr.organization_id = v_org
+L39:      AND pr.branch_id IS NOT DISTINCT FROM n.branch_id
+L40:      AND pr.source_reference = v_ref
+L41:      AND pr.status IN ('draft','submitted','pending','pending-approval')
+L42:    LIMIT 1;
+L43: 
+L44:   IF v_existing IS NOT NULL THEN
+L45:     UPDATE public.department_stock_needs
+L46:        SET purchase_request_id = v_existing, status = 'with-procurement', updated_at = now()
+L47:      WHERE id = _need;
+L48:     RETURN jsonb_build_object('ok', true, 'duplicate', true, 'request_id', v_existing,
+L49:       'request_number', (SELECT request_number FROM public.purchase_requests WHERE id = v_existing));
+L50:   END IF;
+L51: 
+L52:   SELECT public.next_document_number('purchase-request') INTO v_number;
+L53: 
+L54:   BEGIN
+L55:     INSERT INTO public.purchase_requests
+L56:       (organization_id, branch_id, department_id, request_number, title, justification,
+L57:        source, source_reference, status, priority, requested_by)
+L58:     VALUES (v_org, n.branch_id, n.department_id, v_number,
+L59:             'Department need â€” ' || n.item,
+L60:             coalesce(nullif(btrim(coalesce(_notes,'')), ''), n.notes,
+L61:                      'Reported by the department; not available in stores.'),
+L62:             'department-stock-need', v_ref, 'draft', coalesce(n.priority,'normal'), auth.uid())
+L63:     RETURNING id INTO v_req;
+L64: 
+L65:     INSERT INTO public.purchase_request_lines
+L66:       (organization_id, request_id, stock_item_id, description, quantity, unit, estimated_unit_price)
+L67:     VALUES (v_org, v_req, n.stock_item_id, n.item, v_outstanding, coalesce(n.unit,'unit'), 0);
+L68:   EXCEPTION WHEN unique_violation THEN
+L69:     SELECT pr.id INTO v_existing FROM public.purchase_requests pr
+L70:      WHERE pr.organization_id = v_org
+L71:        AND pr.branch_id IS NOT DISTINCT FROM n.branch_id
+L72:        AND pr.source_reference = v_ref
+L73:        AND pr.status IN ('draft','submitted','pending','pending-approval')
+L74:      LIMIT 1;
+L75:     UPDATE public.department_stock_needs
+L76:        SET purchase_request_id = v_existing, status = 'with-procurement', updated_at = now()
+L77:      WHERE id = _need;
+L78:     RETURN jsonb_build_object('ok', true, 'duplicate', true, 'request_id', v_existing);
+L79:   END;
+L80: 
+L81:   UPDATE public.department_stock_needs
+L82:      SET purchase_request_id = v_req, status = 'with-procurement',
+L83:          reviewed_by = auth.uid(), reviewed_at = now(), updated_at = now()
+L84:    WHERE id = _need;
+L85: 
+L86:   RETURN jsonb_build_object('ok', true, 'request_id', v_req, 'request_number', v_number);
+L87: END $function$;
+L88: 
+L89: CREATE OR REPLACE FUNCTION public.neo_procurement_order_from_request(_request uuid, _supplier uuid, _expected date, _attempt uuid, _location uuid DEFAULT NULL::uuid)
+L90:  RETURNS jsonb
+L91:  LANGUAGE plpgsql
+L92:  SECURITY DEFINER
+L93:  SET search_path TO 'public'
+L94: AS $function$
+L95: DECLARE _org uuid := public.current_org_id(); _r record; _order uuid; _number text;
+L96:         _prior jsonb; _lines integer := 0; _subtotal numeric := 0; _unlinked text;
+L97: BEGIN
+L98:   IF _org IS NULL THEN RAISE EXCEPTION 'no_organisation' USING ERRCODE='42501'; END IF;
+L99:   IF _attempt IS NULL THEN RAISE EXCEPTION 'attempt_key_required' USING ERRCODE='22023'; END IF;
+L100: 
+
+================================================
+FILE: src/lib/stores-lifecycle.ts
+LINES: 240 - 320
+================================================
+L240:     onSuccess: (data) => {
+L241:       invalidate();
+L242:       replayNote(data, data["direction"] === "return" ? "Return posted to stock" : "Issue posted from stock");
+L243:     },
+L244:     onError: (e: Error) => toast.error(e.message),
+L245:   });
+L246: }
+L247: 
+L248: /* ------------------------------- low stock -------------------------------- */
+L249: 
+L250: export function useLowStockScan() {
+L251:   const { branchId } = useActivePropertyFilter();
+L252:   const { organizationId } = useAuth();
+L253:   return useMutation({
+L254:     mutationFn: async () => {
+L255:       const { data, error } = await guardedRpc(db, "neo_stores_low_stock_scan", { _branch: branchId ?? null });
+L256:       if (error) throw new Error(error.message);
+L257:       return (data ?? {}) as LifecycleResult;
+L258:     },
+L259:     onSuccess: (data) => {
+L260:       const found = Number(data["items_below_minimum"] ?? 0);
+L261:       if (found === 0) toast.success("Nothing is below its minimum level");
+L262:       else toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum â€” buyers notified`);
+L263:     },
+L264:     onError: (e: Error) => toast.error(e.message),
+L265:     meta: { organizationId },
+L266:   });
+L267: }
+L268: 
+L269: /* --------------------------------- reads ---------------------------------- */
+L270: 
+L271: /** Purchase orders that are open for receiving, with their outstanding lines. */
+L272: export function useReceivableOrders() {
+L273:   const { organizationId } = useAuth();
+L274:   const { applyTo, filterKey } = useActivePropertyFilter();
+L275:   return useQuery({
+L276:     queryKey: ["procurement", "receivable", organizationId, filterKey],
+L277:     enabled: Boolean(organizationId),
+L278:     queryFn: async () => {
+L279:       const { data, error } = await applyTo(
+L280:         db
+L281:           .from("purchase_orders")
+L282:           .select("*, suppliers(name), purchase_order_lines(*, stock_items(name, base_unit))")
+L283:           .in("status", ["approved", "pending-delivery", "sent", "partially-received", "partially_received"]),
+L284:         "purchase_orders",
+L285:       )
+L286:         .order("expected_date", { ascending: true })
+L287:         .limit(100);
+L288:       if (error) throw new Error(error.message);
+L289:       return (data ?? []) as Record<string, unknown>[];
+L290:     },
+L291:   });
+L292: }
+L293: 
+L294: export function outstandingOf(line: Record<string, unknown>): number {
+L295:   const ordered = Number(line["quantity"] ?? 0);
+L296:   const cancelled = Number(line["cancelled_quantity"] ?? 0);
+L297:   const received = Number(line["received_quantity"] ?? 0);
+L298:   return Math.max(ordered - cancelled - received, 0);
+L299: }
+
+================================================
+FILE: src/lib/procurement-department.ts
+LINES: 285 - 345
+================================================
+L285:           dispatch_channel: input.channel ?? null,
+L286:           dispatch_note: input.note ?? null,
+L287:           dispatched_at: input.state === "prepared" ? null : new Date().toISOString(),
+L288:           dispatched_by: input.state === "prepared" ? null : (user?.id ?? null),
+L289:         })
+L290:         .eq("id", input.inviteId);
+L291:       if (error) throw new Error(error.message);
+L292:     },
+L293:     onSuccess: () => {
+L294:       invalidate();
+L295:       toast.success("Supplier communication recorded");
+L296:     },
+L297:     onError: (e: Error) => toast.error(e.message),
+L298:   });
+L299: }
+L300: 
+L301: 
+L302: /* ------------------------------------------------------------------ *
+L303:  * Supplier order follow-up: ordered vs received vs outstanding
+L304:  * ------------------------------------------------------------------ */
+L305: 
+L306: export function useOrderTracking() {
+L307:   const { organizationId, branchId } = useProcurementContext();
+L308:   return useQuery({
+L309:     queryKey: ["procurement-department", "order-tracking", organizationId, branchId],
+L310:     enabled: Boolean(organizationId),
+L311:     queryFn: async () => {
+L312:       let q = db
+L313:         .from("purchase_orders")
+L314:         .select(
+L315:           "*, suppliers:supplier_id(id, name, phone, email), purchase_order_lines(id, description, quantity, received_quantity, accepted_quantity, unit, unit_price)",
+L316:         )
+L317:         .in("status", ["approved", "pending-delivery", "sent", "partially-received", "partially-invoiced"])
+L318:         .order("expected_date", { ascending: true, nullsFirst: false })
+L319:         .limit(200);
+L320:       if (branchId) q = q.eq("branch_id", branchId);
+L321:       const { data, error } = await q;
+L322:       if (error) throw new Error(error.message);
+L323:       return ((data ?? []) as ProcRow[]).map((order) => {
+L324:         const lines = (order["purchase_order_lines"] ?? []) as ProcRow[];
+L325:         const ordered = lines.reduce((sum, l) => sum + num(l["quantity"]), 0);
+L326:         const received = lines.reduce(
+L327:           (sum, l) => sum + num(l["accepted_quantity"] ?? l["received_quantity"]),
+L328:           0,
+L329:         );
+L330:         const expected = order["expected_date"] ? new Date(String(order["expected_date"])).getTime() : null;
+L331:         return {
+L332:           ...order,
+L333:           ordered_quantity: ordered,
+L334:           received_quantity: received,
+L335:           outstanding_quantity: Math.max(ordered - received, 0),
+L336:           is_overdue: expected !== null && expected < Date.now() && ordered - received > 0,
+L337:         } as ProcRow;
+L338:       });
+L339:     },
+L340:   });
+L341: }
+L342: 
+L343: /** Read-only receiving status â€” Procurement follows up, never posts a GRN. */
+L344: export function useRecentReceipts() {
+L345:   const { organizationId, branchId } = useProcurementContext();
+
+================================================
+FILE: src/routes/_shell.inventory.receiving.tsx
+LINES: 45 - 225
+================================================
+L45:           "Receive supplier deliveries against their purchase order, in full or in part, and post them into stock exactly once.",
+L46:       },
+L47:       { property: "og:title", content: "Goods receiving â€” NEÃ˜" },
+L48:       {
+L49:         property: "og:description",
+L50:         content:
+L51:           "Receive supplier deliveries against their purchase order, in full or in part, and post them into stock exactly once.",
+L52:       },
+L53:       { property: "og:type", content: "website" },
+L54:       { name: "twitter:card", content: "summary" },
+L55:     ],
+L56:   }),
+L57:   component: GuardedPage,
+L58: });
+L59: 
+L60: function Page() {
+L61:   const { tenant } = useTenant();
+L62:   const symbol = tenant.regional.currencySymbol;
+L63:   const { branchId } = useActivePropertyFilter();
+L64:   const orders = useReceivableOrders();
+L65:   const locations = useStockLocations();
+L66:   const receive = useReceiveGoods();
+L67:   const health = useProcurementReconciliation(branchId);
+L68:   const recentReceipts = useRecentGoodsReceipts();
+L69:   const [directOpen, setDirectOpen] = useState(false);
+L70: 
+L71:   const [openOrder, setOpenOrder] = useState<string | null>(null);
+L72:   const [locationId, setLocationId] = useState("");
+L73:   const [quantities, setQuantities] = useState<Record<string, string>>({});
+L74:   const [notes, setNotes] = useState("");
+L75:   const [batches, setBatches] = useState<Record<string, string>>({});
+L76:   const [expiries, setExpiries] = useState<Record<string, string>>({});
+L77:   const [lineReasons, setLineReasons] = useState<Record<string, string>>({});
+L78:   const [rejected, setRejected] = useState<Record<string, string>>({});
+L79:   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+L80:   const [deliveryNote, setDeliveryNote] = useState("");
+L81:   const [invoiceNumber, setInvoiceNumber] = useState("");
+L82:   const [attemptKey, setAttemptKey] = useState(newAttemptKey);
+L83:   const [varianceAcknowledged, setVarianceAcknowledged] = useState(false);
+L84: 
+L85:   const orderRows = (orders.data ?? []) as Row[];
+L86:   const locationRows = (locations.data ?? []) as Row[];
+L87:   const active = orderRows.find((o) => String(o["id"]) === openOrder) ?? null;
+L88:   const lines = ((active?.["purchase_order_lines"] as Row[] | undefined) ?? []).slice();
+L89: 
+L90:   const itemIds = useMemo(
+L91:     () =>
+L92:       Array.from(
+L93:         new Set(
+L94:           lines
+L95:             .map((l) => (l["stock_item_id"] ? String(l["stock_item_id"]) : ""))
+L96:             .filter((id) => id.length > 0),
+L97:         ),
+L98:       ),
+L99:     [lines],
+L100:   );
+L101:   const ledger = useLedgerOnHand(itemIds, locationId || null);
+L102:   const reconciliation = useMemo(
+L103:     () => reconcileDelivery(lines, quantities, rejected, ledger.data),
+L104:     [lines, quantities, rejected, ledger.data],
+L105:   );
+L106:   const blockedByVariance = reconciliation.hasExceptions && !varianceAcknowledged;
+L107: 
+L108: 
+L109:   const overLines = useMemo(
+L110:     () =>
+L111:       lines
+L112:         .filter((l) => Number(quantities[String(l["id"])] ?? 0) > outstandingOf(l) + 0.0001)
+L113:         .map((l) => String(l["id"])),
+L114:     [lines, quantities],
+L115:   );
+L116:   const missingReason = overLines.some((id) => (lineReasons[id] ?? "").trim().length === 0);
+L117:   // Anything turned away at the gate has to say why, otherwise the supplier
+L118:   // dispute later has nothing behind it.
+L119:   const missingRejectReason = lines.some(
+L120:     (l) =>
+L121:       Number(rejected[String(l["id"])] ?? 0) > 0 &&
+L122:       (rejectReasons[String(l["id"])] ?? "").trim().length === 0,
+L123:   );
+L124:   const badSplit = lines.some(
+L125:     (l) =>
+L126:       Number(rejected[String(l["id"])] ?? 0) > Number(quantities[String(l["id"])] ?? 0) + 0.0001,
+L127:   );
+L128: 
+L129:   function acceptedOf(id: string) {
+L130:     return Math.max(Number(quantities[id] ?? 0) - Number(rejected[id] ?? 0), 0);
+L131:   }
+L132: 
+L133:   function start(order: Row) {
+L134:     setOpenOrder(String(order["id"]));
+L135:     setLocationId(String(order["deliver_to_location_id"] ?? ""));
+L136:     setQuantities({});
+L137:     setNotes("");
+L138:     setBatches({});
+L139:     setExpiries({});
+L140:     setLineReasons({});
+L141:     setRejected({});
+L142:     setRejectReasons({});
+L143:     setDeliveryNote("");
+L144:     setInvoiceNumber("");
+L145:     setAttemptKey(newAttemptKey());
+L146:     setVarianceAcknowledged(false);
+L147:   }
+L148: 
+L149:   function submit() {
+L150:     if (!active) return;
+L151:     const payload = lines
+L152:       .map((l) => {
+L153:         const id = String(l["id"]);
+L154:         const reason = (lineReasons[id] ?? "").trim();
+L155:         const rejectQty = Number(rejected[id] ?? 0);
+L156:         const rejectReason = (rejectReasons[id] ?? "").trim();
+L157:         return {
+L158:           order_line_id: id,
+L159:           quantity_received: Number(quantities[id] ?? 0),
+L160:           ...(rejectQty > 0 ? { quantity_rejected: rejectQty } : {}),
+L161:           ...(rejectQty > 0 && rejectReason ? { rejection_reason: rejectReason } : {}),
+L162:           ...(batches[id]?.trim() ? { batch_number: batches[id]!.trim() } : {}),
+L163:           ...(expiries[id] ? { expiry_date: expiries[id]! } : {}),
+L164:           ...(reason ? { over_receipt_reason: reason } : {}),
+L165:         };
+L166:       })
+L167:       .filter((l) => l.quantity_received > 0);
+L168:     if (payload.length === 0) return;
+L169:     // The browser never decides whether an over-receipt is permitted; it only
+L170:     // carries the line reason the database requires before it checks authority.
+L171:     const input = { orderId: String(active["id"]), locationId, lines: payload, attemptKey };
+L172:     receive.mutate(
+L173:       {
+L174:         ...input,
+L175:         ...(notes.trim() ? { notes: notes.trim() } : {}),
+L176:         ...(deliveryNote.trim() ? { deliveryNoteNumber: deliveryNote.trim() } : {}),
+L177:         ...(invoiceNumber.trim() ? { supplierInvoiceNumber: invoiceNumber.trim() } : {}),
+L178:       },
+L179:       { onSuccess: () => setOpenOrder(null) },
+L180:     );
+L181:   }
+L182: 
+L183:   return (
+L184:     <div className="space-y-6">
+L185:       <PageHeader
+L186:         eyebrow="Supply Chain"
+L187:         title="Goods receiving"
+L188:         description="Count the delivery against the order. Partial deliveries are normal; receiving more than was ordered needs both a written reason and over-receipt authority."
+L189:         actions={
+L190:           <Button variant="outline" onClick={() => setDirectOpen(true)}>
+L191:             Direct / opening receipt
+L192:           </Button>
+L193:         }
+L194:       />
+L195: 
+L196:       <ReceiveStockDialog open={directOpen} onOpenChange={setDirectOpen} />
+L197: 
+L198:       <ReceiptFinanceTrail symbol={symbol} />
+L199: 
+L200: 
+L201:       <QueryState
+L202:         isLoading={orders.isLoading}
+L203:         error={orders.error}
+L204:         isEmpty={orderRows.length === 0}
+L205:         empty={
+L206:           <SectionCard
+L207:             title="Nothing to receive"
+L208:             description="Approved purchase orders appear here as soon as a buyer issues them."
+L209:           >
+L210:             <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+L211:               <PackageCheck className="h-4 w-4" /> No open orders for this property.
+L212:             </p>
+L213:           </SectionCard>
+L214:         }
+L215:       >
+L216:         <SectionCard
+L217:           title="Open purchase orders"
+L218:           description="Choose the order the delivery belongs to."
+L219:         >
+L220:           <ul className="divide-y divide-border">
+L221:             {orderRows.map((o) => (
+L222:               <li
+L223:                 key={String(o["id"])}
+L224:                 className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+L225:               >
+
+================================================
+FILE: src/routes/_shell.tasks.tsx
+LINES: 215 - 400
+================================================
+L215:     new Date(task.due_at).getTime() < Date.now() &&
+L216:     isActionable(task)
+L217:   );
+L218: }
+L219: 
+L220: /* ============================================================
+L221:    TASK PERSISTENCE HELPERS
+L222:    ============================================================ */
+L223: 
+L224: /**
+L225:  * Confirms an UPDATE affected one accessible task record.
+L226:  *
+L227:  * A Supabase UPDATE can produce no PostgREST error while
+L228:  * returning zero affected rows, particularly when RLS
+L229:  * filters the targeted record.
+L230:  *
+L231:  * The returned record is therefore mandatory.
+L232:  */
+L233: async function updateTaskAndConfirm(
+L234:   id: string,
+L235:   patch: TaskPatch,
+L236: ) {
+L237:   const { data, error } = await supabase
+L238:     .from("tasks")
+L239:     .update(patch)
+L240:     .eq("id", id)
+L241:     .select(
+L242:       "id, assignee_id, department_id, status, progress",
+L243:     )
+L244:     .maybeSingle();
+L245: 
+L246:   if (error) {
+L247:     throw new Error(
+L248:       `Task update failed: ${error.message}`,
+L249:     );
+L250:   }
+L251: 
+L252:   if (!data) {
+L253:     throw new Error(
+L254:       "The task update could not be confirmed. " +
+L255:         "The task may be unavailable or your role may not " +
+L256:         "have permission to modify it.",
+L257:     );
+L258:   }
+L259: 
+L260:   if (
+L261:     patch.assignee_id !== undefined &&
+L262:     data.assignee_id !== patch.assignee_id
+L263:   ) {
+L264:     throw new Error(
+L265:       "The selected employee was not saved as the task assignee.",
+L266:     );
+L267:   }
+L268: 
+L269:   if (
+L270:     patch.department_id !== undefined &&
+L271:     data.department_id !== patch.department_id
+L272:   ) {
+L273:     throw new Error(
+L274:       "The task department was not saved correctly.",
+L275:     );
+L276:   }
+L277: 
+L278:   if (
+L279:     patch.status !== undefined &&
+L280:     data.status !== patch.status
+L281:   ) {
+L282:     throw new Error(
+L283:       "The requested task status was not saved.",
+L284:     );
+L285:   }
+L286: 
+L287:   if (
+L288:     patch.progress !== undefined &&
+L289:     data.progress !== patch.progress
+L290:   ) {
+L291:     throw new Error(
+L292:       "The requested task progress was not saved.",
+L293:     );
+L294:   }
+L295: 
+L296:   return data;
+L297: }
+L298: 
+L299: /**
+L300:  * Creates a task and verifies the persisted row.
+L301:  *
+L302:  * Never report successful creation for a zero-row insert.
+L303:  */
+L304: async function createTaskAndConfirm(
+L305:   organizationId: string,
+L306:   userId: string,
+L307:   payload: NewTaskPayload,
+L308: ) {
+L309:   const { data: documentReference, error: referenceError } =
+L310:     await guardedRpc(
+L311:       supabase,
+L312:       "next_document_number",
+L313:       {
+L314:         _doc_type: "task",
+L315:       },
+L316:     );
+L317: 
+L318:   if (referenceError) {
+L319:     throw new Error(
+L320:       `Could not generate a task reference: ${referenceError.message}`,
+L321:     );
+L322:   }
+L323: 
+L324:   if (
+L325:     typeof documentReference !== "string" ||
+L326:     !documentReference.trim()
+L327:   ) {
+L328:     throw new Error(
+L329:       "The task reference generator returned no valid reference.",
+L330:     );
+L331:   }
+L332: 
+L333:   const expectedStatus = payload.assignee_id
+L334:     ? "assigned"
+L335:     : "new";
+L336: 
+L337:   const { data, error } = await supabase
+L338:     .from("tasks")
+L339:     .insert({
+L340:       organization_id: organizationId,
+L341:       created_by: userId,
+L342:       reference: documentReference,
+L343:       ...payload,
+L344:       status: expectedStatus,
+L345:     })
+L346:     .select(
+L347:       "id, reference, organization_id, assignee_id, department_id, status",
+L348:     )
+L349:     .single();
+L350: 
+L351:   if (error) {
+L352:     throw new Error(
+L353:       `Task creation failed: ${error.message}`,
+L354:     );
+L355:   }
+L356: 
+L357:   if (!data?.id) {
+L358:     throw new Error(
+L359:       "Task creation was not confirmed by the database.",
+L360:     );
+L361:   }
+L362: 
+L363:   if (data.organization_id !== organizationId) {
+L364:     throw new Error(
+L365:       "The created task was returned under an unexpected organisation.",
+L366:     );
+L367:   }
+L368: 
+L369:   if (
+L370:     data.department_id !== payload.department_id
+L371:   ) {
+L372:     throw new Error(
+L373:       "The task was created but its department does not match the selected department.",
+L374:     );
+L375:   }
+L376: 
+L377:   if (
+L378:     data.assignee_id !== payload.assignee_id
+L379:   ) {
+L380:     throw new Error(
+L381:       "The task was created but its assignee does not match the selected employee.",
+L382:     );
+L383:   }
+L384: 
+L385:   if (data.status !== expectedStatus) {
+L386:     throw new Error(
+L387:       "The task was created but its status does not match the requested status.",
+L388:     );
+L389:   }
+L390: 
+L391:   return data;
+L392: }
+L393: 
+L394: /* ============================================================
+L395:    MAIN TASK PAGE
+L396:    ============================================================ */
+L397: 
+L398: function TasksPage() {
+L399:   const { applyScope, scopeKey } = useDataScope();
+L400: 
+
+================================================
+FILE: supabase/migrations/20260819083252_a14acb00-1d37-458f-a536-eee7db625216.sql
+LINES: 75 - 150
+================================================
+L75:     UNION
+L76:     SELECT p.branch_id FROM public.profiles p
+L77:       WHERE p.id = auth.uid() AND p.branch_id IS NOT NULL
+L78:   ) s;
+L79: $$;
+L80: 
+L81: CREATE OR REPLACE FUNCTION public.current_department_ids()
+L82: RETURNS uuid[]
+L83: LANGUAGE sql
+L84: STABLE
+L85: SECURITY DEFINER
+L86: SET search_path = public
+L87: AS $$
+L88:   SELECT coalesce(array_agg(DISTINCT d), '{}'::uuid[]) FROM (
+L89:     SELECT ud.department_id AS d FROM public.user_departments ud
+L90:       WHERE ud.user_id = auth.uid() AND ud.department_id IS NOT NULL
+L91:     UNION
+L92:     SELECT p.department_id FROM public.profiles p
+L93:       WHERE p.id = auth.uid() AND p.department_id IS NOT NULL
+L94:   ) s;
+L95: $$;
+L96: 
+L97: CREATE OR REPLACE FUNCTION public.current_station_ids()
+L98: RETURNS uuid[]
+L99: LANGUAGE sql
+L100: STABLE
+L101: SECURITY DEFINER
+L102: SET search_path = public
+L103: AS $$
+L104:   SELECT coalesce(array_agg(DISTINCT us.station_id), '{}'::uuid[])
+L105:   FROM public.user_stations us
+L106:   WHERE us.user_id = auth.uid() AND us.station_id IS NOT NULL;
+L107: $$;
+L108: 
+L109: CREATE OR REPLACE FUNCTION public.current_access_scope()
+L110: RETURNS text
+L111: LANGUAGE sql
+L112: STABLE
+L113: SECURITY DEFINER
+L114: SET search_path = public
+L115: AS $$
+L116:   SELECT coalesce(
+L117:     (SELECT s.lvl FROM (
+L118:        SELECT coalesce(r.access_scope, public.role_scope_level(r.name)) AS lvl
+L119:        FROM public.user_roles ur
+L120:        JOIN public.roles r ON r.id = ur.role_id
+L121:        WHERE ur.user_id = auth.uid()
+L122:          AND ur.organization_id = public.current_org_id()
+L123:      ) s
+L124:      ORDER BY public.scope_rank(s.lvl) DESC
+L125:      LIMIT 1),
+L126:     'self');
+L127: $$;
+L128: 
+L129: CREATE OR REPLACE FUNCTION public.manages_department(_department_id uuid)
+L130: RETURNS boolean
+L131: LANGUAGE sql
+L132: STABLE
+L133: SECURITY DEFINER
+L134: SET search_path = public
+L135: AS $$
+L136:   SELECT _department_id IS NOT NULL
+L137:      AND public.scope_rank(public.current_access_scope()) >= 3
+L138:      AND (public.scope_rank(public.current_access_scope()) >= 4
+L139:           OR _department_id = ANY (public.current_department_ids()));
+L140: $$;
+L141: 
+L142: CREATE OR REPLACE FUNCTION public.supervises_user(_user_id uuid)
+L143: RETURNS boolean
+L144: LANGUAGE sql
+L145: STABLE
+L146: SECURITY DEFINER
+L147: SET search_path = public
+L148: AS $$
+L149:   SELECT _user_id IS NOT NULL AND (
+L150:     _user_id = auth.uid()

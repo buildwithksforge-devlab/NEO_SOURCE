@@ -1,518 +1,404 @@
-import { useMemo, useState } from "react";
-import { NeoDatePicker } from "@/components/common/DatePicker";
-import { ReceiveStockDialog } from "@/components/inventory/ReceiveStockDialog";
-import { ReceiptFinanceTrail } from "@/components/inventory/ReceiptFinanceTrail";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import { guardedRpc } from "@/lib/rpc-guard";
+import { supabase } from "@/integrations/supabase/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
-import { PackageCheck } from "lucide-react";
-import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
-import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
+import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { QueryState } from "@/components/pms/PmsShared";
-import { ReconciliationPanel } from "@/components/common/ReconciliationPanel";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useActivePropertyFilter } from "@/lib/branch-filter";
-import { DeliveryReconciliationPanel } from "@/components/inventory/DeliveryReconciliationPanel";
-import { reconcileDelivery, useLedgerOnHand } from "@/lib/delivery-reconciliation";
-import { useProcurementReconciliation } from "@/lib/ops-reconciliation";
-import { useStockLocations } from "@/lib/inventory-data";
-import { formatMoney, statusTone, titleCase, type Row } from "@/lib/inventory";
-import { useRecentGoodsReceipts } from "@/lib/procurement-data";
-import { useTenant } from "@/lib/tenant";
-import {
-  newAttemptKey,
-  outstandingOf,
-  useReceivableOrders,
-  useReceiveGoods,
-} from "@/lib/stores-lifecycle";
+import { Button } from "@/components/ui/button";
+import { useReceivableOrders } from "@/lib/stores-lifecycle";
+
+type BlindItem = {
+  id: string;
+  stock_item_id: string | null;
+  name: string;
+  unit: string;
+};
+
+type BlindOrder = {
+  id: string;
+  order_number: string;
+  supplier_name: string;
+  branch_id: string;
+  deliver_to_location_id: string | null;
+  items: BlindItem[];
+};
+
+const db = supabase as any;
 
 export const Route = createFileRoute("/_shell/inventory/receiving")({
-  head: () => ({
-    meta: [
-      { title: "Goods receiving — NEØ" },
-      {
-        name: "description",
-        content:
-          "Receive supplier deliveries against their purchase order, in full or in part, and post them into stock exactly once.",
-      },
-      { property: "og:title", content: "Goods receiving — NEØ" },
-      {
-        property: "og:description",
-        content:
-          "Receive supplier deliveries against their purchase order, in full or in part, and post them into stock exactly once.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
   component: GuardedPage,
 });
 
 function Page() {
-  const { tenant } = useTenant();
-  const symbol = tenant.regional.currencySymbol;
-  const { branchId } = useActivePropertyFilter();
   const orders = useReceivableOrders();
-  const locations = useStockLocations();
-  const receive = useReceiveGoods();
-  const health = useProcurementReconciliation(branchId);
-  const recentReceipts = useRecentGoodsReceipts();
-  const [directOpen, setDirectOpen] = useState(false);
 
-  const [openOrder, setOpenOrder] = useState<string | null>(null);
-  const [locationId, setLocationId] = useState("");
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState("");
+  const submitCount = useMutation({
+    mutationFn: async (payload: {
+      orderId: string;
+      locationId: string;
+      deliveryNote: string;
+      remarks: string;
+      lines: Array<{
+        order_line_id: string;
+        quantity_delivered: number;
+        quantity_rejected: number;
+        rejection_reason?: string | undefined;
+        batch_number?: string | undefined;
+        expiry_date?: string | undefined;
+      }>;
+    }) => {
+      const { data, error } = await guardedRpc(
+        db,
+        "neo_submit_blind_receiving_count",
+        {
+          _order: payload.orderId,
+          _location: payload.locationId,
+          _delivery_note: payload.deliveryNote,
+          _remarks: payload.remarks,
+          _lines: payload.lines,
+        },
+      );
+
+      if (error) throw new Error(error.message);
+
+      return data;
+    },
+
+    onSuccess: () => {
+      toast.success(
+        "Blind receiving count submitted. Awaiting reconciliation."
+      );
+      setSelected(null);
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const [delivered, setDelivered] = useState<Record<string, string>>({});
+  const [rejected, setRejected] = useState<Record<string, string>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [batches, setBatches] = useState<Record<string, string>>({});
   const [expiries, setExpiries] = useState<Record<string, string>>({});
-  const [lineReasons, setLineReasons] = useState<Record<string, string>>({});
-  const [rejected, setRejected] = useState<Record<string, string>>({});
-  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [deliveryNote, setDeliveryNote] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [attemptKey, setAttemptKey] = useState(newAttemptKey);
-  const [varianceAcknowledged, setVarianceAcknowledged] = useState(false);
+  const [remarks, setRemarks] = useState("");
 
-  const orderRows = (orders.data ?? []) as Row[];
-  const locationRows = (locations.data ?? []) as Row[];
-  const active = orderRows.find((o) => String(o["id"]) === openOrder) ?? null;
-  const lines = ((active?.["purchase_order_lines"] as Row[] | undefined) ?? []).slice();
+  const rows = (orders.data ?? []) as BlindOrder[];
 
-  const itemIds = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          lines
-            .map((l) => (l["stock_item_id"] ? String(l["stock_item_id"]) : ""))
-            .filter((id) => id.length > 0),
-        ),
-      ),
-    [lines],
-  );
-  const ledger = useLedgerOnHand(itemIds, locationId || null);
-  const reconciliation = useMemo(
-    () => reconcileDelivery(lines, quantities, rejected, ledger.data),
-    [lines, quantities, rejected, ledger.data],
-  );
-  const blockedByVariance = reconciliation.hasExceptions && !varianceAcknowledged;
+  const active = rows.find((order) => order.id === selected);
 
-
-  const overLines = useMemo(
-    () =>
-      lines
-        .filter((l) => Number(quantities[String(l["id"])] ?? 0) > outstandingOf(l) + 0.0001)
-        .map((l) => String(l["id"])),
-    [lines, quantities],
-  );
-  const missingReason = overLines.some((id) => (lineReasons[id] ?? "").trim().length === 0);
-  // Anything turned away at the gate has to say why, otherwise the supplier
-  // dispute later has nothing behind it.
-  const missingRejectReason = lines.some(
-    (l) =>
-      Number(rejected[String(l["id"])] ?? 0) > 0 &&
-      (rejectReasons[String(l["id"])] ?? "").trim().length === 0,
-  );
-  const badSplit = lines.some(
-    (l) =>
-      Number(rejected[String(l["id"])] ?? 0) > Number(quantities[String(l["id"])] ?? 0) + 0.0001,
-  );
-
-  function acceptedOf(id: string) {
-    return Math.max(Number(quantities[id] ?? 0) - Number(rejected[id] ?? 0), 0);
-  }
-
-  function start(order: Row) {
-    setOpenOrder(String(order["id"]));
-    setLocationId(String(order["deliver_to_location_id"] ?? ""));
-    setQuantities({});
-    setNotes("");
+  function openOrder(id: string) {
+    setSelected(id);
+    setDelivered({});
+    setRejected({});
+    setReasons({});
     setBatches({});
     setExpiries({});
-    setLineReasons({});
-    setRejected({});
-    setRejectReasons({});
     setDeliveryNote("");
-    setInvoiceNumber("");
-    setAttemptKey(newAttemptKey());
-    setVarianceAcknowledged(false);
+    setRemarks("");
   }
 
-  function submit() {
+  function handleSubmit() {
     if (!active) return;
-    const payload = lines
-      .map((l) => {
-        const id = String(l["id"]);
-        const reason = (lineReasons[id] ?? "").trim();
-        const rejectQty = Number(rejected[id] ?? 0);
-        const rejectReason = (rejectReasons[id] ?? "").trim();
-        return {
-          order_line_id: id,
-          quantity_received: Number(quantities[id] ?? 0),
-          ...(rejectQty > 0 ? { quantity_rejected: rejectQty } : {}),
-          ...(rejectQty > 0 && rejectReason ? { rejection_reason: rejectReason } : {}),
-          ...(batches[id]?.trim() ? { batch_number: batches[id]!.trim() } : {}),
-          ...(expiries[id] ? { expiry_date: expiries[id]! } : {}),
-          ...(reason ? { over_receipt_reason: reason } : {}),
-        };
-      })
-      .filter((l) => l.quantity_received > 0);
-    if (payload.length === 0) return;
-    // The browser never decides whether an over-receipt is permitted; it only
-    // carries the line reason the database requires before it checks authority.
-    const input = { orderId: String(active["id"]), locationId, lines: payload, attemptKey };
-    receive.mutate(
-      {
-        ...input,
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
-        ...(deliveryNote.trim() ? { deliveryNoteNumber: deliveryNote.trim() } : {}),
-        ...(invoiceNumber.trim() ? { supplierInvoiceNumber: invoiceNumber.trim() } : {}),
-      },
-      { onSuccess: () => setOpenOrder(null) },
+
+    if (!deliveryNote.trim()) {
+      toast.error("Supplier delivery note number is required.");
+      return;
+    }
+
+    const lines = active.items.map((item) => ({
+      order_line_id: item.id,
+      quantity_delivered: Number(delivered[item.id] || 0),
+      quantity_rejected: Number(rejected[item.id] || 0),
+      rejection_reason: reasons[item.id] || undefined,
+      batch_number: batches[item.id] || undefined,
+      expiry_date: expiries[item.id] || undefined,
+    }));
+
+    const invalid = lines.some(
+      (line) =>
+        !Number.isFinite(line.quantity_delivered) ||
+        !Number.isFinite(line.quantity_rejected) ||
+        line.quantity_delivered < 0 ||
+        line.quantity_rejected < 0 ||
+        line.quantity_rejected > line.quantity_delivered ||
+        (line.quantity_rejected > 0 && !line.rejection_reason?.trim())
     );
+
+    if (invalid) {
+      toast.error("Check delivered and rejected quantities.");
+      return;
+    }
+
+    if (!lines.some((line) => line.quantity_delivered > 0)) {
+      toast.error("Enter at least one delivered quantity.");
+      return;
+    }
+
+    submitCount.mutate({
+      orderId: active.id,
+      locationId: active.deliver_to_location_id ?? "",
+      deliveryNote: deliveryNote.trim(),
+      remarks,
+      lines,
+    });
   }
 
   return (
     <div className="space-y-6">
+
       <PageHeader
         eyebrow="Supply Chain"
-        title="Goods receiving"
-        description="Count the delivery against the order. Partial deliveries are normal; receiving more than was ordered needs both a written reason and over-receipt authority."
-        actions={
-          <Button variant="outline" onClick={() => setDirectOpen(true)}>
-            Direct / opening receipt
-          </Button>
-        }
+        title="Blind Goods Receiving"
+        description="Count what physically arrived. Purchase order quantities and prices are hidden until the receiving count is submitted."
       />
-
-      <ReceiveStockDialog open={directOpen} onOpenChange={setDirectOpen} />
-
-      <ReceiptFinanceTrail symbol={symbol} />
-
 
       <QueryState
         isLoading={orders.isLoading}
         error={orders.error}
-        isEmpty={orderRows.length === 0}
+        isEmpty={rows.length === 0}
         empty={
-          <SectionCard
-            title="Nothing to receive"
-            description="Approved purchase orders appear here as soon as a buyer issues them."
-          >
-            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <PackageCheck className="h-4 w-4" /> No open orders for this property.
+          <SectionCard title="No deliveries awaiting receiving">
+            <p className="py-4 text-sm text-muted-foreground">
+              No eligible purchase orders are currently available for this property.
             </p>
           </SectionCard>
         }
       >
         <SectionCard
-          title="Open purchase orders"
-          description="Choose the order the delivery belongs to."
+          title="Purchase orders awaiting delivery"
+          description="Select the supplier delivery you are counting."
         >
-          <ul className="divide-y divide-border">
-            {orderRows.map((o) => (
-              <li
-                key={String(o["id"])}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+          <div className="space-y-3">
+            {rows.map((order) => (
+              <div
+                key={order.id}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4"
               >
                 <div>
-                  <p className="font-medium">{String(o["order_number"] ?? "Purchase order")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {`${(o["suppliers"] as Row | null)?.["name"] ?? "Supplier"} · ${formatMoney(o["total_amount"], symbol)}`}
-                    {o["expected_date"] ? ` · expected ${String(o["expected_date"])}` : ""}
+                  <p className="font-medium">{order.order_number}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {order.supplier_name}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <StatusPill tone={statusTone(String(o["status"] ?? ""))}>
-                    {titleCase(String(o["status"] ?? ""))}
-                  </StatusPill>
-                  <Button
-                    size="sm"
-                    variant={openOrder === String(o["id"]) ? "secondary" : "default"}
-                    onClick={() => start(o)}
-                  >
-                    Receive delivery
-                  </Button>
-                </div>
-              </li>
+
+                <Button
+                  variant={selected === order.id ? "secondary" : "default"}
+                  onClick={() => openOrder(order.id)}
+                >
+                  Start blind count
+                </Button>
+              </div>
             ))}
-          </ul>
+          </div>
         </SectionCard>
       </QueryState>
 
-      {active ? (
+      {active && (
         <SectionCard
-          title={`Receive against ${String(active["order_number"] ?? "order")}`}
-          description="Enter what physically arrived. Blank or zero lines are simply not received yet."
+          title={`Blind count — ${active.order_number}`}
+          description="Enter the delivered quantities independently. Expected quantities and purchase prices are not available on this screen."
         >
-          <div className="space-y-4">
+          <div className="space-y-6">
+
+            <div className="rounded-lg border p-4">
+              <p className="text-sm font-medium">
+                Supplier: {active.supplier_name}
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Count all items physically before recording acceptance or rejection.
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
+
               <div className="space-y-2">
-                <Label>Receiving store</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Where is it being stored?" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locationRows.map((l) => (
-                      <SelectItem key={String(l["id"])} value={String(l["id"])}>
-                        {String(l["name"])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="grn-note-number">Supplier delivery note no.</Label>
+                <Label>Supplier delivery note number</Label>
                 <Input
-                  id="grn-note-number"
                   value={deliveryNote}
                   onChange={(e) => setDeliveryNote(e.target.value)}
-                  placeholder="As printed on the delivery note"
+                  placeholder="Enter delivery note reference"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="grn-invoice">Supplier invoice no.</Label>
+                <Label>Receiving remarks</Label>
                 <Input
-                  id="grn-invoice"
-                  value={invoiceNumber}
-                  onChange={(e) => setInvoiceNumber(e.target.value)}
-                  placeholder="If the invoice came with the goods"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Driver, vehicle or delivery condition"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="grn-notes">Receiving remarks</Label>
-                <Input
-                  id="grn-notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Driver, vehicle, condition on arrival…"
-                />
-              </div>
+
             </div>
 
-            <ul className="divide-y divide-border">
-              {lines.map((l) => {
-                const outstanding = outstandingOf(l);
-                const id = String(l["id"]);
-                const over = overLines.includes(id);
+            <div className="space-y-4">
+              {active.items.map((item) => {
+                const qty = Number(delivered[item.id] || 0);
+                const rejectQty = Number(rejected[item.id] || 0);
+
                 return (
-                  <li key={id} className="space-y-2 py-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">
-                          {String(
-                            (l["stock_items"] as Row | null)?.["name"] ??
-                              l["description"] ??
-                              "Item",
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {`Ordered ${Number(l["quantity"] ?? 0)} ${String(l["unit"] ?? "")} · already received ${Number(l["received_quantity"] ?? 0)} · outstanding ${outstanding}`}
-                        </p>
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs" htmlFor={`recv-${id}`}>
-                            Delivered
-                          </Label>
-                          <Input
-                            id={`recv-${id}`}
-                            className="w-28"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={quantities[id] ?? ""}
-                            onChange={(e) => setQuantities((q) => ({ ...q, [id]: e.target.value }))}
-                            placeholder="0"
-                            aria-label={`Quantity delivered for ${String((l["stock_items"] as Row | null)?.["name"] ?? "item")}`}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs" htmlFor={`rej-${id}`}>
-                            Rejected
-                          </Label>
-                          <Input
-                            id={`rej-${id}`}
-                            className="w-28"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={rejected[id] ?? ""}
-                            onChange={(e) => setRejected((r) => ({ ...r, [id]: e.target.value }))}
-                            placeholder="0"
-                            aria-label={`Quantity rejected for ${String((l["stock_items"] as Row | null)?.["name"] ?? "item")}`}
-                          />
-                        </div>
-                        <p className="pb-2 text-xs text-muted-foreground">
-                          {`Accepted into stock: ${acceptedOf(id)}`}
-                        </p>
-                      </div>
+                  <div
+                    key={item.id}
+                    className="space-y-4 rounded-lg border p-4"
+                  >
+                    <div>
+                      <p className="font-medium">{item.name}</p>
+
+                      <p className="text-sm text-muted-foreground">
+                        Unit: {item.unit}
+                      </p>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        value={batches[id] ?? ""}
-                        onChange={(e) => setBatches((b) => ({ ...b, [id]: e.target.value }))}
-                        placeholder="Batch / lot number"
-                        aria-label={`Batch number for ${String((l["stock_items"] as Row | null)?.["name"] ?? "item")}`}
-                      />
-                      <NeoDatePicker
-                        value={expiries[id] ?? ""}
-                        onChange={(v) => setExpiries((x) => ({ ...x, [id]: v }))}
-                        ariaLabel={`Expiry date for ${String((l["stock_items"] as Row | null)?.["name"] ?? "item")}`}
-                      />
-                    </div>
-                    {Number(rejected[id] ?? 0) > 0 ? (
-                      <div className="space-y-1 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-                        <Label htmlFor={`rej-reason-${id}`}>
-                          Why was part of this line rejected?
-                        </Label>
-                        <Textarea
-                          id={`rej-reason-${id}`}
-                          value={rejectReasons[id] ?? ""}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+
+                      <div className="space-y-2">
+                        <Label>Quantity physically delivered</Label>
+
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={delivered[item.id] ?? ""}
                           onChange={(e) =>
-                            setRejectReasons((r) => ({ ...r, [id]: e.target.value }))
+                            setDelivered((previous) => ({
+                              ...previous,
+                              [item.id]: e.target.value,
+                            }))
                           }
-                          placeholder="Damaged, short-dated, wrong specification…"
                         />
-                        {Number(rejected[id] ?? 0) > Number(quantities[id] ?? 0) + 0.0001 ? (
-                          <p className="text-xs text-destructive">
-                            You cannot reject more than was delivered on this line.
-                          </p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Only the accepted quantity is posted into stock; the rejection stays on
-                            the receipt.
-                          </p>
-                        )}
                       </div>
-                    ) : null}
-                    {over ? (
-                      <div className="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-3">
-                        <Label htmlFor={`over-${id}`}>Over-receipt reason for this line</Label>
+
+                      <div className="space-y-2">
+                        <Label>Quantity rejected</Label>
+
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={rejected[item.id] ?? ""}
+                          onChange={(e) =>
+                            setRejected((previous) => ({
+                              ...previous,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                    </div>
+
+                    {rejectQty > 0 && (
+                      <div className="space-y-2">
+                        <Label>Reason for rejection</Label>
+
                         <Textarea
-                          id={`over-${id}`}
-                          value={lineReasons[id] ?? ""}
-                          onChange={(e) => setLineReasons((r) => ({ ...r, [id]: e.target.value }))}
-                          placeholder={`Only ${outstanding} outstanding — explain why more is being accepted.`}
+                          value={reasons[item.id] ?? ""}
+                          onChange={(e) =>
+                            setReasons((previous) => ({
+                              ...previous,
+                              [item.id]: e.target.value,
+                            }))
+                          }
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Written to the audit trail and refused unless you hold over-receipt
-                          authority.
-                        </p>
                       </div>
-                    ) : null}
-                  </li>
+                    )}
+
+                    {rejectQty > qty && (
+                      <p className="text-sm text-destructive">
+                        Rejected quantity cannot exceed delivered quantity.
+                      </p>
+                    )}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+
+                      <div className="space-y-2">
+                        <Label>Batch / lot number</Label>
+
+                        <Input
+                          value={batches[item.id] ?? ""}
+                          onChange={(e) =>
+                            setBatches((previous) => ({
+                              ...previous,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Expiry date</Label>
+
+                        <Input
+                          type="date"
+                          value={expiries[item.id] ?? ""}
+                          onChange={(e) =>
+                            setExpiries((previous) => ({
+                              ...previous,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Quantity accepted after physical inspection:
+                      {" "}{Math.max(qty - rejectQty, 0)} {item.unit}
+                    </p>
+                  </div>
                 );
               })}
-            </ul>
-
-            <DeliveryReconciliationPanel
-              reconciliation={reconciliation}
-              ledgerReady={Boolean(locationId) && !ledger.isLoading && !ledger.error}
-              acknowledged={varianceAcknowledged}
-              onAcknowledgedChange={setVarianceAcknowledged}
-            />
-
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setOpenOrder(null)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={
-                  !locationId ||
-                  receive.isPending ||
-                  missingReason ||
-                  missingRejectReason ||
-                  badSplit ||
-                  blockedByVariance ||
-                  lines.every((l) => Number(quantities[String(l["id"])] ?? 0) <= 0)
-                }
-                onClick={submit}
-              >
-                Post receipt to stock
-              </Button>
             </div>
+
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              Blind counting is enabled. Stock posting remains locked
+              until the A10 database authorization and reconciliation
+              controls are installed.
+            </div>
+
+            <div className="flex justify-end gap-3">
+
+              <Button
+                variant="outline"
+                onClick={() => setSelected(null)}
+              >
+                Close count
+              </Button>
+
+              <Button
+                disabled={submitCount.isPending}
+                onClick={handleSubmit}
+              >
+                {submitCount.isPending
+                  ? "Submitting count..."
+                  : "Submit blind receiving count"}
+              </Button>
+
+            </div>
+
           </div>
         </SectionCard>
-      ) : null}
+      )}
 
-      <SectionCard
-        title="Recent GRNs"
-        description="Posted goods receipts for this property. Retrieve the canonical GRN document at any time after posting."
-      >
-        <QueryState
-          isLoading={recentReceipts.isLoading}
-          error={recentReceipts.error}
-          isEmpty={(recentReceipts.data ?? []).length === 0}
-          empty={
-            <p className="py-4 text-sm text-muted-foreground">
-              No posted goods receipts yet.
-            </p>
-          }
-        >
-          <ul className="divide-y divide-border">
-            {((recentReceipts.data ?? []) as Row[]).map((grn) => (
-              <li
-                key={String(grn["id"])}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
-              >
-                <div>
-                  <p className="font-medium">
-                    {String(grn["grn_number"] ?? "Goods receipt")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {String((grn["suppliers"] as Row | null)?.["name"] ?? "Supplier")}
-                    {" · "}
-                    {String((grn["purchase_orders"] as Row | null)?.["order_number"] ?? "No LPO")}
-                    {" · "}
-                    {formatMoney(grn["total_value"], symbol)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {grn["received_at"] ? String(grn["received_at"]) : ""}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <StatusPill tone={statusTone(String(grn["status"] ?? ""))}>
-                    {titleCase(String(grn["status"] ?? ""))}
-                  </StatusPill>
-
-                  <DocumentPrintButton
-                    type="goods_receipt"
-                    id={String(grn["id"])}
-                    label="Download PDF"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </QueryState>
-      </SectionCard>
-
-      <ReconciliationPanel
-        title="Receiving and stock integrity"
-        description="Ordered against received against stock on hand, computed in the database within your property scope."
-        report={health.data}
-        isLoading={health.isLoading}
-        error={health.error}
-      />
     </div>
   );
 }
 
-// Every Supply Chain screen writes to stock, money or supplier records, so the
-// page itself asks for the capability its route declares — never the shell.
 function GuardedPage() {
-  return (
+return (
     <OpsGuard path="/inventory/receiving">
       <Page />
     </OpsGuard>

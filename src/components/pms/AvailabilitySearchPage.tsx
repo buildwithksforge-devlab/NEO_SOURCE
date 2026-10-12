@@ -56,7 +56,7 @@ export function AvailabilityPage() {
   const navigate = routeApi.useNavigate();
   useEffect(() => {
     if (!resolved.needsCanonicalUrl) return;
-    void navigate({ search: (prev) => ({ ...prev, ...committed }), replace: true });
+    void navigate({ to: "/pms/availability", search: committed, replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved.needsCanonicalUrl, committed.arrival, committed.departure, committed.roomType, committed.adults, committed.children]);
 
@@ -491,4 +491,3 @@ function RoomCard({
     </article>
   );
 }
-
