@@ -666,6 +666,12 @@ export const navigation: NavGroup[] = [
         roles: ["owner", "manager", "accountant"],
       },
       {
+        label: "Receiving Reconciliation",
+        to: "/procurement/reconciliation",
+        icon: ClipboardList,
+        roles: ["owner", "manager"],
+      },
+      {
         label: "Goods Receiving",
         to: "/inventory/receiving",
         icon: PackageCheck,

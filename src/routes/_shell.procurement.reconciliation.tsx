@@ -14,6 +14,8 @@ const db = supabase as any;
 type ReviewLine = {
   count_line_id: string;
   order_line_id: string;
+  item_name?: string;
+  unit?: string;
   ordered_quantity: number;
   previously_received: number;
   cancelled_quantity: number;
@@ -97,7 +99,7 @@ function Page() {
       toast.success("Receiving review decision recorded.");
 
       void queryClient.invalidateQueries({
-        queryKey: ["procurement", "blind-reconciliation"],
+        queryKey: ["procurement"],
       });
     },
 
@@ -317,6 +319,9 @@ function Page() {
                         <th className="p-3 text-right">Rejected</th>
                         <th className="p-3 text-right">Accepted</th>
                         <th className="p-3 text-right">Variance</th>
+                        <th className="p-3">Batch</th>
+                        <th className="p-3">Expiry</th>
+                        <th className="p-3">Rejection reason</th>
                         <th className="p-3">Result</th>
                       </tr>
                     </thead>
@@ -327,8 +332,13 @@ function Page() {
                           key={line.count_line_id}
                           className="border-b last:border-0"
                         >
-                          <td className="p-3 font-mono text-xs">
-                            {line.order_line_id.slice(0, 8)}
+                          <td className="p-3">
+                            <p className="font-medium">
+                              {line.item_name || "Unidentified item"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {line.unit || "Unit not specified"}
+                            </p>
                           </td>
 
                           <td className="p-3 text-right">
@@ -357,6 +367,16 @@ function Page() {
 
                           <td className="p-3 text-right">
                             {formatQuantity(line.difference)}
+                          </td>
+
+                          <td className="p-3">
+                            {line.batch_number || "Not entered"}
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            {line.expiry_date || "Not entered"}
+                          </td>
+                          <td className="p-3">
+                            {line.rejection_reason || "Not entered"}
                           </td>
 
                           <td className="p-3">

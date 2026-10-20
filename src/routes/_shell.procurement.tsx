@@ -28,6 +28,7 @@ const TABS = [
   { label: "Requests", to: "/procurement/requests" },
   { label: "Quotations", to: "/procurement/quotations" },
   { label: "Order Tracking", to: "/procurement/orders" },
+  { label: "Receiving Reconciliation", to: "/procurement/reconciliation" },
   { label: "Tasks", to: "/procurement/tasks" },
   { label: "Office Supplies", to: "/procurement/supplies" },
 ];

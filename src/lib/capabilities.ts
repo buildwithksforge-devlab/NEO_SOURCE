@@ -226,6 +226,7 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/procurement/dashboard", module: "procurement", feature: "overview" },
   { prefix: "/procurement/requests", module: "procurement", feature: "requests" },
   { prefix: "/procurement/orders", module: "procurement", feature: "orders" },
+  { prefix: "/procurement/reconciliation", module: "procurement", feature: "orders" },
   { prefix: "/procurement/supplier-portal", module: "procurement", feature: "orders" },
   { prefix: "/procurement/branch", module: "procurement", feature: "overview" },
   { prefix: "/procurement/quotations", module: "procurement", feature: "quotations" },
