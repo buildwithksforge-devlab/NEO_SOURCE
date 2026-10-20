@@ -1,3 +1,4 @@
+import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -224,6 +225,8 @@ function Page() {
         title="Blind Goods Receiving"
         description="Count what physically arrived. Purchase order quantities and prices are hidden until the receiving count is submitted."
       />
+
+      <ApprovedReceivingPosting />
 
       <QueryState
         isLoading={orders.isLoading}

@@ -8,6 +8,7 @@
  * types, and the routine refuses plainly when the property has no receivable,
  * revenue or VAT account configured.
  */
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +50,11 @@ export function invoiceFailure(reason?: string): string {
 
 export function useRaisePartnerInvoice(relationshipId: string | null) {
   const queryClient = useQueryClient();
+  // neoPartnerInvoiceAttemptV1: retain the ID after request errors.
+  const invoiceAttempt = useRef<{
+    fingerprint: string;
+    id: string;
+  } | null>(null);
   return useMutation({
     mutationFn: async (input: {
       lines: PartnerInvoiceLine[];
@@ -56,9 +62,27 @@ export function useRaisePartnerInvoice(relationshipId: string | null) {
       notes?: string;
       message?: string;
     }) => {
+      const fingerprint = JSON.stringify({
+        relationshipId,
+        lines: input.lines,
+        due: input.due || null,
+        notes: input.notes ?? null,
+        message: input.message ?? null,
+      });
+      if (invoiceAttempt.current?.fingerprint !== fingerprint) {
+        invoiceAttempt.current = {
+          fingerprint,
+          id: crypto.randomUUID(),
+        };
+      }
+      const submissionId = invoiceAttempt.current!.id;
       const { data, error } = await guardedRpc(supabase, "neo_partner_invoice_raise", {
         _relationship: relationshipId,
-        _lines: input.lines,
+        _lines: input.lines.map((line, index) =>
+          index === 0
+            ? { ...line, _submission_id: submissionId }
+            : line
+        ),
         _due: input.due || null,
         _notes: input.notes ?? null,
         _message: input.message ?? null,
@@ -74,6 +98,7 @@ export function useRaisePartnerInvoice(relationshipId: string | null) {
       return result;
     },
     onSuccess: (result) => {
+      invoiceAttempt.current = null;
       toast.success(`Invoice ${result.invoice_number ?? ""} sent to the partner`.trim());
       void queryClient.invalidateQueries({ queryKey: ["hotel-partner-threads", relationshipId] });
     },

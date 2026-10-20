@@ -1,0 +1,242 @@
+[1mdiff --git a/src/routes/_shell.inventory.receiving.tsx b/src/routes/_shell.inventory.receiving.tsx[m
+[1mindex 251218f..61db675 100644[m
+[1m--- a/src/routes/_shell.inventory.receiving.tsx[m
+[1m+++ b/src/routes/_shell.inventory.receiving.tsx[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-import { useState } from "react";[m
+[32m+[m[32mimport { useEffect, useRef, useState } from "react";[m
+ import { useMutation } from "@tanstack/react-query";[m
+ import { toast } from "sonner";[m
+ [m
+[36m@@ -30,6 +30,21 @@[m [mtype BlindOrder = {[m
+   items: BlindItem[];[m
+ };[m
+ [m
+[32m+[m[32mtype BlindCountPayload = {[m
+[32m+[m[32m  orderId: string;[m
+[32m+[m[32m  locationId: string;[m
+[32m+[m[32m  deliveryNote: string;[m
+[32m+[m[32m  remarks: string;[m
+[32m+[m[32m  lines: Array<{[m
+[32m+[m[32m    order_line_id: string;[m
+[32m+[m[32m    quantity_delivered: number;[m
+[32m+[m[32m    quantity_rejected: number;[m
+[32m+[m[32m    rejection_reason?: string | undefined;[m
+[32m+[m[32m    batch_number?: string | undefined;[m
+[32m+[m[32m    expiry_date?: string | undefined;[m
+[32m+[m[32m  }>;[m
+[32m+[m[32m};[m
+[32m+[m
+ const db = supabase as any;[m
+ [m
+ export const Route = createFileRoute("/_shell/inventory/receiving")({[m
+[36m@@ -40,20 +55,7 @@[m [mfunction Page() {[m
+   const orders = useReceivableOrders();[m
+ [m
+   const submitCount = useMutation({[m
+[31m-    mutationFn: async (payload: {[m
+[31m-      orderId: string;[m
+[31m-      locationId: string;[m
+[31m-      deliveryNote: string;[m
+[31m-      remarks: string;[m
+[31m-      lines: Array<{[m
+[31m-        order_line_id: string;[m
+[31m-        quantity_delivered: number;[m
+[31m-        quantity_rejected: number;[m
+[31m-        rejection_reason?: string | undefined;[m
+[31m-        batch_number?: string | undefined;[m
+[31m-        expiry_date?: string | undefined;[m
+[31m-      }>;[m
+[31m-    }) => {[m
+[32m+[m[32m    mutationFn: async (payload: BlindCountPayload) => {[m
+       const { data, error } = await guardedRpc([m
+         db,[m
+         "neo_submit_blind_receiving_count",[m
+[36m@@ -75,14 +77,35 @@[m [mfunction Page() {[m
+       toast.success([m
+         "Blind receiving count submitted. Awaiting reconciliation."[m
+       );[m
+[32m+[m[32m      setPendingConfirmation(null);[m
+       setSelected(null);[m
+     },[m
+ [m
+     onError: (error: Error) => {[m
+       toast.error(error.message);[m
+     },[m
+[32m+[m
+[32m+[m[32m    onSettled: () => {[m
+[32m+[m[32m      submittingRef.current = false;[m
+[32m+[m[32m    },[m
+   });[m
+ [m
+[32m+[m[32m  const [pendingConfirmation, setPendingConfirmation] = useState<{[m
+[32m+[m[32m    payload: BlindCountPayload;[m
+[32m+[m[32m    orderNumber: string;[m
+[32m+[m[32m    supplierName: string;[m
+[32m+[m[32m    summary: string;[m
+[32m+[m[32m  } | null>(null);[m
+[32m+[m[32m  const confirmationRef = useRef<HTMLDialogElement>(null);[m
+[32m+[m[32m  const submittingRef = useRef(false);[m
+[32m+[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    const dialog = confirmationRef.current;[m
+[32m+[m[32m    if (!dialog) return;[m
+[32m+[m[32m    if (pendingConfirmation && !dialog.open) dialog.showModal();[m
+[32m+[m[32m    if (!pendingConfirmation && dialog.open) dialog.close();[m
+[32m+[m[32m  }, [pendingConfirmation]);[m
+[32m+[m
+   const [selected, setSelected] = useState<string | null>(null);[m
+ [m
+   const [delivered, setDelivered] = useState<Record<string, string>>({});[m
+[36m@@ -98,6 +121,8 @@[m [mfunction Page() {[m
+   const active = rows.find((order) => order.id === selected);[m
+ [m
+   function openOrder(id: string) {[m
+[32m+[m[32m    if (submittingRef.current) return;[m
+[32m+[m[32m    setPendingConfirmation(null);[m
+     setSelected(id);[m
+     setDelivered({});[m
+     setRejected({});[m
+[36m@@ -109,7 +134,7 @@[m [mfunction Page() {[m
+   }[m
+ [m
+   function handleSubmit() {[m
+[31m-    if (!active) return;[m
+[32m+[m[32m    if (!active || submittingRef.current || pendingConfirmation) return;[m
+ [m
+     if (!deliveryNote.trim()) {[m
+       toast.error("Supplier delivery note number is required.");[m
+[36m@@ -145,15 +170,48 @@[m [mfunction Page() {[m
+       return;[m
+     }[m
+ [m
+[31m-    submitCount.mutate({[m
+[31m-      orderId: active.id,[m
+[31m-      locationId: active.deliver_to_location_id ?? "",[m
+[31m-      deliveryNote: deliveryNote.trim(),[m
+[31m-      remarks,[m
+[31m-      lines,[m
+[32m+[m[32m    const summary = lines[m
+[32m+[m[32m      .map((line) => {[m
+[32m+[m[32m        const item = active.items.find([m
+[32m+[m[32m          (candidate) => candidate.id === line.order_line_id[m
+[32m+[m[32m        );[m
+[32m+[m
+[32m+[m[32m        return [[m
+[32m+[m[32m          item?.name ?? line.order_line_id,[m
+[32m+[m[32m          `Delivered: ${line.quantity_delivered} ${item?.unit ?? ""}`,[m
+[32m+[m[32m          `Rejected: ${line.quantity_rejected} ${item?.unit ?? ""}`,[m
+[32m+[m[32m          `Rejection reason: ${line.rejection_reason ?? "Not entered"}`,[m
+[32m+[m[32m          `Batch: ${line.batch_number ?? "Not entered"}`,[m
+[32m+[m[32m          `Expiry: ${line.expiry_date ?? "NOT ENTERED"}`,[m
+[32m+[m[32m        ].join("\n");[m
+[32m+[m[32m      })[m
+[32m+[m[32m      .join("\n\n");[m
+[32m+[m
+[32m+[m[32m    setPendingConfirmation({[m
+[32m+[m[32m      orderNumber: active.order_number,[m
+[32m+[m[32m      supplierName: active.supplier_name,[m
+[32m+[m[32m      summary,[m
+[32m+[m[32m      payload: {[m
+[32m+[m[32m        orderId: active.id,[m
+[32m+[m[32m        locationId: active.deliver_to_location_id ?? "",[m
+[32m+[m[32m        deliveryNote: deliveryNote.trim(),[m
+[32m+[m[32m        remarks,[m
+[32m+[m[32m        lines,[m
+[32m+[m[32m      },[m
+     });[m
+   }[m
+ [m
+[32m+[m[32m  function cancelConfirmation() {[m
+[32m+[m[32m    if (submittingRef.current) return;[m
+[32m+[m[32m    setPendingConfirmation(null);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function confirmSubmission() {[m
+[32m+[m[32m    if (!pendingConfirmation || submittingRef.current) return;[m
+[32m+[m[32m    submittingRef.current = true;[m
+[32m+[m[32m    submitCount.mutate(pendingConfirmation.payload);[m
+[32m+[m[32m  }[m
+[32m+[m
+   return ([m
+     <div className="space-y-6">[m
+ [m
+[36m@@ -194,6 +252,7 @@[m [mfunction Page() {[m
+ [m
+                 <Button[m
+                   variant={selected === order.id ? "secondary" : "default"}[m
+[32m+[m[32m                  disabled={submitCount.isPending}[m
+                   onClick={() => openOrder(order.id)}[m
+                 >[m
+                   Start blind count[m
+[36m@@ -373,7 +432,11 @@[m [mfunction Page() {[m
+ [m
+               <Button[m
+                 variant="outline"[m
+[31m-                onClick={() => setSelected(null)}[m
+[32m+[m[32m                disabled={submitCount.isPending}[m
+[32m+[m[32m                onClick={() => {[m
+[32m+[m[32m                  setPendingConfirmation(null);[m
+[32m+[m[32m                  setSelected(null);[m
+[32m+[m[32m                }}[m
+               >[m
+                 Close count[m
+               </Button>[m
+[36m@@ -393,6 +456,57 @@[m [mfunction Page() {[m
+         </SectionCard>[m
+       )}[m
+ [m
+[32m+[m[32m      <dialog[m
+[32m+[m[32m        ref={confirmationRef}[m
+[32m+[m[32m        aria-labelledby="blind-count-confirmation-title"[m
+[32m+[m[32m        aria-describedby="blind-count-confirmation-description"[m
+[32m+[m[32m        aria-busy={submitCount.isPending}[m
+[32m+[m[32m        className="m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-lg border bg-background p-6 text-foreground shadow-lg backdrop:bg-black/50"[m
+[32m+[m[32m        onCancel={(event) => {[m
+[32m+[m[32m          event.preventDefault();[m
+[32m+[m[32m          cancelConfirmation();[m
+[32m+[m[32m        }}[m
+[32m+[m[32m      >[m
+[32m+[m[32m        {pendingConfirmation && ([m
+[32m+[m[32m          <div className="space-y-4">[m
+[32m+[m[32m            <h2 id="blind-count-confirmation-title" className="text-lg font-semibold">[m
+[32m+[m[32m              Confirm physical receiving count[m
+[32m+[m[32m            </h2>[m
+[32m+[m[32m            <p id="blind-count-confirmation-description" className="text-sm text-muted-foreground">[m
+[32m+[m[32m              Submit this count for independent review? No inventory will be posted at this stage.[m
+[32m+[m[32m            </p>[m
+[32m+[m[32m            <div className="space-y-1 text-sm">[m
+[32m+[m[32m              <p>PO: {pendingConfirmation.orderNumber}</p>[m
+[32m+[m[32m              <p>Supplier: {pendingConfirmation.supplierName}</p>[m
+[32m+[m[32m              <p>Delivery note: {pendingConfirmation.payload.deliveryNote}</p>[m
+[32m+[m[32m              <p className="whitespace-pre-wrap break-words">[m
+[32m+[m[32m                Remarks: {pendingConfirmation.payload.remarks || "Not entered"}[m
+[32m+[m[32m              </p>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m            <pre className="whitespace-pre-wrap break-words rounded-md border p-4 font-sans text-sm">[m
+[32m+[m[32m              {pendingConfirmation.summary}[m
+[32m+[m[32m            </pre>[m
+[32m+[m[32m            <div className="flex justify-end gap-3">[m
+[32m+[m[32m              <Button[m
+[32m+[m[32m                type="button"[m
+[32m+[m[32m                variant="outline"[m
+[32m+[m[32m                disabled={submitCount.isPending}[m
+[32m+[m[32m                onClick={cancelConfirmation}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                Cancel[m
+[32m+[m[32m              </Button>[m
+[32m+[m[32m              <Button[m
+[32m+[m[32m                type="button"[m
+[32m+[m[32m                disabled={submitCount.isPending}[m
+[32m+[m[32m                onClick={confirmSubmission}[m
+[32m+[m[32m              >[m
+[32m+[m[32m                {submitCount.isPending ? "Submitting count..." : "Confirm"}[m
+[32m+[m[32m              </Button>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        )}[m
+[32m+[m[32m      </dialog>[m
+[32m+[m
+     </div>[m
+   );[m
+ }[m
