@@ -77,7 +77,7 @@ describe("button-by-button UAT — mutation wiring", () => {
     const dead = mutating
       .filter((f) => {
         const s = read(f);
-        return !/supabase\s*\.|rpc\(|from\("|useServerFn|-data"|\.functions"/.test(s);
+        return !/supabase\s*\.|rpc\(|guardedRpc\(|trustedRpc\(|from\("|useServerFn|-data"|\.functions"/.test(s);
       })
       .sort();
     expect(dead, "these screens have mutations with no data path").toEqual([]);

@@ -14,6 +14,14 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_beo_revise: "authenticated",
+  // Blind receiving: database authorization remains mandatory.
+  neo_blind_receiving_orders: "authenticated",
+  neo_submit_blind_receiving_count: "authenticated",
+  neo_blind_receiving_review_queue: "authenticated",
+  neo_blind_receiving_decide: "authenticated",
+  neo_blind_receiving_approved_queue: "authenticated",
+  neo_post_approved_blind_receiving: "authenticated",
   // Device alerts: claim is only called by the token-authenticated server;
   // a signed-in worker can queue a rate-limited test to their own devices.
   neo_claim_worker_push: "service_role",

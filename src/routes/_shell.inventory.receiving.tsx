@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useReceivableOrders } from "@/lib/stores-lifecycle";
+import { NeoDatePicker } from "@/components/common/DatePicker";
 
 type BlindItem = {
   id: string;
@@ -30,6 +31,21 @@ type BlindOrder = {
   items: BlindItem[];
 };
 
+type BlindCountPayload = {
+  orderId: string;
+  locationId: string;
+  deliveryNote: string;
+  remarks: string;
+  lines: Array<{
+    order_line_id: string;
+    quantity_delivered: number;
+    quantity_rejected: number;
+    rejection_reason?: string | undefined;
+    batch_number?: string | undefined;
+    expiry_date?: string | undefined;
+  }>;
+};
+
 const db = supabase as any;
 
 export const Route = createFileRoute("/_shell/inventory/receiving")({
@@ -38,22 +54,10 @@ export const Route = createFileRoute("/_shell/inventory/receiving")({
 
 function Page() {
   const orders = useReceivableOrders();
+  const queryClient = useQueryClient();
 
   const submitCount = useMutation({
-    mutationFn: async (payload: {
-      orderId: string;
-      locationId: string;
-      deliveryNote: string;
-      remarks: string;
-      lines: Array<{
-        order_line_id: string;
-        quantity_delivered: number;
-        quantity_rejected: number;
-        rejection_reason?: string | undefined;
-        batch_number?: string | undefined;
-        expiry_date?: string | undefined;
-      }>;
-    }) => {
+    mutationFn: async (payload: BlindCountPayload) => {
       const { data, error } = await guardedRpc(
         db,
         "neo_submit_blind_receiving_count",
@@ -72,16 +76,38 @@ function Page() {
     },
 
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["procurement"] });
       toast.success(
         "Blind receiving count submitted. Awaiting reconciliation."
       );
+      setPendingConfirmation(null);
       setSelected(null);
     },
 
     onError: (error: Error) => {
       toast.error(error.message);
     },
+
+    onSettled: () => {
+      submittingRef.current = false;
+    },
   });
+
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    payload: BlindCountPayload;
+    orderNumber: string;
+    supplierName: string;
+    summary: string;
+  } | null>(null);
+  const confirmationRef = useRef<HTMLDialogElement>(null);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    const dialog = confirmationRef.current;
+    if (!dialog) return;
+    if (pendingConfirmation && !dialog.open) dialog.showModal();
+    if (!pendingConfirmation && dialog.open) dialog.close();
+  }, [pendingConfirmation]);
 
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -98,6 +124,8 @@ function Page() {
   const active = rows.find((order) => order.id === selected);
 
   function openOrder(id: string) {
+    if (submittingRef.current) return;
+    setPendingConfirmation(null);
     setSelected(id);
     setDelivered({});
     setRejected({});
@@ -109,7 +137,7 @@ function Page() {
   }
 
   function handleSubmit() {
-    if (!active) return;
+    if (!active || submittingRef.current || pendingConfirmation) return;
 
     if (!deliveryNote.trim()) {
       toast.error("Supplier delivery note number is required.");
@@ -145,13 +173,47 @@ function Page() {
       return;
     }
 
-    submitCount.mutate({
-      orderId: active.id,
-      locationId: active.deliver_to_location_id ?? "",
-      deliveryNote: deliveryNote.trim(),
-      remarks,
-      lines,
+    const summary = lines
+      .map((line) => {
+        const item = active.items.find(
+          (candidate) => candidate.id === line.order_line_id
+        );
+
+        return [
+          item?.name ?? line.order_line_id,
+          `Delivered: ${line.quantity_delivered} ${item?.unit ?? ""}`,
+          `Rejected: ${line.quantity_rejected} ${item?.unit ?? ""}`,
+          `Accepted: ${line.quantity_delivered - line.quantity_rejected} ${item?.unit ?? ""}`,
+          `Rejection reason: ${line.rejection_reason ?? "Not entered"}`,
+          `Batch: ${line.batch_number ?? "Not entered"}`,
+          `Expiry: ${line.expiry_date ?? "NOT ENTERED"}`,
+        ].join("\n");
+      })
+      .join("\n\n");
+
+    setPendingConfirmation({
+      orderNumber: active.order_number,
+      supplierName: active.supplier_name,
+      summary,
+      payload: {
+        orderId: active.id,
+        locationId: active.deliver_to_location_id ?? "",
+        deliveryNote: deliveryNote.trim(),
+        remarks,
+        lines,
+      },
     });
+  }
+
+  function cancelConfirmation() {
+    if (submittingRef.current) return;
+    setPendingConfirmation(null);
+  }
+
+  function confirmSubmission() {
+    if (!pendingConfirmation || submittingRef.current) return;
+    submittingRef.current = true;
+    submitCount.mutate(pendingConfirmation.payload);
   }
 
   return (
@@ -194,6 +256,7 @@ function Page() {
 
                 <Button
                   variant={selected === order.id ? "secondary" : "default"}
+                  disabled={submitCount.isPending}
                   onClick={() => openOrder(order.id)}
                 >
                   Start blind count
@@ -340,13 +403,13 @@ function Page() {
                       <div className="space-y-2">
                         <Label>Expiry date</Label>
 
-                        <Input
-                          type="date"
+                        <NeoDatePicker
                           value={expiries[item.id] ?? ""}
-                          onChange={(e) =>
+                          ariaLabel={`Expiry date for ${item.name}`}
+                          onChange={(value) =>
                             setExpiries((previous) => ({
                               ...previous,
-                              [item.id]: e.target.value,
+                              [item.id]: value,
                             }))
                           }
                         />
@@ -363,7 +426,7 @@ function Page() {
               })}
             </div>
 
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="rounded-lg border border-warning/40 bg-tint-warning p-4 text-sm text-on-tint-warning">
               Blind counting is enabled. Stock posting remains locked
               until the A10 database authorization and reconciliation
               controls are installed.
@@ -373,7 +436,11 @@ function Page() {
 
               <Button
                 variant="outline"
-                onClick={() => setSelected(null)}
+                disabled={submitCount.isPending}
+                onClick={() => {
+                  setPendingConfirmation(null);
+                  setSelected(null);
+                }}
               >
                 Close count
               </Button>
@@ -392,6 +459,57 @@ function Page() {
           </div>
         </SectionCard>
       )}
+
+      <dialog
+        ref={confirmationRef}
+        aria-labelledby="blind-count-confirmation-title"
+        aria-describedby="blind-count-confirmation-description"
+        aria-busy={submitCount.isPending}
+        className="m-auto max-h-[90vh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-lg border bg-background p-6 text-foreground shadow-lg backdrop:bg-foreground/50"
+        onCancel={(event) => {
+          event.preventDefault();
+          cancelConfirmation();
+        }}
+      >
+        {pendingConfirmation && (
+          <div className="space-y-4">
+            <h2 id="blind-count-confirmation-title" className="text-lg font-semibold">
+              Confirm physical receiving count
+            </h2>
+            <p id="blind-count-confirmation-description" className="text-sm text-muted-foreground">
+              Submit this count for independent review? No inventory will be posted at this stage.
+            </p>
+            <div className="space-y-1 text-sm">
+              <p>PO: {pendingConfirmation.orderNumber}</p>
+              <p>Supplier: {pendingConfirmation.supplierName}</p>
+              <p>Delivery note: {pendingConfirmation.payload.deliveryNote}</p>
+              <p className="whitespace-pre-wrap break-words">
+                Remarks: {pendingConfirmation.payload.remarks || "Not entered"}
+              </p>
+            </div>
+            <pre className="whitespace-pre-wrap break-words rounded-md border p-4 font-sans text-sm">
+              {pendingConfirmation.summary}
+            </pre>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitCount.isPending}
+                onClick={cancelConfirmation}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={submitCount.isPending}
+                onClick={confirmSubmission}
+              >
+                {submitCount.isPending ? "Submitting count..." : "Confirm"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </dialog>
 
     </div>
   );

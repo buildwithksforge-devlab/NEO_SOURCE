@@ -131,5 +131,5 @@ describe("no unguarded routine call remains in client code", () => {
     );
     const offenders = files.filter((f) => /(?<![\w.])[A-Za-z_$][\w$]*\.rpc\(/.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 });

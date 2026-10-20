@@ -147,7 +147,7 @@ export function defects(source: string): string[] {
   if (/(?<![a-z-])(?<!:)w-\[\d{3,}px\]/.test(source.replace(/\bmax-w-\[\d+px\]/g, "").replace(/\bmin-w-\[\d+px\]/g, "")))
     found.push("fixed-pixel-width");
   // Raw provider error text rendered into the page instead of a shared state.
-  if (/\{\s*\(?[A-Za-z.?]*[eE]rror[^};]{0,60}\.message[^}]{0,30}\}/.test(
+  if (/(?<!\$)\{\s*\(?[A-Za-z.?]*[eE]rror[^};]{0,60}\.message[^}]{0,30}\}/.test(
     source.replace(/toast\.error\([^;]*\);/g, ""),
   ))
     found.push("raw-error-message");

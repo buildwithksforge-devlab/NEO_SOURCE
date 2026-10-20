@@ -80,10 +80,14 @@ describe("Direct stock intake", () => {
     expect(index).toContain("Receive stock");
   });
 
-  it("is offered alongside PO receiving", () => {
-    expect(read("src/routes/_shell.inventory.receiving.tsx")).toContain(
-      "Direct / opening receipt",
-    );
+  it("keeps direct intake separate from the blind-count screen", () => {
+    const inventory = read("src/routes/_shell.inventory.index.tsx");
+    const receiving = read("src/routes/_shell.inventory.receiving.tsx");
+
+    expect(inventory).toContain("ReceiveStockDialog");
+    expect(inventory).toContain("Receive stock");
+    expect(receiving).toContain("neo_submit_blind_receiving_count");
+    expect(receiving).not.toContain("ReceiveStockDialog");
   });
 });
 

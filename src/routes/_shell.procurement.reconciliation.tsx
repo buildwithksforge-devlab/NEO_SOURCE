@@ -366,8 +366,8 @@ function Page() {
                                   ? "font-semibold text-destructive"
                                   : line.reconciliation_result ===
                                       "partial_delivery"
-                                    ? "font-medium text-amber-600"
-                                    : "font-medium text-green-600"
+                                    ? "font-medium text-on-tint-warning"
+                                    : "font-medium text-on-tint-success"
                               }
                             >
                               {line.reconciliation_result.replaceAll("_", " ")}

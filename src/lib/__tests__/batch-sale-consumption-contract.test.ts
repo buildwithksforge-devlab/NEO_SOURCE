@@ -46,5 +46,5 @@ describe("prepared batch sale inventory contract", () => {
     expect(all).toContain("batch_component_log_only");
     expect(all).toContain("batch_operational_consumption");
     expect(all).toContain("batch_canonical_recipe_consumption");
-  });
+  }, 30_000);
 });

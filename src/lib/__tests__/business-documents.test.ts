@@ -43,13 +43,25 @@ describe("branded business documents", () => {
       "_shell.pms.folios.$id.tsx": "folio_statement",
       "_shell.events.bookings.$id.tsx": "beo",
       "_shell.lpos.$id.tsx": "purchase_order",
-      "_shell.inventory.receiving.tsx": "goods_receipt",
+      // Blind counts are not posted goods receipts.
       "_shell.inventory.requisitions.tsx": "requisition",
     };
     for (const [file, type] of Object.entries(expected)) {
       const source = readFileSync(join(ROUTES, file), "utf8");
       expect(source, `${file} must issue a branded ${type}`).toContain(`type="${type}"`);
     }
+  });
+
+  it("keeps posted GRN printing separate from blind receiving counts", () => {
+    const lpo = readFileSync(join(ROUTES, "_shell.lpos.$id.tsx"), "utf8");
+    const receiving = readFileSync(
+      join(ROUTES, "_shell.inventory.receiving.tsx"), "utf8",
+    );
+
+    expect(lpo).toContain('type="goods_receipt"');
+    expect(receiving).toContain("neo_submit_blind_receiving_count");
+    expect(receiving).not.toContain('type="goods_receipt"');
+    expect(receiving).not.toContain("neo_post_approved_blind_receiving");
   });
 
   it("prints the invoice already issued for an event instead of issuing a second one", () => {
