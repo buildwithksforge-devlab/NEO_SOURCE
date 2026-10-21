@@ -42,6 +42,8 @@ type Entry = { prefix: string; module: string; feature: string; action?: string 
  * feature while `/pos/orders/42` resolves to the orders feature.
  */
 export const ROUTE_CAPABILITIES: Entry[] = [
+  { prefix: "/staff-display-code", module: "kitchen", feature: "ticket", action: "accept" },
+  { prefix: "/production-displays", module: "kitchen", feature: "production", action: "manage" },
   // ---------- Front Office ----------
   { prefix: "/pms", module: "front-office", feature: "overview" },
   { prefix: "/pms/arrivals", module: "front-office", feature: "arrivals" },
@@ -74,6 +76,13 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/rates", module: "front-office", feature: "rates" },
   { prefix: "/credit-accounts", module: "front-office", feature: "credit-accounts" },
 
+  // Production displays use the same feature grants as their department queues.
+  { prefix: "/kitchen/display", module: "kitchen", feature: "queue" },
+  { prefix: "/bar/display", module: "bar", feature: "queue" },
+  { prefix: "/coffee/display", module: "kitchen", feature: "queue" },
+  { prefix: "/pastry/display", module: "kitchen", feature: "pastry-production" },
+  { prefix: "/production-overview", module: "kitchen", feature: "all_stations" },
+
   // ---------- Restaurant / POS ----------
   { prefix: "/pos", module: "restaurant", feature: "overview" },
   { prefix: "/pos/floor", module: "restaurant", feature: "floor" },
@@ -104,7 +113,6 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   // Shared production-station stock is deliberately governed by the Stores
   // capability. Station membership further limits the rows in the database.
   { prefix: "/station-stock", module: "stores", feature: "overview" },
-
 
   // ---------- Kitchen ----------
   { prefix: "/kitchen", module: "kitchen", feature: "overview" },
@@ -179,27 +187,57 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   // `maintenance.assets.edit` permission, so gating the route on one hid the
   // page from every account, including the owner.
   { prefix: "/admin/asset-categories", module: "maintenance", feature: "assets", action: "view" },
-  { prefix: "/admin/maintenance-categories", module: "maintenance", feature: "work_orders", action: "view" },
+  {
+    prefix: "/admin/maintenance-categories",
+    module: "maintenance",
+    feature: "work_orders",
+    action: "view",
+  },
   { prefix: "/admin/grounds-areas", module: "maintenance", feature: "grounds", action: "view" },
   // The hotel's own room-cleaning standards: housekeeping management configures
   // them, attendants only ever execute the copy frozen on their job.
-  { prefix: "/admin/housekeeping-standards", module: "housekeeping", feature: "checklists", action: "view" },
+  {
+    prefix: "/admin/housekeeping-standards",
+    module: "housekeeping",
+    feature: "checklists",
+    action: "view",
+  },
   // The hotel's own linen items. Laundry management configures them; laundry,
   // housekeeping and incident reporting all read the same canonical list.
   { prefix: "/admin/linen-catalogue", module: "laundry", feature: "overview", action: "view" },
   { prefix: "/admin/stock-policy", module: "stores", feature: "settings", action: "edit" },
   // The hotel's own public front door: discovery, customer services and which
   // of the four entrances appear. Administration owns it.
-  { prefix: "/admin/public-experience", module: "administration", feature: "workspace", action: "view" },
+  {
+    prefix: "/admin/public-experience",
+    module: "administration",
+    feature: "workspace",
+    action: "view",
+  },
   // One property's brand, media, words, services and publishing, in one place.
-  { prefix: "/admin/experience-studio", module: "administration", feature: "workspace", action: "view" },
+  {
+    prefix: "/admin/experience-studio",
+    module: "administration",
+    feature: "workspace",
+    action: "view",
+  },
   // Joining the public NEØ platform: listing readiness for one property.
   { prefix: "/admin/neo-listing", module: "administration", feature: "workspace", action: "view" },
-  { prefix: "/admin/partner-access", module: "administration", feature: "workspace", action: "view" },
+  {
+    prefix: "/admin/partner-access",
+    module: "administration",
+    feature: "workspace",
+    action: "view",
+  },
   // Billing a corporate partner on credit, and the hotel side of partner messages.
   { prefix: "/admin/partner-billing", module: "finance", feature: "invoices", action: "view" },
   // The hotel's inbox of partner conversations.
-  { prefix: "/admin/partner-messages", module: "procurement", feature: "suppliers", action: "view" },
+  {
+    prefix: "/admin/partner-messages",
+    module: "procurement",
+    feature: "suppliers",
+    action: "view",
+  },
   // What this property charges guests for laundry.
   { prefix: "/admin/laundry-pricing", module: "laundry", feature: "overview", action: "view" },
 
@@ -257,10 +295,20 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/finance/payments", module: "finance", feature: "collections" },
   { prefix: "/finance/posting", module: "finance", feature: "reconciliation", action: "edit" },
   { prefix: "/finance/outbox", module: "finance", feature: "reconciliation", action: "edit" },
-  { prefix: "/finance/commerce-check", module: "finance", feature: "reconciliation", action: "view" },
+  {
+    prefix: "/finance/commerce-check",
+    module: "finance",
+    feature: "reconciliation",
+    action: "view",
+  },
   // Must sit before "/finance/till" so the reconciliation report is not matched
   // by the cashier till prefix.
-  { prefix: "/finance/till-reconciliation", module: "finance", feature: "reconciliation", action: "view" },
+  {
+    prefix: "/finance/till-reconciliation",
+    module: "finance",
+    feature: "reconciliation",
+    action: "view",
+  },
   { prefix: "/finance/collections", module: "finance", feature: "collections" },
   { prefix: "/finance/till", module: "finance", feature: "till" },
   { prefix: "/finance/sessions", module: "finance", feature: "sessions" },
@@ -282,7 +330,6 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/finance/ota", module: "finance", feature: "ota" },
   { prefix: "/finance/packages", module: "finance", feature: "packages" },
   { prefix: "/finance/quickbooks", module: "finance", feature: "quickbooks", action: "edit" },
-
 
   // ---------- CRM (marketing module) ----------
   // Features here must exist in the permission catalogue, otherwise the menu
@@ -390,24 +437,74 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   // Every configuration page carries its own capability. `/admin` alone is no
   // longer a blanket key: a member who may edit branding must not thereby be
   // able to open payment credentials or the access matrix.
-  { prefix: "/admin/hotel-information", module: "administration", feature: "workspace", action: "edit" },
+  {
+    prefix: "/admin/hotel-information",
+    module: "administration",
+    feature: "workspace",
+    action: "edit",
+  },
   { prefix: "/admin/branches", module: "administration", feature: "workspace", action: "edit" },
   { prefix: "/admin/regional", module: "administration", feature: "workspace", action: "edit" },
-  { prefix: "/admin/configuration", module: "administration", feature: "workspace", action: "edit" },
-  { prefix: "/admin/dashboard-cards", module: "administration", feature: "workspace", action: "edit" },
-  { prefix: "/admin/brand-identity", module: "administration", feature: "branding", action: "edit" },
-  { prefix: "/admin/dashboard-appearance", module: "administration", feature: "branding", action: "edit" },
+  {
+    prefix: "/admin/configuration",
+    module: "administration",
+    feature: "workspace",
+    action: "edit",
+  },
+  {
+    prefix: "/admin/dashboard-cards",
+    module: "administration",
+    feature: "workspace",
+    action: "edit",
+  },
+  {
+    prefix: "/admin/brand-identity",
+    module: "administration",
+    feature: "branding",
+    action: "edit",
+  },
+  {
+    prefix: "/admin/dashboard-appearance",
+    module: "administration",
+    feature: "branding",
+    action: "edit",
+  },
   { prefix: "/admin/app-branding", module: "administration", feature: "branding", action: "edit" },
   { prefix: "/admin/documents", module: "administration", feature: "documents", action: "edit" },
-  { prefix: "/admin/communication", module: "administration", feature: "communication", action: "edit" },
+  {
+    prefix: "/admin/communication",
+    module: "administration",
+    feature: "communication",
+    action: "edit",
+  },
   { prefix: "/admin/user-defaults", module: "administration", feature: "users", action: "edit" },
-  { prefix: "/admin/approval-limits", module: "administration", feature: "approvals", action: "edit" },
-  { prefix: "/admin/approval-routing", module: "administration", feature: "approvals", action: "edit" },
-  { prefix: "/admin/self-approval-exceptions", module: "administration", feature: "approvals", action: "edit" },
+  {
+    prefix: "/admin/approval-limits",
+    module: "administration",
+    feature: "approvals",
+    action: "edit",
+  },
+  {
+    prefix: "/admin/approval-routing",
+    module: "administration",
+    feature: "approvals",
+    action: "edit",
+  },
+  {
+    prefix: "/admin/self-approval-exceptions",
+    module: "administration",
+    feature: "approvals",
+    action: "edit",
+  },
   { prefix: "/admin/access-matrix", module: "administration", feature: "roles", action: "edit" },
   { prefix: "/admin/role-testing", module: "administration", feature: "roles", action: "edit" },
   { prefix: "/admin/role-migration", module: "administration", feature: "roles", action: "edit" },
-  { prefix: "/admin/workspace-preview", module: "administration", feature: "roles", action: "edit" },
+  {
+    prefix: "/admin/workspace-preview",
+    module: "administration",
+    feature: "roles",
+    action: "edit",
+  },
   { prefix: "/admin/capability-map", module: "administration", feature: "roles", action: "edit" },
   { prefix: "/admin/integrity", module: "administration", feature: "audit-logs", action: "view" },
   { prefix: "/admin/go-live", module: "administration", feature: "audit-logs", action: "view" },
@@ -430,7 +527,6 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   // Closing an accounting period is authority, not configuration.
   { prefix: "/admin/finance-periods", module: "finance", feature: "period", action: "edit" },
 
-
   // ---------- Automation (integrations module) ----------
   { prefix: "/automation", module: "integrations", feature: "overview" },
   { prefix: "/automation/workflows", module: "integrations", feature: "workflows" },
@@ -451,7 +547,12 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/platform/integrations", module: "integrations", feature: "centre" },
   { prefix: "/platform/migration", module: "migration", feature: "overview" },
   { prefix: "/platform/printers", module: "integrations", feature: "centre" },
-  { prefix: "/platform/data-lifecycle", module: "administration", feature: "recovery", action: "view" },
+  {
+    prefix: "/platform/data-lifecycle",
+    module: "administration",
+    feature: "recovery",
+    action: "view",
+  },
   { prefix: "/platform/quality", module: "quality", feature: "overview" },
   { prefix: "/platform/configuration-health", module: "platform", feature: "readiness" },
   { prefix: "/platform/performance", module: "platform", feature: "operations" },
@@ -492,6 +593,17 @@ export function capabilityForPath(path: string): Capability | null {
  * every alternative names an explicit feature the role already holds.
  */
 export const ROUTE_CAPABILITY_ALTERNATIVES: Record<string, Capability[]> = {
+  "/staff-display-code": [
+    { module: "bar", feature: "queue", action: "edit" },
+    { module: "kitchen", feature: "item", action: "prepare" },
+    { module: "kitchen", feature: "production", action: "manage" },
+    { module: "kitchen", feature: "chef", action: "assign" },
+    { module: "bar", feature: "queue", action: "assign" },
+  ],
+  "/production-displays": [
+    { module: "kitchen", feature: "chef", action: "assign" },
+    { module: "bar", feature: "queue", action: "assign" },
+  ],
   // The stay board carries no money, so the teams who act on arrivals reach it
   // through the work they already hold: room work for housekeeping, service
   // work for food & beverage. It opens no other front-office surface.
@@ -526,9 +638,7 @@ export const ROUTE_CAPABILITY_ALTERNATIVES: Record<string, Capability[]> = {
   ],
   // Supervisory custody authority also opens the register; a reporter's
   // `lost-found.report` never does.
-  "/housekeeping/lost-found": [
-    { module: "housekeeping", feature: "lost-found", action: "edit" },
-  ],
+  "/housekeeping/lost-found": [{ module: "housekeeping", feature: "lost-found", action: "edit" }],
   // The stock catalogue resolves through `stores.items` only. Supplier
   // administration is a procurement master, not a stock master: editing
   // vendors must never confer stock-item authority. Owner/System Admin reach
@@ -559,10 +669,6 @@ export function pathPermitted(
   if (caps.length === 0) return true;
   return caps.some((c) => can(c.module, c.feature, c.action));
 }
-
-
-
-
 
 /** Every capability the interface can demand, for compilation and testing. */
 export function allRouteCapabilities(): Capability[] {

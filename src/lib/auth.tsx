@@ -168,6 +168,7 @@ const PUBLIC_SURFACE_PREFIXES = ["/guest/", "/delivery/", "/rider"];
 function onPublicSurface() {
   if (typeof window === "undefined") return false;
   const path = window.location.pathname;
+  if (path === "/station-screen") return true; // Restricted bearer-token device; no staff workspace.
   return PUBLIC_SURFACE_PREFIXES.some((p) => path === p.replace(/\/$/, "") || path.startsWith(p));
 }
 /** How often a live session checks whether its granted access changed. */

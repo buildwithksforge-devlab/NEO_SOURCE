@@ -6,6 +6,7 @@ export const Route = createFileRoute("/_shell/pastry")({
 });
 
 const TABS = [
+  { label: "Pastry Display", to: "/pastry/display" },
   { label: "Pastry Home", to: "/pastry" },
   { label: "Order Queue", to: "/pastry/queue" },
   { label: "Production Plan", to: "/pastry/production" },

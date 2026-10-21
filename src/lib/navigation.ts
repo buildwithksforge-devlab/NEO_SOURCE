@@ -235,6 +235,12 @@ export const navigation: NavGroup[] = [
         roles: ["owner", "manager", "waiter"],
       },
       {
+        label: "Bar Display",
+        to: "/bar/display",
+        icon: ClipboardCheck,
+        roles: ["owner", "manager", "waiter"],
+      },
+      {
         label: "Bar Order Queue",
         to: "/bar/queue",
         icon: ClipboardCheck,
@@ -294,7 +300,7 @@ export const navigation: NavGroup[] = [
         roles: ["owner", "manager", "waiter", "accountant"],
       },
       {
-        label: "Kitchen Display",
+        label: "POS Production Monitor",
         to: "/pos/kds",
         icon: ChefHat,
         roles: ["owner", "manager", "kitchen", "waiter"],
@@ -348,6 +354,36 @@ export const navigation: NavGroup[] = [
         roles: ["owner", "manager", "kitchen"],
       },
       {
+        label: "Kitchen Display",
+        to: "/kitchen/display",
+        icon: ChefHat,
+        roles: ["owner", "manager", "kitchen"],
+      },
+      {
+        label: "Coffee Display",
+        to: "/coffee/display",
+        icon: ChefHat,
+        roles: ["owner", "manager", "kitchen"],
+      },
+      {
+        label: "Shared Display Controls",
+        to: "/production-displays",
+        icon: ChefHat,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "My Display Code & PIN",
+        to: "/staff-display-code",
+        icon: ChefHat,
+        roles: ["owner", "manager", "kitchen", "waiter"],
+      },
+      {
+        label: "Production Overview",
+        to: "/production-overview",
+        icon: ChefHat,
+        roles: ["owner", "manager"],
+      },
+      {
         label: "Kitchen Queue",
         to: "/kitchen/queue",
         icon: ChefHat,
@@ -362,6 +398,12 @@ export const navigation: NavGroup[] = [
       {
         label: "Pastry & Bakery",
         to: "/pastry",
+        icon: ChefHat,
+        roles: ["owner", "manager", "kitchen"],
+      },
+      {
+        label: "Pastry Display",
+        to: "/pastry/display",
         icon: ChefHat,
         roles: ["owner", "manager", "kitchen"],
       },
@@ -921,7 +963,12 @@ export const navigation: NavGroup[] = [
         icon: Megaphone,
         roles: ["owner", "manager", "marketing"],
       },
-      { label: "Leads", to: "/marketing/leads", icon: Users, roles: ["owner", "manager", "marketing"] },
+      {
+        label: "Leads",
+        to: "/marketing/leads",
+        icon: Users,
+        roles: ["owner", "manager", "marketing"],
+      },
       {
         label: "Lead Pipeline",
         to: "/marketing/pipeline",
@@ -1106,38 +1153,118 @@ export const navigation: NavGroup[] = [
   {
     title: "Automation & Communications",
     items: [
-      { label: "Automation Dashboard", to: "/automation", icon: Workflow, roles: ["owner", "manager"] },
-      { label: "Workflows", to: "/automation/workflows", icon: Workflow, roles: ["owner", "manager"] },
-      { label: "Message Templates", to: "/automation/templates", icon: MessageSquare, roles: ["owner", "manager"] },
-      { label: "Communication Queue", to: "/automation/queue", icon: Send, roles: ["owner", "manager"] },
+      {
+        label: "Automation Dashboard",
+        to: "/automation",
+        icon: Workflow,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Workflows",
+        to: "/automation/workflows",
+        icon: Workflow,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Message Templates",
+        to: "/automation/templates",
+        icon: MessageSquare,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Communication Queue",
+        to: "/automation/queue",
+        icon: Send,
+        roles: ["owner", "manager"],
+      },
       { label: "Event Log", to: "/automation/events", icon: Activity, roles: ["owner", "manager"] },
-      { label: "Rules & Escalations", to: "/automation/rules", icon: ListChecks, roles: ["owner", "manager"] },
-      { label: "Failed Workflows", to: "/automation/failures", icon: AlertTriangle, roles: ["owner", "manager"] },
+      {
+        label: "Rules & Escalations",
+        to: "/automation/rules",
+        icon: ListChecks,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Failed Workflows",
+        to: "/automation/failures",
+        icon: AlertTriangle,
+        roles: ["owner", "manager"],
+      },
       { label: "Providers", to: "/automation/providers", icon: Plug, roles: ["owner"] },
-      { label: "Automation Settings", to: "/automation/settings", icon: Settings2, roles: ["owner"] },
+      {
+        label: "Automation Settings",
+        to: "/automation/settings",
+        icon: Settings2,
+        roles: ["owner"],
+      },
     ],
   },
   {
     title: "Administration",
     items: [
       { label: "Users", to: "/users", icon: Users, roles: ["owner", "manager", "hr"] },
-      { label: "Roles & Permissions", to: "/roles", icon: ShieldCheck, roles: ["owner", "manager"] },
-      { label: "Departments", to: "/departments", icon: Building, roles: ["owner", "manager", "hr"] },
+      {
+        label: "Roles & Permissions",
+        to: "/roles",
+        icon: ShieldCheck,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Departments",
+        to: "/departments",
+        icon: Building,
+        roles: ["owner", "manager", "hr"],
+      },
       { label: "Stations", to: "/stations", icon: MapPin, roles: ["owner", "manager"] },
-      { label: "Admin Audit Log", to: "/audit-logs", icon: ScrollText, roles: ["owner", "manager"] },
-      { label: "Configuration Centre", to: "/settings", icon: Settings, roles: ["owner", "manager"] },
+      {
+        label: "Admin Audit Log",
+        to: "/audit-logs",
+        icon: ScrollText,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Configuration Centre",
+        to: "/settings",
+        icon: Settings,
+        roles: ["owner", "manager"],
+      },
     ],
   },
   {
     title: "Platform & Readiness",
     items: [
-      { label: "Go-Live Readiness", to: "/platform", icon: ShieldCheck, roles: ["owner", "manager"] },
+      {
+        label: "Go-Live Readiness",
+        to: "/platform",
+        icon: ShieldCheck,
+        roles: ["owner", "manager"],
+      },
       { label: "Integration Centre", to: "/platform/integrations", icon: Plug, roles: ["owner"] },
-      { label: "Printers & Print Queue", to: "/platform/printers", icon: Plug, roles: ["owner", "manager"] },
-      { label: "History & Tenant Migration", to: "/platform/data-lifecycle", icon: ScrollText, roles: ["owner"] },
-      { label: "Environments & Flags", to: "/platform/environments", icon: Settings2, roles: ["owner"] },
+      {
+        label: "Printers & Print Queue",
+        to: "/platform/printers",
+        icon: Plug,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "History & Tenant Migration",
+        to: "/platform/data-lifecycle",
+        icon: ScrollText,
+        roles: ["owner"],
+      },
+      {
+        label: "Environments & Flags",
+        to: "/platform/environments",
+        icon: Settings2,
+        roles: ["owner"],
+      },
       { label: "Subscription", to: "/platform/subscription", icon: BadgePercent, roles: ["owner"] },
-      { label: "Data Migration", to: "/platform/migration", icon: ScrollText, roles: ["owner", "manager"] },
+      {
+        label: "Data Migration",
+        to: "/platform/migration",
+        icon: ScrollText,
+        roles: ["owner", "manager"],
+      },
       { label: "Recovery Centre", to: "/platform/recovery", icon: ShieldCheck, roles: ["owner"] },
       {
         // What each property is still missing: stations, stores, recipes,
@@ -1147,9 +1274,24 @@ export const navigation: NavGroup[] = [
         icon: ShieldCheck,
         roles: ["owner", "manager"],
       },
-      { label: "Testing & Defects", to: "/platform/quality", icon: ListChecks, roles: ["owner", "manager"] },
-      { label: "Simulation Centre", to: "/platform/simulation", icon: ListChecks, roles: ["owner"] },
-      { label: "Releases & Monitoring", to: "/platform/operations", icon: Activity, roles: ["owner"] },
+      {
+        label: "Testing & Defects",
+        to: "/platform/quality",
+        icon: ListChecks,
+        roles: ["owner", "manager"],
+      },
+      {
+        label: "Simulation Centre",
+        to: "/platform/simulation",
+        icon: ListChecks,
+        roles: ["owner"],
+      },
+      {
+        label: "Releases & Monitoring",
+        to: "/platform/operations",
+        icon: Activity,
+        roles: ["owner"],
+      },
       {
         // Measured timings for staff actions and live-update lag, against the
         // agreed acceptance targets.

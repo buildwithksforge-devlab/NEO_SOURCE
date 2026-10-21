@@ -7,6 +7,7 @@ export const Route = createFileRoute("/_shell/kitchen")({
 });
 
 const TABS = [
+  { label: "Kitchen Display", to: "/kitchen/display" },
   { label: "Kitchen Home", to: "/kitchen" },
   { label: "Dashboard", to: "/kitchen/dashboard" },
   { label: "Live Queue", to: "/kitchen/queue" },

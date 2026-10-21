@@ -14,6 +14,13 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  // Bearer-token restricted displays work after the supervisor signs out.
+  neo_production_display_read: "anon",
+  neo_production_display_act: "anon",
+  neo_production_staff_pin: "authenticated",
+  neo_production_display_pair: "authenticated",
+  neo_production_display_manage: "authenticated",
+  neo_kitchen_visible_station_ids: "authenticated",
   neo_beo_revise: "authenticated",
   // Blind receiving: database authorization remains mandatory.
   neo_blind_receiving_orders: "authenticated",

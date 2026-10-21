@@ -72,11 +72,13 @@ describe("database callable surface", () => {
     expect(orphaned, "remove stale entries so the manifest stays truthful").toEqual([]);
   });
 
-  it("exposes only the published storefront menu to signed-out callers", () => {
+  it("restricts anonymous calls to published surfaces and bearer-token display endpoints", () => {
     const anon = Object.entries(RPC_MANIFEST)
       .filter(([, caller]) => caller === "anon")
       .map(([name]) => name)
       .sort();
+    // Shared-display calls are restricted bearer-token endpoints. Anonymous
+    // execution never makes production tickets publicly readable.
     // Workspace lookup is resolved by the trusted server client. The only
     // routine a signed-out visitor may run is the published menu listing, so
     // the Guest and Delivery storefronts render before an account exists; it
@@ -87,6 +89,8 @@ describe("database callable surface", () => {
     // The NEØ front door adds the public hotel list, a hotel's public page and
     // its entrance states: published information only, granting nothing.
     expect(anon).toEqual([
+      "neo_production_display_act",
+      "neo_production_display_read",
       "neo_property_doors",
       "neo_property_entrance",
       "neo_public_destinations",
