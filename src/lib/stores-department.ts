@@ -155,6 +155,44 @@ export function useSetIssuingStore() {
   });
 }
 
+/**
+ * Map a requisition line to an actual inventory item.
+ * This does not deduct stock or approve the requisition.
+ */
+export function useAssignRequisitionStockItem() {
+  const invalidate = useStoresInvalidate();
+
+  return useMutation({
+    mutationFn: async (input: {
+      requisitionId: string;
+      lineId: string;
+      stockItemId: string;
+    }) => {
+      const { data, error } = await guardedRpc(
+        db,
+        "neo_requisition_assign_stock_item",
+        {
+          _requisition: input.requisitionId,
+          _line: input.lineId,
+          _stock_item: input.stockItemId,
+        },
+      );
+
+      if (error) throw new Error(error.message);
+
+      return data as StoresRow;
+    },
+
+    onSuccess: () => {
+      invalidate();
+      toast.success("Inventory item linked to requisition");
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
 /** Confirm the quantities Stores will release, before issuing. */
 export function useApproveRequisitionAtStores() {
   const invalidate = useStoresInvalidate();

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useStockLocations } from "@/lib/inventory-data";
+import { useStockLocations, useStockItems } from "@/lib/inventory-data";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +32,7 @@ import {
   num,
   str,
   useAllDepartmentStockNeeds,
+  useAssignRequisitionStockItem,
   useIssueRequisition,
   useSetIssuingStore,
   useRaiseReplenishment,
@@ -99,6 +100,8 @@ function StoresRequisitionsPage() {
   const availabilityQuery = useStoresAvailability();
   const needs = useAllDepartmentStockNeeds("pending");
 
+  const assignStockItem = useAssignRequisitionStockItem();
+  const stockItemsQuery = useStockItems();
   const issue = useIssueRequisition();
   const reject = useRejectRequisition();
   const replenish = useRaiseReplenishment();
@@ -273,6 +276,62 @@ function StoresRequisitionsPage() {
               {str(requisition["reason"], "No reason given")}
             </p>
           </InspectorSection>
+          {mayIssue && ["pending-supervisor", "awaiting-stores"].includes(status) ? (
+            <InspectorSection title="Match requested items to inventory">
+              <div className="space-y-4">
+                {lines.map((line) => {
+                  const lineId = String(line["id"]);
+                  const currentItemId = str(line["stock_item_id"], "");
+
+                  return (
+                    <div key={lineId} className="space-y-2 rounded-lg border p-3">
+                      <p className="text-sm font-medium">
+                        {str(line["description"], "Requested item")}
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Requested: {num(line["quantity_requested"])} {str(line["unit"], "units")}
+                      </p>
+
+                      <Select
+                        value={currentItemId}
+                        disabled={assignStockItem.isPending}
+                        onValueChange={(stockItemId) =>
+                          assignStockItem.mutate({
+                            requisitionId: id,
+                            lineId,
+                            stockItemId,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select actual inventory item" />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {((stockItemsQuery.data ?? []) as StoresRow[]).map((item) => (
+                            <SelectItem key={String(item["id"])} value={String(item["id"])}>
+                              {str(item["name"], "Inventory item")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {currentItemId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Inventory item linked
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700">
+                          Match this request to an inventory item before issuing.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </InspectorSection>
+          ) : null}
 
           <InspectorSection title="Line items & availability">
             <RequisitionLineItems lines={lineRows} />
@@ -350,7 +409,18 @@ function StoresRequisitionsPage() {
           {canIssue ? (
             <>
               <Button
-                disabled={issue.isPending || issueLines.length === 0 || !sourceStoreId}
+                disabled={
+                  issue.isPending ||
+                  issueLines.length === 0 ||
+                  !sourceStoreId ||
+                  issueLines.some((entry) =>
+                    !lines.some(
+                      (line) =>
+                        String(line["id"]) === entry.id &&
+                        Boolean(line["stock_item_id"]),
+                    ),
+                  )
+                }
                 onClick={() => issue.mutate({ requisitionId: id, lines: issueLines })}
               >
                 {sourceStoreId
