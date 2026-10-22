@@ -498,6 +498,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_matching_policy: "authenticated",
   req_approve: "authenticated",
   req_confirm_receipt: "authenticated",
+  neo_req_issue_safe: "authenticated",
   req_issue: "authenticated",
   req_record_consumption: "authenticated",
   req_submit: "authenticated",

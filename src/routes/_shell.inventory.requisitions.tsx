@@ -111,6 +111,7 @@ function StoresRequisitionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
+  const [issueAttemptId, setIssueAttemptId] = useState(() => crypto.randomUUID());
 
   const availability = useMemo(
     () => availabilityQuery.data ?? new Map<string, number>(),
@@ -187,7 +188,7 @@ function StoresRequisitionsPage() {
       "partially-approved",
       "partially-issued",
     ].includes(status);
-    const canIssue = mayIssue && approvedForIssue;
+    const canIssue = false; // E07-B: disabled until inventory certification
     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
     const sourceStoreId = str(requisition["source_location_id"], "");
     const sourceStoreName = str(
@@ -421,7 +422,18 @@ function StoresRequisitionsPage() {
                     ),
                   )
                 }
-                onClick={() => issue.mutate({ requisitionId: id, lines: issueLines })}
+                onClick={() =>
+                  issue.mutate(
+                    {
+                      requisitionId: id,
+                      lines: issueLines,
+                      attemptId: issueAttemptId,
+                    },
+                    {
+                      onSuccess: () => setIssueAttemptId(crypto.randomUUID()),
+                    },
+                  )
+                }
               >
                 {sourceStoreId
                   ? `Issue ${issueLines.length} line${issueLines.length === 1 ? "" : "s"}`

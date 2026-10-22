@@ -217,10 +217,11 @@ export function useApproveRequisitionAtStores() {
 export function useIssueRequisition() {
   const invalidate = useStoresInvalidate();
   return useMutation({
-    mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_issued: number }[] }) => {
-      const { data, error } = await guardedRpc(db, "req_issue", {
+    mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_issued: number }[]; attemptId: string }) => {
+      const { data, error } = await guardedRpc(db, "neo_req_issue_safe", {
         _requisition: input.requisitionId,
         _lines: input.lines,
+        _attempt: input.attemptId,
       });
       if (error) throw new Error(error.message);
       return (data ?? {}) as StoresRow;
