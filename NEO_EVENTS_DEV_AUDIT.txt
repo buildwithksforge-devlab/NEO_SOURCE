@@ -1,0 +1,612 @@
+NEO EVENTS DEVELOPMENT AUDIT
+Commit: cf2d953
+Date: 2026-10-22 10:44:36
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\event-identity.ts
+================================================================================
+2: * One identity for an event, from enquiry to final payment.
+7: * the invoice back to the enquiry that started it. Counting "events this month"
+22: | "invoice"
+23: | "payment";
+31: "invoice",
+32: "payment",
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events.ts
+================================================================================
+24: "cancelled",
+31: "approved",
+38: "cancelled",
+51: "cancelled",
+53: "closed",
+56: export const PAYMENT_STATUSES = [
+79: "approved",
+82: "cancelled",
+90: "cancelled",
+181: sees: ["Event reference & date", "Serving times", "Guest count", "Approved menu & portions", "Dietary & allergy warnings", "Production tasks", "Ingredient requirements"],
+191: sees: ["Venue preparation tasks", "Cleaning schedule", "Washroom & linen requirements", "Guest-room requirements", "Setup & breakdown times"],
+201: sees: ["Reserved stock", "Event stock requests", "Stock availability", "Issues & returns", "Required issue dates"],
+206: sees: ["Approved purchase requirements", "Required dates", "Approved quantities", "Supplier requirements"],
+211: sees: ["Quotations & invoices", "Deposits & receipts", "Discounts & taxes", "Credit approvals", "Outstanding balances", "Event profitability"],
+216: sees: ["Event type", "Approved photography schedule", "Branding requirements", "Testimonial request", "Client consent status"],
+226: sees: ["Guest estimates", "VIP requirements", "Parking & access control", "Security tasks", "Event times"],
+235: "quotation-approved",
+240: "credit-approved",
+246: "final-payment-due",
+251: "final-invoice-issued",
+254: "event-closed",
+296: if (status === "lost" || status === "cancelled") return "destructive";
+303: if (status === "accepted" || status === "converted" || status === "approved") return "success";
+304: if (status === "rejected" || status === "cancelled" || status === "expired") return "destructive";
+310: if (["confirmed", "ready", "completed", "closed"].includes(status)) return "success";
+311: if (["cancelled", "postponed"].includes(status)) return "destructive";
+316: export function paymentTone(status: string): Tone {
+332: if (status === "published" || status === "approved") return "success";
+333: if (status === "cancelled") return "destructive";
+413: if (outstanding > 0 && b["status"] !== "cancelled") {
+424: detail: "Recommendations appear once events with guest counts and balances exist. AI never confirms bookings, approves discounts or moves stock.",
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts
+================================================================================
+3: import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+59: let q: Builder = db.from(table).select(sel(select));
+60: if (branchId && EVENT_PROPERTY_TABLES.has(table)) q = q.eq("branch_id", branchId);
+96: payment_status: string | null;
+102: branch_id: string;
+153: .rpc("neo_event_workspace", {
+170: payment_status: string | null;
+172: branch_id: string;
+229: "id, name, code, branch_id, description, location, is_outdoor, min_capacity, max_capacity, layouts, base_hire_price, tax_rate, setup_minutes, breakdown_minutes, opens_at, closes_at, facilities, accessibility, status, maintenance_note",
+247: "id, name, category, branch_id, quantity_owned, condition, location, hire_price, maintenance_status, active",
+265: "id, name, description, branch_id, event_type_id, price_basis, price, min_guests, max_guests, exclusions, tax_rate, valid_from, valid_to, active, event_types(name), event_package_items(id, component, description, quantity, unit_price, is_optional)",
+274: "id, enquiry_number, contact_name, phone, email, preferred_channel, event_type_label, proposed_date, alternative_date, start_time, end_time, expected_adults, expected_children, estimated_budget, requirements, internal_notes, lead_source, next_followup_at, probability, status, loss_reason, competitor, venue_id, customer_id, corporate_account_id, branch_id, created_at, customers(full_name, customer_number), event_venues(name)",
+301: "id, event_reference, event_name, status, payment_status, event_date, start_at, end_at, setup_at, breakdown_at, expected_guests, guaranteed_guests, final_guests, adults, children, service_style, seating_layout, colour_theme, vip_details, dietary_requirements, allergy_warnings, photography_consent, deposit_required, deposit_paid, total_amount, paid_amount, hold_expires_at, cancellation_reason, internal_notes, venue_id, customer_id, corporate_account_id, quotation_id, branch_id, created_at, customers(full_name, phone), event_venues(name, max_capacity), event_types(name)",
+313: .from("event_bookings")
+331: const q: Builder = db.from(table).select(sel(select));
+346: "id, department_id, department_key, requirement, detail, required_by, readiness, blocker, task_id, departments(name)",
+354: "id, name, service_style, service_at, guest_count, price_per_person, estimated_cost, dietary_substitutions, allergens, version, approved_at, event_menu_items(id, course, name, portions, notes)",
+379: "id, description, unit, planned_qty, reserved_qty, issued_qty, consumed_qty, returned_qty, wasted_qty, required_at, status, stock_items(name)",
+473: return useMutation({
+474: mutationFn: async (values: Row) => {
+478: const payload: Row = { organization_id: organizationId };
+484: const chosen = (values["branch_id"] as string | undefined) ?? branchId;
+486: payload["branch_id"] = chosen;
+487: } else if (!("branch_id" in values) && branchId) {
+488: payload["branch_id"] = branchId;
+490: const { data, error } = await db.from(table).insert(payload).select("id").maybeSingle();
+494: onSuccess: (data, values) => {
+544: return useMutation({
+545: mutationFn: async (values: Row) => {
+546: const chosen = (values["branch_id"] as string | undefined) ?? branchId;
+552: _payload: { ...rest, branch_id: chosen, idempotency_key: idempotencyKey },
+557: onSuccess: (data, values) => {
+582: return useMutation({
+583: mutationFn: async ({ bookingId, branchId, reason }: { bookingId: string; branchId: string; reason: string }) => {
+592: onSuccess: (data, vars) => {
+624: return useMutation({
+625: mutationFn: async ({ enquiryId, values }: { enquiryId: string; values?: Row }) => {
+630: ...(branchId ? { branch_id: branchId } : {}),
+637: onSuccess: (data, vars) => {
+658: return useMutation({
+659: mutationFn: async ({ quotationId, values }: { quotationId: string; values?: Row }) => {
+670: onSuccess: (data, vars) => {
+691: return useMutation({
+692: mutationFn: async ({ id, values }: { id: string; values: Row }) => {
+693: const { error } = await db.from(table).update(sanitizeEventValues(values)).eq("id", id);
+697: onSuccess: (id, vars) => {
+727: return useMutation({
+728: mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+730: .from(table)
+742: onSuccess: ({ id, active }) => {
+762: return useMutation({
+763: mutationFn: async (id: string) => {
+766: const { data, error } = await db.from(table).delete().eq("id", id).select("id");
+775: onSuccess: (id) => {
+805: /** Idempotent booking confirmation — reserves venue, seeds milestones, tasks and BEO. */
+809: return useMutation({
+810: mutationFn: async ({ bookingId, overrideReason }: { bookingId: string; overrideReason?: string }) => {
+818: onSuccess: (data, vars) => {
+821: else toast.success(`Event confirmed · ${data?.["tasks_created"] ?? 0} department tasks generated`);
+841: return useMutation({
+842: mutationFn: async (quotation: Row) => {
+856: .from("event_quotations")
+859: organization_id: organizationId,
+870: const { error: itemErr } = await db.from("event_quotation_items").insert(
+872: organization_id: organizationId,
+889: onSuccess: (id, quotation) => {
+910: return useMutation({
+911: mutationFn: async ({ beo, changeSummary }: { beo: Row; changeSummary: string }) => {
+926: onSuccess: (id) => {
+953: return useMutation({
+954: mutationFn: async (bookingId: string) => {
+959: onSuccess: (id) => {
+983: return useMutation({
+984: mutationFn: async (beoId: string) => {
+989: onSuccess: (result) => {
+1009: recordId: String(result["beo_id"] ?? ""),
+1021: branch_id: string | null;
+1024: beo_id: string | null;
+1037: /** Confirmed, close to the date (or past it), still without a published order. */
+1046: * A confirmed booking does not close itself: someone states the outcome —
+1047: * it took place, the party did not arrive, or it was cancelled. Recording
+1048: * that closes the department handoffs and freezes the operational side.
+1052: export function useCloseOutEvent() {
+1055: return useMutation({
+1056: mutationFn: async ({
+1062: outcome: "completed" | "no-show" | "cancelled";
+1065: const { data, error } = await guardedRpc(db, "neo_event_close_out", {
+1073: onSuccess: (result, vars) => {
+1078: ? `Event closed as ${vars.outcome}. An outstanding balance remains for Finance to collect.`
+1079: : `Event closed as ${vars.outcome}.`,
+1085: action: "events.booking.close-out",
+1095: /** Booking → banquet order → kitchen / housekeeping / billing → payment. */
+1127: .from("event_bookings")
+1129: if (branchId) q = q.eq("branch_id", branchId);
+1169: export type EventBillPayment = {
+1194: branch_id: string | null;
+1202: payments?: EventBillPayment[];
+1219: * Invoices already issued against events. Read-only lookup so the billing
+1223: export type EventInvoiceRef = {
+1225: invoice_number: string | null;
+1230: export function useEventInvoices() {
+1233: queryKey: ["events", "invoices", organizationId, branchId],
+1238: .from("invoices")
+1239: .select("id, invoice_number, status, event_booking_id")
+1241: if (branchId) q = q.eq("branch_id", branchId);
+1244: const map: Record<string, EventInvoiceRef> = {};
+1245: for (const row of (data ?? []) as EventInvoiceRef[]) {
+1253: export function useEventInvoice(bookingId: string | null) {
+1256: queryKey: ["events", "invoice", organizationId, bookingId],
+1261: .from("invoices")
+1262: .select("id, invoice_number, status, event_booking_id")
+1268: return (data ?? null) as EventInvoiceRef | null;
+1282: return useMutation({
+1283: mutationFn: async (vars: TVars) => {
+1298: onSuccess: (result) => {
+1332: export function useRecordEventPayment() {
+1344: const { data, error } = await guardedRpc(db, "neo_event_billing_record_payment", {
+1356: "events.billing.payment",
+1400: return useMutation({
+1401: mutationFn: async (input: {
+1430: onSuccess: (result) => {
+1439: recordId: String(result["beo_id"] ?? ""),
+1461: .from("banquet_event_orders")
+1470: if (branchId) q = q.eq("branch_id", branchId);
+1492: return useMutation({
+1493: mutationFn: async ({ beoId, moment }: { beoId: string; moment: string }) => {
+1502: onSuccess: (result) => {
+1511: recordId: String(result["beo_id"] ?? ""),
+1519: export type EventPaymentRow = Row;
+1526: export function useEventPaymentLedger() {
+1529: queryKey: ["events", "payment-ledger", organizationId, branchId],
+1533: .from("event_payments")
+1536: "id, booking_id, entry_type, method, amount, currency, reference, reason, recorded_at, event_bookings(event_reference, event_name, event_date, total_amount, paid_amount, deposit_required, deposit_paid, payment_status, status)",
+1541: if (branchId) q = q.eq("branch_id", branchId);
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts
+================================================================================
+7: * the BEO instructions relevant to their work and their own tasks, and nothing
+11: *  - Banqueting Staff never raise a Stores requisition; they report a need and
+13: *  - Banqueting Staff never confirm payments, change prices or cancel events.
+14: *  - Task progress only moves forward, and nobody approves their own request.
+20: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+26: import { applyStockNeedStatus } from "@/lib/stock-needs";
+34: export const BANQUET_TASK_STATUSES = ["not-started", "in-progress", "ready", "completed", "blocked"] as const;
+35: export type BanquetTaskStatus = (typeof BANQUET_TASK_STATUSES)[number];
+37: export const BANQUET_TASK_LABELS: Record<string, string> = {
+50: { value: "stock-shortage", label: "Stock shortage", routesTo: "Stores" },
+67: export const BANQUET_TASK_SUGGESTIONS = [
+86: export function taskTone(status: string): "success" | "warning" | "destructive" | "default" {
+94: /** The next stage a banqueting task may move to, or null when it is finished. */
+95: export function nextTaskStatus(status: string): BanquetTaskStatus | null {
+113: const fallback = (profile as { branch_id?: string | null } | null)?.branch_id ?? null;
+136: .from("event_bookings")
+138: .neq("status", "cancelled")
+141: if (branchId) q = q.eq("branch_id", branchId);
+158: branchId: w.branch_id,
+170: .from("event_staff_assignments")
+184: return useMutation({
+185: mutationFn: async (input: { bookingId: string; staffId: string; station?: string; duties?: string }) => {
+197: onSuccess: () => {
+207: return useMutation({
+208: mutationFn: async (assignmentId: string) => {
+209: const { error } = await db.from("event_staff_assignments").delete().eq("id", assignmentId);
+212: onSuccess: () => {
+221: * Banqueting tasks
+224: export function useBanquetTasks(bookingId: string | null = null) {
+227: queryKey: ["sales-events", "tasks", organizationId, branchId, bookingId],
+231: .from("event_banquet_tasks")
+245: * caller's tasks; the explicit filter keeps a manager's console honest too.
+247: export function useMyBanquetTasks() {
+250: queryKey: ["sales-events", "my-tasks", organizationId, userId],
+254: .from("event_banquet_tasks")
+272: .from("event_staff_assignments")
+283: export function useCreateBanquetTask() {
+285: return useMutation({
+286: mutationFn: async (input: {
+295: if (!input.title.trim()) throw new Error("Give the task a title");
+296: const { data, error } = await guardedRpc(db, "neo_event_task_create", {
+307: onSuccess: () => {
+309: toast.success("Banqueting task created");
+315: export function useAdvanceBanquetTask() {
+317: return useMutation({
+318: mutationFn: async (input: { taskId: string; status: BanquetTaskStatus; blocker?: string }) => {
+319: const { data, error } = await guardedRpc(db, "neo_event_task_advance", {
+320: _task: input.taskId,
+327: onSuccess: (data) => {
+329: toast.success(`Task marked ${BANQUET_TASK_LABELS[sevStr(data["status"], "")] ?? "updated"}`);
+346: .from("event_issue_reports")
+350: q = applyStockNeedStatus(q, status);
+360: return useMutation({
+361: mutationFn: async (input: { bookingId: string | null; category: string; detail: string; taskId?: string | null }) => {
+367: _task: input.taskId || null,
+372: onSuccess: (data) => {
+382: return useMutation({
+383: mutationFn: async (input: { issueId: string; status: string; resolution?: string }) => {
+392: onSuccess: (data) => {
+401: * Supply needs — reported by banqueting, requisitioned by the manager
+404: export function useEventStockNeeds(status = "all") {
+407: queryKey: ["sales-events", "stock-needs", organizationId, branchId, status],
+411: .from("department_stock_needs")
+416: if (branchId) q = q.eq("branch_id", branchId);
+417: q = applyStockNeedStatus(q, status);
+425: export function useReportEventStockNeed() {
+428: return useMutation({
+429: mutationFn: async (input: {
+437: const { data, error } = await guardedRpc(db, "neo_department_stock_need_create", {
+450: onSuccess: () => {
+458: export function useReviewEventStockNeed() {
+460: return useMutation({
+461: mutationFn: async (input: {
+463: decision: "acknowledge" | "requisition" | "decline" | "close";
+466: const { data, error } = await guardedRpc(db, "neo_department_stock_need_review", {
+470: _requisition: null,
+475: onSuccess: (data) => {
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.automation.events.tsx
+================================================================================
+61: const liveTypes = Array.from(
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.banqueting.tsx
+================================================================================
+27: BANQUET_TASK_LABELS,
+28: BANQUET_TASK_SUGGESTIONS,
+30: taskTone,
+33: useBanquetTasks,
+35: useCreateBanquetTask,
+52: "Assign banqueting staff to events, set up the task board for each function and clear the issues raised on the floor.",
+58: "Stations, duties and setup tasks for every confirmed event, owned by the Sales & Events Manager.",
+81: const tasks = useBanquetTasks(bookingId || null);
+86: const createTask = useCreateBanquetTask();
+93: const [taskTitle, setTaskTitle] = useState("");
+94: const [taskAssignee, setTaskAssignee] = useState("unassigned");
+95: const [taskInstruction, setTaskInstruction] = useState("");
+100: const taskRows = (tasks.data ?? []) as SevRow[];
+119: description="Choose an event, put staff on stations and break the setup into tasks. Banqueting staff only ever see the events they are assigned to."
+155: tasks={taskRows}
+207: onSuccess: () => {
+280: title="Add a setup task"
+281: description={`Common tasks: ${BANQUET_TASK_SUGGESTIONS.join(", ")}.`}
+285: <Label htmlFor="task-title">Task</Label>
+287: id="task-title"
+288: value={taskTitle}
+289: onChange={(e) => setTaskTitle(e.target.value)}
+295: <Select value={taskAssignee} onValueChange={setTaskAssignee}>
+314: disabled={!taskTitle.trim() || createTask.isPending}
+316: createTask.mutate(
+319: title: taskTitle,
+320: assigneeId: taskAssignee === "unassigned" ? null : taskAssignee,
+321: instruction: taskInstruction,
+324: onSuccess: () => {
+325: setTaskTitle("");
+326: setTaskInstruction("");
+327: setTaskAssignee("unassigned");
+333: Add task
+337: <Label htmlFor="task-instruction">Instruction</Label>
+339: id="task-instruction"
+340: value={taskInstruction}
+341: onChange={(e) => setTaskInstruction(e.target.value)}
+342: placeholder="What good looks like for this task"
+350: title="Task board"
+354: isLoading={tasks.isLoading}
+355: error={tasks.error}
+359: {taskRows.length === 0 ? (
+362: title="No tasks yet"
+363: description="Break the setup down into tasks."
+370: <TableHead>Task</TableHead>
+377: {taskRows.map((t) => (
+385: <StatusPill tone={taskTone(sevStr(t["status"], ""))}>
+386: {BANQUET_TASK_LABELS[sevStr(t["status"], "")] ?? sevStr(t["status"])}
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.billing.tsx
+================================================================================
+13: import { formatDate, formatMoney, paymentTone } from "@/lib/events";
+17: import { useEventBilling, useEventInvoices } from "@/lib/events-data";
+48: const invoices = useEventInvoices();
+49: const invoiceByBooking = invoices.data ?? {};
+51: const rows = (workspace.data ?? []).filter((r) => r.status !== "cancelled");
+103: "Payment",
+131: tone={paymentTone(String(r.payment_status ?? "unpaid"))}
+132: value={String(r.payment_status ?? "unpaid")}
+140: {invoiceByBooking[r.booking_id] ? (
+142: type="invoice"
+143: id={invoiceByBooking[r.booking_id]!.id}
+144: label={`View / Print Invoice${
+145: invoiceByBooking[r.booking_id]!.invoice_number
+146: ? ` ${invoiceByBooking[r.booking_id]!.invoice_number}`
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.$id.tsx
+================================================================================
+32: paymentTone,
+46: useEventInvoice,
+94: const eventInvoice = useEventInvoice(id);
+96: const stock = useEventRequirements(id);
+105: const addStock = useEventInsert("event_requirements", "Stock requirement");
+197: <Pill tone={paymentTone(String(b["payment_status"]))} value={String(b["payment_status"])} />
+199: !["confirmed", "in-planning", "ready", "in-progress", "completed", "closed"].includes(
+205: description="Reserves the venue for the setup-to-breakdown window, seeds the timeline, generates department tasks and drafts the BEO. Running it twice never duplicates anything."
+207: {(close) => (
+210: Confirmation requirements: accepted quotation, deposit received or approved
+228: confirm.mutate({ bookingId: id, overrideReason }, { onSuccess: () => close() })
+245: description="Guest-count changes recalculate catering quantities. Approved menus are versioned, never silently overwritten."
+247: {(close) => (
+261: updateBooking.mutate({ id, values }, { onSuccess: () => close() })
+358: description="Approved operational source of truth. Material changes create a new revision; client pricing is never shown to departments."
+381: {(close) => (
+399: { onSuccess: () => close() },
+498: description="Tasks are created in the central Task Management system when the booking is confirmed."
+504: description="Assign work to a department. Confirming the booking turns each requirement into a task."
+506: {(close) => (
+533: { onSuccess: () => close() },
+586: {(close) => (
+608: { onSuccess: () => close() },
+626: description="Linked to restaurant menu items and approved recipes so kitchen production and costing stay consistent."
+634: {(close) => (
+651: addMenu.mutate({ ...values, booking_id: id }, { onSuccess: () => close() })
+690: title="Stock requirements"
+691: description="Planned, reserved, issued, consumed, returned and wasted quantities. Reserving never deducts stock — Phase 9 issuing does."
+696: title="Add stock requirement"
+699: {(close) => (
+709: addStock.mutate({ ...values, booking_id: id }, { onSuccess: () => close() })
+718: isLoading={stock.isLoading}
+719: error={stock.error}
+720: isEmpty={(stock.data ?? []).length === 0}
+723: title="No stock requirements"
+742: {((stock.data ?? []) as Row[]).map((r) => (
+746: r["description"] || (r["stock_items"] as Row | null)?.["name"] || "—",
+817: {eventInvoice.data ? (
+820: Invoice {eventInvoice.data.invoice_number ?? "issued"}
+821: {eventInvoice.data.status ? ` · ${titleCase(eventInvoice.data.status)}` : ""}
+824: type="invoice"
+825: id={eventInvoice.data.id}
+826: label="View / Print Invoice"
+840: {(close) => (
+863: { onSuccess: () => close() },
+909: label="Payment gateway"
+910: note="No payment provider is connected, so deposits and balances are recorded manually against the existing Finance ledger."
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.bookings.index.tsx
+================================================================================
+42: paymentTone,
+122: {(close) => (
+187: onSuccess: () => {
+189: close();
+228: "Payment",
+249: tone={paymentTone(String(b.payment_status ?? "unpaid"))}
+250: value={String(b.payment_status ?? "unpaid")}
+327: { onSuccess: () => setTransferFor(null) },
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.calendar.tsx
+================================================================================
+75: ...Array.from({ length: leading }, () => null),
+76: ...Array.from({ length: days }, (_, i) =>
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.enquiries.tsx
+================================================================================
+171: {(close) => (
+192: onSuccess: () => {
+194: close();
+285: {(close) => (
+323: onSuccess: () => {
+325: close();
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.feedback.tsx
+================================================================================
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.index.tsx
+================================================================================
+26: useCloseOutEvent,
+71: const closeOut = useCloseOutEvent();
+79: (row) => !["cancelled", "closed", "completed"].includes(String(row.status).toLowerCase()),
+85: // counts as operationally live until it is closed out.
+108: if (["converted", "lost", "cancelled", "archived"].includes(status)) return false;
+250: tone={row.beo_status === "published" ? "success" : row.beo_id ? "warning" : "destructive"}
+272: title="Events waiting to be closed"
+313: { outcome: "cancelled", label: "Cancelled" },
+320: disabled={closeOut.isPending && closeOut.variables?.bookingId === row.booking_id}
+327: closeOut.mutate({
+394: description="Calculated from real department requirements and tasks"
+461: description="Derived from your own event records. It never confirms bookings, approves discounts, moves stock or messages clients."
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.my-tasks.tsx
+================================================================================
+27: BANQUET_TASK_LABELS,
+28: nextTaskStatus,
+30: taskTone,
+31: useAdvanceBanquetTask,
+32: useMyBanquetTasks,
+38: export const Route = createFileRoute("/_shell/events/my-tasks")({
+41: { title: "My Banqueting Tasks — NEØ" },
+45: "The events you are assigned to, the setup tasks that belong to you and a way to flag what is missing.",
+47: { property: "og:title", content: "My Banqueting Tasks — NEØ" },
+51: "Update task progress and report missing items or delays straight to the department that fixes them.",
+58: <OpsGuard module="events" action="my_tasks.view">
+59: <MyBanquetingTasksPage />
+64: function MyBanquetingTasksPage() {
+66: const tasks = useMyBanquetTasks();
+67: const advance = useAdvanceBanquetTask();
+77: const taskRows = (tasks.data ?? []) as SevRow[];
+85: title="My events & tasks"
+86: description="Only the functions you are assigned to. Update progress as you go — pricing, payments and cancellations stay with the Sales & Events Manager."
+137: title="My tasks"
+140: <QueryState isLoading={tasks.isLoading} error={tasks.error} isEmpty={false} empty={null}>
+141: {taskRows.length === 0 ? (
+144: title="No tasks"
+152: <TableHead>Task</TableHead>
+159: {taskRows.map((t) => {
+162: const next = nextTaskStatus(status);
+170: <StatusPill tone={taskTone(status)}>
+171: {BANQUET_TASK_LABELS[status] ?? status}
+179: onClick={() => advance.mutate({ taskId: id, status: next })}
+181: Mark {BANQUET_TASK_LABELS[next]}
+202: <Label htmlFor="blocker">What is blocking this task?</Label>
+215: { taskId: blockerFor, status: "blocked", blocker: blockerNote },
+217: onSuccess: () => {
+228: Cancel
+291: { onSuccess: () => setDetail("") },
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.packages.tsx
+================================================================================
+106: {(close) => (
+112: create.mutate({ ...values, active: true }, { onSuccess: () => close() })
+187: {(close) => (
+196: { onSuccess: () => close() },
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.payments.tsx
+================================================================================
+2: * Banquet payment entry.
+22: import { formatDate, formatMoney, paymentTone, titleCase } from "@/lib/events";
+23: import { useBookings, useEventBillStatement, useRecordEventPayment } from "@/lib/events-data";
+29: export const Route = createFileRoute("/_shell/events/payments")({
+32: { title: "Banquet Payments — NEØ" },
+37: { property: "og:title", content: "Banquet Payments — NEØ" },
+65: const record = useRecordEventPayment();
+68: const [entryType, setEntryType] = useState("payment");
+91: .filter((b) => !["cancelled", "enquiry"].includes(String(b["status"] ?? "")))
+96: paymentStatus: String(b["payment_status"] ?? "unpaid"),
+153: title="Banquet payments"
+191: empty={<EventsEmpty title="No events yet" description="Confirmed events appear here for payment entry." />}
+242: {["deposit", "payment"].map((t) => (
+281: <Label htmlFor="payment-note">Note (optional)</Label>
+282: <Textarea id="payment-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+290: <Pill tone={paymentTone(String(booking.billing_status ?? "not_billed"))} value={String(booking.billing_status ?? "not_billed")} />
+302: isEmpty={(statement.data?.payments ?? []).length === 0}
+306: {(statement.data?.payments ?? []).map((p) => (
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.quotations.tsx
+================================================================================
+106: const accepted = ["accepted", "approved"].includes(String(q["status"]));
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.readiness.tsx
+================================================================================
+53: const rows = (workspace.data ?? []).filter((r) => !["cancelled"].includes(r.status));
+136: * office → billing → payment. A handoff that never happened is named here
+141: const rows = (chain.data ?? []).filter((r) => r.status !== "cancelled");
+147: description="Booking → banquet order → kitchen, housekeeping, front office → billing → payment."
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.reconciliation.tsx
+================================================================================
+25: import { formatDate, formatMoney, paymentTone, titleCase } from "@/lib/events";
+26: import { useEventPaymentLedger } from "@/lib/events-data";
+60: paymentStatus: string;
+75: const ledger = useEventPaymentLedger();
+95: paymentStatus: String(booking["payment_status"] ?? "unpaid"),
+165: description="Record a deposit or payment against an event bill and the reconciliation will build itself here."
+216: <Pill tone={paymentTone(b.paymentStatus)} value={b.paymentStatus} />
+253: <td className="py-2 pr-4">{titleCase(String(row["entry_type"] ?? "payment"))}</td>
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.reports.tsx
+================================================================================
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.resources.tsx
+================================================================================
+109: {(close) => (
+117: { onSuccess: () => close() },
+191: {(close) => (
+200: { onSuccess: () => close() },
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.service.tsx
+================================================================================
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.settings.tsx
+================================================================================
+100: {(close) => (
+106: create.mutate({ ...values, active: true }, { onSuccess: () => close() })
+157: {(close) => (
+166: { onSuccess: () => close() },
+232: description="Departments that receive event requirements and tasks"
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.site-visits.tsx
+================================================================================
+72: {(close) => (
+125: create.mutate({ ...values, status: "scheduled" }, { onSuccess: () => close() })
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.supplies.tsx
+================================================================================
+23: useEventStockNeeds,
+24: useReportEventStockNeed,
+25: useReviewEventStockNeed,
+42: "Report what the floor needs. Only the manager turns a need into a Stores requisition.",
+49: <OpsGuard module="events" action="stock_needs.view">
+58: requisitioned: "success",
+60: closed: "default",
+65: const mayReview = can("events", "stock_needs.approve");
+67: const needs = useEventStockNeeds("all");
+68: const report = useReportEventStockNeed();
+69: const review = useReviewEventStockNeed();
+82: description="Banqueting reports what is short. The Sales & Events Manager decides whether it becomes a Stores requisition — nobody on the floor raises one directly."
+117: onSuccess: () => {
+189: review.mutate({ needId: id, decision: "requisition" })
+192: Requisition
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.tsx
+================================================================================
+26: { label: "My Tasks", to: "/events/my-tasks", feature: "my_tasks", action: "view" },
+27: { label: "Supplies", to: "/events/supplies", feature: "stock_needs", action: "view" },
+
+================================================================================
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.venues.tsx
+================================================================================
+78: { name: "closes_at", label: "Closes at", type: "time" },
+95: {(close) => (
+101: create.mutate({ ...values, status: "available" }, { onSuccess: () => close() })
+158: {(close) => (
+167: { onSuccess: () => close() },
+
+================================================================================
+EVENTS MIGRATION REFERENCES
+================================================================================
+20260924165000_event_closeout_blocker_guard.sql
+
+================================================================================
+EVENTS TEST FILES
+================================================================================
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\automation-event-wiring.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\event-identity.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\events-contract-verification.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\events-property-contract.test.ts
