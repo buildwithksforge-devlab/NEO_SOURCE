@@ -81,7 +81,8 @@ BEGIN
          WHERE id = v_need.requisition_id
            AND organization_id = v_org
            AND branch_id = v_need.branch_id
-           AND department_id IS NOT DISTINCT FROM v_need.department_id;
+           AND department_id IS NOT DISTINCT FROM v_need.department_id
+           AND event_booking_id = v_need.event_booking_id;
 
         IF v_req IS NULL THEN
             RAISE EXCEPTION

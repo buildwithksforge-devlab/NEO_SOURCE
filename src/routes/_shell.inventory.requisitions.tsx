@@ -179,7 +179,12 @@ function StoresRequisitionsPage() {
     const lines = (requisition["internal_requisition_lines"] ?? []) as StoresRow[];
     const status = str(requisition["status"], "awaiting-stores");
     const awaitingApproval = status === "pending-supervisor";
-    const canIssue = mayIssue && !awaitingApproval;
+    const approvedForIssue = [
+      "ready-for-issue",
+      "partially-approved",
+      "partially-issued",
+    ].includes(status);
+    const canIssue = mayIssue && approvedForIssue;
     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
     const sourceStoreId = str(requisition["source_location_id"], "");
     const sourceStoreName = str(

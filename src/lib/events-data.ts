@@ -484,8 +484,10 @@ export function useEventInsert(table: string, label: string) {
         const chosen = (values["branch_id"] as string | undefined) ?? branchId;
         if (!chosen) throw new Error(PROPERTY_REQUIRED_MESSAGE);
         payload["branch_id"] = chosen;
-      } else if (!("branch_id" in values) && branchId) {
-        payload["branch_id"] = branchId;
+      } else {
+        // Child records inherit their property from the parent booking.
+        // Do not inject branch_id into tables without that column.
+        delete payload["branch_id"];
       }
       const { data, error } = await db.from(table).insert(payload).select("id").maybeSingle();
       if (error) throw error;
