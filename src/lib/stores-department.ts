@@ -107,6 +107,11 @@ export function useStoresAvailability() {
         const key = String(row["stock_item_id"] ?? "");
         if (!key) continue;
         byItem.set(key, (byItem.get(key) ?? 0) + num(row["quantity_on_hand"]));
+        const locationId = String(row["location_id"] ?? "");
+        if (locationId) {
+          const storeKey = `${locationId}:${key}`;
+          byItem.set(storeKey, (byItem.get(storeKey) ?? 0) + num(row["quantity_on_hand"]));
+        }
       }
       return byItem;
     },
@@ -224,7 +229,10 @@ export function useIssueRequisition() {
         _attempt: input.attemptId,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as StoresRow;
+      if (!data || typeof data !== "object" || data["ok"] !== true) {
+        throw new Error(String(data?.["message"] ?? data?.["reason"] ?? "Stock issue was not confirmed."));
+      }
+      return data as StoresRow;
     },
     onSuccess: (data) => {
       invalidate();

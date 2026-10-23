@@ -19,6 +19,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_production_display_act: "anon",
   neo_production_staff_pin: "authenticated",
   neo_production_display_pair: "authenticated",
+  neo_marketing_need_to_requisition: "authenticated",
   neo_production_display_manage: "authenticated",
   neo_kitchen_visible_station_ids: "authenticated",
   neo_beo_revise: "authenticated",
