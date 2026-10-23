@@ -44,7 +44,12 @@ export function depositGate(position: DepositPosition | undefined | null): {
   message: string;
 } {
   if (!position || !position.ok) {
-    return { blocked: false, message: "Deposit position unavailable." };
+    return {
+      blocked: true,
+      message:
+        position?.reason ??
+        "Deposit eligibility could not be verified. Refresh the reservation before checking in.",
+    };
   }
   if (position.waiver === "corporate-credit") {
     return { blocked: false, message: "Charged to a corporate credit account — no deposit due." };

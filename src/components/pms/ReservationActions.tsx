@@ -259,7 +259,14 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
       title={`Check in ${reservation.confirmation_number}`}
       description="Opens the guest folio, marks the room occupied and notifies housekeeping."
       confirmLabel="Complete check-in"
-      disabled={!reservation.room_id || !idVerified || gate.blocked || deposit.isLoading}
+      disabled={
+        !reservation.room_id ||
+        !idVerified ||
+        gate.blocked ||
+        deposit.isLoading ||
+        deposit.isError ||
+        reservation.arrival_date > operationalToday()
+      }
       onConfirm={() => checkIn.mutateAsync({ reservation: reservation.id, keys, notes })}
     >
       {!reservation.room_id ? (
@@ -274,6 +281,14 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
             Record the deposit or authorise an override on the reservation before checking in.
           </p>
         </div>
+      ) : null}
+      {reservation.arrival_date > operationalToday() ? (
+        <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          Early check-in is not permitted. The reservation begins on{" "}
+          {reservation.arrival_date}.
+          Amend the arrival date through the authorised reservation workflow
+          if the guest needs to arrive earlier.
+        </p>
       ) : null}
       <DepositPanel reservationId={reservation.id} />
       <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
