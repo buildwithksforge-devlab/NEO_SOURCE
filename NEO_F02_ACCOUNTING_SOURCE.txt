@@ -1,0 +1,1078 @@
+
+======================================================================
+FILE: supabase/migrations/20260831043706_a114fd29-7595-4771-b0de-57407fb6c220.sql
+======================================================================
+CREATE OR REPLACE FUNCTION public.pms_apply_deposits_to_folio()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE _d record; _line uuid;
+BEGIN
+  IF NEW.reservation_id IS NULL THEN RETURN NEW; END IF;
+  FOR _d IN SELECT * FROM public.reservation_deposits
+             WHERE reservation_id = NEW.reservation_id AND status = 'held'
+  LOOP
+    INSERT INTO public.folio_lines (organization_id, branch_id, folio_id, reservation_id, line_type,
+      category, source_module, description, operational_date, quantity, unit_price,
+      gross_amount, net_amount, posted_by)
+    VALUES (NEW.organization_id, NEW.branch_id, NEW.id, NEW.reservation_id, 'payment', 'payment', 'pms',
+      'Pre-arrival deposit' || COALESCE(' Â· ' || _d.reference, ''), current_date, 1, _d.amount,
+      _d.amount, _d.amount, auth.uid())
+    RETURNING id INTO _line;
+
+    UPDATE public.reservation_deposits
+       SET status='applied', applied_folio_id=NEW.id, applied_folio_line_id=_line, applied_at=now()
+     WHERE id=_d.id;
+
+    -- A deposit applied to the folio is money already banked: it must reduce
+    -- what the guest owes, not sit on the folio as an unreconciled line.
+    UPDATE public.folios
+       SET total_payments = COALESCE(total_payments,0) + _d.amount,
+           balance = COALESCE(balance,0) - _d.amount,
+           updated_at = now()
+     WHERE id = NEW.id;
+  END LOOP;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.pms_check_out(_reservation uuid, _force boolean DEFAULT false, _notes text DEFAULT ''::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE _stay record; _f record; _charges numeric; _paid numeric; _line_paid numeric; _outstanding numeric;
+BEGIN
+  SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation FOR UPDATE;
+  IF _stay IS NULL THEN RAISE EXCEPTION 'No active stay for this reservation'; END IF;
+  IF _stay.status = 'checked-out' THEN
+    RETURN jsonb_build_object('stay_id',_stay.id,'idempotent',true);
+  END IF;
+
+  SELECT * INTO _f FROM public.folios WHERE stay_id=_stay.id AND folio_type='guest' FOR UPDATE;
+
+  -- Charges exclude payment/deposit lines; those are settlement, not consumption.
+  SELECT COALESCE(SUM(l.net_amount), 0) INTO _charges
+    FROM public.folio_lines l
+    JOIN public.folios f ON f.id = l.folio_id
+   WHERE f.stay_id = _stay.id
+     AND COALESCE(l.status,'posted') NOT IN ('void','voided','reversed')
+     AND COALESCE(l.line_type,'charge') NOT IN ('payment','deposit','refund');
+
+  SELECT COALESCE(SUM(a.amount), 0) INTO _paid
+    FROM public.payment_allocations a
+    JOIN public.folios f ON f.id = a.folio_id
+    JOIN public.payments p ON p.id = a.payment_id
+   WHERE f.stay_id = _stay.id
+     AND p.status = 'confirmed';
+
+  -- Deposits applied at check-in are recorded as folio payment lines.
+  SELECT COALESCE(SUM(l.net_amount), 0) INTO _line_paid
+    FROM public.folio_lines l
+    JOIN public.folios f ON f.id = l.folio_id
+   WHERE f.stay_id = _stay.id
+     AND COALESCE(l.status,'posted') NOT IN ('void','voided','reversed')
+     AND COALESCE(l.line_type,'charge') IN ('payment','deposit');
+
+  _outstanding := _charges - _paid - _line_paid;
+
+  IF round(_outstanding, 2) > 0 THEN
+    IF NOT _force THEN
+      RAISE EXCEPTION 'Folio is not settled â€” outstanding balance of %. Settle the bill before check-out.', round(_outstanding, 2);
+    END IF;
+    IF NOT (public.has_permission('pms','folio.override') OR public.is_org_admin()) THEN
+      RAISE EXCEPTION 'Checking out with an unsettled balance of % requires folio override authority.', round(_outstanding, 2);
+    END IF;
+    IF btrim(COALESCE(_notes,'')) = '' THEN
+      RAISE EXCEPTION 'A written reason is required to check out with an unsettled balance.';
+    END IF;
+  END IF;
+
+  UPDATE public.stays SET status='checked-out', checked_out_at=now(), updated_at=now() WHERE id=_stay.id;
+  UPDATE public.reservations SET status='checked-out', updated_at=now() WHERE id=_reservation;
+
+  IF _f.id IS NOT NULL THEN
+    UPDATE public.folios
+       SET total_charges = _charges,
+           total_payments = COALESCE(_paid,0) + COALESCE(_line_paid,0),
+           balance = _outstanding,
+           status = CASE WHEN round(_outstanding,2) > 0 THEN 'under-review' ELSE 'settled' END,
+           updated_at = now()
+     WHERE id = _f.id;
+  END IF;
+
+  UPDATE public.rooms SET status='active', housekeeping_status='dirty', updated_at=now()
+   WHERE id = (SELECT room_id FROM public.reservations WHERE id=_reservation);
+
+  INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)
+  VALUES (_stay.organization_id, auth.uid(), '', 'pms.check_out', 'pms', _stay.id::text,
+    jsonb_build_object('reservation_id',_reservation,'outstanding',_outstanding,'forced',_force), _notes);
+
+  RETURN jsonb_build_object('stay_id',_stay.id,'folio_id',_f.id,'idempotent',false,'outstanding',_outstanding);
+END;
+$function$;
+
+======================================================================
+FILE: supabase/migrations/20260831045823_d8993219-835b-4244-8912-765e9b835a92.sql
+======================================================================
+CREATE OR REPLACE FUNCTION public.pms_assign_room(_reservation uuid, _room uuid, _reason text DEFAULT ''::text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _org uuid := public.current_org_id();
+  _res public.reservations;
+  _candidate public.rooms;
+  _prev uuid;
+  _id uuid;
+BEGIN
+  IF NOT public.has_permission('pms','rooms.assign') THEN
+    RAISE EXCEPTION 'Not permitted to assign rooms';
+  END IF;
+
+  SELECT * INTO _res
+    FROM public.reservations
+   WHERE id = _reservation AND organization_id = _org
+   FOR UPDATE;
+  IF _res.id IS NULL THEN RAISE EXCEPTION 'Reservation not found'; END IF;
+  IF _res.status IN ('cancelled','checked-out','no-show') THEN
+    RAISE EXCEPTION 'This reservation can no longer receive a room';
+  END IF;
+
+  SELECT * INTO _candidate
+    FROM public.rooms
+   WHERE id = _room AND organization_id = _org AND branch_id = _res.branch_id
+   FOR UPDATE;
+  IF _candidate.id IS NULL THEN
+    RAISE EXCEPTION 'Room does not belong to this reservation property';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.pms_available_rooms(
+        _res.branch_id, _res.arrival_date, _res.departure_date,
+        _res.room_type_id, _res.adults, _res.children, _res.group_booking_id
+      ) a
+     WHERE a.room_id = _room
+  ) AND _res.room_id IS DISTINCT FROM _room THEN
+    RAISE EXCEPTION 'Room % is no longer available for these stay dates', _candidate.room_number;
+  END IF;
+
+  SELECT room_id INTO _prev
+    FROM public.room_assignments
+   WHERE reservation_id = _reservation AND status = 'active'
+   LIMIT 1;
+
+  IF _prev = _room THEN
+    SELECT id INTO _id FROM public.room_assignments
+     WHERE reservation_id = _reservation AND room_id = _room AND status = 'active'
+     LIMIT 1;
+    RETURN _id;
+  END IF;
+
+  UPDATE public.room_assignments
+     SET status = 'released', updated_at = now()
+   WHERE reservation_id = _reservation AND status = 'active';
+
+  INSERT INTO public.room_assignments
+    (organization_id, branch_id, reservation_id, stay_id, room_id,
+     start_date, end_date, previous_room_id, reason, assigned_by)
+  VALUES
+    (_org, _res.branch_id, _reservation,
+     (SELECT id FROM public.stays WHERE reservation_id = _reservation),
+     _room, _res.arrival_date, _res.departure_date, _prev, COALESCE(_reason,''), auth.uid())
+  RETURNING id INTO _id;
+
+  UPDATE public.reservations SET room_id = _room, updated_at = now() WHERE id = _reservation;
+  INSERT INTO public.reservation_history
+    (organization_id, reservation_id, action, field, previous_value, new_value, reason, changed_by)
+  VALUES
+    (_org, _reservation, 'room.assign', 'room_id', _prev::text, _room::text, _reason, auth.uid());
+  INSERT INTO public.audit_logs
+    (organization_id, branch_id, user_id, user_name, action, module, record_id, previous_value, new_value, reason)
+  VALUES
+    (_org, _res.branch_id, auth.uid(), '', 'pms.room.assign', 'front-office', _reservation::text,
+     jsonb_build_object('room_id', _prev), jsonb_build_object('room_id', _room), _reason);
+  RETURN _id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.pms_transfer_room(_reservation uuid, _to_room uuid, _reason text, _move_type text DEFAULT 'transfer'::text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _org uuid := public.current_org_id();
+  _stay public.stays;
+  _res public.reservations;
+  _from uuid;
+  _id uuid;
+  _to public.rooms;
+BEGIN
+  IF NOT public.has_permission('pms','rooms.transfer') THEN RAISE EXCEPTION 'Not permitted to transfer rooms'; END IF;
+  IF btrim(COALESCE(_reason,'')) = '' THEN RAISE EXCEPTION 'A reason is required for a room move'; END IF;
+
+  SELECT * INTO _stay FROM public.stays
+   WHERE reservation_id = _reservation AND organization_id = _org FOR UPDATE;
+  IF _stay.id IS NULL OR _stay.status <> 'in-house' THEN RAISE EXCEPTION 'No in-house stay for this reservation'; END IF;
+  SELECT * INTO _res FROM public.reservations WHERE id = _reservation AND organization_id = _org FOR UPDATE;
+  SELECT * INTO _to FROM public.rooms
+   WHERE id = _to_room AND organization_id = _org AND branch_id = _stay.branch_id FOR UPDATE;
+  IF _to.id IS NULL THEN RAISE EXCEPTION 'Destination room not found in this property'; END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.pms_available_rooms(
+      _stay.branch_id, current_date, GREATEST(_stay.expected_departure, current_date + 1),
+      _to.room_type_id, _res.adults, _res.children, _res.group_booking_id
+    ) a WHERE a.room_id = _to_room
+  ) THEN
+    RAISE EXCEPTION 'Destination room % is no longer available', _to.room_number;
+  END IF;
+
+  _from := _stay.room_id;
+  UPDATE public.room_assignments SET status = 'moved', end_date = GREATEST(start_date + 1, current_date), updated_at = now()
+   WHERE reservation_id = _reservation AND status = 'active';
+  INSERT INTO public.room_assignments
+    (organization_id, branch_id, reservation_id, stay_id, room_id, start_date, end_date,
+     previous_room_id, reason, assignment_type, assigned_by)
+  VALUES
+    (_org, _stay.branch_id, _reservation, _stay.id, _to_room, current_date,
+     GREATEST(_stay.expected_departure, current_date + 1), _from, _reason, _move_type, auth.uid())
+  RETURNING id INTO _id;
+
+  UPDATE public.stays SET room_id = _to_room, updated_at = now() WHERE id = _stay.id;
+  UPDATE public.reservations SET room_id = _to_room, updated_at = now() WHERE id = _reservation;
+  PERFORM set_config('neo.system_posting', 'on', true);
+  PERFORM public.ops_set_room_status(_from, 'dirty', 'operational', 'Guest transferred out', 'pms', _reservation, 'vacant');
+  PERFORM public.ops_set_room_status(_to_room, 'occupied', 'operational', 'Guest transferred in', 'pms', _reservation, 'occupied');
+
+  INSERT INTO public.room_move_history
+    (organization_id, reservation_id, stay_id, from_room_id, to_room_id, move_type, reason, moved_by)
+  VALUES (_org, _reservation, _stay.id, _from, _to_room, _move_type, _reason, auth.uid());
+  INSERT INTO public.tasks
+    (organization_id, branch_id, reference, title, description, created_by, priority, status)
+  VALUES (_org, _stay.branch_id, 'HK-MV-' || left(_id::text,8), 'Clean vacated room',
+          'Guest transferred out. Room requires cleaning.', auth.uid(), 'high', 'open');
+  INSERT INTO public.audit_logs
+    (organization_id, branch_id, user_id, user_name, action, module, record_id, previous_value, new_value, reason)
+  VALUES (_org, _stay.branch_id, auth.uid(), '', 'pms.room.transfer', 'front-office', _reservation::text,
+          jsonb_build_object('room_id',_from), jsonb_build_object('room_id',_to_room), _reason);
+  RETURN _id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.neo_reservation_deposit_record(
+  _reservation uuid, _amount numeric, _method text DEFAULT 'cash'::text,
+  _reference text DEFAULT NULL::text, _idempotency_key text DEFAULT NULL::text,
+  _notes text DEFAULT NULL::text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _org uuid := public.current_org_id();
+  _res public.reservations;
+  _id uuid;
+  _existing uuid;
+  _post jsonb;
+BEGIN
+  IF NOT (public.has_permission('pms','reservations.edit') OR public.has_permission('finance','collections.record_payment')) THEN
+    RAISE EXCEPTION 'Not permitted to record a reservation deposit';
+  END IF;
+  IF COALESCE(_amount,0) <= 0 THEN RAISE EXCEPTION 'A deposit must be greater than zero'; END IF;
+  IF NULLIF(btrim(COALESCE(_idempotency_key,'')), '') IS NULL THEN RAISE EXCEPTION 'A deposit idempotency key is required'; END IF;
+
+  SELECT * INTO _res FROM public.reservations
+   WHERE id = _reservation AND organization_id = _org FOR UPDATE;
+  IF _res.id IS NULL THEN RAISE EXCEPTION 'Reservation not found'; END IF;
+
+  SELECT id INTO _existing FROM public.reservation_deposits
+   WHERE organization_id = _org AND idempotency_key = _idempotency_key;
+  IF _existing IS NOT NULL THEN
+    _post := public.neo_deposit_post(_existing, true);
+    RETURN jsonb_build_object('deposit_id', _existing, 'idempotent', true,
+      'position', public.neo_reservation_deposit_position(_reservation), 'finance', _post);
+  END IF;
+
+  INSERT INTO public.reservation_deposits
+    (organization_id, branch_id, reservation_id, customer_id, amount, method,
+     reference, received_by, idempotency_key, notes)
+  VALUES
+    (_org, _res.branch_id, _reservation, _res.customer_id, round(_amount,2),
+     COALESCE(NULLIF(lower(_method),''),'cash'), NULLIF(btrim(COALESCE(_reference,'')),''),
+     auth.uid(), _idempotency_key, _notes)
+  RETURNING id INTO _id;
+
+  UPDATE public.reservations r
+     SET deposit_paid = (SELECT COALESCE(sum(d.amount),0) FROM public.reservation_deposits d
+                          WHERE d.reservation_id = _reservation AND d.status IN ('held','applied')),
+         updated_at = now()
+   WHERE r.id = _reservation;
+
+  _post := public.neo_deposit_post(_id, true);
+  RETURN jsonb_build_object('deposit_id', _id, 'idempotent', false,
+    'position', public.neo_reservation_deposit_position(_reservation), 'finance', _post);
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.neo_reservation_deposit_record(uuid,numeric,text,text,text,text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.neo_reservation_deposit_record(uuid,numeric,text,text,text,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.neo_maintenance_work_order_create(_payload jsonb, _idempotency_key text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _org uuid := public.current_org_id();
+  _branch uuid := NULLIF(_payload->>'branch_id','')::uuid;
+  _room uuid := NULLIF(_payload->>'room_id','')::uuid;
+  _asset uuid := NULLIF(_payload->>'asset_id','')::uuid;
+  _department uuid := NULLIF(_payload->>'requesting_department_id','')::uuid;
+  _description text := btrim(COALESCE(_payload->>'description',''));
+  _priority text := COALESCE(NULLIF(_payload->>'priority',''),'normal');
+  _blocks boolean := COALESCE((_payload->>'blocks_room')::boolean, false);
+  _severity text := COALESCE(NULLIF(_payload->>'block_status',''),'out-of-order');
+  _existing public.maintenance_work_orders;
+  _wo public.maintenance_work_orders;
+  _number text;
+  _room_state jsonb;
+BEGIN
+  IF _org IS NULL THEN RAISE EXCEPTION 'No active organisation'; END IF;
+  IF NOT (public.has_permission('maintenance','edit') OR public.has_permission('housekeeping','edit')
+          OR public.has_permission('laundry','edit') OR public.is_org_admin()) THEN
+    RAISE EXCEPTION 'Not permitted to report maintenance faults';
+  END IF;
+  IF _description = '' THEN RAISE EXCEPTION 'Describe the fault before reporting it'; END IF;
+  IF NULLIF(btrim(COALESCE(_idempotency_key,'')), '') IS NULL THEN RAISE EXCEPTION 'A work-order idempotency key is required'; END IF;
+  IF _branch IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches WHERE id = _branch AND organization_id = _org) THEN
+    RAISE EXCEPTION 'Select a valid property';
+  END IF;
+  IF _room IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.rooms WHERE id = _room AND organization_id = _org AND branch_id = _branch
+  ) THEN RAISE EXCEPTION 'The selected room does not belong to this property'; END IF;
+  IF _asset IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.assets WHERE id = _asset AND organization_id = _org AND (branch_id IS NULL OR branch_id = _branch)
+  ) THEN RAISE EXCEPTION 'The selected asset does not belong to this property'; END IF;
+
+  SELECT * INTO _existing FROM public.maintenance_work_orders
+   WHERE organization_id = _org AND idempotency_key = _idempotency_key;
+  IF _existing.id IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', true, 'idempotent', true, 'work_order_id', _existing.id,
+      'work_order_number', _existing.work_order_number, 'blocks_room', _existing.blocks_room);
+  END IF;
+
+  _number := public.next_document_number('work-order');
+  INSERT INTO public.maintenance_work_orders
+    (organization_id, branch_id, work_order_number, requesting_department_id, requested_by,
+     room_id, location_label, asset_id, fault_category, description, priority, operational_impact,
+     guest_impact, attachments, status, blocks_room, block_status, source_module, source_record_id,
+     idempotency_key, created_by)
+  VALUES
+    (_org, _branch, _number, _department, auth.uid(), _room, NULLIF(_payload->>'location_label',''),
+     _asset, COALESCE(NULLIF(_payload->>'fault_category',''),'other'), _description, _priority,
+     NULLIF(_payload->>'operational_impact',''), COALESCE((_payload->>'guest_impact')::boolean,false),
+     COALESCE(_payload->'attachments','[]'::jsonb), 'new', _blocks AND _room IS NOT NULL,
+     CASE WHEN _blocks AND _room IS NOT NULL THEN _severity ELSE NULL END,
+     COALESCE(NULLIF(_payload->>'source_module',''),'maintenance'),
+     NULLIF(_payload->>'source_record_id','')::uuid, _idempotency_key, auth.uid())
+  RETURNING * INTO _wo;
+
+  INSERT INTO public.work_order_status_history
+    (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+  VALUES (_org, _wo.id, NULL, 'new', 'Work order created', auth.uid());
+
+  IF _blocks AND _room IS NOT NULL THEN
+    PERFORM set_config('neo.system_posting', 'on', true);
+    _room_state := public.ops_set_room_status(_room, NULL, _severity, _description, 'maintenance', _wo.id, NULL);
+  END IF;
+
+  INSERT INTO public.audit_logs
+    (organization_id, branch_id, user_id, user_name, action, module, record_id, new_value)
+  VALUES (_org, _branch, auth.uid(), '', 'maintenance.work_order.created', 'maintenance', _wo.id::text,
+    jsonb_build_object('work_order_number',_number,'room_id',_room,'asset_id',_asset,
+                       'blocks_room',_wo.blocks_room,'room_state',_room_state));
+
+  RETURN jsonb_build_object('ok', true, 'idempotent', false, 'work_order_id', _wo.id,
+    'work_order_number', _number, 'blocks_room', _wo.blocks_room, 'room_state', _room_state);
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.neo_maintenance_work_order_create(jsonb,text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.neo_maintenance_work_order_create(jsonb,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.pos_post_room_charge(_order_id uuid, _folio_id uuid, _idempotency_key text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  _org uuid := public.current_org_id();
+  _order public.pos_orders;
+  _folio public.folios;
+  _line uuid;
+  _prior text;
+  _base numeric;
+BEGIN
+  IF NOT public.has_permission('pos','room_charge.post') THEN RAISE EXCEPTION 'Not permitted to post room charges'; END IF;
+  SELECT * INTO _order FROM public.pos_orders WHERE id = _order_id AND organization_id = _org FOR UPDATE;
+  IF _order.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;
+  IF _order.folio_post_status = 'posted' THEN
+    SELECT id INTO _line FROM public.folio_lines
+     WHERE organization_id = _org AND idempotency_key = _idempotency_key LIMIT 1;
+    IF _line IS NOT NULL THEN RETURN _line; END IF;
+    RAISE EXCEPTION 'Order already posted to a folio';
+  END IF;
+  IF _order.status NOT IN ('sent','accepted','in-preparation','partially-ready','ready','partially-served','served','awaiting-payment') THEN
+    RAISE EXCEPTION 'Bill % cannot be charged to a room from status "%": send it to production first', _order.order_number, _order.status;
+  END IF;
+  SELECT * INTO _folio FROM public.folios WHERE id = _folio_id AND organization_id = _org FOR UPDATE;
+  IF _folio.id IS NULL THEN RAISE EXCEPTION 'Folio not found'; END IF;
+  IF _folio.branch_id IS DISTINCT FROM _order.branch_id THEN RAISE EXCEPTION 'Order and folio belong to different properties'; END IF;
+  IF _folio.status <> 'open' THEN RAISE EXCEPTION 'Folio is not open'; END IF;
+  SELECT id INTO _line FROM public.folio_lines WHERE organization_id = _org AND idempotency_key = _idempotency_key LIMIT 1;
+  IF _line IS NOT NULL THEN RETURN _line; END IF;
+
+  _base := round(COALESCE(_order.grand_total,0) - COALESCE(_order.tax_total,0)
+                 - COALESCE(_order.service_charge_total,0) + COALESCE(_order.discount_total,0), 2);
+  IF _base < 0 OR round(_base - COALESCE(_order.discount_total,0) + COALESCE(_order.tax_total,0)
+      + COALESCE(_order.service_charge_total,0),2) <> round(COALESCE(_order.grand_total,0),2) THEN
+    RAISE EXCEPTION 'Posting blocked â€” source integrity mismatch';
+  END IF;
+
+  _prior := COALESCE(current_setting('neo.system_posting', true), 'off');
+  PERFORM set_config('neo.system_posting', 'on', true);
+  _line := public.folio_post_charge(
+    _folio_id, 'food-beverage', 'POS ' || _order.order_number || ' (' || _order.order_type || ')',
+    1, _base, _order.tax_total, _order.service_charge_total, _order.discount_total,
+    'pos', _order_id, 'fnb', _idempotency_key, NULL);
+  UPDATE public.pos_orders
+     SET folio_post_status = 'posted', folio_id = _folio_id, payment_status = 'paid',
+         status = 'charged-to-room', closed_at = now()
+   WHERE id = _order_id;
+  PERFORM set_config('neo.system_posting', _prior, true);
+
+  PERFORM public.emit_domain_event(_org, _order.branch_id, 'pos.room_charge.posted', 'pos', _order_id,
+    jsonb_build_object('orderId',_order_id,'folioId',_folio_id,'amount',_order.grand_total,
+                       'tax',_order.tax_total,'serviceCharge',_order.service_charge_total),
+    _idempotency_key, _order.customer_id);
+  INSERT INTO public.audit_logs
+    (organization_id, branch_id, user_id, action, module, record_id, new_value)
+  VALUES (_org, _order.branch_id, auth.uid(), 'pos.room_charge.post', 'pos', _order_id,
+    jsonb_build_object('folioId',_folio_id,'gross',_order.grand_total,'tax',_order.tax_total,
+                       'serviceCharge',_order.service_charge_total,'folioLineId',_line));
+  RETURN _line;
+END;
+$function$;
+
+======================================================================
+FILE: supabase/migrations/20260921070329_8190d71a-fe59-4f44-8a73-5eef62ba800b.sql
+======================================================================
+-- ============================================================
+-- 1. Financial accounts: where money is received or paid from
+-- ============================================================
+
+ALTER TABLE public.bank_accounts
+  ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.payments
+  ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES public.bank_accounts(id);
+
+ALTER TABLE public.reservation_deposits
+  ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES public.bank_accounts(id);
+
+CREATE INDEX IF NOT EXISTS payments_destination_account_idx
+  ON public.payments(destination_account_id) WHERE destination_account_id IS NOT NULL;
+
+-- One shared resolver: the ledger code money should land in.
+-- A named financial account always wins; otherwise fall back to the
+-- payment-method default so historical behaviour is unchanged.
+CREATE OR REPLACE FUNCTION public.neo_gl_cash_code(_org uuid, _method text, _account uuid DEFAULT NULL)
+RETURNS text
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE v_code text; v_name text;
+BEGIN
+  IF _account IS NOT NULL THEN
+    SELECT a.code INTO v_code
+      FROM public.bank_accounts b
+      JOIN public.chart_of_accounts a ON a.id = b.gl_account_id
+     WHERE b.id = _account
+       AND b.organization_id = _org
+       AND a.organization_id = _org
+       AND a.postable AND a.active AND coalesce(a.is_header,false) = false;
+    IF v_code IS NOT NULL THEN RETURN v_code; END IF;
+  END IF;
+
+  SELECT c.code INTO v_code FROM (VALUES
+      ('mpesa','1030'), ('mobile','1030'), ('mobile_money','1030'),
+      ('card','1040'),
+      ('bank','1020'), ('transfer','1020'), ('eft','1020')
+    ) AS c(method, code)
+   WHERE c.method = lower(coalesce(_method,'cash'));
+
+  RETURN coalesce(v_code, '1010');
+END $$;
+
+CREATE OR REPLACE FUNCTION public.neo_gl_cash_name(_code text)
+RETURNS text
+LANGUAGE sql IMMUTABLE
+AS $$ SELECT CASE _code
+        WHEN '1030' THEN 'M-Pesa Clearing'
+        WHEN '1040' THEN 'Card Clearing'
+        WHEN '1020' THEN 'Bank Accounts'
+        ELSE 'Cash on Hand' END $$;
+
+GRANT EXECUTE ON FUNCTION public.neo_gl_cash_code(uuid, text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.neo_gl_cash_name(text) TO authenticated, service_role;
+
+-- Guest payments: honour the chosen receiving account.
+CREATE OR REPLACE FUNCTION public.neo_payment_post(_payment uuid, _silent boolean DEFAULT false)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE p public.payments; org uuid; cur text; cash_code text; cash_name text;
+        occurred date; ref text; res jsonb; jid uuid; msg text; amt numeric;
+BEGIN
+  SELECT * INTO p FROM public.payments WHERE id = _payment;
+  IF p.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;
+  org := p.organization_id;
+
+  IF NOT _silent AND NOT (public.is_org_admin() OR public.has_permission('finance','edit')
+                          OR public.has_permission('finance','approve')) THEN
+    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+  END IF;
+
+  IF coalesce(p.status,'') IN ('void','voided','cancelled','failed','reversed') THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_eligible',
+      'detail', 'A voided, cancelled or failed payment is not recognised in Finance.');
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended('payment:' || _payment::text, 0));
+
+  IF p.posted_journal_id IS NOT NULL
+     OR EXISTS (SELECT 1 FROM public.finance_posting_receipts
+                 WHERE organization_id = org AND idempotency_key = 'payment:' || _payment::text
+                   AND status = 'posted') THEN
+    RETURN jsonb_build_object('ok', true, 'reason', 'already_posted',
+      'journal_id', p.posted_journal_id, 'module', 'payment', 'source_id', _payment);
+  END IF;
+
+  amt := round(coalesce(p.amount,0), 2);
+  IF amt <= 0 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_eligible',
+      'detail', 'A payment with no amount cannot be recognised.');
+  END IF;
+
+  cur := coalesce(nullif(p.currency,''), public.neo_fact_currency(org, p.branch_id));
+  occurred := coalesce((p.paid_at)::date, (p.created_at)::date, CURRENT_DATE);
+  ref := coalesce(nullif(p.receipt_number,''), _payment::text);
+
+  cash_code := public.neo_gl_cash_code(org, p.method, p.destination_account_id);
+  cash_name := public.neo_gl_cash_name(cash_code);
+
+  BEGIN
+    PERFORM public.neo_finance_ensure_account(org, cash_code, cash_name, 'asset', 'Cash and Bank');
+    PERFORM public.neo_finance_ensure_account(org, '1110', 'Guest Ledger', 'asset', 'Receivables');
+
+    res := public.neo_gl_post(
+      org, p.branch_id, 'payments', 'guest_payment', _payment, 'settlement',
+      occurred, cur,
+      'Guest payment ' || ref,
+      jsonb_build_array(
+        jsonb_build_object('code', cash_code, 'debit', amt,
+                           'description', 'Payment received (' || coalesce(p.method,'cash') || ')'),
+        jsonb_build_object('code', '1110', 'credit', amt,
+                           'description', 'Guest ledger settled')
+      ), p.customer_id);
+    jid := nullif(res->>'journal_id','')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    msg := SQLERRM;
+    PERFORM public.neo_record_posting_receipt(org, p.branch_id, 'payment', _payment, ref, 'failed',
+      amt, cur, NULL, NULL, msg, occurred);
+    PERFORM public.neo_financial_state_set(org, p.branch_id, 'payment', _payment, ref,
+      p.status, 'failed', 'The payment could not be recognised in Finance.',
+      amt, cur, occurred, NULL, NULL, msg, auth.uid(), NULL);
+    IF _silent THEN RETURN jsonb_build_object('ok', false, 'reason', 'failed', 'detail', msg); END IF;
+    RAISE;
+  END;
+
+  IF jid IS NOT NULL THEN
+    UPDATE public.payments SET posted_journal_id = jid, updated_at = now() WHERE id = _payment;
+  END IF;
+
+  PERFORM public.neo_record_posting_receipt(org, p.branch_id, 'payment', _payment, ref,
+    CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+    amt, cur, NULL, res->>'detail', NULL, occurred);
+
+  PERFORM public.neo_financial_state_set(org, p.branch_id, 'payment', _payment, ref,
+    p.status, CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+    'A guest payment moves cash in and reduces the guest ledger on the day it is received.',
+    amt, cur, occurred, jid, NULL, NULL, auth.uid(), NULL);
+
+  RETURN coalesce(res, '{}'::jsonb) || jsonb_build_object('module', 'payment', 'source_id', _payment);
+END $function$;
+
+-- Deposits: same resolver. Previously pointed at code 1000, which is the
+-- non-postable "Assets" heading in the seeded chart, so every deposit failed.
+CREATE OR REPLACE FUNCTION public.neo_deposit_post(_deposit uuid, _silent boolean DEFAULT false)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE d public.reservation_deposits; org uuid; cur text; cash_code text; cash_name text;
+        occurred date; ref text; res jsonb; jid uuid; msg text;
+BEGIN
+  SELECT * INTO d FROM public.reservation_deposits WHERE id = _deposit;
+  IF d.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;
+  org := d.organization_id;
+
+  IF NOT _silent AND NOT (public.is_org_admin() OR public.has_permission('finance','edit')
+                          OR public.has_permission('finance','approve')) THEN
+    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended('deposit:' || _deposit::text, 0));
+
+  IF EXISTS (SELECT 1 FROM public.finance_posting_receipts
+              WHERE organization_id = org AND idempotency_key = 'deposit:' || _deposit::text
+                AND status = 'posted') THEN
+    RETURN jsonb_build_object('ok', true, 'reason', 'already_posted');
+  END IF;
+
+  cur := COALESCE(NULLIF(d.currency,''), public.neo_fact_currency(org, d.branch_id));
+  occurred := COALESCE((d.received_at)::date, (d.created_at)::date, CURRENT_DATE);
+  SELECT COALESCE(r.confirmation_number, d.reservation_id::text) INTO ref
+    FROM public.reservations r WHERE r.id = d.reservation_id;
+  ref := COALESCE(ref, _deposit::text);
+
+  cash_code := public.neo_gl_cash_code(org, d.method, d.destination_account_id);
+  cash_name := public.neo_gl_cash_name(cash_code);
+
+  BEGIN
+    PERFORM public.neo_finance_ensure_account(org, cash_code, cash_name, 'asset', 'Cash and Bank');
+    PERFORM public.neo_finance_ensure_account(org, '2020', 'Guest Deposits', 'liability', 'Liabilities');
+
+    res := public.neo_gl_post(
+      org, d.branch_id, 'pms', 'reservation_deposit', _deposit, 'deposit',
+      occurred, cur,
+      'Pre-arrival deposit ' || ref,
+      jsonb_build_array(
+        jsonb_build_object('code', cash_code, 'debit', round(COALESCE(d.amount,0),2),
+                           'description', 'Deposit received (' || COALESCE(d.method,'cash') || ')'),
+        jsonb_build_object('code', '2020', 'credit', round(COALESCE(d.amount,0),2),
+                           'description', 'Guest deposit held')
+      ), d.customer_id);
+    jid := NULLIF(res->>'journal_id','')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    msg := SQLERRM;
+    PERFORM public.neo_record_posting_receipt(org, d.branch_id, 'deposit', _deposit, ref, 'failed',
+      COALESCE(d.amount,0), cur, NULL, NULL, msg, occurred);
+    PERFORM public.neo_financial_state_set(org, d.branch_id, 'deposit', _deposit, ref,
+      d.status, 'failed', 'The deposit could not be recognised in Finance.',
+      COALESCE(d.amount,0), cur, occurred, NULL, NULL, msg, auth.uid(), NULL);
+    IF _silent THEN RETURN jsonb_build_object('ok', false, 'reason', 'failed', 'detail', msg); END IF;
+    RAISE;
+  END;
+
+  PERFORM public.neo_record_posting_receipt(org, d.branch_id, 'deposit', _deposit, ref,
+    CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+    COALESCE(d.amount,0), cur, NULL, res->>'detail', NULL, occurred);
+
+  PERFORM public.neo_financial_state_set(org, d.branch_id, 'deposit', _deposit, ref,
+    d.status, CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+    'A pre-arrival deposit is held as a liability until it is applied to the guest folio.',
+    COALESCE(d.amount,0), cur, occurred, jid, NULL, NULL, auth.uid(), NULL);
+
+  RETURN COALESCE(res, '{}'::jsonb) || jsonb_build_object('module', 'deposit', 'source_id', _deposit);
+END $function$;
+
+-- Financial accounts a property can receive money into, for selectors.
+CREATE OR REPLACE FUNCTION public.neo_financial_accounts(_branch uuid DEFAULT NULL)
+RETURNS TABLE(id uuid, name text, account_kind text, currency text, branch_id uuid,
+              gl_code text, is_default boolean)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+  SELECT b.id, b.name, b.account_kind, b.currency, b.branch_id, a.code, b.is_default
+    FROM public.bank_accounts b
+    LEFT JOIN public.chart_of_accounts a ON a.id = b.gl_account_id
+   WHERE b.organization_id = public.current_org_id()
+     AND b.active
+     AND (_branch IS NULL OR b.branch_id IS NULL OR b.branch_id = _branch)
+   ORDER BY b.is_default DESC, b.account_kind, b.name;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.neo_financial_accounts(uuid) TO authenticated, service_role;
+
+-- ============================================================
+-- 2. Accounting periods open when their dates arrive
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.neo_fin_activate_due_periods(_org uuid, _date date)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $$
+BEGIN
+  UPDATE public.accounting_periods
+     SET status = 'open', updated_at = now()
+   WHERE organization_id = _org
+     AND status = 'future'
+     AND starts_on <= greatest(_date, CURRENT_DATE);
+END $$;
+
+GRANT EXECUTE ON FUNCTION public.neo_fin_activate_due_periods(uuid, date) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.fin_period_for(_org uuid, _date date)
+RETURNS accounting_periods
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+DECLARE p public.accounting_periods;
+BEGIN
+  SELECT * INTO p
+    FROM public.accounting_periods
+   WHERE organization_id = _org AND _date BETWEEN starts_on AND ends_on
+   ORDER BY
+     CASE status WHEN 'open' THEN 0 WHEN 'closed' THEN 1 WHEN 'locked' THEN 2 ELSE 3 END,
+     created_at DESC
+   LIMIT 1;
+
+  -- A month whose dates have already arrived is open, not future. Closing and
+  -- locking stay deliberate acts and are never undone here.
+  IF p.id IS NOT NULL AND p.status = 'future' AND p.starts_on <= CURRENT_DATE THEN
+    p.status := 'open';
+  END IF;
+  RETURN p;
+END $$;
+
+-- ============================================================
+-- 3. Stock cannot silently go below zero
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.inventory_policies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL,
+  branch_id uuid,
+  allow_negative_stock boolean NOT NULL DEFAULT false,
+  note text,
+  updated_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS inventory_policies_org_branch_idx
+  ON public.inventory_policies(organization_id, coalesce(branch_id, '00000000-0000-0000-0000-000000000000'::uuid));
+
+GRANT SELECT, INSERT, UPDATE ON public.inventory_policies TO authenticated;
+GRANT ALL ON public.inventory_policies TO service_role;
+
+ALTER TABLE public.inventory_policies ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS inventory_policies_read ON public.inventory_policies;
+CREATE POLICY inventory_policies_read ON public.inventory_policies
+  FOR SELECT TO authenticated
+  USING (organization_id = public.current_org_id());
+
+DROP POLICY IF EXISTS inventory_policies_write ON public.inventory_policies;
+CREATE POLICY inventory_policies_write ON public.inventory_policies
+  FOR INSERT TO authenticated
+  WITH CHECK (organization_id = public.current_org_id()
+              AND (public.is_org_admin_for(organization_id)
+                   OR public.has_permission('inventory','settings.manage')
+                   OR public.has_permission('inventory','stock.manage')));
+
+DROP POLICY IF EXISTS inventory_policies_update ON public.inventory_policies;
+CREATE POLICY inventory_policies_update ON public.inventory_policies
+  FOR UPDATE TO authenticated
+  USING (organization_id = public.current_org_id()
+         AND (public.is_org_admin_for(organization_id)
+              OR public.has_permission('inventory','settings.manage')
+              OR public.has_permission('inventory','stock.manage')))
+  WITH CHECK (organization_id = public.current_org_id());
+
+CREATE OR REPLACE FUNCTION public.neo_inventory_allows_negative(_org uuid, _branch uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+  SELECT coalesce((
+    SELECT p.allow_negative_stock FROM public.inventory_policies p
+     WHERE p.organization_id = _org
+       AND (p.branch_id = _branch OR p.branch_id IS NULL)
+     ORDER BY (p.branch_id IS NOT NULL) DESC
+     LIMIT 1), false);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.neo_inventory_allows_negative(uuid, uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.inventory_apply_movement(_item uuid, _location uuid, _quantity numeric, _unit text, _movement_type text, _unit_cost numeric DEFAULT NULL::numeric, _reference_type text DEFAULT NULL::text, _reference_id uuid DEFAULT NULL::uuid, _reason text DEFAULT NULL::text, _idempotency_key text DEFAULT NULL::text, _batch_number text DEFAULT NULL::text, _expiry date DEFAULT NULL::date)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_org uuid := current_org_id();
+  v_item record;
+  v_qty_base numeric;
+  v_cost numeric;
+  v_level record;
+  v_batch uuid;
+  v_movement uuid;
+  v_existing uuid;
+  v_available numeric;
+  v_store text;
+BEGIN
+  IF v_org IS NULL THEN RAISE EXCEPTION 'No active organization'; END IF;
+  IF NOT public.neo_system_posting()
+     AND NOT (has_permission('inventory','stock.manage') OR has_permission('procurement','receiving.manage')) THEN
+    RAISE EXCEPTION 'Not permitted to move stock';
+  END IF;
+
+  IF _idempotency_key IS NOT NULL THEN
+    SELECT id INTO v_existing FROM stock_movements WHERE organization_id = v_org AND idempotency_key = _idempotency_key;
+    IF v_existing IS NOT NULL THEN RETURN v_existing; END IF;
+  END IF;
+
+  SELECT * INTO v_item FROM stock_items WHERE id = _item AND organization_id = v_org;
+  IF v_item IS NULL THEN RAISE EXCEPTION 'Unknown stock item'; END IF;
+
+  v_qty_base := inventory_convert(_quantity, COALESCE(_unit, v_item.base_unit), v_item.base_unit);
+  v_cost := COALESCE(_unit_cost, v_item.average_cost);
+
+  INSERT INTO stock_levels (organization_id, stock_item_id, location_id, quantity_on_hand, last_movement_at)
+  VALUES (v_org, _item, _location, 0, now())
+  ON CONFLICT (stock_item_id, location_id) DO NOTHING;
+
+  SELECT * INTO v_level FROM stock_levels WHERE stock_item_id = _item AND location_id = _location FOR UPDATE;
+
+  -- Taking out more than is there creates impossible inventory. A count,
+  -- adjustment or opening balance must still be able to state reality.
+  IF v_qty_base < 0
+     AND COALESCE(v_level.quantity_on_hand, 0) + v_qty_base < 0
+     AND lower(COALESCE(_movement_type,'')) NOT IN
+         ('count','stock_take','stock-take','adjustment','opening','opening_balance','variance','recount','correction')
+     AND NOT public.neo_inventory_allows_negative(v_org, v_item.branch_id) THEN
+    SELECT sl.name INTO v_store FROM stock_locations sl WHERE sl.id = _location;
+    v_available := round(COALESCE(v_level.quantity_on_hand, 0), 4);
+    RAISE EXCEPTION 'Not enough %: % % available in %, % % requested',
+      v_item.name,
+      trim(to_char(GREATEST(v_available,0), 'FM999999990.###')), v_item.base_unit,
+      COALESCE(v_store, 'this store'),
+      trim(to_char(abs(v_qty_base), 'FM999999990.###')), v_item.base_unit
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_qty_base > 0 AND (v_item.track_batches OR _batch_number IS NOT NULL OR _expiry IS NOT NULL) THEN
+    INSERT INTO stock_batches (organization_id, stock_item_id, location_id, batch_number, expiry_date, quantity, unit_cost)
+    VALUES (v_org, _item, _location, _batch_number, _expiry, v_qty_base, v_cost)
+    RETURNING id INTO v_batch;
+  ELSIF v_qty_base < 0 THEN
+    SELECT id INTO v_batch FROM stock_batches
+      WHERE stock_item_id = _item AND location_id = _location AND quantity > 0 AND status = 'active'
+      ORDER BY expiry_date NULLS LAST, received_at LIMIT 1;
+    IF v_batch IS NOT NULL THEN
+      UPDATE stock_batches SET quantity = GREATEST(0, quantity + v_qty_base) WHERE id = v_batch;
+    END IF;
+  END IF;
+
+  UPDATE stock_levels
+     SET quantity_on_hand = quantity_on_hand + v_qty_base,
+         quantity_damaged = quantity_damaged + CASE WHEN _movement_type = 'damage' THEN abs(v_qty_base) ELSE 0 END,
+         quantity_expired = quantity_expired + CASE WHEN _movement_type = 'expiry' THEN abs(v_qty_base) ELSE 0 END,
+         last_movement_at = now()
+   WHERE id = v_level.id;
+
+  IF v_qty_base > 0 AND _unit_cost IS NOT NULL THEN
+    UPDATE stock_items
+       SET last_cost = v_cost,
+           average_cost = CASE
+             WHEN COALESCE(v_level.quantity_on_hand, 0) + v_qty_base <= 0 THEN v_cost
+             ELSE ((GREATEST(v_level.quantity_on_hand, 0) * average_cost) + (v_qty_base * v_cost))
+                  / (GREATEST(v_level.quantity_on_hand, 0) + v_qty_base)
+           END
+     WHERE id = _item;
+  END IF;
+
+  INSERT INTO stock_movements (
+    organization_id, branch_id, stock_item_id, location_id, batch_id, movement_type,
+    quantity, unit, unit_cost, value, balance_after, reference_type, reference_id,
+    reason, idempotency_key, performed_by
+  ) VALUES (
+    v_org, v_item.branch_id, _item, _location, v_batch, _movement_type,
+    v_qty_base, v_item.base_unit, v_cost, v_qty_base * v_cost,
+    (SELECT quantity_on_hand FROM stock_levels WHERE id = v_level.id),
+    _reference_type, _reference_id, _reason, _idempotency_key, auth.uid()
+  ) RETURNING id INTO v_movement;
+
+  RETURN v_movement;
+END;
+$function$;
+
+-- Register the new privileged routines
+INSERT INTO public.privileged_function_review
+ (function_name, identity_arguments, reachability, sensitive, establishes_tenant_context,
+  classification, trusts_client_tenant, search_path_fixed, domain, review_note)
+VALUES
+ ('neo_gl_cash_code','_org uuid, _method text, _account uuid','internal_only', false, false,
+  'internal_privileged', false, true, 'other',
+  'Resolves which ledger account money landed in: the named financial account when the hotel chose one, otherwise the payment-method default.'),
+ ('neo_financial_accounts','_branch uuid','app_callable', false, false,
+  'tenant_derived_privileged', false, true, 'other',
+  'Lists the active tills, bank and settlement accounts of the caller''s own workspace for selection.'),
+ ('neo_fin_activate_due_periods','_org uuid, _date date','internal_only', false, false,
+  'internal_privileged', false, true, 'other',
+  'Opens an accounting month whose dates have arrived. Never reopens a closed or locked month.'),
+ ('neo_inventory_allows_negative','_org uuid, _branch uuid','internal_only', false, false,
+  'internal_privileged', false, true, 'other',
+  'Reads the hotel''s policy on whether stock may fall below zero.')
+ON CONFLICT DO NOTHING;
+
+======================================================================
+FILE: supabase/migrations/20260925020000_guest_folio_checkout.sql
+======================================================================
+-- Guest folio M-Pesa checkout: customer-owned, idempotent, provider-confirmed only.
+CREATE OR REPLACE FUNCTION public.neo_guest_folio_mpesa_start(_org uuid, _folio uuid, _msisdn text, _amount numeric DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE _cust uuid:=public.my_customer_id(); f public.folios; _digits text; _due numeric; _take numeric; _env text; _code text; _pay uuid; _txn uuid; _idem text;
+BEGIN
+ IF _cust IS NULL THEN RAISE EXCEPTION 'This account is not linked to a guest profile'; END IF;
+ SELECT * INTO f FROM public.folios WHERE id=_folio AND organization_id=_org AND customer_id=_cust FOR UPDATE;
+ IF f.id IS NULL THEN RAISE EXCEPTION 'Folio not found'; END IF;
+ _due:=GREATEST(COALESCE(f.balance,0),0); IF _due<=0 THEN RAISE EXCEPTION 'This folio has no outstanding balance'; END IF;
+ _take:=LEAST(COALESCE(NULLIF(_amount,0),_due),_due); IF _take<=0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;
+ _digits:=regexp_replace(COALESCE(_msisdn,''),'[^0-9]','','g'); IF length(_digits)<9 THEN RAISE EXCEPTION 'A valid mobile number is required'; END IF;
+ SELECT environment,short_code INTO _env,_code FROM public.mpesa_settings WHERE organization_id=_org AND COALESCE(enabled,true) LIMIT 1;
+ IF _code IS NULL THEN RAISE EXCEPTION 'Mobile payment is not configured for this property'; END IF;
+ _idem:='guest-folio-mpesa:'||f.id::text||':'||round(_take,2)::text||':'||_digits;
+ SELECT id INTO _pay FROM public.payments WHERE organization_id=_org AND idempotency_key=_idem AND status IN ('pending','confirmed') ORDER BY created_at DESC LIMIT 1;
+ IF _pay IS NULL THEN
+   INSERT INTO public.payments(organization_id,branch_id,receipt_number,folio_id,customer_id,amount,currency,method,status,paid_at,received_by,notes,idempotency_key,source_module,source_record_id)
+   VALUES(_org,f.branch_id,'PENDING-'||upper(substr(replace(gen_random_uuid()::text,'-',''),1,12)),f.id,_cust,round(_take,2),COALESCE(f.currency,'KES'),'mpesa','pending',now(),NULL,'Guest app folio checkout',_idem,'guest_folio',f.id::text)
+   RETURNING id INTO _pay;
+ END IF;
+ SELECT id INTO _txn FROM public.mpesa_transactions WHERE organization_id=_org AND payment_table='payments' AND payment_id=_pay AND status IN ('initiated','pending') ORDER BY created_at DESC LIMIT 1;
+ IF _txn IS NULL THEN
+   INSERT INTO public.mpesa_transactions(organization_id,branch_id,source_module,source_record_id,payment_table,payment_id,msisdn,amount,account_reference,description,environment,short_code,status,created_by)
+   VALUES(_org,f.branch_id,'guest_folio',f.id,'payments',_pay,_digits,round(_take,2),COALESCE(f.folio_number,f.id::text),'Guest folio payment',COALESCE(_env,'sandbox'),_code,'initiated',NULL)
+   RETURNING id INTO _txn;
+ END IF;
+ RETURN jsonb_build_object('ok',true,'payment_id',_pay,'transaction_id',_txn,'amount',round(_take,2),'folio_id',f.id,'environment',COALESCE(_env,'sandbox'));
+END $$;
+REVOKE ALL ON FUNCTION public.neo_guest_folio_mpesa_start(uuid,uuid,text,numeric) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.neo_guest_folio_mpesa_start(uuid,uuid,text,numeric) TO authenticated,service_role;
+
+
+======================================================================
+FILE: supabase/migrations/20261022080000_folio_applied_deposit_projection.sql
+======================================================================
+-- Include applied deposits that have no corresponding payments row.
+-- Preserves existing guest-ledger and property access checks.
+CREATE OR REPLACE FUNCTION public.neo_folio_projection(_folio uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  f public.folios;
+  _net numeric := 0;
+  _tax numeric := 0;
+  _service numeric := 0;
+  _gross numeric := 0;
+  _paid numeric := 0;
+  _guest text;
+  _res text;
+BEGIN
+  IF auth.uid() IS NULL
+     OR public.can_read_guest_ledger() IS NOT TRUE
+  THEN
+    RAISE EXCEPTION 'Guest ledger read permission required'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO f FROM public.folios
+   WHERE id = _folio
+     AND organization_id = current_org_id()
+     AND (
+       in_my_branch_scope(organization_id, branch_id)
+       OR is_org_admin_for(organization_id)
+     );
+
+  IF f.id IS NULL THEN
+    RETURN jsonb_build_object('found', false);
+  END IF;
+
+  SELECT COALESCE(SUM(fl.net_amount), 0),
+         COALESCE(SUM(fl.tax_amount), 0),
+         COALESCE(SUM(fl.service_charge_amount), 0)
+    INTO _gross, _tax, _service
+    FROM public.folio_lines fl
+   WHERE fl.folio_id = f.id
+     AND fl.organization_id = f.organization_id
+     AND COALESCE(fl.status, 'posted')
+         NOT IN ('void', 'voided', 'reversed')
+     AND COALESCE(fl.line_type, 'charge')
+         NOT IN ('payment', 'deposit', 'refund');
+
+  _net := _gross - _tax - _service;
+
+  SELECT COALESCE(SUM(pm.amount), 0) INTO _paid
+    FROM public.payments pm
+   WHERE pm.folio_id = f.id
+     -- neo_folio_payment_tenant_guard_v1
+     AND pm.organization_id = f.organization_id
+     AND pm.status IN ('confirmed', 'posted', 'completed');
+
+  -- neo_folio_applied_deposit_projection_v1
+  -- These deposits have no payments row, so the payment sum excludes them.
+  SELECT _paid + COALESCE(SUM(d.amount), 0)
+    INTO _paid
+    FROM public.reservation_deposits d
+   WHERE d.organization_id = f.organization_id
+     AND d.applied_folio_id = f.id
+     AND d.status = 'applied'
+     AND d.payment_id IS NULL
+     AND EXISTS (
+       SELECT 1
+       FROM public.folio_lines fl
+       WHERE fl.id = d.applied_folio_line_id
+         AND fl.folio_id = f.id
+         AND fl.organization_id = f.organization_id
+         AND fl.line_type IN ('payment', 'deposit')
+         AND COALESCE(fl.status, 'posted')
+             NOT IN ('void', 'voided', 'reversed')
+         AND fl.net_amount = d.amount
+     );
+
+  SELECT c.full_name INTO _guest
+    FROM public.customers c WHERE c.id = f.customer_id;
+
+  SELECT r.confirmation_number INTO _res
+    FROM public.reservations r WHERE r.id = f.reservation_id;
+
+  RETURN jsonb_build_object(
+    'found', true,
+    'folio_id', f.id,
+    'folio_number', f.folio_number,
+    'status', f.status,
+    'currency', f.currency,
+    'branch_id', f.branch_id,
+    'reservation_id', f.reservation_id,
+    'reservation_number', _res,
+    'customer_id', f.customer_id,
+    'guest_name', _guest,
+    'net_revenue', _net,
+    'tax', _tax,
+    'service_charge', _service,
+    'gross_obligation', _gross,
+    'collected', _paid,
+    'outstanding', _gross - _paid
+  );
+END;
+$function$;
+

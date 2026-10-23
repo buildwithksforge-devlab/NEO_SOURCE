@@ -1,0 +1,114 @@
+# NEØ F01 — Connect Marketing stock needs to an existing database RPC.
+# Run from the NEØ repository root. No database or deployment commands are executed.
+$ErrorActionPreference = 'Stop'
+$root = (Get-Location).Path
+$marketingPath = Join-Path $root 'src/lib/marketing-department.ts'
+$routePath = Join-Path $root 'src/routes/_shell.marketing.supplies.tsx'
+$manifestPath = Join-Path $root 'src/lib/rpc-manifest.ts'
+$paths = @($marketingPath, $routePath, $manifestPath)
+foreach ($path in $paths) { if (-not (Test-Path -LiteralPath $path)) { throw "Missing expected file: $path" } }
+$marketing = [System.IO.File]::ReadAllText($marketingPath)
+$route = [System.IO.File]::ReadAllText($routePath)
+$manifest = [System.IO.File]::ReadAllText($manifestPath)
+
+# Refuse to guess if the inspected source has been changed since review.
+$hookAnchor = 'export function useReviewMarketingStockNeed() {'
+$importAnchor = '  useReviewMarketingStockNeed,'
+$stateAnchor = '  const review = useReviewMarketingStockNeed();'
+$openAnchor = 'const open = ["pending", "acknowledged"].includes(status);'
+$controlAnchor = '                        {mayReview && open ? ('
+$buttonAnchor = '                            <Button' + "`n" + '                              size="sm"' + "`n" + '                              variant="outline"' + "`n" + '                              disabled={review.isPending}'
+foreach ($check in @(
+    @{n='Marketing hook insertion point'; v=$marketing.Contains($hookAnchor)},
+    @{n='Route hook import'; v=$route.Contains($importAnchor)},
+    @{n='Route hook initialization'; v=$route.Contains($stateAnchor)},
+    @{n='Open status logic'; v=$route.Contains($openAnchor)},
+    @{n='Review actions'; v=$route.Contains($controlAnchor)},
+    @{n='Review first button'; v=$route.Contains($buttonAnchor)}
+)) { if (-not $check.v) { throw "Source differs from reviewed code ($($check.n)); nothing changed." } }
+if ($marketing.Contains('useCreateMarketingRequisition') -or $route.Contains('createRequisition.mutate')) {
+    throw 'Marketing conversion code already appears present. No changes made.'
+}
+
+# Manifest is a trusted RPC allowlist. Insert alongside its existing authenticated entries.
+if ($manifest -notmatch 'neo_marketing_need_to_requisition') {
+    $anchor = [regex]::Match($manifest, '(?m)^(?<indent>\s*)(?<quote>["''])neo_event_stock_need_to_requisition\k<quote>\s*:\s*(?<vquote>["''])authenticated\k<vquote>\s*,?\s*$')
+    if (-not $anchor.Success) {
+        throw 'Cannot safely find an authenticated event RPC entry in rpc-manifest.ts. Nothing changed. Share that file for an exact integration.'
+    }
+    $indent = $anchor.Groups['indent'].Value
+    $quote = $anchor.Groups['quote'].Value
+    $vquote = $anchor.Groups['vquote'].Value
+    $entry = "$indent$quote" + 'neo_marketing_need_to_requisition' + "$quote`: $vquote" + 'authenticated' + "$vquote,`n"
+    $manifest = $manifest.Insert($anchor.Index, $entry)
+}
+
+$hook = @'
+/** Convert an authorized Marketing need into one linked Stores requisition. */
+export function useCreateMarketingRequisition() {
+  const invalidate = useMktInvalidate();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (needId: string) => {
+      const { data, error } = await guardedRpc(db, "neo_marketing_need_to_requisition", {
+        _need: needId,
+      });
+      if (error) throw new Error(error.message);
+      const result = data as Record<string, unknown> | null;
+      if (!result || result["ok"] !== true || !result["requisition_id"]) {
+        throw new Error(String(result?.["message"] ?? "Requisition creation was not confirmed."));
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ["stores-department"] });
+      void qc.invalidateQueries({ queryKey: ["stock-needs"] });
+      toast.success(
+        `${result["already_exists"] ? "Existing" : "Created"} requisition ${String(result["request_number"] ?? "")}`,
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+'@
+$marketing = $marketing.Replace($hookAnchor, $hook + $hookAnchor)
+$route = $route.Replace($importAnchor, '  useCreateMarketingRequisition,' + "`n" + $importAnchor)
+$route = $route.Replace($stateAnchor, $stateAnchor + "`n" + '  const createRequisition = useCreateMarketingRequisition();')
+$route = $route.Replace($openAnchor, 'const open = ["reported", "pending", "acknowledged"].includes(status);')
+$route = $route.Replace('  pending: "warning",', '  reported: "warning",' + "`n" + '  pending: "warning",')
+$insertBeforeButton = @'
+                            <Button
+                              size="sm"
+                              disabled={createRequisition.isPending || review.isPending}
+                              onClick={() => createRequisition.mutate(String(row["id"]))}
+                            >
+                              Create Requisition
+                            </Button>
+'@
+# Insert the new action alongside the existing Review buttons, not outside the permission guard.
+$route = $route.Replace($buttonAnchor, $insertBeforeButton + "`n" + $buttonAnchor)
+
+$stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+$backupDir = Join-Path $root "F01_MARKETING_BACKUP_$stamp"
+New-Item -ItemType Directory -Path $backupDir | Out-Null
+$names = @('marketing-department.ts','marketing.supplies.tsx','rpc-manifest.ts')
+for ($i=0; $i -lt $paths.Count; $i++) { Copy-Item -LiteralPath $paths[$i] -Destination (Join-Path $backupDir $names[$i]) }
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+try {
+    [System.IO.File]::WriteAllText($marketingPath, $marketing, $utf8)
+    [System.IO.File]::WriteAllText($routePath, $route, $utf8)
+    [System.IO.File]::WriteAllText($manifestPath, $manifest, $utf8)
+    Write-Host "Marketing connection written. Backup: $backupDir" -ForegroundColor Green
+    & npm run typecheck
+    if ($LASTEXITCODE -ne 0) { throw 'TypeScript check failed' }
+    & npx vitest run src/lib/__tests__/transfer-and-need-lifecycle.test.ts src/lib/__tests__/supply-chain-certification.test.ts
+    if ($LASTEXITCODE -ne 0) { throw 'Supply Chain tests failed' }
+    Write-Host 'F01 Marketing connection passed local checks. Not deployed. No DB writes.' -ForegroundColor Green
+    Write-Host 'Review changes with: git diff -- src/lib/marketing-department.ts src/routes/_shell.marketing.supplies.tsx src/lib/rpc-manifest.ts'
+} catch {
+    Write-Host 'Validation failed; restoring the three source files.' -ForegroundColor Red
+    for ($i=0; $i -lt $paths.Count; $i++) { Copy-Item -LiteralPath (Join-Path $backupDir $names[$i]) -Destination $paths[$i] -Force }
+    throw
+}
