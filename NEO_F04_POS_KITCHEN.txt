@@ -1,0 +1,197 @@
+﻿NEØ F04 — POS & KITCHEN
+Commit: 3af3453
+
+=== FRONTEND RPC CONNECTIONS ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-controls.ts:106 return callRpc("pos_record_payment_attempt", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-alerts.ts:5 *  - `public.neo_kitchen_routing_health` — missing-routing rate, invariant
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-alerts.ts:139 "neo_kitchen_routing_health" as never,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts:247 const { data, error } = await guardedRpc(supabase, "kitchen_item_transition", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts:302 * Allocation of kitchen work. This goes through `neo_kitchen_assign_chef`,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts:326 const { error } = await guardedRpc(supabase, "neo_kitchen_assign_chef", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts:960 const { data, error } = await guardedRpc(supabase, "neo_kitchen_waste_post", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:5 * Kitchen Live Queue (`/kitchen/queue`) read `public.neo_kitchen_queue` and
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:6 * mutate through `public.neo_kitchen_ticket_transition` /
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:74 * Lifecycle contract — mirrors neo_kitchen_ticket_transition()
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:121 /** Mirrors `neo_kitchen_item_transition()`. The server re-validates every move. */
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:237 const { data, error } = await guardedRpc(supabase, "neo_kitchen_queue", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:327 const { data, error } = await guardedRpc(supabase, "neo_kitchen_ticket_transition", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts:357 const { data, error } = await guardedRpc(supabase, "neo_kitchen_item_transition", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen.ts:38 /** Mirrors `kitchen_item_transition()` in the database. The server is authoritative. */
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\main-kitchen.ts:125 const { data, error } = await guardedRpc(db, "neo_kitchen_assign_chef", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\mpesa.functions.ts:309 const { data: attempt, error } = await client.rpc("pos_record_payment_attempt", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:74 const { data, error } = await guardedRpc(sb, "neo_pos_kds_reconciliation", branchId ? { _branch: branchId } : {});
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:103 "neo_pos_route_missing_tickets",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:768 * `neo_pos_send_to_kitchen` owns routing, ticket creation and item status: it
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:781 const { data, error } = await guardedRpc(supabase, "neo_pos_send_to_kitchen", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1040 * Records a settlement attempt through `pos_record_payment_attempt`. Validation
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1095 "pos_record_payment_attempt",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1125 "pos_confirm_manual_payment",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1170 const { data, error } = await guardedRpc(supabase, "pos_post_room_charge", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1306 }).rpc("neo_pos_refund_decide", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:253 neo_pos_kds_reconciliation: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:254 neo_pos_send_to_kitchen: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:256 neo_pos_route_missing_tickets: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:375 kitchen_item_transition: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:376 neo_kitchen_queue: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:378 neo_kitchen_assign_chef: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:385 neo_kitchen_item_transition: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:414 neo_kitchen_ticket_transition: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:423 neo_kitchen_routing_health: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:429 pos_post_room_charge: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:431 pos_record_payment_attempt: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:432 pos_confirm_manual_payment: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:510 neo_pos_refund_decide: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:691 neo_kitchen_waste_post: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:258 await expectOk(waiter, "neo_pos_send_to_kitchen", { _order: ctx.state["posOrderId"], _attempt: crypto.randomUUID() });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:276 const { data, error } = await rpc(chef, "neo_kitchen_queue", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:288 const { error: allocError } = await rpc(head, "neo_kitchen_assign_chef", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:294 const { data: queued } = await rpc(chef, "neo_kitchen_queue", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:312 const { error: acceptError } = await rpc(chef, "neo_kitchen_item_transition", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:318 await expectOk(chef, "neo_kitchen_item_transition", { _item: item.id, _to: "preparing", _reason: "System test" });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:319 await expectOk(chef, "neo_kitchen_item_transition", { _item: item.id, _to: "ready", _reason: "System test" });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:333 const { error: serveError } = await rpc(waiterClient, "neo_kitchen_item_transition", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1279 run: async (c, ctx) => permitted(c.rpc("neo_kitchen_queue" as never, { _branch: ctx.a.branchId, _view: "live" } as never) as never),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\bar-queue-station-access.test.ts:46 expect(route).not.toContain("neo_kitchen_queue");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\bar-queue-station-access.test.ts:55 expect(kitchen).toContain("neo_kitchen_queue");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-assignment-governance.test.ts:81 expect(data).toContain("neo_kitchen_assign_chef");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts:17 *   neo_kitchen_item_transition() -> has_permission('kitchen', <action>)
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts:79 /** Mirrors the permission branch of neo_kitchen_item_transition(). */
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts:147 expect(data).toContain("neo_kitchen_assign_chef");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts:148 expect(data).toContain("kitchen_item_transition");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-queue-visibility.test.ts:128 expect(migration).not.toContain("neo_pos_send_to_kitchen");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-station-routing.test.ts:23 const routeOrder = fn("neo_pos_send_to_kitchen");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-station-routing.test.ts:59 expect(legacyRouteOrder).toContain("neo_pos_send_to_kitchen");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-ticket-contract.test.ts:54 "neo_kitchen_queue",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-ticket-contract.test.ts:55 "neo_kitchen_ticket_transition",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-ticket-contract.test.ts:136 expect(RPC_MANIFEST["neo_kitchen_item_transition"]).toBe("authenticated");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\live-security.test.ts:54 "neo_pos_send_to_kitchen",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\live-security.test.ts:223 'neo_pos_send_to_kitchen')
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:25 const send = fn("neo_pos_send_to_kitchen");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:27 const reconcile = fn("neo_pos_kds_reconciliation");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:29 const ticketTransition = fn("neo_kitchen_ticket_transition");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:30 const itemTransition = fn("neo_kitchen_item_transition");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:31 const queue = fn("neo_kitchen_queue");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:35 expect(legacy).toContain("neo_pos_send_to_kitchen");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:204 expect(RPC_MANIFEST["neo_pos_send_to_kitchen"]).toBe("authenticated");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts:205 expect(RPC_MANIFEST["neo_pos_kds_reconciliation"]).toBe("authenticated");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-send-idempotency.test.ts:23 const start = SEND_SQL.indexOf("FUNCTION public.neo_pos_send_to_kitchen(");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-send-idempotency.test.ts:94 /** Mirrors `neo_pos_send_to_kitchen`: rulebook check, per-item live-line reuse,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-audit.test.ts:23 const record = fn("pos_record_payment_attempt");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-audit.test.ts:24 const manual = fn("pos_confirm_manual_payment");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-audit.test.ts:79 "pos_record_payment_attempt",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-audit.test.ts:80 "pos_confirm_manual_payment",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-concurrency.test.ts:26 const start = SQL.indexOf("FUNCTION public.pos_record_payment_attempt(");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-concurrency.test.ts:33 expect(i, `missing from pos_record_payment_attempt: ${needle}`).toBeGreaterThan(-1);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\room-service-charge-to-room.test.ts:9 * narrowest layer, both inside `pos_post_room_charge`:
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\room-service-charge-to-room.test.ts:42 const roomCharge = () => routine("pos_post_room_charge");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\room-service-charge-to-room.test.ts:115 const send = routine("neo_pos_send_to_kitchen");
+
+=== RELEVANT FRONTEND FILES ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\station-screen.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.deposits.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.posting.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.dashboard.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.display.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.index.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.my-station.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.needs.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.operations.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.production.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.quality.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.queue.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.recipes.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.reconciliation.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.reorder.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.reports.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.settings.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stewarding.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stock-count.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.waste.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.lpos.$id.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.approvals.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.floor.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.index.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.kds.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.menu.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.orders.$id.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.orders.index.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.reports.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.requisitions.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.settings.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.shifts.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.wastage.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.security.my-post.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.security.posts.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.station-stock.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.stations.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\WorkflowPositionPanel.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\finance\PostingPlanDialog.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\hr\PayrollPostingPanel.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\hr\PositionGradesCard.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\inventory\ApprovedReceivingPosting.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\BulkTicketBar.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\IngredientRows.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\KitchenAlertsFeed.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\KitchenShared.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\ProductionDisplay.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\RecordDialog.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\TicketAuditSheet.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\TicketCard.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pms\DepositPanel.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\AddItemDialog.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\FloorTableCard.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuCatalogueManager.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuConsumptionCard.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuImageField.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\MenuImportDialog.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pos\PosShared.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\deposit-policies.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\deposits.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-posting.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-alerts.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-visibility.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\main-kitchen.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-approvals-authority.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-floor.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\station-stock.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\station-store-routing.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workflow-position.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\ap-deposit-policy.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\bar-queue-station-access.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\bar-station-isolation.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\deposits.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\finance-posting.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-assignment-governance.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-queue-visibility.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-recipe-surfaces.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-station-routing.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-ticket-contract.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\payroll-posting-release-guard.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-approvals-authority-e2e.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-floor-service-state.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-prepaid-service-guard.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-send-idempotency.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-send-routing.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-audit.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-settlement-concurrency.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\registry-scoping-and-pos-approvals.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\station-department-integrity.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\station-scope-certification.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\station-store-mapping.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\waiter-pos-front-door.test.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\workflow-position.test.ts
+
+=== BACKEND FUNCTION DEFINITIONS ===
+20260923045541_79f0a5f3-0e47-4bea-9eb4-4badf1d5b6ad.sql:1
+20260923060604_01075328-bccb-4cb9-89b2-20115b551872.sql:28
+20260923072633_3a014101-2604-47e2-a18c-bdfe8696b6e2.sql:1

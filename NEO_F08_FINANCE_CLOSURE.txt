@@ -1,0 +1,107 @@
+﻿NEØ F08 — FINANCE & BUSINESS DAY CLOSURE
+Commit: 3af3453
+
+=== FINANCE & CLOSURE FILES ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\audit-history.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\audit-window.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\audit.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\dashboard-reconciliation.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-reconciliation.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-controls.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-lifecycle.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-posting.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-subledger.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stock-reconciliation.ts
+
+=== BACKEND CALLS ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\audit.ts:1 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\audit.ts:50 await guardedRpc(supabase, "log_audit_event", args as never);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:13 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:107 const { data, error } = await guardedRpc(supabase, "neo_bank_reconciliation_overview", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:122 const { data, error } = await guardedRpc(supabase, "neo_bank_transfer_queue", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:171 const { data, error } = await guardedRpc(supabase, "neo_bank_statement_import", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:192 const { data, error } = await guardedRpc(supabase, "neo_bank_match_transfer", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:214 const { data, error } = await guardedRpc(supabase, "neo_bank_auto_match", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:239 const { data, error } = await guardedRpc(supabase, "neo_bank_unmatch_transfer", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:266 const { data, error } = await guardedRpc(supabase, "neo_bank_mark_transfer_reconciled", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bank-reconciliation.ts:288 const { data, error } = await guardedRpc(supabase, "neo_bank_mark_line_reconciled", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:4 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:83 guardedRpc<TillContext>(client, "neo_cash_till_context", { _branch: branchId ?? null }),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:110 guardedRpc<CashRequestResult>(client, "neo_cash_request_payment", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:137 guardedRpc<CashRequestResult>(client, "neo_cash_confirm_receipt", { _request: request }),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:152 guardedRpc<CashRequestResult>(client, "neo_cash_cancel_request", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:221 guardedRpc<CashRequestResult>(client, "neo_cash_request_pos_payment", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:274 guardedRpc<CashTransfer[]>(client, "neo_cash_transfers", { _branch: branchId ?? null }),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:290 guardedRpc<{ transfer_number: string }>(client, "neo_cash_transfer_send", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:309 unwrap(guardedRpc<{ transfer_number: string }>(client, "neo_cash_transfer_confirm", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:324 unwrap(guardedRpc(client, "neo_cash_transfer_cancel", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:368 guardedRpc<CashRefund[]>(client, "neo_cash_refunds", { _branch: branchId ?? null }),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:379 guardedRpc<{ status: string; threshold: number }>(client, "neo_cash_refund_request", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:402 guardedRpc<{ status: string }>(client, "neo_cash_refund_decide", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:421 guardedRpc<{ refund_receipt_number: string }>(client, "neo_cash_refund_settle", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:499 guardedRpc<ShiftReconciliation>(client, "neo_cash_shift_reconciliation", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\cash-routing.ts:566 unwrap(guardedRpc<PaymentTrace>(client, "neo_cash_payment_trace", { _payment: paymentId })),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-controls.ts:1 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-controls.ts:538 const { data, error } = await guardedRpc(supabase, "neo_approval_seed_authority", { _commit: true });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:1 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:69 const { data, error } = await guardedRpc(db, "fin_metrics", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:86 const { data, error } = await guardedRpc(db, "fin_trial_balance", { _from: from, _to: to, _branch: branchId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:134 const { data, error } = await guardedRpc(db, "neo_journal_detail", { _journal: id });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:210 const { data, error } = await guardedRpc(supabase, "neo_supplier_payment_advance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:256 const { data, error } = await guardedRpc(supabase, "neo_payment_schedule_release", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:439 const { data, error } = await guardedRpc(db, "fin_seed_finance_defaults");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:465 const { data: number, error: numErr } = await guardedRpc(db, "next_document_number", { _doc_type: "journal" });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:514 const { data, error } = await guardedRpc(db, "fin_post_journal", { _journal: journalId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:540 const { data, error } = await guardedRpc(db, "fin_reverse_journal", { _journal: journalId, _reason: reason });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:613 const { data, error } = await guardedRpc(db, "neo_finance_readiness");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:666 const { data, error } = await (db as any).rpc("neo_journal_register", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:744 const { data, error } = await guardedRpc(db, "neo_general_ledger", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:803 const { data, error } = await guardedRpc(supabase, "neo_ar_record_customer_payment", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-posting.ts:17 (supabase as any).rpc(fn, args) as Promise<{ data: any; error: { message: string } | null }>;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:7 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:74 const { data, error } = await guardedRpc(sb, "neo_pos_kds_reconciliation", branchId ? { _branch: branchId } : {});
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:86 const { data, error } = await guardedRpc(sb, "neo_procurement_reconciliation", branchId ? { _branch: branchId } : {});
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ops-reconciliation.ts:102 const { data, error } = await guardedRpc(sb,
+
+=== FINANCE AND EOD ROUTES ===
+admin.finance-periods.tsx
+_shell.audit-logs.tsx
+_shell.events.reconciliation.tsx
+_shell.finance.ap-matching.tsx
+_shell.finance.bank-accounts.tsx
+_shell.finance.banking.tsx
+_shell.finance.cashbook.tsx
+_shell.finance.collections.tsx
+_shell.finance.commerce-check.tsx
+_shell.finance.deposits.tsx
+_shell.finance.eod.tsx
+_shell.finance.general-ledger.tsx
+_shell.finance.index.tsx
+_shell.finance.journals.tsx
+_shell.finance.ledger.tsx
+_shell.finance.ota.tsx
+_shell.finance.outbox.tsx
+_shell.finance.packages.tsx
+_shell.finance.payables.tsx
+_shell.finance.payments.tsx
+_shell.finance.payroll-journal.tsx
+_shell.finance.posting.tsx
+_shell.finance.profit-loss.tsx
+_shell.finance.queue.tsx
+_shell.finance.quickbooks.tsx
+_shell.finance.receivables.tsx
+_shell.finance.reconciliation.tsx
+_shell.finance.register.tsx
+_shell.finance.revenue.tsx
+_shell.finance.sessions.tsx
+_shell.finance.tax.tsx
+_shell.finance.till-reconciliation.tsx
+_shell.finance.till.tsx
+_shell.finance.tsx
+_shell.kitchen.reconciliation.tsx
+_shell.procurement.reconciliation.tsx

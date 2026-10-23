@@ -1,0 +1,450 @@
+﻿=== src/lib/delivery-data.ts:380-440 ===
+ 380: /**
+ 381:  * Staff-assisted order (phone orders taken at the property).
+ 382:  * Prices, zone fee, minimum order, ETA and kitchen routing are all decided by
+ 383:  * the database function, exactly as for a guest order â€” the screen only
+ 384:  * supplies the customer, address, zone, items and tender.
+ 385:  */
+ 386: export function useStaffPlaceDeliveryOrder() {
+ 387:   const qc = useQueryClient();
+ 388:   const audit = useAudit();
+ 389:   return useMutation({
+ 390:     mutationFn: async (input: {
+ 391:       branchId: string;
+ 392:       contactName: string;
+ 393:       contactPhone: string;
+ 394:       fulfilment: "delivery" | "pickup";
+ 395:       zoneId?: string | null;
+ 396:       address?: Record<string, unknown>;
+ 397:       items: Array<{ menu_item_id: string; quantity: number; special_instructions?: string | undefined }>;
+ 398:       paymentMethod: string;
+ 399:       notes?: string | null;
+ 400:     }) => {
+ 401:       const { data, error } = await guardedRpc(sb, "neo_delivery_staff_place_order", {
+ 402:         _branch: input.branchId,
+ 403:         _contact_name: input.contactName,
+ 404:         _contact_phone: input.contactPhone,
+ 405:         _items: input.items,
+ 406:         _fulfilment: input.fulfilment,
+ 407:         _zone: input.zoneId ?? null,
+ 408:         _address: input.address ?? {},
+ 409:         _payment_method: input.paymentMethod,
+ 410:         _notes: input.notes ?? null,
+ 411:       });
+ 412:       if (error) throw new Error(error.message);
+ 413:       return data as {
+ 414:         delivery_order_id: string;
+ 415:         order_number: string;
+ 416:         pin: string;
+ 417:         delivery_fee: number;
+ 418:         grand_total: number;
+ 419:         eta_minutes: number;
+ 420:         order_status: string;
+ 421:       };
+ 422:     },
+ 423:     onSuccess: async (res) => {
+ 424:       // The PIN is never shown to staff â€” it goes to the customer directly and
+ 425:       // appears on their order tracking screen.
+ 426:       toast.success(`Order ${res.order_number} created â€” collection PIN sent to the customer`);
+ 427:       await audit("delivery.order.create-assisted", "delivery_orders", res.delivery_order_id, {
+ 428:         order_number: res.order_number,
+ 429:         grand_total: res.grand_total,
+ 430:         order_status: res.order_status,
+ 431:       });
+ 432:       invalidate(qc);
+ 433:     },
+ 434:     onError: (e: Error) => toast.error(e.message),
+ 435:   });
+ 436: }
+ 437: 
+ 438: /* ------------------------------------------------------------------ *
+ 439:  * Customer addresses & favourites
+ 440:  * ------------------------------------------------------------------ */
+
+=== src/lib/delivery-data.ts:1050-1105 ===
+1050: export function useSaveRider() {
+1051:   const audit = useAudit();
+1052:   const qc = useQueryClient();
+1053:   const { organizationId } = useAuth();
+1054:   return useMutation({
+1055:     mutationFn: async (payload: Row & { id?: string }) => {
+1056:       const { id, ...values } = payload;
+1057:       if (id) {
+1058:         const { error } = await sb.from("rider_profiles").update(values).eq("id", id);
+1059:         if (error) throw error;
+1060:       } else {
+1061:         const { error } = await sb.from("rider_profiles").insert({ ...values, organization_id: organizationId });
+1062:         if (error) throw error;
+1063:       }
+1064:       await audit("delivery.rider.save", "rider_profiles", id ?? "new", values);
+1065:     },
+1066:     onSuccess: () => {
+1067:       toast.success("Rider saved");
+1068:       invalidate(qc);
+1069:     },
+1070:     onError: (e: Error) => toast.error(e.message),
+1071:   });
+1072: }
+1073: 
+1074: export function useAssignRider() {
+1075:   const qc = useQueryClient();
+1076:   const mutation = useMutation({
+1077:     mutationFn: async (input: { orderId: string; riderId: string; reason?: string }) => {
+1078:       const { data, error } = await guardedRpc(sb, "neo_delivery_assign", {
+1079:         _order: input.orderId,
+1080:         _rider: input.riderId,
+1081:         _reason: input.reason ?? null,
+1082:       });
+1083:       if (error) throw new Error(error.message);
+1084:       const result = (data ?? {}) as Record<string, unknown>;
+1085:       if (result["ok"] !== true) {
+1086:         throw new Error((result["detail"] as string) ?? "That rider could not take this order.");
+1087:       }
+1088:       return result;
+1089:     },
+1090:     onSuccess: (result, input) => {
+1091:       forgetFailedAction(`delivery-assign:${input.orderId}`);
+1092:       toast.success(result["reassigned"] ? "Order reassigned â€” both riders notified" : "Rider assigned");
+1093:       invalidate(qc);
+1094:     },
+1095:     onError: (e: Error, input) => {
+1096:       /**
+1097:        * A dispatch refused because the session lapsed is remembered, not lost:
+1098:        * it reruns by itself once the operator signs in again. A genuine
+1099:        * business refusal is only reported.
+1100:        */
+1101:       const held = rememberIfReauthNeeded(e, {
+1102:         key: `delivery-assign:${input.orderId}`,
+1103:         label: "Assign rider to this delivery",
+1104:         run: () => mutation.mutateAsync(input),
+1105:       });
+
+=== src/lib/delivery-data.ts:1310-1375 ===
+1310:       if (zones.error) throw zones.error;
+1311:       const names = new Map(((zones.data ?? []) as Row[]).map((z) => [String(z["id"]), String(z["name"])]));
+1312:       const groups = new Map<string, ZoneQueueGroup>();
+1313:       for (const order of (orders.data ?? []) as Row[]) {
+1314:         const zoneId = order["zone_id"] ? String(order["zone_id"]) : "unzoned";
+1315:         const group = groups.get(zoneId) ?? {
+1316:           zoneId,
+1317:           zoneName: names.get(zoneId) ?? "No zone recorded",
+1318:           orders: [],
+1319:         };
+1320:         group.orders.push(order);
+1321:         groups.set(zoneId, group);
+1322:       }
+1323:       return [...groups.values()].sort((a, b) => a.zoneName.localeCompare(b.zoneName));
+1324:     },
+1325:     refetchInterval: 20_000,
+1326:   });
+1327: }
+1328: 
+1329: export function useRiderAdvance() {
+1330:   const qc = useQueryClient();
+1331:   return useMutation({
+1332:     mutationFn: async (input: { orderId: string; to: string }) => {
+1333:       guardPreview();
+1334:       const { error } = await guardedRpc(sb, "delivery_rider_advance", { _order: input.orderId, _to: input.to });
+1335:       if (error) throw new Error(error.message);
+1336:     },
+1337:     onSuccess: () => {
+1338:       toast.success("Delivery updated");
+1339:       invalidate(qc);
+1340:     },
+1341:     onError: (e: Error) => toast.error(e.message),
+1342:   });
+1343: }
+1344: 
+1345: export function useConfirmDelivery() {
+1346:   const qc = useQueryClient();
+1347:   return useMutation({
+1348:     mutationFn: async (input: { orderId: string; pin: string; recipient: string; cash?: number }) => {
+1349:       guardPreview();
+1350:       const { error } = await guardedRpc(sb, "delivery_confirm_delivery", {
+1351:         _order: input.orderId,
+1352:         _pin: input.pin,
+1353:         _recipient: input.recipient,
+1354:         _cash_collected: input.cash ?? null,
+1355:       });
+1356:       if (error) throw new Error(error.message);
+1357:     },
+1358:     onSuccess: () => {
+1359:       toast.success("Delivery confirmed");
+1360:       invalidate(qc);
+1361:     },
+1362:     onError: (e: Error) => toast.error(e.message),
+1363:   });
+1364: }
+1365: 
+1366: export function useReportIssue() {
+1367:   const audit = useAudit();
+1368:   const qc = useQueryClient();
+1369:   const { organizationId } = useAuth();
+1370:   return useMutation({
+1371:     mutationFn: async (input: { orderId: string; category: string; description: string; branchId?: string | null }) => {
+1372:       guardPreview();
+1373:       const { error } = await sb.from("delivery_issues").insert({
+1374:         organization_id: organizationId,
+1375:         branch_id: input.branchId ?? null,
+
+=== src/lib/delivery-data.ts:1450-1585 ===
+1450:  */
+1451: export function useUnsettledCashDeliveries() {
+1452:   const { applyTo, filterKey } = useActivePropertyFilter();
+1453:   return useQuery({
+1454:     queryKey: ["delivery", "unsettled-cash", filterKey],
+1455:     queryFn: async () => {
+1456:       const { data, error } = await applyTo(
+1457:         sb
+1458:           .from("delivery_orders")
+1459:           .select("id, order_number, grand_total, currency, delivered_at, contact_name, rider_id"),
+1460:         "delivery_orders",
+1461:       )
+1462:         .eq("order_status", "delivered")
+1463:         .eq("payment_method", "cash")
+1464:         .not("payment_status", "in", "(paid,settled,completed)")
+1465:         .order("delivered_at", { ascending: false })
+1466:         .limit(100);
+1467:       if (error) throw error;
+1468:       return (data ?? []) as Row[];
+1469:     },
+1470:   });
+1471: }
+1472: 
+1473: /** Record cash a rider collected on delivery but did not enter at handover. */
+1474: export function useRecordDeliveryCash() {
+1475:   const qc = useQueryClient();
+1476:   return useMutation({
+1477:     mutationFn: async (input: { orderId: string; amount: number; reason?: string }) => {
+1478:       guardPreview();
+1479:       const { error } = await guardedRpc(sb, "neo_delivery_record_cash_collection", {
+1480:         _order: input.orderId,
+1481:         _amount: input.amount,
+1482:         _reason: input.reason ?? null,
+1483:       });
+1484:       if (error) throw new Error(error.message);
+1485:     },
+1486:     onSuccess: () => {
+1487:       toast.success("Cash recorded against the delivery");
+1488:       invalidate(qc);
+1489:     },
+1490:     onError: (e: Error) => toast.error(e.message),
+1491:   });
+1492: }
+1493: 
+1494: export function useCashRemittances() {
+1495:   const { applyTo, filterKey } = useActivePropertyFilter();
+1496:   return useQuery({
+1497:     queryKey: ["delivery", "cash-remittances", filterKey],
+1498:     queryFn: async () => {
+1499:       const { data, error } = await applyTo(sb.from("rider_cash_remittances").select("*, rider_profiles(display_name, rider_code)"), "rider_cash_remittances")
+1500:         .order("submitted_at", { ascending: false });
+1501:       if (error) throw error;
+1502:       return (data ?? []) as Row[];
+1503:     },
+1504:   });
+1505: }
+1506: 
+1507: /** Cash the signed-in rider still holds â€” collections not yet attached to a remittance. */
+1508: export function useMyOutstandingCash(riderId?: string) {
+1509:   const { applyTo, filterKey } = useActivePropertyFilter();
+1510:   return useQuery({
+1511:     queryKey: ["delivery", "my-cash", riderId ?? "none", filterKey],
+1512:     enabled: Boolean(riderId),
+1513:     queryFn: async () => {
+1514:       const { data, error } = await applyTo(sb.from("rider_cash_collections").select("id, collected_amount, currency, delivery_orders(order_number)"), "rider_cash_collections")
+1515:         .eq("rider_id", riderId)
+1516:         .eq("status", "collected")
+1517:         .is("remittance_id", null);
+1518:       if (error) throw error;
+1519:       const rows = (data ?? []) as Row[];
+1520:       const total = rows.reduce((sum, r) => sum + Number(r["collected_amount"] ?? 0), 0);
+1521:       return { rows, total };
+1522:     },
+1523:   });
+1524: }
+1525: 
+1526: 
+1527: export function useSubmitRemittance() {
+1528:   const qc = useQueryClient();
+1529:   return useMutation({
+1530:     mutationFn: async (input: { declared: number; branchId?: string | null }) => {
+1531:       guardPreview();
+1532:       const { data, error } = await guardedRpc(sb, "neo_delivery_rider_remit", {
+1533:         _declared: input.declared,
+1534:         _branch: input.branchId ?? null,
+1535:       });
+1536:       if (error) throw error;
+1537:       const result = (data ?? {}) as { ok?: boolean; reason?: string };
+1538:       if (!result.ok) throw new Error(result.reason ?? "Cash could not be submitted");
+1539:       return result;
+1540:     },
+1541:     onSuccess: () => {
+1542:       toast.success("Cash submitted for counting");
+1543:       invalidate(qc);
+1544:     },
+1545:     onError: (e: Error) => toast.error(e.message),
+1546:   });
+1547: }
+1548: 
+1549: /** Cashier/Finance action â€” a rider can never reconcile their own cash. */
+1550: /** Plain-language reasons the till could not take the rider's cash. */
+1551: const REMIT_REASONS: Record<string, string> = {
+1552:   till_not_found: "That till could not be found.",
+1553:   till_not_open: "Your till is closed, so it cannot take cash in. Open it first.",
+1554:   till_belongs_to_another_cashier: "That till belongs to another cashier.",
+1555:   till_property_mismatch: "Your till is at a different property from this rider's cash.",
+1556:   variance_reason_required: "A reason is needed when the counted amount differs.",
+1557:   remittance_not_found: "That hand-in could not be found.",
+1558: };
+1559: 
+1560: export function useReconcileRemittance() {
+1561:   const qc = useQueryClient();
+1562:   return useMutation({
+1563:     mutationFn: async (input: { id: string; counted: number; reason?: string; shiftId?: string }) => {
+1564:       const { data, error } = await guardedRpc(sb, "neo_delivery_remit_reconcile", {
+1565:         _remittance: input.id,
+1566:         _counted: input.counted,
+1567:         _reason: input.reason ?? null,
+1568:         _shift: input.shiftId ?? null,
+1569:       });
+1570:       if (error) throw error;
+1571:       const result = (data ?? {}) as { ok?: boolean; reason?: string; till_recorded?: boolean };
+1572:       if (!result.ok) {
+1573:         const key = result.reason ?? "";
+1574:         throw new Error(REMIT_REASONS[key] ?? key ?? "Cash could not be reconciled");
+1575:       }
+1576:       return result;
+1577:     },
+1578:     onSuccess: (result) => {
+1579:       toast.success(
+1580:         result.till_recorded ? "Cash counted and taken into your till" : "Cash counted",
+1581:       );
+1582:       invalidate(qc);
+1583:       // The money now sits in the cashier's till, so the shift's expected cash
+1584:       // and movement list must re-read rather than show the pre-count figure.
+1585:       if (result.till_recorded) void qc.invalidateQueries({ queryKey: ["pos"] });
+
+=== src/lib/delivery-data.ts:2020-2140 ===
+2020:  *
+2021:  * The browser only names the order: the database decides whether this rider
+2022:  * may have it â€” same property, still unclaimed, within their carry limit and,
+2023:  * for a cash order, cleared to handle cash.
+2024:  */
+2025: export function useClaimWaitingOrder() {
+2026:   const qc = useQueryClient();
+2027:   return useMutation({
+2028:     mutationFn: async (input: string | { orderId: string; collect?: boolean }) => {
+2029:       guardPreview();
+2030:       const orderId = typeof input === "string" ? input : input.orderId;
+2031:       const collect = typeof input === "string" ? false : Boolean(input.collect);
+2032:       const { data, error } = await guardedRpc(sb, "neo_delivery_claim", {
+2033:         _order: orderId,
+2034:         _collect: collect,
+2035:       });
+2036:       if (error) throw new Error(error.message);
+2037:       const result = (data ?? {}) as Record<string, unknown>;
+2038:       if (result["ok"] !== true) {
+2039:         throw new Error((result["detail"] as string) ?? "That order could not be picked up.");
+2040:       }
+2041:       return result;
+2042:     },
+2043:     onSuccess: (result) => {
+2044:       const label = String(result["order_number"] ?? "Order");
+2045:       toast.success(
+2046:         result["collected"] === true
+2047:           ? `${label} is picked up and on its way`
+2048:           : `${label} is yours â€” collect it from the kitchen`,
+2049:       );
+2050:       invalidate(qc);
+2051:     },
+2052:     onError: (e: Error) => toast.error(e.message),
+2053:   });
+2054: }
+2055: 
+2056: 
+2057: /**
+2058:  * Bill a delivery order: a real invoice plus the journal entry behind it.
+2059:  *
+2060:  * Amounts come from the order itself and the posting is written once per
+2061:  * order, so pressing this twice cannot double-count revenue.
+2062:  */
+2063: export function useBillDeliveryOrder() {
+2064:   const qc = useQueryClient();
+2065:   return useMutation({
+2066:     mutationFn: async (input: { orderId: string; reason?: string }) => {
+2067:       guardPreview();
+2068:       const { data, error } = await guardedRpc(sb, "neo_delivery_bill", {
+2069:         _order: input.orderId,
+2070:         _reason: input.reason ?? null,
+2071:       });
+2072:       if (error) throw new Error(error.message);
+2073:       const result = (data ?? {}) as Record<string, unknown>;
+2074:       if (result["ok"] !== true) {
+2075:         throw new Error((result["detail"] as string) ?? "This order could not be billed.");
+2076:       }
+2077:       return result;
+2078:     },
+2079:     onSuccess: (result) => {
+2080:       toast.success(
+2081:         result["already_billed"]
+2082:           ? `Already billed on ${String(result["invoice_number"])}`
+2083:           : `Invoice ${String(result["invoice_number"])} raised Â· journal ${String(result["journal_number"])}`,
+2084:       );
+2085:       invalidate(qc);
+2086:       void qc.invalidateQueries({ queryKey: ["finance"] });
+2087:     },
+2088:     onError: (e: Error) => toast.error(e.message),
+2089:   });
+2090: }
+2091: 
+2092: /**
+2093:  * Record a deposit or a settlement against a delivery order's invoice.
+2094:  *
+2095:  * The database writes the receipt, moves the invoice balance and posts the
+2096:  * matching money entry; the same reference twice is recorded only once.
+2097:  */
+2098: export function useRecordDeliveryPayment() {
+2099:   const qc = useQueryClient();
+2100:   return useMutation({
+2101:     mutationFn: async (input: {
+2102:       orderId: string;
+2103:       amount: number;
+2104:       method: string;
+2105:       entryType: "deposit" | "payment";
+2106:       reference?: string;
+2107:       reason?: string;
+2108:       /** Which of the hotel's accounts received the money. */
+2109:       destinationAccountId?: string | null;
+2110:     }) => {
+2111:       guardPreview();
+2112:       const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment", {
+2113:         _order: input.orderId,
+2114:         _amount: input.amount,
+2115:         _method: input.method,
+2116:         _entry_type: input.entryType,
+2117:         _reference: input.reference?.trim() ? input.reference.trim() : null,
+2118:         _reason: input.reason?.trim() ? input.reason.trim() : null,
+2119:         _account: input.destinationAccountId ?? null,
+2120:       } as never);
+2121:       if (error) throw new Error(error.message);
+2122:       const result = (data ?? {}) as Record<string, unknown>;
+2123:       if (result["ok"] !== true) {
+2124:         throw new Error((result["detail"] as string) ?? "That money could not be recorded.");
+2125:       }
+2126:       return result;
+2127:     },
+2128:     onSuccess: (result) => {
+2129:       toast.success(
+2130:         result["already_recorded"]
+2131:           ? "That entry was already recorded."
+2132:           : `Receipt ${String(result["receipt_number"])} Â· journal ${String(result["journal_number"])}`,
+2133:       );
+2134:       invalidate(qc);
+2135:       void qc.invalidateQueries({ queryKey: ["finance"] });
+2136:     },
+2137:     onError: (e: Error) => toast.error(e.message),
+2138:   });
+2139: }
+2140: 
+

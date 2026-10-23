@@ -92,7 +92,7 @@ function EndOfDayPage() {
 
   const rows = runs.data ?? [];
   // Everything on this page reads the audit run for the business date on
-  // screen â€” not simply the most recent run â€” so the counters, the exception
+  // screen — not simply the most recent run — so the counters, the exception
   // table and the close control can never disagree with one another.
   const dateRun = rows.find((r) => r.business_date === date) ?? null;
   const latest = dateRun ?? rows[0] ?? null;
@@ -135,7 +135,7 @@ function EndOfDayPage() {
     ? [
       ["Audit ID", displayedRun.run_reference ?? "Not numbered"],
       ["Business date", displayedRun.business_date],
-      ["Operator", displayedRun.operator_name ?? "â€”"],
+      ["Operator", displayedRun.operator_name ?? "—"],
       ["Started", new Date(displayedRun.started_at).toLocaleString()],
       [
         "Finished",
@@ -150,7 +150,7 @@ function EndOfDayPage() {
       ["Outstanding folios", money(num("outstanding_balances"))],
       [
         "Unposted transactions",
-        `${num("unposted_count")} Â· ${money(num("unposted_amount"))}`,
+        `${num("unposted_count")} · ${money(num("unposted_amount"))}`,
       ],
       ["Failed postings", String(num("failed_postings"))],
       ["Accounts payable", money(num("accounts_payable"))],
@@ -163,7 +163,7 @@ function EndOfDayPage() {
       [
         "Signed result",
         displayedRun.result_digest
-          ? displayedRun.result_digest.slice(0, 16) + "â€¦"
+          ? displayedRun.result_digest.slice(0, 16) + "…"
           : "Not signed",
       ],
       [
@@ -176,13 +176,13 @@ function EndOfDayPage() {
     : [];
 
   // Everything standing between this date and a locked day, in the order it
-  // has to be dealt with. Nothing here is inferred â€” each entry is a real
+  // has to be dealt with. Nothing here is inferred — each entry is a real
   // record state, a real permission or a real audit exception.
   const outstanding: { title: string; detail: string }[] = [];
   if (!branchId) {
     outstanding.push({
       title: "Select a property",
-      detail: "The audit is always run for one property â€” choose it in the workspace bar.",
+      detail: "The audit is always run for one property — choose it in the workspace bar.",
     });
   } else if (!selectedDay) {
     outstanding.push({
@@ -208,7 +208,7 @@ function EndOfDayPage() {
     if (e.severity !== "blocking") continue;
     outstanding.push({
       title: EXCEPTION_LABELS[e.category] ?? titleCase(e.category),
-      detail: `${e.detail}${e.reference ? ` Â· ${e.reference}` : ""}${e.amount === null ? "" : ` Â· ${money(e.amount)}`
+      detail: `${e.detail}${e.reference ? ` · ${e.reference}` : ""}${e.amount === null ? "" : ` · ${money(e.amount)}`
         }`,
     });
   }
@@ -235,12 +235,12 @@ function EndOfDayPage() {
         <StatCard
           label="Audit ID"
           value={latest?.run_reference ?? "Awaiting data"}
-          hint={latest ? `${latest.business_date} Â· ${titleCase(latest.run_mode)}` : "No audit recorded"}
+          hint={latest ? `${latest.business_date} · ${titleCase(latest.run_mode)}` : "No audit recorded"}
           icon={CalendarCheck}
         />
         <StatCard
           label="Blocking exceptions"
-          value={latest ? String(latest.blocking_count) : "â€”"}
+          value={latest ? String(latest.blocking_count) : "—"}
           tone={latest && latest.blocking_count > 0 ? "warning" : "default"}
           icon={AlertTriangle}
         />
@@ -266,7 +266,7 @@ function EndOfDayPage() {
                 {date} is closed and locked
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                The business day is final. Nothing further can be posted to it â€” corrections are
+                The business day is final. Nothing further can be posted to it — corrections are
                 made on an open date and referenced back to this one.
               </p>
             </div>
@@ -295,7 +295,7 @@ function EndOfDayPage() {
                     onClick={() => closeDay.mutate({ branch: branchId!, date, note })}
                   >
                     <Lock className="mr-2 size-4" />
-                    {closeDay.isPending ? "Closingâ€¦" : `Close ${date}`}
+                    {closeDay.isPending ? "Closing…" : `Close ${date}`}
                   </Button>
                 ) : (
                   <Button
@@ -305,7 +305,7 @@ function EndOfDayPage() {
                     onClick={() => openDay.mutate({ branch: branchId!, date, note })}
                   >
                     <Unlock className="mr-2 size-4" />
-                    {openDay.isPending ? "Openingâ€¦" : `Open ${date}`}
+                    {openDay.isPending ? "Opening…" : `Open ${date}`}
                   </Button>
                 )}
                 <Button
@@ -314,7 +314,7 @@ function EndOfDayPage() {
                   onClick={() => runAudit.mutate({ branch: branchId!, date })}
                 >
                   <PlayCircle className="mr-2 size-4" />
-                  {runAudit.isPending ? "Runningâ€¦" : dateRun ? "Re-run audit" : "Run audit"}
+                  {runAudit.isPending ? "Running…" : dateRun ? "Re-run audit" : "Run audit"}
                 </Button>
               </div>
             </div>
@@ -363,7 +363,7 @@ function EndOfDayPage() {
 
       <SectionCard
         title="Audit record"
-        description="The persistent record of this run â€” it survives refresh and is retained with its identifier."
+        description="The persistent record of this run — it survives refresh and is retained with its identifier."
       >
         {latest ? (
           <>
@@ -458,10 +458,10 @@ function EndOfDayPage() {
                       </StatusPill>
                     </TableCell>
                     <TableCell>{EXCEPTION_LABELS[e.category] ?? titleCase(e.category)}</TableCell>
-                    <TableCell className="font-mono text-xs">{e.reference ?? "â€”"}</TableCell>
+                    <TableCell className="font-mono text-xs">{e.reference ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{e.detail}</TableCell>
                     <TableCell className="text-right">
-                      {e.amount === null ? "â€”" : money(e.amount)}
+                      {e.amount === null ? "—" : money(e.amount)}
                     </TableCell>
                   </TableRow>
                 ))}
