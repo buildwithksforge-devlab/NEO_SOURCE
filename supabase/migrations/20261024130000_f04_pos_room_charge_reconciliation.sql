@@ -24,7 +24,7 @@ DECLARE org uuid:=public.current_org_id(); today date:=current_date; BEGIN
                 AND fl.organization_id = r.organization_id
                 AND fl.branch_id = r.branch_id
                 AND fl.source_module = 'pos'
-                AND fl.source_id = r.source_id
+                AND fl.source_record_uuid = r.source_id
           )
       )
       AND (
@@ -97,7 +97,7 @@ BEGIN
        AND fl.organization_id = NEW.organization_id
        AND fl.branch_id = NEW.branch_id
        AND fl.source_module = 'pos'
-       AND fl.source_id = NEW.source_id
+       AND fl.source_record_uuid = NEW.source_id
      ORDER BY j.created_at DESC
      LIMIT 1;
 
