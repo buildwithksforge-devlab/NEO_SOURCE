@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+const db = supabase as any;
 import {
   DataTable,
   EventsEmpty,
@@ -39,13 +45,13 @@ import {
 export const Route = createFileRoute("/_shell/events/quotations")({
   head: () => ({
     meta: [
-      { title: "Event Quotations â€” NEÃ˜" },
+      { title: "Event Quotations ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â NEÃƒÆ’Ã‹Å“" },
       {
         name: "description",
         content:
           "Versioned event quotations with deposits, balances and conversion to confirmed events.",
       },
-      { property: "og:title", content: "Event Quotations â€” NEÃ˜" },
+      { property: "og:title", content: "Event Quotations ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â NEÃƒÆ’Ã‹Å“" },
       {
         property: "og:description",
         content: "Versioned event quotations with deposits, balances and conversion.",
@@ -61,6 +67,198 @@ export const Route = createFileRoute("/_shell/events/quotations")({
   ),
 });
 
+
+// E1C_QUOTATION_PRICING
+type QuotationLine = {
+  description: string;
+  category: string;
+  quantity: number;
+  unit_price: number;
+  unit: string;
+  taxable: boolean;
+};
+
+function QuotationPricingEditor({
+  quotation,
+  onClose,
+}: {
+  quotation: Row;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const existing = (quotation["event_quotation_items"] ?? []) as Row[];
+
+  const [lines, setLines] = useState<QuotationLine[]>(
+    existing.length
+      ? existing.map((item) => ({
+          description: String(item["description"] ?? ""),
+          category: String(item["category"] ?? "other"),
+          quantity: Number(item["quantity"] ?? 1),
+          unit_price: Number(item["unit_price"] ?? 0),
+          unit: String(item["unit"] ?? "unit"),
+          taxable: Boolean(item["taxable"] ?? true),
+        }))
+      : [{ description: "", category: "other", quantity: 1, unit_price: 0, unit: "unit", taxable: true }],
+  );
+
+  const [discount, setDiscount] = useState(Number(quotation["discount_amount"] ?? 0));
+  const [taxRate, setTaxRate] = useState(Number(quotation["tax_rate"] ?? 0));
+  const [serviceRate, setServiceRate] = useState(Number(quotation["service_charge_rate"] ?? 0));
+  const [depositPercent, setDepositPercent] = useState(Number(quotation["deposit_percent"] ?? 50));
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!lines.length) throw new Error("Add at least one quotation item.");
+      for (const line of lines) {
+        if (!line.description.trim()) throw new Error("Each quotation item needs a description.");
+        if (!Number.isFinite(line.quantity) || line.quantity <= 0)
+          throw new Error("Item quantity must be greater than zero.");
+        if (!Number.isFinite(line.unit_price) || line.unit_price < 0)
+          throw new Error("Item price cannot be negative.");
+      }
+
+      for (const [value, label] of [
+        [taxRate, "Tax"],
+        [serviceRate, "Service charge"],
+        [depositPercent, "Deposit"],
+      ] as const) {
+        if (!Number.isFinite(value) || value < 0 || value > 100)
+          throw new Error(`${label} percentage must be between 0 and 100.`);
+      }
+
+      if (!Number.isFinite(discount) || discount < 0)
+        throw new Error("Discount cannot be negative.");
+
+      const { data, error } = await db.rpc("neo_event_quotation_price", {
+        _quotation: String(quotation["id"]),
+        _items: lines,
+        _discount: discount,
+        _tax_rate: taxRate,
+        _service_rate: serviceRate,
+        _deposit_percent: depositPercent,
+      } as never);
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      toast.success("Quotation pricing saved");
+      onClose();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const subtotal = lines.reduce(
+    (sum, line) => sum + line.quantity * line.unit_price,
+    0,
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {lines.map((line, index) => (
+          <div key={index} className="grid grid-cols-12 gap-2 rounded-md border p-3">
+            <Input
+              className="col-span-12 sm:col-span-5"
+              placeholder="Service or item description"
+              value={line.description}
+              onChange={(e) =>
+                setLines((previous) =>
+                  previous.map((item, i) =>
+                    i === index ? { ...item, description: e.target.value } : item,
+                  ),
+                )
+              }
+            />
+            <Input
+              className="col-span-4 sm:col-span-2"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={line.quantity}
+              onChange={(e) =>
+                setLines((previous) =>
+                  previous.map((item, i) =>
+                    i === index ? { ...item, quantity: Number(e.target.value) } : item,
+                  ),
+                )
+              }
+            />
+            <Input
+              className="col-span-4 sm:col-span-3"
+              type="number"
+              min="0"
+              step="0.01"
+              value={line.unit_price}
+              onChange={(e) =>
+                setLines((previous) =>
+                  previous.map((item, i) =>
+                    i === index ? { ...item, unit_price: Number(e.target.value) } : item,
+                  ),
+                )
+              }
+            />
+            <Button
+              className="col-span-4 sm:col-span-2"
+              variant="outline"
+              type="button"
+              disabled={lines.length === 1}
+              onClick={() => setLines((previous) => previous.filter((_, i) => i !== index))}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() =>
+          setLines((previous) => [
+            ...previous,
+            { description: "", category: "other", quantity: 1, unit_price: 0, unit: "unit", taxable: true },
+          ])
+        }
+      >
+        Add quotation item
+      </Button>
+
+      <div className="grid grid-cols-2 gap-3">
+        {([
+          ["Discount (KES)", discount, setDiscount],
+          ["Tax (%)", taxRate, setTaxRate],
+          ["Service charge (%)", serviceRate, setServiceRate],
+          ["Deposit (%)", depositPercent, setDepositPercent],
+        ] as const).map(([label, value, setter]) => (
+          <label key={label} className="space-y-1 text-sm">
+            <span>{label}</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={value}
+              onChange={(e) => setter(Number(e.target.value))}
+            />
+          </label>
+        ))}
+      </div>
+
+      <p className="text-sm font-medium">
+        Item subtotal: KES {subtotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+      </p>
+
+      <Button
+        type="button"
+        disabled={save.isPending}
+        onClick={() => save.mutate()}
+      >
+        {save.isPending ? "Saving..." : "Save quotation pricing"}
+      </Button>
+    </div>
+  );
+}
 function Page() {
   const { tenant } = useTenant();
   const symbol = tenant.regional.currencySymbol;
@@ -79,6 +277,7 @@ function Page() {
   const rows = (quotations.data ?? []) as Row[];
   const canConvert = can("events", "quotations", "convert");
   const canEdit = can("events", "quotations", "edit");
+  const [pricingQuotation, setPricingQuotation] = useState<Row | null>(null);
   const canCreate = can("events", "quotations", "create");
 
   return (
@@ -194,7 +393,7 @@ function Page() {
             </FormDialog>
           ) : null
         }
-        description="Sent quotations are never overwritten â€” a revision supersedes the previous version and keeps its history."
+        description="Sent quotations are never overwritten ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a revision supersedes the previous version and keeps its history."
       />
 
       {canCreate && !branchId ? <PropertyRequired what="A quotation" /> : null}
@@ -235,9 +434,9 @@ function Page() {
                 <tr key={String(q["id"])}>
                   <td className="py-2 pr-4 font-medium">{String(q["quotation_number"])}</td>
                   <td className="py-2 pr-4">{num(q["version"]) || 1}</td>
-                  <td className="py-2 pr-4">{String(q["title"] || "â€”")}</td>
+                  <td className="py-2 pr-4">{String(q["title"] || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â")}</td>
                   <td className="py-2 pr-4">
-                    {String((q["customers"] as Row | null)?.["full_name"] ?? "â€”")}
+                    {String((q["customers"] as Row | null)?.["full_name"] ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â")}
                   </td>
                   <td className="py-2 pr-4">{formatDate(q["event_date"])}</td>
                   <td className="py-2 pr-4">{num(q["guest_count"])}</td>
@@ -266,6 +465,15 @@ function Page() {
                         Accept the quotation to convert it
                       </span>
                     ) : null}
+                    {canEdit && String(q["status"]) === "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPricingQuotation(q)}
+                      >
+                        Price quotation
+                      </Button>
+                    ) : null}
                     {canEdit ? (
                       <Button
                         size="sm"
@@ -284,6 +492,25 @@ function Page() {
         </EventsQueryState>
       </SectionCard>
 
+      {pricingQuotation ? (
+        <SectionCard
+          title={`Price quotation ${String(pricingQuotation["quotation_number"] ?? "")}`}
+          description="Edit itemized prices while the quotation is in draft."
+        >
+          <QuotationPricingEditor
+            key={String(pricingQuotation["id"])}
+            quotation={pricingQuotation}
+            onClose={() => setPricingQuotation(null)}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setPricingQuotation(null)}
+          >
+            Close editor
+          </Button>
+        </SectionCard>
+      ) : null}
       <SectionCard
         title="Quotation statuses"
         description="Only an accepted quotation can become an event"
