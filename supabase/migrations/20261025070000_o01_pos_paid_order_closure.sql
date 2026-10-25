@@ -1,3 +1,11 @@
--- NEØ O01: Close fully served and fully paid POS orders.
-
-
+-- NEØ O01: POS paid-order closure.
+--
+-- Existing implementation:
+-- 20260924134500_pos_prepaid_service_guard.sql
+--
+-- The existing pos_reconcile_settlement_internal(uuid) already
+-- supports closing fully served orders whose status is paid.
+--
+-- No duplicate function replacement is required.
+-- Integration with the final item lifecycle requires separate review.
+SELECT 1;
