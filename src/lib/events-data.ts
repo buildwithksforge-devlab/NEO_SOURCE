@@ -15,7 +15,7 @@ const db = supabase as any;
 
 /**
  * Every events table that physically belongs to one property. Records in these
- * tables are always read and written against the selected property — never the
+ * tables are always read and written against the selected property â€” never the
  * signing-in user's home branch, which is null for organisation-wide accounts.
  */
 export const EVENT_PROPERTY_TABLES = new Set<string>([
@@ -31,7 +31,7 @@ export const EVENT_PROPERTY_TABLES = new Set<string>([
 
 /**
  * Events context. The property comes from the global property selector, so the
- * module always agrees with the header — including for organisation-wide users
+ * module always agrees with the header â€” including for organisation-wide users
  * whose profile carries no branch at all.
  */
 export function useEventsCtx() {
@@ -442,7 +442,7 @@ function useInvalidate() {
  * A cleared date, time or follow-up arrives as an empty string, which a date
  * column refuses; an untouched optional field should simply be absent rather
  * than blank. Strings are trimmed, blanks become nulls, and nothing else is
- * altered — no value is ever invented here.
+ * altered â€” no value is ever invented here.
  */
 export function sanitizeEventValues(values: Row): Row {
   const out: Row = {};
@@ -460,7 +460,7 @@ export function sanitizeEventValues(values: Row): Row {
 }
 
 export const PROPERTY_REQUIRED_MESSAGE =
-  "Select a property in the header before creating this record — “All Properties” is a viewing mode only.";
+  "Select a property in the header before creating this record â€” â€œAll Propertiesâ€ is a viewing mode only.";
 
 /**
  * Generic insert used by the events forms. Property-bound records always take
@@ -530,7 +530,7 @@ export function newEventAttemptKey(): string {
  * Holds one submission token for the lifetime of a single form attempt. Every
  * retry or double click of that attempt sends the same token, so the server
  * collapses them into one event. The token is rotated only after a confirmed
- * success or when the operator deliberately starts a new attempt — two
+ * success or when the operator deliberately starts a new attempt â€” two
  * genuinely separate events with identical details are therefore never merged.
  */
 export function useEventAttemptKey(): { key: string; reset: () => void } {
@@ -539,7 +539,7 @@ export function useEventAttemptKey(): { key: string; reset: () => void } {
   return { key, reset };
 }
 
-/** Authoritative event creation — the database allocates the reference. */
+/** Authoritative event creation â€” the database allocates the reference. */
 export function useCreateBooking() {
   const { organizationId, branchId, userId, userName } = useEventsCtx();
   const invalidate = useInvalidate();
@@ -547,7 +547,7 @@ export function useCreateBooking() {
     mutationFn: async (values: Row) => {
       const chosen = (values["branch_id"] as string | undefined) ?? branchId;
       if (!chosen) throw new Error(PROPERTY_REQUIRED_MESSAGE);
-      // A client can never choose the reference — the server allocates it.
+      // A client can never choose the reference â€” the server allocates it.
       const { event_reference: _ignoredReference, ...rest } = values;
       const idempotencyKey = (values["idempotency_key"] as string | undefined) ?? newEventAttemptKey();
       const { data, error } = await guardedRpc(db, "neo_event_booking_create", {
@@ -560,7 +560,7 @@ export function useCreateBooking() {
       invalidate();
       toast.success(
         data?.["created"] === false
-          ? "This event already exists — nothing was duplicated."
+          ? "This event already exists â€” nothing was duplicated."
           : `Event ${String(data?.["event_reference"] ?? "")} created`,
       );
       void logAudit({
@@ -619,7 +619,7 @@ export function useTransferBooking() {
   });
 }
 
-/** Enquiry → event. Repeated calls return the same event. */
+/** Enquiry â†’ event. Repeated calls return the same event. */
 export function useConvertEnquiry() {
   const { organizationId, branchId, userId, userName } = useEventsCtx();
   const invalidate = useInvalidate();
@@ -653,7 +653,7 @@ export function useConvertEnquiry() {
   });
 }
 
-/** Accepted quotation → event. Repeated calls return the same event. */
+/** Accepted quotation â†’ event. Repeated calls return the same event. */
 export function useConvertQuotation() {
   const { organizationId, userId, userName } = useEventsCtx();
   const invalidate = useInvalidate();
@@ -736,7 +736,7 @@ export function useEventRetire(table: string, label: string, statusColumn = "act
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error(
-          `Nothing changed — your account is not allowed to ${active ? "reactivate" : "deactivate"} this ${label.toLowerCase()}.`,
+          `Nothing changed â€” your account is not allowed to ${active ? "reactivate" : "deactivate"} this ${label.toLowerCase()}.`,
         );
       }
       return { id, active };
@@ -769,7 +769,7 @@ export function useEventDelete(table: string, label: string) {
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error(
-          `Nothing was deleted — removing a ${label.toLowerCase()} is reserved for administrators. Deactivate it instead.`,
+          `Nothing was deleted â€” removing a ${label.toLowerCase()} is reserved for administrators. Deactivate it instead.`,
         );
       }
       return id;
@@ -790,7 +790,7 @@ export function useEventDelete(table: string, label: string) {
       const inUse = /foreign key|violates|referenced|23503/i.test(e.message);
       toast.error(
         inUse
-          ? `This ${label.toLowerCase()} is already used by existing events, so it cannot be deleted. Deactivate it instead — past events keep their record.`
+          ? `This ${label.toLowerCase()} is already used by existing events, so it cannot be deleted. Deactivate it instead â€” past events keep their record.`
           : e.message,
       );
     },
@@ -804,7 +804,7 @@ export async function nextNumber(docType: string, fallbackPrefix: string): Promi
   return String(data);
 }
 
-/** Idempotent booking confirmation — reserves venue, seeds milestones, tasks and BEO. */
+/** Idempotent booking confirmation â€” reserves venue, seeds milestones, tasks and BEO. */
 export function useConfirmBooking() {
   const { organizationId, userId, userName } = useEventsCtx();
   const invalidate = useInvalidate();
@@ -819,8 +819,8 @@ export function useConfirmBooking() {
     },
     onSuccess: (data, vars) => {
       invalidate();
-      if (data?.["already_confirmed"]) toast.info("This event was already confirmed — nothing was duplicated.");
-      else toast.success(`Event confirmed · ${data?.["tasks_created"] ?? 0} department tasks generated`);
+      if (data?.["already_confirmed"]) toast.info("This event was already confirmed â€” nothing was duplicated.");
+      else toast.success(`Event confirmed Â· ${data?.["tasks_created"] ?? 0} department tasks generated`);
       void logAudit({
         organizationId,
         userId,
@@ -836,7 +836,7 @@ export function useConfirmBooking() {
   });
 }
 
-/** Never overwrite a sent or accepted quotation — supersede it with a new version. */
+/** Never overwrite a sent or accepted quotation â€” supersede it with a new version. */
 export function useReviseQuotation() {
   const { organizationId, userId, userName } = useEventsCtx();
   const invalidate = useInvalidate();
@@ -852,6 +852,12 @@ export function useReviseQuotation() {
         event_venues: _v,
         sent_at: _s,
         responded_at: _r,
+        approved_by: _approvedBy,
+        approved_at: _approvedAt,
+        created_by: _createdBy,
+        updated_by: _updatedBy,
+        accepted_by_name: _acceptedBy,
+        acceptance_note: _acceptanceNote,
         ...rest
       } = quotation;
       const { data, error } = await db
@@ -862,7 +868,14 @@ export function useReviseQuotation() {
           version: Number(quotation["version"] ?? 1) + 1,
           supersedes_id: quotation["id"],
           status: "draft",
+          approved_by: null,
+          approved_at: null,
+          sent_at: null,
+          responded_at: null,
           accepted_by_name: "",
+          acceptance_note: "",
+          created_by: userId,
+          updated_by: userId,
         })
         .select("id")
         .maybeSingle();
@@ -890,7 +903,7 @@ export function useReviseQuotation() {
     },
     onSuccess: (id, quotation) => {
       invalidate();
-      toast.success("New quotation version created — the previous version is preserved");
+      toast.success("New quotation version created â€” the previous version is preserved");
       void logAudit({
         organizationId,
         userId,
@@ -977,7 +990,7 @@ export function useEnsureBeo() {
 /**
  * Publishing is the handoff itself: departments get their requirements, the
  * venue gets a preparation job, billing is built and everyone is notified.
- * Repeating it is safe — nothing is duplicated.
+ * Repeating it is safe â€” nothing is duplicated.
  */
 export function usePublishBeo() {
   const { organizationId, userId, userName } = useEventsCtx();
@@ -1045,7 +1058,7 @@ export type EventChainRow = {
 /**
  * What happens when the date passes.
  *
- * A confirmed booking does not close itself: someone states the outcome —
+ * A confirmed booking does not close itself: someone states the outcome â€”
  * it took place, the party did not arrive, or it was cancelled. Recording
  * that closes the department handoffs and freezes the operational side.
  * Any outstanding balance stays outstanding; closing an event never
@@ -1094,7 +1107,7 @@ export function useCloseOutEvent() {
   });
 }
 
-/** Booking → banquet order → kitchen / housekeeping / billing → payment. */
+/** Booking â†’ banquet order â†’ kitchen / housekeeping / billing â†’ payment. */
 export function useEventChainStatus() {
   const { organizationId, branchId } = useEventsCtx();
   return useQuery({
@@ -1327,7 +1340,7 @@ export function useBuildEventBill() {
       return (data ?? {}) as Record<string, unknown>;
     },
     "events.billing.build",
-    (r) => `Bill rebuilt — ${r["lines"]} line(s).`,
+    (r) => `Bill rebuilt â€” ${r["lines"]} line(s).`,
   );
 }
 
@@ -1371,7 +1384,7 @@ export function useFinaliseEventBill() {
       return (data ?? {}) as Record<string, unknown>;
     },
     "events.billing.finalise",
-    () => "Bill finalised — the event is now eligible for Finance.",
+    () => "Bill finalised â€” the event is now eligible for Finance.",
   );
 }
 
@@ -1522,7 +1535,7 @@ export type EventPaymentRow = Row;
 
 /**
  * Money actually received against events at the selected property, as recorded
- * — never inferred. Used to reconcile what was billed against what came in by
+ * â€” never inferred. Used to reconcile what was billed against what came in by
  * cash, M-Pesa, card or transfer.
  */
 export function useEventPaymentLedger() {
