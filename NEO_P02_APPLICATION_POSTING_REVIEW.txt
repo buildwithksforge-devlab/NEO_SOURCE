@@ -1,0 +1,13 @@
+﻿20260831022423_a2bc589e-ed7e-48b6-a63e-1b2c14f89b87.sql:299: applied_folio_id uuid, applied_at timestamptz,
+20260831022423_a2bc589e-ed7e-48b6-a63e-1b2c14f89b87.sql:324: d.applied_folio_id, d.applied_at,
+20260831043706_a114fd29-7595-4771-b0de-57407fb6c220.sql:1: CREATE OR REPLACE FUNCTION public.pms_apply_deposits_to_folio()
+20260831043706_a114fd29-7595-4771-b0de-57407fb6c220.sql:22: SET status='applied', applied_folio_id=NEW.id, applied_folio_line_id=_line, applied_at=now()
+20261022080000_folio_applied_deposit_projection.sql:65: AND d.applied_folio_id = f.id
+20261022080000_folio_applied_deposit_projection.sql:71: WHERE fl.id = d.applied_folio_line_id
+20261024120000_f03_guest_deposit_liability_clearing.sql:11: CREATE OR REPLACE FUNCTION public.neo_guest_deposit_application_post()
+20261024120000_f03_guest_deposit_liability_clearing.sql:56: WHERE id = NEW.applied_folio_id
+20261024120000_f03_guest_deposit_liability_clearing.sql:89: 'reservation_deposit_application',
+20261024120000_f03_guest_deposit_liability_clearing.sql:128: public.neo_guest_deposit_application_post()
+20261024120000_f03_guest_deposit_liability_clearing.sql:134: DROP TRIGGER IF EXISTS trg_guest_deposit_application_post
+20261024120000_f03_guest_deposit_liability_clearing.sql:137: CREATE TRIGGER trg_guest_deposit_application_post
+20261024120000_f03_guest_deposit_liability_clearing.sql:145: EXECUTE FUNCTION public.neo_guest_deposit_application_post();

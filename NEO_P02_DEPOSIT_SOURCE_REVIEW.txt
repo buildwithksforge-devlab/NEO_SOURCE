@@ -1,0 +1,1007 @@
+NEO P0.2 - GUEST DEPOSIT ACCOUNTING SOURCE
+
+==================================
+FILE: supabase/migrations/20260921070329_8190d71a-fe59-4f44-8a73-5eef62ba800b.sql
+==================================
+  149: CREATE OR REPLACE FUNCTION public.neo_deposit_post(_deposit uuid, _silent boolean DEFAULT false)
+  150: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  151: AS $function$
+  152: DECLARE d public.reservation_deposits; org uuid; cur text; cash_code text; cash_name text;
+  153:         occurred date; ref text; res jsonb; jid uuid; msg text;
+  154: BEGIN
+  155:   SELECT * INTO d FROM public.reservation_deposits WHERE id = _deposit;
+  156:   IF d.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;
+  157:   org := d.organization_id;
+  158: 
+  159:   IF NOT _silent AND NOT (public.is_org_admin() OR public.has_permission('finance','edit')
+  160:                           OR public.has_permission('finance','approve')) THEN
+  161:     RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+  162:   END IF;
+  163: 
+  164:   PERFORM pg_advisory_xact_lock(hashtextextended('deposit:' || _deposit::text, 0));
+  165: 
+  166:   IF EXISTS (SELECT 1 FROM public.finance_posting_receipts
+  167:               WHERE organization_id = org AND idempotency_key = 'deposit:' || _deposit::text
+  168:                 AND status = 'posted') THEN
+  169:     RETURN jsonb_build_object('ok', true, 'reason', 'already_posted');
+  170:   END IF;
+  171: 
+  172:   cur := COALESCE(NULLIF(d.currency,''), public.neo_fact_currency(org, d.branch_id));
+  173:   occurred := COALESCE((d.received_at)::date, (d.created_at)::date, CURRENT_DATE);
+  174:   SELECT COALESCE(r.confirmation_number, d.reservation_id::text) INTO ref
+  175:     FROM public.reservations r WHERE r.id = d.reservation_id;
+  176:   ref := COALESCE(ref, _deposit::text);
+  177: 
+  178:   cash_code := public.neo_gl_cash_code(org, d.method, d.destination_account_id);
+  179:   cash_name := public.neo_gl_cash_name(cash_code);
+  180: 
+  181:   BEGIN
+  182:     PERFORM public.neo_finance_ensure_account(org, cash_code, cash_name, 'asset', 'Cash and Bank');
+  183:     PERFORM public.neo_finance_ensure_account(org, '2020', 'Guest Deposits', 'liability', 'Liabilities');
+  184: 
+  185:     res := public.neo_gl_post(
+  186:       org, d.branch_id, 'pms', 'reservation_deposit', _deposit, 'deposit',
+  187:       occurred, cur,
+  188:       'Pre-arrival deposit ' || ref,
+  189:       jsonb_build_array(
+  190:         jsonb_build_object('code', cash_code, 'debit', round(COALESCE(d.amount,0),2),
+  191:                            'description', 'Deposit received (' || COALESCE(d.method,'cash') || ')'),
+  192:         jsonb_build_object('code', '2020', 'credit', round(COALESCE(d.amount,0),2),
+  193:                            'description', 'Guest deposit held')
+  194:       ), d.customer_id);
+  195:     jid := NULLIF(res->>'journal_id','')::uuid;
+  196:   EXCEPTION WHEN OTHERS THEN
+  197:     msg := SQLERRM;
+  198:     PERFORM public.neo_record_posting_receipt(org, d.branch_id, 'deposit', _deposit, ref, 'failed',
+  199:       COALESCE(d.amount,0), cur, NULL, NULL, msg, occurred);
+  200:     PERFORM public.neo_financial_state_set(org, d.branch_id, 'deposit', _deposit, ref,
+  201:       d.status, 'failed', 'The deposit could not be recognised in Finance.',
+  202:       COALESCE(d.amount,0), cur, occurred, NULL, NULL, msg, auth.uid(), NULL);
+  203:     IF _silent THEN RETURN jsonb_build_object('ok', false, 'reason', 'failed', 'detail', msg); END IF;
+  204:     RAISE;
+  205:   END;
+  206: 
+  207:   PERFORM public.neo_record_posting_receipt(org, d.branch_id, 'deposit', _deposit, ref,
+  208:     CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+  209:     COALESCE(d.amount,0), cur, NULL, res->>'detail', NULL, occurred);
+  210: 
+  211:   PERFORM public.neo_financial_state_set(org, d.branch_id, 'deposit', _deposit, ref,
+  212:     d.status, CASE WHEN jid IS NOT NULL THEN 'posted' ELSE 'blocked' END,
+  213:     'A pre-arrival deposit is held as a liability until it is applied to the guest folio.',
+  214:     COALESCE(d.amount,0), cur, occurred, jid, NULL, NULL, auth.uid(), NULL);
+  215: 
+  216:   RETURN COALESCE(res, '{}'::jsonb) || jsonb_build_object('module', 'deposit', 'source_id', _deposit);
+  217: END $function$;
+  218: 
+  219: -- Financial accounts a property can receive money into, for selectors.
+  220: CREATE OR REPLACE FUNCTION public.neo_financial_accounts(_branch uuid DEFAULT NULL)
+  221: RETURNS TABLE(id uuid, name text, account_kind text, currency text, branch_id uuid,
+  222:               gl_code text, is_default boolean)
+  223: LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+  224: AS $$
+  225:   SELECT b.id, b.name, b.account_kind, b.currency, b.branch_id, a.code, b.is_default
+  226:     FROM public.bank_accounts b
+  227:     LEFT JOIN public.chart_of_accounts a ON a.id = b.gl_account_id
+  228:    WHERE b.organization_id = public.current_org_id()
+  229:      AND b.active
+  230:      AND (_branch IS NULL OR b.branch_id IS NULL OR b.branch_id = _branch)
+  231:    ORDER BY b.is_default DESC, b.account_kind, b.name;
+  232: $$;
+  233: 
+  234: GRANT EXECUTE ON FUNCTION public.neo_financial_accounts(uuid) TO authenticated, service_role;
+  235: 
+  236: -- ============================================================
+  237: -- 2. Accounting periods open when their dates arrive
+  238: -- ============================================================
+  239: 
+  240: CREATE OR REPLACE FUNCTION public.neo_fin_activate_due_periods(_org uuid, _date date)
+  241: RETURNS void
+  242: LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  243: AS $$
+  244: BEGIN
+  245:   UPDATE public.accounting_periods
+  246:      SET status = 'open', updated_at = now()
+  247:    WHERE organization_id = _org
+  248:      AND status = 'future'
+  249:      AND starts_on <= greatest(_date, CURRENT_DATE);
+  250: END $$;
+  251: 
+  252: GRANT EXECUTE ON FUNCTION public.neo_fin_activate_due_periods(uuid, date) TO authenticated, service_role;
+  253: 
+  254: CREATE OR REPLACE FUNCTION public.fin_period_for(_org uuid, _date date)
+  255: RETURNS accounting_periods
+  256: LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+  257: AS $$
+  258: DECLARE p public.accounting_periods;
+  259: BEGIN
+  260:   SELECT * INTO p
+  261:     FROM public.accounting_periods
+  262:    WHERE organization_id = _org AND _date BETWEEN starts_on AND ends_on
+  263:    ORDER BY
+  264:      CASE status WHEN 'open' THEN 0 WHEN 'closed' THEN 1 WHEN 'locked' THEN 2 ELSE 3 END,
+  265:      created_at DESC
+  266:    LIMIT 1;
+  267: 
+  268:   -- A month whose dates have already arrived is open, not future. Closing and
+  269:   -- locking stay deliberate acts and are never undone here.
+  270:   IF p.id IS NOT NULL AND p.status = 'future' AND p.starts_on <= CURRENT_DATE THEN
+  271:     p.status := 'open';
+  272:   END IF;
+  273:   RETURN p;
+  274: END $$;
+  275: 
+  276: -- ============================================================
+  277: -- 3. Stock cannot silently go below zero
+  278: -- ============================================================
+  279: 
+  280: CREATE TABLE IF NOT EXISTS public.inventory_policies (
+  281:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  282:   organization_id uuid NOT NULL,
+  283:   branch_id uuid,
+  284:   allow_negative_stock boolean NOT NULL DEFAULT false,
+  285:   note text,
+  286:   updated_by uuid,
+  287:   created_at timestamptz NOT NULL DEFAULT now(),
+  288:   updated_at timestamptz NOT NULL DEFAULT now()
+  289: );
+  290: 
+  291: CREATE UNIQUE INDEX IF NOT EXISTS inventory_policies_org_branch_idx
+  292:   ON public.inventory_policies(organization_id, coalesce(branch_id, '00000000-0000-0000-0000-000000000000'::uuid));
+  293: 
+  294: GRANT SELECT, INSERT, UPDATE ON public.inventory_policies TO authenticated;
+  295: GRANT ALL ON public.inventory_policies TO service_role;
+  296: 
+  297: ALTER TABLE public.inventory_policies ENABLE ROW LEVEL SECURITY;
+  298: 
+  299: DROP POLICY IF EXISTS inventory_policies_read ON public.inventory_policies;
+  300: CREATE POLICY inventory_policies_read ON public.inventory_policies
+  301:   FOR SELECT TO authenticated
+  302:   USING (organization_id = public.current_org_id());
+  303: 
+  304: DROP POLICY IF EXISTS inventory_policies_write ON public.inventory_policies;
+  305: CREATE POLICY inventory_policies_write ON public.inventory_policies
+  306:   FOR INSERT TO authenticated
+  307:   WITH CHECK (organization_id = public.current_org_id()
+  308:               AND (public.is_org_admin_for(organization_id)
+  309:                    OR public.has_permission('inventory','settings.manage')
+  310:                    OR public.has_permission('inventory','stock.manage')));
+  311: 
+  312: DROP POLICY IF EXISTS inventory_policies_update ON public.inventory_policies;
+  313: CREATE POLICY inventory_policies_update ON public.inventory_policies
+  314:   FOR UPDATE TO authenticated
+  315:   USING (organization_id = public.current_org_id()
+  316:          AND (public.is_org_admin_for(organization_id)
+  317:               OR public.has_permission('inventory','settings.manage')
+  318:               OR public.has_permission('inventory','stock.manage')))
+  319:   WITH CHECK (organization_id = public.current_org_id());
+  320: 
+  321: CREATE OR REPLACE FUNCTION public.neo_inventory_allows_negative(_org uuid, _branch uuid)
+  322: RETURNS boolean
+  323: LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+  324: AS $$
+  325:   SELECT coalesce((
+  326:     SELECT p.allow_negative_stock FROM public.inventory_policies p
+  327:      WHERE p.organization_id = _org
+  328:        AND (p.branch_id = _branch OR p.branch_id IS NULL)
+  329:      ORDER BY (p.branch_id IS NOT NULL) DESC
+  330:      LIMIT 1), false);
+  331: $$;
+  332: 
+  333: GRANT EXECUTE ON FUNCTION public.neo_inventory_allows_negative(uuid, uuid) TO authenticated, service_role;
+  334: 
+  335: CREATE OR REPLACE FUNCTION public.inventory_apply_movement(_item uuid, _location uuid, _quantity numeric, _unit text, _movement_type text, _unit_cost numeric DEFAULT NULL::numeric, _reference_type text DEFAULT NULL::text, _reference_id uuid DEFAULT NULL::uuid, _reason text DEFAULT NULL::text, _idempotency_key text DEFAULT NULL::text, _batch_number text DEFAULT NULL::text, _expiry date DEFAULT NULL::date)
+  336: RETURNS uuid
+  337: LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  338: AS $function$
+
+==================================
+FILE: supabase/migrations/20260831045823_d8993219-835b-4244-8912-765e9b835a92.sql
+==================================
+  151: CREATE OR REPLACE FUNCTION public.neo_reservation_deposit_record(
+  152:   _reservation uuid, _amount numeric, _method text DEFAULT 'cash'::text,
+  153:   _reference text DEFAULT NULL::text, _idempotency_key text DEFAULT NULL::text,
+  154:   _notes text DEFAULT NULL::text
+  155: )
+  156: RETURNS jsonb
+  157: LANGUAGE plpgsql
+  158: SECURITY DEFINER
+  159: SET search_path TO 'public'
+  160: AS $function$
+  161: DECLARE
+  162:   _org uuid := public.current_org_id();
+  163:   _res public.reservations;
+  164:   _id uuid;
+  165:   _existing uuid;
+  166:   _post jsonb;
+  167: BEGIN
+  168:   IF NOT (public.has_permission('pms','reservations.edit') OR public.has_permission('finance','collections.record_payment')) THEN
+  169:     RAISE EXCEPTION 'Not permitted to record a reservation deposit';
+  170:   END IF;
+  171:   IF COALESCE(_amount,0) <= 0 THEN RAISE EXCEPTION 'A deposit must be greater than zero'; END IF;
+  172:   IF NULLIF(btrim(COALESCE(_idempotency_key,'')), '') IS NULL THEN RAISE EXCEPTION 'A deposit idempotency key is required'; END IF;
+  173: 
+  174:   SELECT * INTO _res FROM public.reservations
+  175:    WHERE id = _reservation AND organization_id = _org FOR UPDATE;
+  176:   IF _res.id IS NULL THEN RAISE EXCEPTION 'Reservation not found'; END IF;
+  177: 
+  178:   SELECT id INTO _existing FROM public.reservation_deposits
+  179:    WHERE organization_id = _org AND idempotency_key = _idempotency_key;
+  180:   IF _existing IS NOT NULL THEN
+  181:     _post := public.neo_deposit_post(_existing, true);
+  182:     RETURN jsonb_build_object('deposit_id', _existing, 'idempotent', true,
+  183:       'position', public.neo_reservation_deposit_position(_reservation), 'finance', _post);
+  184:   END IF;
+  185: 
+  186:   INSERT INTO public.reservation_deposits
+  187:     (organization_id, branch_id, reservation_id, customer_id, amount, method,
+  188:      reference, received_by, idempotency_key, notes)
+  189:   VALUES
+  190:     (_org, _res.branch_id, _reservation, _res.customer_id, round(_amount,2),
+  191:      COALESCE(NULLIF(lower(_method),''),'cash'), NULLIF(btrim(COALESCE(_reference,'')),''),
+  192:      auth.uid(), _idempotency_key, _notes)
+  193:   RETURNING id INTO _id;
+  194: 
+  195:   UPDATE public.reservations r
+  196:      SET deposit_paid = (SELECT COALESCE(sum(d.amount),0) FROM public.reservation_deposits d
+  197:                           WHERE d.reservation_id = _reservation AND d.status IN ('held','applied')),
+  198:          updated_at = now()
+  199:    WHERE r.id = _reservation;
+  200: 
+  201:   _post := public.neo_deposit_post(_id, true);
+  202:   RETURN jsonb_build_object('deposit_id', _id, 'idempotent', false,
+  203:     'position', public.neo_reservation_deposit_position(_reservation), 'finance', _post);
+  204: END;
+  205: $function$;
+  206: REVOKE ALL ON FUNCTION public.neo_reservation_deposit_record(uuid,numeric,text,text,text,text) FROM PUBLIC, anon;
+  207: GRANT EXECUTE ON FUNCTION public.neo_reservation_deposit_record(uuid,numeric,text,text,text,text) TO authenticated;
+  208: 
+  209: CREATE OR REPLACE FUNCTION public.neo_maintenance_work_order_create(_payload jsonb, _idempotency_key text)
+  210: RETURNS jsonb
+  211: LANGUAGE plpgsql
+  212: SECURITY DEFINER
+  213: SET search_path TO 'public'
+  214: AS $function$
+  215: DECLARE
+  216:   _org uuid := public.current_org_id();
+  217:   _branch uuid := NULLIF(_payload->>'branch_id','')::uuid;
+  218:   _room uuid := NULLIF(_payload->>'room_id','')::uuid;
+  219:   _asset uuid := NULLIF(_payload->>'asset_id','')::uuid;
+  220:   _department uuid := NULLIF(_payload->>'requesting_department_id','')::uuid;
+  221:   _description text := btrim(COALESCE(_payload->>'description',''));
+  222:   _priority text := COALESCE(NULLIF(_payload->>'priority',''),'normal');
+  223:   _blocks boolean := COALESCE((_payload->>'blocks_room')::boolean, false);
+  224:   _severity text := COALESCE(NULLIF(_payload->>'block_status',''),'out-of-order');
+  225:   _existing public.maintenance_work_orders;
+  226:   _wo public.maintenance_work_orders;
+  227:   _number text;
+  228:   _room_state jsonb;
+  229: BEGIN
+  230:   IF _org IS NULL THEN RAISE EXCEPTION 'No active organisation'; END IF;
+  231:   IF NOT (public.has_permission('maintenance','edit') OR public.has_permission('housekeeping','edit')
+  232:           OR public.has_permission('laundry','edit') OR public.is_org_admin()) THEN
+  233:     RAISE EXCEPTION 'Not permitted to report maintenance faults';
+  234:   END IF;
+  235:   IF _description = '' THEN RAISE EXCEPTION 'Describe the fault before reporting it'; END IF;
+  236:   IF NULLIF(btrim(COALESCE(_idempotency_key,'')), '') IS NULL THEN RAISE EXCEPTION 'A work-order idempotency key is required'; END IF;
+  237:   IF _branch IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches WHERE id = _branch AND organization_id = _org) THEN
+  238:     RAISE EXCEPTION 'Select a valid property';
+  239:   END IF;
+  240:   IF _room IS NOT NULL AND NOT EXISTS (
+  241:     SELECT 1 FROM public.rooms WHERE id = _room AND organization_id = _org AND branch_id = _branch
+  242:   ) THEN RAISE EXCEPTION 'The selected room does not belong to this property'; END IF;
+  243:   IF _asset IS NOT NULL AND NOT EXISTS (
+  244:     SELECT 1 FROM public.assets WHERE id = _asset AND organization_id = _org AND (branch_id IS NULL OR branch_id = _branch)
+  245:   ) THEN RAISE EXCEPTION 'The selected asset does not belong to this property'; END IF;
+  246: 
+  247:   SELECT * INTO _existing FROM public.maintenance_work_orders
+  248:    WHERE organization_id = _org AND idempotency_key = _idempotency_key;
+  249:   IF _existing.id IS NOT NULL THEN
+  250:     RETURN jsonb_build_object('ok', true, 'idempotent', true, 'work_order_id', _existing.id,
+  251:       'work_order_number', _existing.work_order_number, 'blocks_room', _existing.blocks_room);
+  252:   END IF;
+  253: 
+  254:   _number := public.next_document_number('work-order');
+  255:   INSERT INTO public.maintenance_work_orders
+  256:     (organization_id, branch_id, work_order_number, requesting_department_id, requested_by,
+  257:      room_id, location_label, asset_id, fault_category, description, priority, operational_impact,
+  258:      guest_impact, attachments, status, blocks_room, block_status, source_module, source_record_id,
+  259:      idempotency_key, created_by)
+  260:   VALUES
+  261:     (_org, _branch, _number, _department, auth.uid(), _room, NULLIF(_payload->>'location_label',''),
+  262:      _asset, COALESCE(NULLIF(_payload->>'fault_category',''),'other'), _description, _priority,
+  263:      NULLIF(_payload->>'operational_impact',''), COALESCE((_payload->>'guest_impact')::boolean,false),
+  264:      COALESCE(_payload->'attachments','[]'::jsonb), 'new', _blocks AND _room IS NOT NULL,
+  265:      CASE WHEN _blocks AND _room IS NOT NULL THEN _severity ELSE NULL END,
+  266:      COALESCE(NULLIF(_payload->>'source_module',''),'maintenance'),
+  267:      NULLIF(_payload->>'source_record_id','')::uuid, _idempotency_key, auth.uid())
+  268:   RETURNING * INTO _wo;
+  269: 
+  270:   INSERT INTO public.work_order_status_history
+  271:     (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+  272:   VALUES (_org, _wo.id, NULL, 'new', 'Work order created', auth.uid());
+  273: 
+  274:   IF _blocks AND _room IS NOT NULL THEN
+  275:     PERFORM set_config('neo.system_posting', 'on', true);
+  276:     _room_state := public.ops_set_room_status(_room, NULL, _severity, _description, 'maintenance', _wo.id, NULL);
+  277:   END IF;
+  278: 
+  279:   INSERT INTO public.audit_logs
+  280:     (organization_id, branch_id, user_id, user_name, action, module, record_id, new_value)
+  281:   VALUES (_org, _branch, auth.uid(), '', 'maintenance.work_order.created', 'maintenance', _wo.id::text,
+  282:     jsonb_build_object('work_order_number',_number,'room_id',_room,'asset_id',_asset,
+  283:                        'blocks_room',_wo.blocks_room,'room_state',_room_state));
+  284: 
+  285:   RETURN jsonb_build_object('ok', true, 'idempotent', false, 'work_order_id', _wo.id,
+
+==================================
+FILE: supabase/migrations/20260831043706_a114fd29-7595-4771-b0de-57407fb6c220.sql
+==================================
+    1: CREATE OR REPLACE FUNCTION public.pms_apply_deposits_to_folio()
+    2:  RETURNS trigger
+    3:  LANGUAGE plpgsql
+    4:  SECURITY DEFINER
+    5:  SET search_path TO 'public'
+    6: AS $function$
+    7: DECLARE _d record; _line uuid;
+    8: BEGIN
+    9:   IF NEW.reservation_id IS NULL THEN RETURN NEW; END IF;
+   10:   FOR _d IN SELECT * FROM public.reservation_deposits
+   11:              WHERE reservation_id = NEW.reservation_id AND status = 'held'
+   12:   LOOP
+   13:     INSERT INTO public.folio_lines (organization_id, branch_id, folio_id, reservation_id, line_type,
+   14:       category, source_module, description, operational_date, quantity, unit_price,
+   15:       gross_amount, net_amount, posted_by)
+   16:     VALUES (NEW.organization_id, NEW.branch_id, NEW.id, NEW.reservation_id, 'payment', 'payment', 'pms',
+   17:       'Pre-arrival deposit' || COALESCE(' · ' || _d.reference, ''), current_date, 1, _d.amount,
+   18:       _d.amount, _d.amount, auth.uid())
+   19:     RETURNING id INTO _line;
+   20: 
+   21:     UPDATE public.reservation_deposits
+   22:        SET status='applied', applied_folio_id=NEW.id, applied_folio_line_id=_line, applied_at=now()
+   23:      WHERE id=_d.id;
+   24: 
+   25:     -- A deposit applied to the folio is money already banked: it must reduce
+   26:     -- what the guest owes, not sit on the folio as an unreconciled line.
+   27:     UPDATE public.folios
+   28:        SET total_payments = COALESCE(total_payments,0) + _d.amount,
+   29:            balance = COALESCE(balance,0) - _d.amount,
+   30:            updated_at = now()
+   31:      WHERE id = NEW.id;
+   32:   END LOOP;
+   33:   RETURN NEW;
+   34: END;
+   35: $function$;
+   36: 
+   37: CREATE OR REPLACE FUNCTION public.pms_check_out(_reservation uuid, _force boolean DEFAULT false, _notes text DEFAULT ''::text)
+   38:  RETURNS jsonb
+   39:  LANGUAGE plpgsql
+   40:  SECURITY DEFINER
+   41:  SET search_path TO 'public'
+   42: AS $function$
+   43: DECLARE _stay record; _f record; _charges numeric; _paid numeric; _line_paid numeric; _outstanding numeric;
+   44: BEGIN
+   45:   SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation FOR UPDATE;
+   46:   IF _stay IS NULL THEN RAISE EXCEPTION 'No active stay for this reservation'; END IF;
+   47:   IF _stay.status = 'checked-out' THEN
+   48:     RETURN jsonb_build_object('stay_id',_stay.id,'idempotent',true);
+   49:   END IF;
+   50: 
+   51:   SELECT * INTO _f FROM public.folios WHERE stay_id=_stay.id AND folio_type='guest' FOR UPDATE;
+   52: 
+   53:   -- Charges exclude payment/deposit lines; those are settlement, not consumption.
+   54:   SELECT COALESCE(SUM(l.net_amount), 0) INTO _charges
+   55:     FROM public.folio_lines l
+   56:     JOIN public.folios f ON f.id = l.folio_id
+   57:    WHERE f.stay_id = _stay.id
+   58:      AND COALESCE(l.status,'posted') NOT IN ('void','voided','reversed')
+   59:      AND COALESCE(l.line_type,'charge') NOT IN ('payment','deposit','refund');
+   60: 
+   61:   SELECT COALESCE(SUM(a.amount), 0) INTO _paid
+   62:     FROM public.payment_allocations a
+   63:     JOIN public.folios f ON f.id = a.folio_id
+   64:     JOIN public.payments p ON p.id = a.payment_id
+   65:    WHERE f.stay_id = _stay.id
+   66:      AND p.status = 'confirmed';
+   67: 
+   68:   -- Deposits applied at check-in are recorded as folio payment lines.
+   69:   SELECT COALESCE(SUM(l.net_amount), 0) INTO _line_paid
+   70:     FROM public.folio_lines l
+   71:     JOIN public.folios f ON f.id = l.folio_id
+   72:    WHERE f.stay_id = _stay.id
+   73:      AND COALESCE(l.status,'posted') NOT IN ('void','voided','reversed')
+   74:      AND COALESCE(l.line_type,'charge') IN ('payment','deposit');
+   75: 
+   76:   _outstanding := _charges - _paid - _line_paid;
+   77: 
+   78:   IF round(_outstanding, 2) > 0 THEN
+   79:     IF NOT _force THEN
+   80:       RAISE EXCEPTION 'Folio is not settled — outstanding balance of %. Settle the bill before check-out.', round(_outstanding, 2);
+   81:     END IF;
+   82:     IF NOT (public.has_permission('pms','folio.override') OR public.is_org_admin()) THEN
+   83:       RAISE EXCEPTION 'Checking out with an unsettled balance of % requires folio override authority.', round(_outstanding, 2);
+   84:     END IF;
+   85:     IF btrim(COALESCE(_notes,'')) = '' THEN
+   86:       RAISE EXCEPTION 'A written reason is required to check out with an unsettled balance.';
+   87:     END IF;
+   88:   END IF;
+   89: 
+   90:   UPDATE public.stays SET status='checked-out', checked_out_at=now(), updated_at=now() WHERE id=_stay.id;
+   91:   UPDATE public.reservations SET status='checked-out', updated_at=now() WHERE id=_reservation;
+   92: 
+   93:   IF _f.id IS NOT NULL THEN
+   94:     UPDATE public.folios
+   95:        SET total_charges = _charges,
+   96:            total_payments = COALESCE(_paid,0) + COALESCE(_line_paid,0),
+   97:            balance = _outstanding,
+   98:            status = CASE WHEN round(_outstanding,2) > 0 THEN 'under-review' ELSE 'settled' END,
+   99:            updated_at = now()
+  100:      WHERE id = _f.id;
+  101:   END IF;
+  102: 
+  103:   UPDATE public.rooms SET status='active', housekeeping_status='dirty', updated_at=now()
+  104:    WHERE id = (SELECT room_id FROM public.reservations WHERE id=_reservation);
+  105: 
+  106:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)
+  107:   VALUES (_stay.organization_id, auth.uid(), '', 'pms.check_out', 'pms', _stay.id::text,
+  108:     jsonb_build_object('reservation_id',_reservation,'outstanding',_outstanding,'forced',_force), _notes);
+  109: 
+  110:   RETURN jsonb_build_object('stay_id',_stay.id,'folio_id',_f.id,'idempotent',false,'outstanding',_outstanding);
+  111: END;
+  112: $function$;
+
+==================================
+FILE: supabase/migrations/20260921073325_50507baf-ba3e-4fe1-b637-f3478f8206e0.sql
+==================================
+    1: DROP FUNCTION IF EXISTS public.neo_ar_record_customer_payment(uuid, numeric, text, text, date, text, uuid, text);
+    2: 
+    3: CREATE OR REPLACE FUNCTION public.neo_ar_record_customer_payment(
+    4:   _invoice uuid, _amount numeric, _method text DEFAULT 'cash'::text,
+    5:   _reference text DEFAULT NULL::text, _paid_on date DEFAULT NULL::date,
+    6:   _notes text DEFAULT NULL::text, _campaign uuid DEFAULT NULL::uuid,
+    7:   _intent_key text DEFAULT NULL::text, _account uuid DEFAULT NULL::uuid)
+    8:  RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+    9: AS $function$
+   10: DECLARE
+   11:   _org uuid := public.current_org_id();
+   12:   _inv public.invoices;
+   13:   _key text; _pay uuid; _receipt text; _amt numeric; _paid numeric; _bal numeric;
+   14:   _status text; _cash_code text; _ar_code text := '1060'; _res jsonb; _journal uuid;
+   15:   _date date; _acct uuid;
+   16: BEGIN
+   17:   IF _org IS NULL THEN RAISE EXCEPTION 'No workspace in context'; END IF;
+   18:   IF NOT (public.has_permission('finance','ar.allocate_receipt') OR public.is_org_admin()) THEN
+   19:     RAISE EXCEPTION 'Not permitted to record customer receipts' USING ERRCODE = '42501';
+   20:   END IF;
+   21: 
+   22:   _amt := round(coalesce(_amount, 0), 2);
+   23:   IF _amt <= 0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;
+   24: 
+   25:   SELECT * INTO _inv FROM public.invoices WHERE id = _invoice AND organization_id = _org FOR UPDATE;
+   26:   IF _inv.id IS NULL THEN RAISE EXCEPTION 'Invoice not found in this workspace'; END IF;
+   27:   IF _inv.status NOT IN ('issued','partially_paid','overdue') THEN
+   28:     RAISE EXCEPTION 'Invoice % is % and cannot accept a payment', _inv.invoice_number, _inv.status;
+   29:   END IF;
+   30: 
+   31:   _acct := public.neo_assert_financial_account(_org, _inv.branch_id, _account);
+   32: 
+   33:   _bal := round(coalesce(_inv.balance, coalesce(_inv.total,0) - coalesce(_inv.amount_paid,0)), 2);
+   34:   IF _amt > _bal THEN
+   35:     RAISE EXCEPTION 'Payment of % is more than the outstanding balance of % on %', _amt, _bal, _inv.invoice_number;
+   36:   END IF;
+   37: 
+   38:   _key := NULLIF(btrim(coalesce(_intent_key,'')), '');
+   39:   IF _key IS NULL THEN
+   40:     _key := 'ar:receipt:' || _invoice::text || ':' || _amt::text || ':' || coalesce(_method,'cash')
+   41:             || ':' || coalesce(_reference,'') || ':' || coalesce(auth.uid()::text,'system')
+   42:             || ':' || to_char(now() at time zone 'utc', 'YYYYMMDD"T"HH24MI');
+   43:   END IF;
+   44: 
+   45:   SELECT p.id INTO _pay FROM public.payments p
+   46:    WHERE p.organization_id = _org AND p.idempotency_key = _key LIMIT 1;
+   47:   IF _pay IS NOT NULL THEN
+   48:     RETURN jsonb_build_object('ok', true, 'payment_id', _pay, 'duplicate_prevented', true);
+   49:   END IF;
+   50: 
+   51:   _date := coalesce(_paid_on, CURRENT_DATE);
+   52:   _receipt := public.next_document_number('receipt');
+   53: 
+   54:   BEGIN
+   55:     INSERT INTO public.payments (organization_id, branch_id, receipt_number, customer_id, amount,
+   56:       currency, method, external_reference, paid_at, status, received_by, notes,
+   57:       source_module, source_record_id, idempotency_key, shift_id, destination_account_id)
+   58:     VALUES (_org, _inv.branch_id, _receipt, _inv.customer_id, _amt,
+   59:       coalesce(_inv.currency,'KES'), coalesce(_method,'cash'), _reference,
+   60:       (_date::timestamp at time zone 'utc'), 'confirmed', auth.uid(), coalesce(_notes,''),
+   61:       'ar', _invoice, _key,
+   62:       CASE WHEN coalesce(_method,'cash') = 'cash'
+   63:            THEN public.pos_resolve_open_shift(_inv.branch_id) END,
+   64:       _acct)
+   65:     RETURNING id INTO _pay;
+   66:   EXCEPTION WHEN unique_violation THEN
+   67:     SELECT p.id INTO _pay FROM public.payments p
+   68:      WHERE p.organization_id = _org AND p.idempotency_key = _key LIMIT 1;
+   69:     IF _pay IS NULL THEN RAISE; END IF;
+   70:     RETURN jsonb_build_object('ok', true, 'payment_id', _pay, 'duplicate_prevented', true);
+   71:   END;
+   72: 
+   73:   _paid := round(coalesce(_inv.amount_paid,0) + _amt, 2);
+   74:   _bal := round(coalesce(_inv.total,0) - _paid, 2);
+   75:   _status := CASE WHEN _bal <= 0.009 THEN 'paid' ELSE 'partially_paid' END;
+   76: 
+   77:   UPDATE public.invoices
+   78:      SET amount_paid = _paid, balance = GREATEST(_bal, 0), status = _status, updated_at = now()
+   79:    WHERE id = _invoice;
+   80: 
+   81:   _cash_code := public.neo_gl_account_code(_org, coalesce(_method,'cash'), _acct);
+   82:   PERFORM public.neo_finance_ensure_account(_org, _cash_code, 'Settlement account', 'asset', 'Cash & Bank');
+   83:   PERFORM public.neo_finance_ensure_account(_org, _ar_code, 'Accounts Receivable', 'asset', 'Receivables');
+   84: 
+   85:   SELECT je.id INTO _journal FROM public.journal_entries je
+   86:    WHERE je.organization_id = _org AND je.source_document_id = _pay
+   87:    ORDER BY je.created_at LIMIT 1;
+   88: 
+   89:   IF _journal IS NULL THEN
+   90:     _res := public.neo_gl_post(
+   91:       _org, _inv.branch_id, 'finance', 'customer_payment', _pay, 'settlement',
+   92:       _date, coalesce(_inv.currency,'KES'),
+   93:       'Customer receipt ' || _receipt || ' against invoice ' || _inv.invoice_number,
+   94:       jsonb_build_array(
+   95:         jsonb_build_object('code', _cash_code, 'debit', _amt, 'description', 'Money received'),
+   96:         jsonb_build_object('code', _ar_code, 'credit', _amt, 'description', 'Customer debt settled')
+   97:       ),
+   98:       _inv.customer_id);
+   99:     _journal := (_res->>'journal_id')::uuid;
+  100:   END IF;
+  101:   UPDATE public.payments SET posted_journal_id = _journal, updated_at = now() WHERE id = _pay;
+  102: 
+  103:   IF _campaign IS NOT NULL THEN
+  104:     INSERT INTO public.campaign_conversions (organization_id, branch_id, campaign_id, customer_id,
+  105:       conversion_type, source_module, source_record_id, revenue, attribution_model, confidence,
+  106:       occurred_at, idempotency_key)
+  107:     SELECT _org, _inv.branch_id, c.id, _inv.customer_id, 'payment', 'finance', _pay, _amt,
+  108:       'declared', 'declared', now(), 'ar-payment:' || _pay::text
+  109:       FROM public.campaigns c
+  110:      WHERE c.id = _campaign AND c.organization_id = _org
+  111:     ON CONFLICT DO NOTHING;
+  112:   END IF;
+  113: 
+  114:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)
+  115:   VALUES (_org, auth.uid(), '', 'finance.ar.receipt', 'finance', _pay::text,
+  116:     jsonb_build_object('invoice_id', _invoice, 'invoice_number', _inv.invoice_number,
+  117:       'amount', _amt, 'method', coalesce(_method,'cash'), 'receipt_number', _receipt,
+  118:       'journal_id', _journal, 'invoice_status', _status, 'campaign_id', _campaign,
+  119:       'destination_account_id', _acct), _notes);
+  120: 
+  121:   RETURN jsonb_build_object('ok', true, 'payment_id', _pay, 'receipt_number', _receipt,
+  122:     'journal_id', _journal, 'invoice_status', _status, 'invoice_balance', GREATEST(_bal, 0),
+  123:     'destination_account_id', _acct);
+  124: END;
+  125: $function$;
+  126: 
+  127: REVOKE ALL ON FUNCTION public.neo_ar_record_customer_payment(uuid, numeric, text, text, date, text, uuid, text, uuid) FROM PUBLIC, anon;
+  128: GRANT EXECUTE ON FUNCTION public.neo_ar_record_customer_payment(uuid, numeric, text, text, date, text, uuid, text, uuid) TO authenticated, service_role;
+
+==================================
+FRONTEND: src/lib/deposits.ts
+==================================
+/**
+ * Pre-arrival deposits.
+ *
+ * A deposit is a liability held against a reservation, not revenue, and it is
+ * the gate the arrivals desk must pass before a stay may open. Nothing here
+ * computes the position: `neo_reservation_deposit_position` is the single
+ * source of truth, and the same rule is enforced again by the database trigger
+ * on stays, so a refresh, a reopen or a direct call can never bypass it.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { stableIdempotencyKey } from "@/lib/transaction-scope";
+
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const rpc = (fn: string, args: Record<string, unknown>) =>
+  (supabase as any).rpc(fn, args) as Promise<{ data: any; error: { message: string } | null }>;
+
+export type DepositPosition = {
+  ok: boolean;
+  reason?: string;
+  reservation_id?: string;
+  currency?: string;
+  required?: number;
+  held?: number;
+  applied?: number;
+  paid?: number;
+  outstanding?: number;
+  waiver?: string | null;
+  override_id?: string | null;
+  may_check_in?: boolean;
+  required_source?: "manual" | "policy" | "none" | string | null;
+  policy_id?: string | null;
+  policy_name?: string | null;
+  policy_reason?: string | null;
+  policy_amount?: number | null;
+};
+
+/** Why check-in is or is not permitted, in the words the desk should read. */
+export function depositGate(position: DepositPosition | undefined | null): {
+  blocked: boolean;
+  message: string;
+} {
+  if (!position || !position.ok) {
+    return {
+      blocked: true,
+      message:
+        position?.reason ??
+        "Deposit eligibility could not be verified. Refresh the reservation before checking in.",
+    };
+  }
+  if (position.waiver === "corporate-credit") {
+    return { blocked: false, message: "Charged to a corporate credit account — no deposit due." };
+  }
+  if (position.override_id) {
+    return {
+      blocked: false,
+      message: "An authorised override is on file for this arrival. It is used once.",
+    };
+  }
+  const outstanding = Number(position.outstanding ?? 0);
+  if (outstanding > 0.009) {
+    return {
+      blocked: true,
+      message: `Deposit outstanding: ${outstanding.toFixed(2)} of ${Number(position.required ?? 0).toFixed(2)} required. Record the deposit or obtain an authorised override.`,
+    };
+  }
+  return { blocked: false, message: "Deposit settled." };
+}
+
+export function useDepositPosition(reservationId: string | null | undefined, enabled = true) {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pms", "deposit-position", organizationId, reservationId],
+    enabled: enabled && Boolean(organizationId) && Boolean(reservationId),
+    queryFn: async (): Promise<DepositPosition> => {
+      const { data, error } = await rpc("neo_reservation_deposit_position", {
+        _reservation: reservationId,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? { ok: false }) as DepositPosition;
+    },
+  });
+}
+
+function useInvalidateDeposits() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["pms"] });
+    void qc.invalidateQueries({ queryKey: ["finance"] });
+  };
+}
+
+/**
+ * Records a received deposit. The idempotency key is minted per submission, so
+ * a double-click, a retry or a refreshed request returns the first deposit
+ * instead of taking the guest's money twice.
+ */
+export function useRecordDeposit() {
+  const invalidate = useInvalidateDeposits();
+  return useMutation({
+    mutationFn: async (input: {
+      reservationId: string;
+      amount: number;
+      method: string;
+      reference?: string;
+      notes?: string;
+      idempotencyKey: string;
+    }) => {
+      const { data, error } = await rpc("neo_reservation_deposit_record", {
+        _reservation: input.reservationId,
+        _amount: input.amount,
+        _method: input.method,
+        _reference: input.reference ?? null,
+        _idempotency_key: input.idempotencyKey,
+        _notes: input.notes ?? null,
+      });
+      if (error) throw new Error(error.message);
+       const result = (data ?? {}) as {
+         deposit_id?: string;
+         idempotent?: boolean;
+         position?: DepositPosition;
+         finance?: { ok?: boolean; reason?: string; detail?: string };
+       };
+       if (!result.deposit_id) throw new Error("The deposit was not persisted.");
+       return result;
+    },
+    onSuccess: (r) => {
+      if (r.finance?.ok) {
+        toast.success(r.idempotent ? "Deposit already recorded and posted" : "Deposit recorded and posted to Finance");
+      } else {
+        toast.warning(`Deposit recorded — Finance ${r.finance?.reason ?? "posting is pending"}`);
+      }
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Authorised, single-use permission to check in with a deposit still outstanding. */
+export function useDepositOverride() {
+  const invalidate = useInvalidateDeposits();
+  return useMutation({
+    mutationFn: async (input: { reservationId: string; reason: string; authority: string }) => {
+      const { data, error } = await rpc("neo_checkin_deposit_override", {
+        _reservation: input.reservationId,
+        _reason: input.reason,
+        _authority: input.authority,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    onSuccess: () => {
+      toast.success("Override authorised for this arrival");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * One posting intent per source event and property.
+ *
+ * A key minted at random per submission made every retry — and every second
+ * operator confirming the same money — a *new* deposit, which is how one
+ * reservation came to sit twice in the Finance posting queue. The key is now
+ * derived from the facts of the intent itself (property, reservation, amount,
+ * method, reference, business date), so repeating the same intent returns the
+ * existing deposit while a genuinely different one still records.
+ */
+export const depositIdempotencyKey = (input: {
+  reservationId: string;
+  propertyId: string | null;
+  amount: number;
+  method: string;
+  reference?: string;
+  businessDate?: string;
+}) =>
+  stableIdempotencyKey("deposit", "record", [
+    input.propertyId,
+    input.reservationId,
+    input.amount.toFixed(2),
+    input.method,
+    input.reference ?? "",
+    input.businessDate ?? new Date().toISOString().slice(0, 10),
+  ]);
+
+
+==================================
+FRONTEND: src/lib/deposit-policies.ts
+==================================
+/**
+ * Deposit policy and deposit reconciliation.
+ *
+ * A property states once how a pre-arrival deposit is calculated; every
+ * reservation then reads the same rule, so the amount shown at the desk and
+ * the amount enforced at check-in cannot drift apart. Reconciliation reads the
+ * database view of each deposit together with its Finance posting and journal.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { guardedRpc } from "@/lib/rpc-guard";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
+export type DepositBasis = "percentage" | "flat" | "nights";
+
+export type DepositPolicy = {
+  id: string;
+  branch_id: string | null;
+  rate_plan_id: string | null;
+  name: string;
+  basis: DepositBasis;
+  value: number;
+  minimum_amount: number;
+  reason: string;
+  priority: number;
+  active: boolean;
+};
+
+
+export type DepositReconciliationRow = {
+  deposit_id: string;
+  reservation_id: string | null;
+  confirmation_number: string | null;
+  guest_name: string;
+  property: string | null;
+  arrival_date: string | null;
+  departure_date: string | null;
+  reservation_status: string | null;
+  amount: number;
+  currency: string;
+  method: string | null;
+  reference: string | null;
+  deposit_status: string;
+  received_at: string | null;
+  required_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  applied_folio_id: string | null;
+  applied_at: string | null;
+  posting_status: string | null;
+  posting_receipt_id: string | null;
+  posting_error: string | null;
+  journal_id: string | null;
+  journal_number: string | null;
+  journal_debit: number;
+  journal_credit: number;
+  journal_status: string | null;
+};
+
+/** How a policy reads to the desk, in words rather than in configuration. */
+export function describePolicy(policy: Pick<DepositPolicy, "basis" | "value" | "minimum_amount">) {
+  const base =
+    policy.basis === "percentage"
+      ? `${policy.value}% of the stay value`
+      : policy.basis === "nights"
+        ? `${policy.value} night(s) at the nightly rate`
+        : `A flat ${policy.value}`;
+  return policy.minimum_amount > 0 ? `${base}, minimum ${policy.minimum_amount}` : base;
+}
+
+export function useDepositPolicies() {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pms", "deposit-policies", organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<DepositPolicy[]> => {
+      const { data, error } = await db
+        .from("deposit_policies")
+        .select("*")
+        .order("priority", { ascending: true });
+      if (error) throw new Error(error.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((r) => ({
+        id: String(r.id),
+        branch_id: r.branch_id ?? null,
+        rate_plan_id: r.rate_plan_id ?? null,
+
+        name: String(r.name ?? ""),
+        basis: (r.basis ?? "percentage") as DepositBasis,
+        value: Number(r.value ?? 0),
+        minimum_amount: Number(r.minimum_amount ?? 0),
+        reason: String(r.reason ?? ""),
+        priority: Number(r.priority ?? 100),
+        active: Boolean(r.active),
+      }));
+    },
+  });
+}
+
+export function useSaveDepositPolicy() {
+  const { organizationId } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Partial<DepositPolicy> & { name: string }) => {
+      const payload = {
+        organization_id: organizationId,
+        branch_id: input.branch_id ?? null,
+        rate_plan_id: input.rate_plan_id ?? null,
+
+        name: input.name,
+        basis: input.basis ?? "percentage",
+        value: Number(input.value ?? 0),
+        minimum_amount: Number(input.minimum_amount ?? 0),
+        reason: input.reason ?? "Standard pre-arrival deposit",
+        priority: Number(input.priority ?? 100),
+        active: input.active ?? true,
+      };
+      const q = input.id
+        ? db.from("deposit_policies").update(payload).eq("id", input.id)
+        : db.from("deposit_policies").insert(payload);
+      const { error } = await q;
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: () => {
+      toast.success("Deposit policy saved");
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteDepositPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await db.from("deposit_policies").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: () => {
+      toast.success("Deposit policy removed");
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * Re-runs the Finance recognition for a deposit. The routine is repeat-safe:
+ * a deposit already carrying a journal returns that journal rather than a
+ * second entry.
+ */
+export function usePostDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (depositId: string) => {
+      const { data, error } = await guardedRpc(db, "neo_deposit_post", { _deposit: depositId });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as { ok?: boolean; reason?: string; detail?: string };
+      if (result.ok === false) {
+        throw new Error(result.detail ?? result.reason ?? "The deposit could not be posted.");
+      }
+      return result;
+    },
+    onSuccess: (r) => {
+      toast.success(
+        r.reason === "already_posted"
+          ? "This deposit is already recognised in Finance"
+          : "Deposit posted to Finance",
+      );
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
+
+export function useDepositReconciliation() {
+  const { organizationId } = useAuth();
+  const { branchId } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["finance", "deposit-reconciliation", organizationId, branchId ?? "all"],
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<DepositReconciliationRow[]> => {
+      const { data, error } = await guardedRpc(db, "neo_deposit_reconciliation", {
+        _branch: branchId,
+      });
+      if (error) throw new Error(error.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((r) => ({
+        deposit_id: String(r.deposit_id),
+        reservation_id: r.reservation_id ?? null,
+        confirmation_number: r.confirmation_number ?? null,
+        guest_name: String(r.guest_name ?? "Guest"),
+        property: r.property ?? null,
+        arrival_date: r.arrival_date ?? null,
+        departure_date: r.departure_date ?? null,
+        reservation_status: r.reservation_status ?? null,
+        amount: Number(r.amount ?? 0),
+        currency: String(r.currency ?? "KES"),
+        method: r.method ?? null,
+        reference: r.reference ?? null,
+        deposit_status: String(r.deposit_status ?? "held"),
+        received_at: r.received_at ?? null,
+        required_amount: Number(r.required_amount ?? 0),
+        paid_amount: Number(r.paid_amount ?? 0),
+        outstanding_amount: Number(r.outstanding_amount ?? 0),
+        applied_folio_id: r.applied_folio_id ?? null,
+        applied_at: r.applied_at ?? null,
+        posting_status: r.posting_status ?? null,
+        posting_receipt_id: r.posting_receipt_id ?? null,
+        posting_error: r.posting_error ?? null,
+        journal_id: r.journal_id ?? null,
+        journal_number: r.journal_number ?? null,
+        journal_debit: Number(r.journal_debit ?? 0),
+        journal_credit: Number(r.journal_credit ?? 0),
+        journal_status: r.journal_status ?? null,
+      }));
+    },
+  });
+}

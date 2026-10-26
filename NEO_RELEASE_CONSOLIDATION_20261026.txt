@@ -1,0 +1,87 @@
+﻿NEO RELEASE CONSOLIDATION
+Date: 2026-10-26
+Status: PRE-DEPLOYMENT REVIEW
+
+====================================
+GIT STATUS
+====================================
+?? NEO_P02_APPLICATION_POSTING_REVIEW.txt
+?? NEO_P02_DEPOSIT_SOURCE_REVIEW.txt
+?? NEO_P03_ACTIVE_STAY_CONTRACT.txt
+?? NEO_P03_ROOM_OCCUPANCY_FIX_REVIEW.txt
+?? NEO_P11_EVENTS_REQUISITION_DEPLOYMENT_REVIEW.sql
+?? NEO_P11_EVENTS_RPC_CONTRACT.txt
+?? NEO_P12_KDS_RECONCILIATION_ROOT_CAUSE.txt
+?? NEO_P12_KDS_STATUS_RESET_REVIEW.txt
+?? NEO_P12_KDS_TRANSITION_FIX_REVIEW.txt
+?? NEO_P13_STATION_AUTHORITY_REVIEW.txt
+?? NEO_P14_RECIPE_CONSUMPTION_REVIEW.txt
+?? NEO_P15B_GUEST_LAUNDRY_FIX_REVIEW.txt
+?? NEO_P15B_GUEST_LAUNDRY_RESTORATION_REVIEW.sql
+?? NEO_P15_LAUNDRY_MAINTENANCE_REVIEW.txt
+?? NEO_P16_DELIVERY_HANDOFF_REVIEW.txt
+?? supabase/migrations/20261026110000_p02_reservation_deposit_atomicity.sql
+?? supabase/migrations/20261026120000_p03_active_stay_occupancy_guard.sql
+?? supabase/migrations/20261026130000_p04_pos_terminal_settlement_closure.sql
+?? supabase/migrations/20261026140000_p12_kds_transition_lock.sql
+?? supabase/migrations/20261026141000_p12_kds_reconciliation_guard.sql
+?? supabase/migrations/20261026142000_p13_kitchen_station_authority.sql
+?? supabase/migrations/20261026143000_p14_direct_stock_recipe_guard.sql
+?? supabase/migrations/20261026144000_p15_guest_laundry_sync_consolidation.sql
+
+====================================
+LOCAL CORRECTION MIGRATIONS
+====================================
+20261026100000_s01_events_payment_idempotency.sql
+20261026110000_p02_reservation_deposit_atomicity.sql
+20261026120000_p03_active_stay_occupancy_guard.sql
+20261026130000_p04_pos_terminal_settlement_closure.sql
+20261026140000_p12_kds_transition_lock.sql
+20261026141000_p12_kds_reconciliation_guard.sql
+20261026142000_p13_kitchen_station_authority.sql
+20261026143000_p14_direct_stock_recipe_guard.sql
+20261026144000_p15_guest_laundry_sync_consolidation.sql
+
+====================================
+EXISTING OCTOBER 25 CORRECTIONS
+====================================
+20261025070000_o01_pos_paid_order_closure.sql
+20261025080000_o01_pos_settlement_runtime_alignment.sql
+20261025090000_o02_delivery_kitchen_link_sync.sql
+20261025100000_o03_grn_quantity_integrity.sql
+20261025110000_o04_stayover_occupancy_guard.sql
+20261025120000_o05_laundry_order_status_sync.sql
+20261025130000_o06_linen_numeric_discrepancy.sql
+20261025140000_o07_maintenance_verification_closure.sql
+20261025150000_e01c_quotation_pricing_engine.sql
+20261025160000_e01d_quotation_approval_lifecycle.sql
+20261025170000_e01d_accepted_quotation_conversion.sql
+20261025180000_e01d_quotation_write_protection.sql
+20261025190000_e02b_deposit_aware_quotation_conversion.sql
+20261025200000_e02c_payment_backed_confirmation.sql
+20261025210000_e02e_secure_event_confirmation.sql
+
+====================================
+REVIEW PACKAGES
+====================================
+NEO_P02_APPLICATION_POSTING_REVIEW.txt
+NEO_P02_DEPOSIT_SOURCE_REVIEW.txt
+NEO_P03_ACTIVE_STAY_CONTRACT.txt
+NEO_P03_ROOM_OCCUPANCY_FIX_REVIEW.txt
+NEO_P11_EVENTS_REQUISITION_DEPLOYMENT_REVIEW.sql
+NEO_P11_EVENTS_RPC_CONTRACT.txt
+NEO_P12_KDS_RECONCILIATION_ROOT_CAUSE.txt
+NEO_P12_KDS_STATUS_RESET_REVIEW.txt
+NEO_P12_KDS_TRANSITION_FIX_REVIEW.txt
+NEO_P13_STATION_AUTHORITY_REVIEW.txt
+NEO_P14_RECIPE_CONSUMPTION_REVIEW.txt
+NEO_P15_LAUNDRY_MAINTENANCE_REVIEW.txt
+NEO_P15B_GUEST_LAUNDRY_FIX_REVIEW.txt
+NEO_P15B_GUEST_LAUNDRY_RESTORATION_REVIEW.sql
+NEO_P16_DELIVERY_HANDOFF_REVIEW.txt
+NEO_PIN_KDS_AUDIT.zip
+
+====================================
+TRACKED DIFF VALIDATION
+====================================
+RESULT: PASSED

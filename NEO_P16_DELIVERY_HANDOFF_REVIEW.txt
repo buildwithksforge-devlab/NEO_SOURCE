@@ -1,0 +1,1018 @@
+﻿
+========================================
+FILE: supabase/migrations/20260823171920_8e4a27fe-6f2a-43e6-97c8-f9fa5006b38e.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_delivery_assign(_order uuid, _rider uuid, _reason text DEFAULT NULL::text)
+   2:  RETURNS jsonb
+   3:  LANGUAGE plpgsql
+   4:  SECURITY DEFINER
+   5:  SET search_path TO 'public'
+   6: AS $function$
+   7: DECLARE
+   8:   _org uuid := public.current_org_id();
+   9:   _o public.delivery_orders; _new public.rider_profiles; _prev public.rider_profiles;
+  10:   _cand record; _found boolean := false; _reason_clean text := nullif(btrim(coalesce(_reason,'')),'');
+  11: BEGIN
+  12:   IF _org IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'no_organisation'); END IF;
+  13:   IF NOT (public.has_permission('delivery','dispatch.assign') OR public.is_org_admin()) THEN
+  14:     RAISE EXCEPTION 'The delivery.dispatch.assign permission is required.' USING ERRCODE = '42501';
+  15:   END IF;
+  16: 
+  17:   SELECT * INTO _o FROM public.delivery_orders
+  18:    WHERE id = _order AND organization_id = _org FOR UPDATE;
+  19:   IF _o.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found'); END IF;
+  20:   IF NOT public.neo_branch_in_scope(_o.branch_id) THEN
+  21:     RAISE EXCEPTION 'That order is outside your access scope.' USING ERRCODE = '42501';
+  22:   END IF;
+  23:   IF _o.order_status IN ('delivered','cancelled','rejected','failed') THEN
+  24:     RETURN jsonb_build_object('ok', false, 'reason', 'order_closed',
+  25:       'detail', 'That order is already ' || _o.order_status || '.');
+  26:   END IF;
+  27:   IF _o.rider_id = _rider THEN
+  28:     RETURN jsonb_build_object('ok', false, 'reason', 'already_assigned',
+  29:       'detail', 'That rider already holds this order.');
+  30:   END IF;
+  31:   IF _o.rider_id IS NOT NULL AND _reason_clean IS NULL THEN
+  32:     RETURN jsonb_build_object('ok', false, 'reason', 'reason_required',
+  33:       'detail', 'Reassigning an order requires a written reason.');
+  34:   END IF;
+  35: 
+  36:   FOR _cand IN SELECT * FROM public.neo_delivery_dispatch_candidates(_order) c WHERE c.rider_id = _rider LOOP
+  37:     _found := true;
+  38:     IF _cand.eligible IS NOT TRUE THEN
+  39:       RETURN jsonb_build_object('ok', false, 'reason', 'rider_ineligible',
+  40:         'detail', array_to_string(_cand.reasons, '; '), 'reasons', to_jsonb(_cand.reasons));
+  41:     END IF;
+  42:   END LOOP;
+  43:   IF NOT _found THEN RETURN jsonb_build_object('ok', false, 'reason', 'rider_not_found'); END IF;
+  44: 
+  45:   SELECT * INTO _new FROM public.rider_profiles WHERE id = _rider;
+  46:   IF _o.rider_id IS NOT NULL THEN
+  47:     SELECT * INTO _prev FROM public.rider_profiles WHERE id = _o.rider_id;
+  48:   END IF;
+  49: 
+  50:   UPDATE public.delivery_orders
+  51:      SET rider_id = _rider,
+  52:          dispatch_status = 'rider-assigned',
+  53:          order_status = CASE WHEN order_status IN ('ready-for-pickup','confirmed','in-preparation')
+  54:                              THEN 'rider-assigned' ELSE order_status END,
+  55:          accepted_at = coalesce(accepted_at, now()),
+  56:          updated_at = now()
+  57:    WHERE id = _order;
+  58: 
+  59:   INSERT INTO public.delivery_order_status_history
+  60:     (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+  61:   VALUES (_org, _order, 'dispatch', coalesce(_prev.display_name, 'unassigned'),
+  62:           coalesce(_new.display_name, 'rider'), _reason_clean, auth.uid());
+  63: 
+  64:   PERFORM public.neo_delivery_rider_notify(
+  65:     _org, _rider, 'delivery.assigned', 'Delivery assigned to you',
+  66:     _o.order_number || coalesce(' Â· ' || _o.contact_name, '') ||
+  67:       coalesce(' Â· reassigned: ' || _reason_clean, ''),
+  68:     'delivery.assign:' || _order::text || ':' || _rider::text,
+  69:     _order, _prev.id, _rider, 'high', '/rider');
+  70: 
+  71:   IF _prev.id IS NOT NULL THEN
+  72:     PERFORM public.neo_delivery_rider_notify(
+  73:       _org, _prev.id, 'delivery.reassigned', 'Delivery reassigned',
+  74:       _o.order_number || ' is now with ' || coalesce(_new.display_name,'another rider') ||
+  75:         coalesce(' â€” ' || _reason_clean, ''),
+  76:       'delivery.unassign:' || _order::text || ':' || _prev.id::text || ':' || _rider::text,
+  77:       _order, _prev.id, _rider, 'normal', '/rider');
+  78:   END IF;
+  79: 
+  80:   INSERT INTO public.audit_logs
+  81:     (organization_id, user_id, user_name, action, module, record_id, previous_value, new_value, reason)
+  82:   VALUES (_org, auth.uid(), '',
+  83:     CASE WHEN _prev.id IS NULL THEN 'delivery.dispatch.assign' ELSE 'delivery.dispatch.reassign' END,
+  84:     'delivery', _order::text,
+  85:     jsonb_build_object('rider_id', _prev.id, 'rider', _prev.display_name),
+  86:     jsonb_build_object('rider_id', _rider, 'rider', _new.display_name),
+  87:     _reason_clean);
+  88: 
+  89:   RETURN jsonb_build_object('ok', true, 'order_id', _order, 'rider_id', _rider,
+  90:     'previous_rider_id', _prev.id, 'reassigned', _prev.id IS NOT NULL);
+  91: END $function$;
+  92: 
+  93: REVOKE ALL ON FUNCTION public.neo_delivery_assign(uuid, uuid, text) FROM PUBLIC, anon;
+  94: GRANT EXECUTE ON FUNCTION public.neo_delivery_assign(uuid, uuid, text) TO authenticated;
+
+========================================
+FILE: supabase/migrations/20260924150000_cross_entry_guest_rider_guards.sql
+========================================
+   1: -- Final certification cross-entry guards
+   2: -- Guest/Stay & Dine <-> Work/POS/Folio and Rider <-> Kitchen boundaries.
+   3: 
+   4: CREATE OR REPLACE FUNCTION public.folio_post_charge(
+   5:   _folio uuid,
+   6:   _category text,
+   7:   _description text,
+   8:   _quantity numeric,
+   9:   _unit_price numeric,
+  10:   _tax numeric DEFAULT 0,
+  11:   _service_charge numeric DEFAULT 0,
+  12:   _discount numeric DEFAULT 0,
+  13:   _source_module text DEFAULT 'manual'::text,
+  14:   _source_record uuid DEFAULT NULL::uuid,
+  15:   _revenue_centre text DEFAULT 'rooms'::text,
+  16:   _idempotency_key text DEFAULT NULL::text,
+  17:   _correlation uuid DEFAULT NULL::uuid
+  18: )
+  19: RETURNS uuid
+  20: LANGUAGE plpgsql
+  21: SECURITY DEFINER
+  22: SET search_path TO 'public'
+  23: AS $function$
+  24: DECLARE
+  25:   -- System posting is a deliberate server-side handoff (for example Guest room
+  26:   -- service -> folio). In that mode the folio itself is the canonical tenant
+  27:   -- boundary. A guest profile may legitimately have no Work org, or a stale
+  28:   -- Work org from another relationship, so never prefer current_org_id() here.
+  29:   _org uuid := CASE
+  30:     WHEN public.neo_system_posting()
+  31:       THEN (SELECT organization_id FROM public.folios WHERE id = _folio)
+  32:     ELSE public.current_org_id()
+  33:   END;
+  34:   _f public.folios;
+  35:   _gross numeric;
+  36:   _net numeric;
+  37:   _id uuid;
+  38:   _key text := COALESCE(
+  39:     _idempotency_key,
+  40:     CASE
+  41:       WHEN _source_record IS NOT NULL
+  42:         THEN _source_module || ':' || _source_record::text
+  43:       ELSE 'auto:' || _folio::text
+  44:            || ':' || COALESCE(_category, '')
+  45:            || ':' || md5(COALESCE(_description, ''))
+  46:            || ':' || to_char(round(COALESCE(_quantity,1) * COALESCE(_unit_price,0), 2), 'FM9999999999990.00')
+  47:            || ':' || to_char(date_trunc('minute', now() AT TIME ZONE 'UTC'), 'YYYYMMDDHH24MI')
+  48:     END
+  49:   );
+  50: BEGIN
+  51:   IF NOT (public.has_permission('pms','folios.post_charge') OR public.neo_system_posting()) THEN
+  52:     RAISE EXCEPTION 'Not permitted to post charges';
+  53:   END IF;
+  54:   IF _org IS NULL THEN RAISE EXCEPTION 'Folio organisation could not be resolved'; END IF;
+  55: 
+  56:   SELECT * INTO _f FROM public.folios WHERE id=_folio AND organization_id=_org FOR UPDATE;
+  57:   IF _f.id IS NULL THEN RAISE EXCEPTION 'Folio not found'; END IF;
+  58:   IF _f.status <> 'open' THEN RAISE EXCEPTION 'Folio is % and cannot accept charges', _f.status; END IF;
+  59: 
+  60:   SELECT id INTO _id FROM public.folio_lines WHERE organization_id=_org AND idempotency_key=_key;
+  61:   IF _id IS NOT NULL THEN RETURN _id; END IF;
+  62: 
+  63:   IF _f.corporate_account_id IS NOT NULL THEN
+  64:     PERFORM public.corp_assert_credit(_f.corporate_account_id, _f.branch_id, _f.customer_id,
+  65:       round(COALESCE(_quantity,1)*COALESCE(_unit_price,0),2) + COALESCE(_tax,0) + COALESCE(_service_charge,0));
+  66:   END IF;
+  67: 
+  68:   _gross := round(COALESCE(_quantity,1) * COALESCE(_unit_price,0), 2);
+  69:   _net := _gross - COALESCE(_discount,0) + COALESCE(_tax,0) + COALESCE(_service_charge,0);
+  70: 
+  71:   INSERT INTO public.folio_lines (organization_id, branch_id, folio_id, reservation_id, customer_id, line_type,
+  72:     category, revenue_centre, reference, source_module, source_record_id, source_record_uuid, idempotency_key,
+  73:     description, quantity, unit_price, gross_amount, discount_amount, tax_amount, service_charge_amount,
+  74:     net_amount, posted_by, actor_id, correlation_id, status)
+  75:   VALUES (_org, _f.branch_id, _folio, _f.reservation_id, _f.customer_id, 'charge',
+  76:     _category, COALESCE(_revenue_centre,'rooms'), COALESCE(_source_record::text,''), _source_module,
+  77:     _source_record::text, _source_record, _key, _description, COALESCE(_quantity,1), COALESCE(_unit_price,0),
+  78:     _gross, COALESCE(_discount,0), COALESCE(_tax,0), COALESCE(_service_charge,0), _net,
+  79:     auth.uid(), auth.uid(), COALESCE(_correlation, gen_random_uuid()), 'posted')
+  80:   RETURNING id INTO _id;
+  81: 
+  82:   UPDATE public.folios SET
+  83:     total_charges = total_charges + _gross,
+  84:     total_discounts = total_discounts + COALESCE(_discount,0),
+  85:     total_taxes = total_taxes + COALESCE(_tax,0),
+  86:     balance = balance + _net, updated_at=now()
+  87:   WHERE id=_folio;
+  88: 
+  89:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value)
+  90:   VALUES (_org, auth.uid(), '', 'pms.folio.post_charge', 'finance', _folio::text,
+  91:     jsonb_build_object('line_id',_id,'category',_category,'amount',_net,'source',_source_module,'revenue_centre',_revenue_centre));
+  92:   RETURN _id;
+  93: END;
+  94: $function$;
+  95: 
+  96: CREATE OR REPLACE FUNCTION public.neo_pos_guard_void_discount()
+  97: RETURNS trigger
+  98: LANGUAGE plpgsql
+  99: SECURITY DEFINER
+ 100: SET search_path TO 'public'
+ 101: AS $function$
+ 102: DECLARE
+ 103:   _system boolean := auth.uid() IS NULL
+ 104:                      AND coalesce(current_setting('neo.void_maintenance', true),'off') = 'on';
+ 105:   _guest_cancel boolean := auth.uid() IS NOT NULL
+ 106:                      AND coalesce(current_setting('neo.guest_cancel', true),'off') = 'on'
+ 107:                      AND NEW.customer_id IS NOT DISTINCT FROM public.my_customer_id()
+ 108:                      AND coalesce(OLD.payment_status,'unpaid') NOT IN ('paid','charged','refunded')
+ 109:                      AND coalesce(OLD.status,'draft') NOT IN ('closed','voided','cancelled');
+ 110:   _may_void boolean := _system OR _guest_cancel
+ 111:                        OR public.has_permission('restaurant','orders.void')
+ 112:                        OR public.has_permission('restaurant','approvals.approve')
+ 113:                        OR public.is_org_admin();
+ 114:   _may_discount boolean := _system OR public.has_permission('restaurant','orders.override')
+ 115:                            OR public.has_permission('restaurant','orders.void')
+ 116:                            OR public.has_permission('restaurant','approvals.approve')
+ 117:                            OR public.is_org_admin();
+ 118:   _old_disc numeric := coalesce(OLD.discount_total, 0);
+ 119:   _new_disc numeric := coalesce(NEW.discount_total, 0);
+ 120: BEGIN
+ 121:   IF NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('voided','cancelled') THEN
+ 122:     IF NOT _may_void THEN
+ 123:       RAISE EXCEPTION 'void_requires_authority' USING ERRCODE = '42501',
+ 124:         DETAIL = 'Voiding or cancelling a restaurant order requires explicit void authority.';
+ 125:     END IF;
+ 126:     INSERT INTO public.audit_logs
+ 127:       (organization_id, user_id, user_name, action, module, record_id, previous_value, new_value)
+ 128:     VALUES (NEW.organization_id, auth.uid(), CASE WHEN _system THEN 'System Cleanup' WHEN _guest_cancel THEN 'Guest' ELSE '' END,
+ 129:       'restaurant.order.' || NEW.status, 'restaurant', NEW.id::text,
+ 130:       jsonb_build_object('status', OLD.status, 'grand_total', OLD.grand_total),
+ 131:       jsonb_build_object('status', NEW.status));
+ 132:   END IF;
+ 133: 
+ 134:   IF _new_disc > _old_disc + 0.0001 THEN
+ 135:     IF NOT _may_discount THEN
+ 136:       RAISE EXCEPTION 'discount_requires_authority' USING ERRCODE = '42501',
+ 137:         DETAIL = 'Applying or increasing a discount requires explicit override authority.';
+ 138:     END IF;
+ 139:     INSERT INTO public.audit_logs
+ 140:       (organization_id, user_id, user_name, action, module, record_id, previous_value, new_value)
+ 141:     VALUES (NEW.organization_id, auth.uid(), '', 'restaurant.order.discount', 'restaurant', NEW.id::text,
+ 142:       jsonb_build_object('discount_total', _old_disc),
+ 143:       jsonb_build_object('discount_total', _new_disc));
+ 144:   END IF;
+ 145: 
+ 146:   RETURN NEW;
+ 147: END;
+ 148: $function$;
+ 149: 
+ 150: CREATE OR REPLACE FUNCTION public.neo_guest_order_cancel(_org uuid, _reference text, _reason text DEFAULT NULL)
+ 151: RETURNS jsonb
+ 152: LANGUAGE plpgsql
+ 153: SECURITY DEFINER
+ 154: SET search_path TO 'public'
+ 155: AS $function$
+ 156: DECLARE
+ 157:   _cust uuid := public.my_customer_id();
+ 158:   _d public.delivery_orders;
+ 159:   _started boolean;
+ 160: BEGIN
+ 161:   IF _cust IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_signed_in'); END IF;
+ 162: 
+ 163:   SELECT * INTO _d FROM public.delivery_orders
+ 164:    WHERE organization_id = _org AND order_number = _reference AND customer_id = _cust
+ 165:    FOR UPDATE;
+ 166:   IF _d.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'unknown_order'); END IF;
+ 167: 
+ 168:   IF _d.order_status = 'cancelled' THEN
+ 169:     RETURN jsonb_build_object('ok', true, 'already_cancelled', true);
+ 170:   END IF;
+ 171: 
+ 172:   _started := EXISTS (
+ 173:     SELECT 1 FROM public.station_tickets t
+ 174:      WHERE t.order_id = _d.pos_order_id
+ 175:        AND t.status NOT IN ('new','queued','pending','cancelled')
+ 176:   );
+ 177: 
+ 178:   IF _d.payment_status IN ('paid','charged','refunded')
+ 179:      OR _d.order_status IN ('delivered','completed','collected','rejected')
+ 180:      OR coalesce(_d.dispatch_status,'') IN ('picked-up','on-the-way','delivered','collected','en-route')
+ 181:      OR _started THEN
+ 182:     RETURN jsonb_build_object('ok', false, 'reason', 'already_started');
+ 183:   END IF;
+ 184: 
+ 185:   UPDATE public.station_tickets
+ 186:      SET status = 'cancelled'
+ 187:    WHERE order_id = _d.pos_order_id
+ 188:      AND status IN ('new','queued','pending');
+ 189: 
+ 190:   PERFORM set_config('neo.guest_cancel','on',true);
+ 191:   UPDATE public.pos_orders
+ 192:      SET status = 'cancelled'
+ 193:    WHERE id = _d.pos_order_id
+ 194:      AND status <> 'cancelled';
+ 195:   PERFORM set_config('neo.guest_cancel','off',true);
+ 196: 
+ 197:   UPDATE public.delivery_orders
+ 198:      SET order_status = 'cancelled',
+ 199:          kitchen_status = 'cancelled',
+ 200:          cancelled_at = now(),
+ 201:          cancellation_reason = nullif(trim(coalesce(_reason, '')), '')
+ 202:    WHERE id = _d.id;
+ 203: 
+ 204:   INSERT INTO public.delivery_order_status_history
+ 205:     (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, reason)
+ 206:   VALUES (_org, _d.id, 'order', _d.order_status, 'cancelled', 'customer',
+ 207:           nullif(trim(coalesce(_reason, '')), ''));
+ 208: 
+ 209:   RETURN jsonb_build_object('ok', true, 'order_number', _d.order_number);
+ 210: END;
+ 211: $function$;
+ 212: 
+ 213: CREATE OR REPLACE FUNCTION public.delivery_rider_advance(_order uuid, _to text)
+ 214: RETURNS jsonb
+ 215: LANGUAGE plpgsql
+ 216: SECURITY DEFINER
+ 217: SET search_path TO 'public'
+ 218: AS $function$
+ 219: DECLARE
+ 220:   _d public.delivery_orders;
+ 221:   _rider uuid := public.my_rider_id();
+ 222: BEGIN
+ 223:   SELECT * INTO _d FROM public.delivery_orders WHERE id = _order FOR UPDATE;
+ 224:   IF _d.id IS NULL OR _d.rider_id IS NULL OR _d.rider_id <> _rider THEN RAISE EXCEPTION 'Delivery not assigned to you'; END IF;
+ 225:   IF _to NOT IN ('pickup-pending','collected','en-route') THEN RAISE EXCEPTION 'Invalid transition'; END IF;
+ 226:   IF _d.dispatch_status = _to THEN RETURN jsonb_build_object('ok', true, 'unchanged', true); END IF;
+ 227: 
+ 228:   IF _to = 'collected' THEN
+ 229:     IF _d.dispatch_status NOT IN ('rider-assigned','pickup-pending') THEN RAISE EXCEPTION 'Invalid transition'; END IF;
+ 230:     IF coalesce(_d.kitchen_status,'') NOT IN ('ready','completed') THEN
+ 231:       RAISE EXCEPTION 'Order is not ready for pickup';
+ 232:     END IF;
+ 233:   END IF;
+ 234: 
+ 235:   IF _to = 'en-route' AND _d.dispatch_status <> 'collected' THEN
+ 236:     RAISE EXCEPTION 'Collect the order first';
+ 237:   END IF;
+ 238: 
+ 239:   UPDATE public.delivery_orders SET dispatch_status = _to,
+ 240:     collected_at = CASE WHEN _to = 'collected' THEN now() ELSE collected_at END,
+ 241:     order_status = CASE WHEN _to = 'collected' THEN 'collected' WHEN _to = 'en-route' THEN 'out-for-delivery' ELSE order_status END
+ 242:   WHERE id = _order;
+ 243: 
+ 244:   UPDATE public.rider_profiles
+ 245:      SET availability_status = CASE WHEN _to = 'en-route' THEN 'delivering' ELSE 'collecting' END
+ 246:    WHERE id = _rider;
+ 247: 
+ 248:   INSERT INTO public.delivery_order_status_history
+ 249:     (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, changed_by)
+ 250:   VALUES (_d.organization_id, _order, 'dispatch', _d.dispatch_status, _to, 'rider', auth.uid());
+ 251: 
+ 252:   RETURN jsonb_build_object('ok', true);
+ 253: END;
+ 254: $function$;
+
+========================================
+FILE: supabase/migrations/20260921073216_88336f9d-e18d-46e6-9207-d585596db8c4.sql
+========================================
+   1: REVOKE ALL ON FUNCTION public.neo_event_billing_record_payment(uuid, numeric, text, text, text, text, uuid) FROM PUBLIC, anon;
+   2: GRANT EXECUTE ON FUNCTION public.neo_event_billing_record_payment(uuid, numeric, text, text, text, text, uuid) TO authenticated, service_role;
+   3: 
+   4: REVOKE ALL ON FUNCTION public.pos_record_payment_attempt(uuid, numeric, text, numeric, text, uuid, text, boolean, text, uuid) FROM PUBLIC, anon;
+   5: GRANT EXECUTE ON FUNCTION public.pos_record_payment_attempt(uuid, numeric, text, numeric, text, uuid, text, boolean, text, uuid) TO authenticated, service_role;
+   6: 
+   7: REVOKE ALL ON FUNCTION public.neo_gl_account_code(uuid, text, uuid) FROM PUBLIC, anon;
+   8: GRANT EXECUTE ON FUNCTION public.neo_gl_account_code(uuid, text, uuid) TO authenticated, service_role;
+   9: 
+  10: REVOKE ALL ON FUNCTION public.neo_assert_financial_account(uuid, uuid, uuid) FROM PUBLIC, anon;
+  11: GRANT EXECUTE ON FUNCTION public.neo_assert_financial_account(uuid, uuid, uuid) TO authenticated, service_role;
+  12: 
+  13: REVOKE ALL ON FUNCTION public.neo_gl_cash_code(uuid, text, uuid) FROM PUBLIC, anon;
+  14: GRANT EXECUTE ON FUNCTION public.neo_gl_cash_code(uuid, text, uuid) TO authenticated, service_role;
+  15: 
+  16: -- ------------------------------------------------ delivery collections
+  17: DROP FUNCTION IF EXISTS public.neo_delivery_record_payment(uuid, numeric, text, text, text, text);
+  18: 
+  19: CREATE OR REPLACE FUNCTION public.neo_delivery_record_payment(
+  20:   _order uuid, _amount numeric, _method text DEFAULT 'cash'::text,
+  21:   _entry_type text DEFAULT 'payment'::text, _reference text DEFAULT NULL::text,
+  22:   _reason text DEFAULT NULL::text, _account uuid DEFAULT NULL::uuid)
+  23:  RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  24: AS $function$
+  25: DECLARE
+  26:   o public.delivery_orders;
+  27:   inv public.invoices;
+  28:   org uuid;
+  29:   v_method text := lower(nullif(btrim(coalesce(_method, '')), ''));
+  30:   v_entry text := lower(coalesce(nullif(btrim(_entry_type), ''), 'payment'));
+  31:   v_amount numeric := round(coalesce(_amount, 0)::numeric, 2);
+  32:   v_debit uuid; v_ar uuid; v_receipt text; v_payment uuid; v_journal uuid; v_jnum text;
+  33:   v_key text; v_balance numeric; acct uuid;
+  34: BEGIN
+  35:   IF v_entry NOT IN ('deposit','payment') THEN
+  36:     RETURN jsonb_build_object('ok', false, 'reason', 'bad_entry_type',
+  37:       'detail', 'Record either a deposit or a payment.');
+  38:   END IF;
+  39:   IF v_method IS NULL THEN
+  40:     RETURN jsonb_build_object('ok', false, 'reason', 'no_method',
+  41:       'detail', 'Choose how the money was received.');
+  42:   END IF;
+  43:   IF v_amount <= 0 THEN
+  44:     RETURN jsonb_build_object('ok', false, 'reason', 'bad_amount',
+  45:       'detail', 'The amount must be greater than zero.');
+  46:   END IF;
+  47: 
+  48:   SELECT * INTO o FROM public.delivery_orders WHERE id = _order FOR UPDATE;
+  49:   IF o.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found'); END IF;
+  50:   org := o.organization_id;
+  51:   IF org <> public.current_org_id() THEN
+  52:     RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found');
+  53:   END IF;
+  54:   IF NOT (public.has_permission('finance','payments','create')
+  55:           OR public.has_permission('finance','invoices','create')
+  56:           OR public.has_permission('finance','approve')
+  57:           OR public.is_org_admin_for(org)) THEN
+  58:     RAISE EXCEPTION 'Permission to record a payment is required.' USING ERRCODE = '42501';
+  59:   END IF;
+  60:   IF NOT public.neo_branch_in_scope(o.branch_id) THEN
+  61:     RAISE EXCEPTION 'That order is outside your access scope.' USING ERRCODE = '42501';
+  62:   END IF;
+  63: 
+  64:   acct := public.neo_assert_financial_account(org, o.branch_id, _account);
+  65: 
+  66:   SELECT * INTO inv FROM public.invoices
+  67:    WHERE organization_id = org AND notes LIKE '%delivery-order:' || _order::text || '%'
+  68:    ORDER BY created_at LIMIT 1
+  69:    FOR UPDATE;
+  70:   IF inv.id IS NULL THEN
+  71:     RETURN jsonb_build_object('ok', false, 'reason', 'not_billed',
+  72:       'detail', 'Raise the invoice for this delivery before recording money against it.');
+  73:   END IF;
+  74: 
+  75:   v_balance := round(coalesce(inv.balance, 0)::numeric, 2);
+  76:   IF v_balance <= 0 THEN
+  77:     RETURN jsonb_build_object('ok', false, 'reason', 'nothing_outstanding',
+  78:       'detail', 'This delivery invoice is already settled.');
+  79:   END IF;
+  80:   IF v_amount > v_balance THEN
+  81:     RETURN jsonb_build_object('ok', false, 'reason', 'amount_exceeds_balance',
+  82:       'detail', 'That is more than the outstanding balance on this delivery invoice.',
+  83:       'balance', v_balance);
+  84:   END IF;
+  85: 
+  86:   v_key := 'delivery-payment:' || _order::text || ':' || v_entry || ':'
+  87:            || coalesce(nullif(btrim(coalesce(_reference,'')), ''), v_amount::text);
+  88: 
+  89:   SELECT id INTO v_payment FROM public.payments
+  90:    WHERE organization_id = org AND idempotency_key = v_key LIMIT 1;
+  91:   IF v_payment IS NOT NULL THEN
+  92:     RETURN jsonb_build_object('ok', true, 'already_recorded', true, 'payment_id', v_payment);
+  93:   END IF;
+  94: 
+  95:   SELECT a.id INTO v_debit FROM public.chart_of_accounts a
+  96:    WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+  97:      AND a.code = public.neo_gl_account_code(org, v_method, acct)
+  98:    LIMIT 1;
+  99:   IF v_debit IS NULL THEN
+ 100:     RETURN jsonb_build_object('ok', false, 'reason', 'no_settlement_account',
+ 101:       'detail', 'No money account is configured for that payment method.');
+ 102:   END IF;
+ 103: 
+ 104:   SELECT a.id INTO v_ar FROM public.chart_of_accounts a
+ 105:    WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+ 106:      AND a.name ILIKE 'Accounts Receivable'
+ 107:    ORDER BY a.code LIMIT 1;
+ 108:   IF v_ar IS NULL THEN
+ 109:     RETURN jsonb_build_object('ok', false, 'reason', 'no_receivable_account',
+ 110:       'detail', 'This property has no Accounts Receivable account.');
+ 111:   END IF;
+ 112: 
+ 113:   v_receipt := public.next_document_number('receipt', NULL, o.branch_id);
+ 114: 
+ 115:   INSERT INTO public.payments (organization_id, branch_id, receipt_number, customer_id, amount,
+ 116:     currency, method, external_reference, status, received_by, notes, source_module,
+ 117:     source_record_id, idempotency_key, destination_account_id)
+ 118:   VALUES (org, o.branch_id, v_receipt, o.customer_id, v_amount,
+ 119:     coalesce(o.currency,'KES'), v_method, nullif(btrim(coalesce(_reference,'')), ''),
+ 120:     'confirmed', auth.uid(),
+ 121:     initcap(v_entry) || ' for delivery order ' || o.order_number || ' Â· invoice ' || inv.invoice_number
+ 122:       || coalesce(' Â· ' || nullif(btrim(coalesce(_reason,'')), ''), ''),
+ 123:     'delivery', _order, v_key, acct)
+ 124:   RETURNING id INTO v_payment;
+ 125: 
+ 126:   v_jnum := public.next_document_number('journal');
+ 127:   INSERT INTO public.journal_entries (organization_id, branch_id, journal_number, journal_type,
+ 128:     accounting_date, source_module, source_document_type, source_document_id, document_number,
+ 129:     idempotency_key, description, currency, created_by, status)
+ 130:   VALUES (org, o.branch_id, v_jnum, 'receipt', CURRENT_DATE, 'delivery', 'delivery_payment',
+ 131:     v_payment, v_receipt, v_key,
+ 132:     initcap(v_entry) || ' received on delivery order ' || o.order_number
+ 133:       || ' against invoice ' || inv.invoice_number
+ 134:       || coalesce(' â€” ' || nullif(btrim(coalesce(_reason,'')), ''), ''),
+ 135:     coalesce(o.currency,'KES'), auth.uid(), 'draft')
+ 136:   RETURNING id INTO v_journal;
+ 137: 
+ 138:   INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 139:     description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 140:   VALUES (org, v_journal, 1, v_debit, initcap(v_entry) || ' ' || v_receipt, v_amount, 0,
+ 141:     o.branch_id, o.customer_id, 'delivery', v_method);
+ 142: 
+ 143:   INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 144:     description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 145:   VALUES (org, v_journal, 2, v_ar, 'Settlement of ' || inv.invoice_number, 0, v_amount,
+ 146:     o.branch_id, o.customer_id, 'delivery', v_method);
+ 147: 
+ 148:   PERFORM public.fin_post_journal(v_journal);
+ 149: 
+ 150:   UPDATE public.payments SET posted_journal_id = v_journal, updated_at = now()
+ 151:    WHERE id = v_payment;
+ 152: 
+ 153:   UPDATE public.invoices
+ 154:      SET amount_paid = round(coalesce(amount_paid,0) + v_amount, 2),
+ 155:          balance = round(coalesce(balance,0) - v_amount, 2),
+ 156:          status = CASE WHEN round(coalesce(balance,0) - v_amount, 2) <= 0 THEN 'paid' ELSE status END,
+ 157:          updated_at = now()
+ 158:    WHERE id = inv.id
+ 159:    RETURNING balance INTO v_balance;
+ 160: 
+ 161:   IF v_balance <= 0 THEN
+ 162:     UPDATE public.delivery_orders
+ 163:        SET payment_status = 'paid',
+ 164:            payment_method = coalesce(payment_method, v_method),
+ 165:            updated_at = now()
+ 166:      WHERE id = _order;
+ 167:   ELSIF v_entry = 'deposit' THEN
+ 168:     UPDATE public.delivery_orders
+ 169:        SET payment_status = 'partially-paid', updated_at = now()
+ 170:      WHERE id = _order
+ 171:        AND lower(coalesce(payment_status,'')) NOT IN ('paid','refunded');
+ 172:   END IF;
+ 173: 
+ 174:   INSERT INTO public.audit_logs (organization_id, branch_id, user_id, user_name, action, module,
+ 175:     record_id, previous_value, new_value, reason)
+ 176:   VALUES (org, o.branch_id, auth.uid(),
+ 177:     coalesce((SELECT full_name FROM public.profiles WHERE id = auth.uid()), ''),
+ 178:     'delivery.payment.recorded', 'delivery', o.order_number,
+ 179:     jsonb_build_object('invoice', inv.invoice_number, 'balance_before', inv.balance),
+ 180:     jsonb_build_object('entry_type', v_entry, 'amount', v_amount, 'method', v_method,
+ 181:       'receipt', v_receipt, 'journal', v_jnum, 'balance_after', v_balance,
+ 182:       'destination_account_id', acct),
+ 183:     nullif(btrim(coalesce(_reason,'')), ''));
+ 184: 
+ 185:   RETURN jsonb_build_object('ok', true, 'payment_id', v_payment, 'receipt_number', v_receipt,
+ 186:     'journal_id', v_journal, 'journal_number', v_jnum, 'amount', v_amount,
+ 187:     'entry_type', v_entry, 'invoice_number', inv.invoice_number, 'balance', v_balance,
+ 188:     'destination_account_id', acct);
+ 189: END;
+ 190: $function$;
+ 191: 
+ 192: REVOKE ALL ON FUNCTION public.neo_delivery_record_payment(uuid, numeric, text, text, text, text, uuid) FROM PUBLIC, anon;
+ 193: GRANT EXECUTE ON FUNCTION public.neo_delivery_record_payment(uuid, numeric, text, text, text, text, uuid) TO authenticated, service_role;
+
+========================================
+FILE: supabase/migrations/20260923031528_3f99c372-4349-41da-9239-ef45d9307d8a.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_delivery_bill(_order uuid, _reason text DEFAULT NULL)
+   2: RETURNS jsonb
+   3: LANGUAGE plpgsql
+   4: SECURITY DEFINER
+   5: SET search_path = public
+   6: AS $function$
+   7: DECLARE
+   8:   o public.delivery_orders;
+   9:   org uuid;
+  10:   v_invoice uuid;
+  11:   v_number text;
+  12:   v_journal uuid;
+  13:   v_jnum text;
+  14:   v_key text;
+  15:   v_revenue uuid;
+  16:   v_vat uuid;
+  17:   v_service uuid;
+  18:   v_debit uuid;
+  19:   v_method text;
+  20:   v_paid boolean;
+  21:   v_tax numeric;
+  22:   v_service_amount numeric;
+  23:   v_net_items numeric;
+  24:   v_revenue_credit numeric;
+  25:   v_invoice_subtotal numeric;
+  26:   v_line int := 0;
+  27:   v_jline int := 0;
+  28:   v_existing public.invoices;
+  29: BEGIN
+  30:   SELECT * INTO o FROM public.delivery_orders WHERE id = _order FOR UPDATE;
+  31:   IF o.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found'); END IF;
+  32:   org := o.organization_id;
+  33:   IF org <> public.current_org_id() THEN
+  34:     RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found');
+  35:   END IF;
+  36:   IF NOT (public.has_permission('finance','invoices','create')
+  37:           OR public.has_permission('finance','approve')
+  38:           OR public.is_org_admin_for(org)) THEN
+  39:     RAISE EXCEPTION 'Permission to raise an invoice is required.' USING ERRCODE = '42501';
+  40:   END IF;
+  41:   IF NOT public.neo_branch_in_scope(o.branch_id) THEN
+  42:     RAISE EXCEPTION 'That order is outside your access scope.' USING ERRCODE = '42501';
+  43:   END IF;
+  44:   IF o.order_status IN ('cancelled','rejected','failed') THEN
+  45:     RETURN jsonb_build_object('ok', false, 'reason', 'order_closed',
+  46:       'detail', 'A cancelled order cannot be billed.');
+  47:   END IF;
+  48:   IF coalesce(o.grand_total, 0) <= 0 THEN
+  49:     RETURN jsonb_build_object('ok', false, 'reason', 'nothing_to_bill');
+  50:   END IF;
+  51: 
+  52:   SELECT * INTO v_existing FROM public.invoices
+  53:    WHERE organization_id = org AND notes LIKE '%delivery-order:' || _order::text || '%'
+  54:    LIMIT 1;
+  55:   IF v_existing.id IS NOT NULL THEN
+  56:     RETURN jsonb_build_object('ok', true, 'already_billed', true,
+  57:       'invoice_id', v_existing.id, 'invoice_number', v_existing.invoice_number,
+  58:       'journal_id', v_existing.journal_id);
+  59:   END IF;
+  60: 
+  61:   v_method := lower(coalesce(o.payment_method, ''));
+  62:   v_paid := lower(coalesce(o.payment_status,'')) IN ('paid','settled','captured','completed');
+  63:   v_tax := coalesce(o.tax_total, 0);
+  64:   v_service_amount := coalesce(o.service_charge_total, 0);
+  65: 
+  66:   v_net_items := coalesce(o.subtotal,0) - coalesce(o.discount_total,0) - v_tax;
+  67:   v_revenue_credit := v_net_items + coalesce(o.delivery_fee,0) + coalesce(o.tip_amount,0);
+  68:   v_invoice_subtotal := v_revenue_credit + v_service_amount;
+  69: 
+  70:   IF round(v_invoice_subtotal + v_tax, 2) <> round(coalesce(o.grand_total,0), 2) THEN
+  71:     RETURN jsonb_build_object('ok', false, 'reason', 'totals_mismatch',
+  72:       'detail', 'The order total does not equal its items, fee, service charge and tax.',
+  73:       'expected', round(v_invoice_subtotal + v_tax, 2), 'grand_total', coalesce(o.grand_total,0));
+  74:   END IF;
+  75: 
+  76:   SELECT a.id INTO v_revenue FROM public.chart_of_accounts a
+  77:    WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+  78:      AND a.name ILIKE 'Delivery Revenue'
+  79:    ORDER BY a.code LIMIT 1;
+  80:   IF v_revenue IS NULL THEN
+  81:     RETURN jsonb_build_object('ok', false, 'reason', 'no_revenue_account',
+  82:       'detail', 'This property has no active Delivery Revenue account.');
+  83:   END IF;
+  84: 
+  85:   IF v_tax > 0 THEN
+  86:     SELECT a.id INTO v_vat FROM public.chart_of_accounts a
+  87:      WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+  88:        AND a.name ILIKE '%VAT Payable%'
+  89:      ORDER BY a.code LIMIT 1;
+  90:     IF v_vat IS NULL THEN
+  91:       RETURN jsonb_build_object('ok', false, 'reason', 'no_vat_account',
+  92:         'detail', 'This order carries tax but the property has no VAT Payable account.');
+  93:     END IF;
+  94:   END IF;
+  95: 
+  96:   IF v_service_amount <> 0 THEN
+  97:     SELECT a.id INTO v_service FROM public.chart_of_accounts a
+  98:      WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+  99:        AND a.name ILIKE '%Service Charge%'
+ 100:      ORDER BY a.code LIMIT 1;
+ 101:     IF v_service IS NULL THEN
+ 102:       RETURN jsonb_build_object('ok', false, 'reason', 'no_service_charge_account',
+ 103:         'detail', 'This order carries a service charge but the property has no Service Charge account.');
+ 104:     END IF;
+ 105:   END IF;
+ 106: 
+ 107:   IF v_paid THEN
+ 108:     SELECT a.id INTO v_debit FROM public.chart_of_accounts a
+ 109:      WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+ 110:        AND a.code = public.neo_gl_settlement_code_for(org, v_method)
+ 111:      LIMIT 1;
+ 112:   END IF;
+ 113:   IF v_debit IS NULL THEN
+ 114:     SELECT a.id INTO v_debit FROM public.chart_of_accounts a
+ 115:      WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)
+ 116:        AND a.name ILIKE 'Accounts Receivable'
+ 117:      ORDER BY a.code LIMIT 1;
+ 118:   END IF;
+ 119:   IF v_debit IS NULL THEN
+ 120:     RETURN jsonb_build_object('ok', false, 'reason', 'no_settlement_account',
+ 121:       'detail', 'No account is configured to carry the money for this order.');
+ 122:   END IF;
+ 123: 
+ 124:   v_number := public.next_document_number('invoice', NULL, o.branch_id);
+ 125: 
+ 126:   INSERT INTO public.invoices (organization_id, branch_id, invoice_number, document_type,
+ 127:     customer_id, issue_date, currency, bill_to_snapshot, subtotal, discount_total, tax_total,
+ 128:     total, amount_paid, balance, status, notes, created_by, issued_at)
+ 129:   VALUES (org, o.branch_id, v_number, 'tax_invoice', o.customer_id, CURRENT_DATE,
+ 130:     coalesce(o.currency,'KES'),
+ 131:     jsonb_build_object('name', o.contact_name, 'phone', o.contact_phone,
+ 132:                        'address', o.address_snapshot),
+ 133:     v_invoice_subtotal, coalesce(o.discount_total,0), v_tax, coalesce(o.grand_total,0),
+ 134:     CASE WHEN v_paid THEN coalesce(o.grand_total,0) ELSE 0 END,
+ 135:     CASE WHEN v_paid THEN 0 ELSE coalesce(o.grand_total,0) END,
+ 136:     'issued',
+ 137:     'delivery-order:' || _order::text || ' Â· ' || o.order_number
+ 138:       || coalesce(' Â· ' || nullif(btrim(coalesce(_reason,'')),''), ''),
+ 139:     auth.uid(), now())
+ 140:   RETURNING id INTO v_invoice;
+ 141: 
+ 142:   v_line := v_line + 1;
+ 143:   INSERT INTO public.invoice_lines (organization_id, invoice_id, line_number, description,
+ 144:     source_module, source_record_id, revenue_account_id, quantity, unit_price,
+ 145:     discount_amount, tax_amount, net_amount, total_amount)
+ 146:   VALUES (org, v_invoice, v_line, 'Delivery order ' || o.order_number || ' â€” food and beverage',
+ 147:     'delivery', _order, v_revenue, 1, coalesce(o.subtotal,0), coalesce(o.discount_total,0),
+ 148:     v_tax, v_net_items, v_net_items + v_tax);
+ 149: 
+ 150:   IF coalesce(o.delivery_fee,0) <> 0 THEN
+ 151:     v_line := v_line + 1;
+ 152:     INSERT INTO public.invoice_lines (organization_id, invoice_id, line_number, description,
+ 153:       source_module, source_record_id, revenue_account_id, quantity, unit_price,
+ 154:       net_amount, total_amount)
+ 155:     VALUES (org, v_invoice, v_line, 'Delivery fee', 'delivery', _order, v_revenue, 1,
+ 156:       o.delivery_fee, o.delivery_fee, o.delivery_fee);
+ 157:   END IF;
+ 158: 
+ 159:   IF v_service_amount <> 0 THEN
+ 160:     v_line := v_line + 1;
+ 161:     INSERT INTO public.invoice_lines (organization_id, invoice_id, line_number, description,
+ 162:       source_module, source_record_id, revenue_account_id, quantity, unit_price,
+ 163:       net_amount, total_amount)
+ 164:     VALUES (org, v_invoice, v_line, 'Service charge', 'delivery', _order, v_service, 1,
+ 165:       v_service_amount, v_service_amount, v_service_amount);
+ 166:   END IF;
+ 167: 
+ 168:   IF coalesce(o.tip_amount,0) <> 0 THEN
+ 169:     v_line := v_line + 1;
+ 170:     INSERT INTO public.invoice_lines (organization_id, invoice_id, line_number, description,
+ 171:       source_module, source_record_id, revenue_account_id, quantity, unit_price,
+ 172:       net_amount, total_amount)
+ 173:     VALUES (org, v_invoice, v_line, 'Rider tip', 'delivery', _order, v_revenue, 1,
+ 174:       o.tip_amount, o.tip_amount, o.tip_amount);
+ 175:   END IF;
+ 176: 
+ 177:   v_key := 'delivery-invoice:' || _order::text;
+ 178:   v_jnum := public.next_document_number('journal');
+ 179: 
+ 180:   INSERT INTO public.journal_entries (organization_id, branch_id, journal_number, journal_type,
+ 181:     accounting_date, source_module, source_document_type, source_document_id, document_number,
+ 182:     idempotency_key, description, currency, created_by, status)
+ 183:   VALUES (org, o.branch_id, v_jnum, 'automatic', CURRENT_DATE, 'delivery', 'delivery_invoice',
+ 184:     v_invoice, v_number, v_key,
+ 185:     'Delivery order ' || o.order_number || ' billed on invoice ' || v_number
+ 186:       || coalesce(' â€” ' || nullif(btrim(coalesce(_reason,'')),''), ''),
+ 187:     coalesce(o.currency,'KES'), auth.uid(), 'draft')
+ 188:   RETURNING id INTO v_journal;
+ 189: 
+ 190:   v_jline := v_jline + 1;
+ 191:   INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 192:     description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 193:   VALUES (org, v_journal, v_jline, v_debit,
+ 194:     CASE WHEN v_paid THEN 'Delivery receipt ' || o.order_number
+ 195:          ELSE 'Delivery receivable ' || o.order_number END,
+ 196:     coalesce(o.grand_total,0), 0, o.branch_id, o.customer_id, 'delivery',
+ 197:     nullif(v_method,''));
+ 198: 
+ 199:   v_jline := v_jline + 1;
+ 200:   INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 201:     description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 202:   VALUES (org, v_journal, v_jline, v_revenue, 'Delivery revenue ' || o.order_number,
+ 203:     0, v_revenue_credit, o.branch_id, o.customer_id, 'delivery', nullif(v_method,''));
+ 204: 
+ 205:   IF v_service_amount <> 0 THEN
+ 206:     v_jline := v_jline + 1;
+ 207:     INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 208:       description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 209:     VALUES (org, v_journal, v_jline, v_service, 'Service charge on ' || o.order_number,
+ 210:       0, v_service_amount, o.branch_id, o.customer_id, 'delivery', nullif(v_method,''));
+ 211:   END IF;
+ 212: 
+ 213:   IF v_tax > 0 THEN
+ 214:     v_jline := v_jline + 1;
+ 215:     INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,
+ 216:       description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)
+ 217:     VALUES (org, v_journal, v_jline, v_vat, 'Output VAT on ' || o.order_number,
+ 218:       0, v_tax, o.branch_id, o.customer_id, 'delivery', nullif(v_method,''));
+ 219:   END IF;
+ 220: 
+ 221:   PERFORM public.fin_post_journal(v_journal);
+ 222: 
+ 223:   UPDATE public.invoices SET journal_id = v_journal, updated_at = now() WHERE id = v_invoice;
+ 224: 
+ 225:   INSERT INTO public.audit_logs (organization_id, branch_id, user_id, user_name, action, module,
+ 226:     record_id, previous_value, new_value, reason)
+ 227:   VALUES (org, o.branch_id, auth.uid(),
+ 228:     coalesce((SELECT full_name FROM public.profiles WHERE id = auth.uid()), ''),
+ 229:     'delivery.billed', 'delivery', o.order_number,
+ 230:     jsonb_build_object('payment_status', o.payment_status),
+ 231:     jsonb_build_object('invoice_number', v_number, 'journal_number', v_jnum,
+ 232:       'total', o.grand_total, 'settled', v_paid,
+ 233:       'service_charge', v_service_amount, 'delivery_fee', coalesce(o.delivery_fee,0)),
+ 234:     nullif(btrim(coalesce(_reason,'')),''));
+ 235: 
+ 236:   RETURN jsonb_build_object('ok', true, 'invoice_id', v_invoice, 'invoice_number', v_number,
+ 237:     'journal_id', v_journal, 'journal_number', v_jnum, 'settled', v_paid,
+ 238:     'total', coalesce(o.grand_total,0), 'delivery_fee', coalesce(o.delivery_fee,0),
+ 239:     'service_charge', v_service_amount);
+ 240: END;
+ 241: $function$;
+
+========================================
+FILE: supabase/migrations/20260915111852_0b712746-bc13-4708-ae26-6979ffdab2cb.sql
+========================================
+   1: -- Three routines could be run twice at the same instant (double tap, two
+   2: -- devices, a retried request) and each read its guard before the other wrote.
+   3: 
+   4: CREATE OR REPLACE FUNCTION public.neo_delivery_rider_remit(_declared numeric, _branch uuid DEFAULT NULL::uuid)
+   5:  RETURNS jsonb
+   6:  LANGUAGE plpgsql
+   7:  SECURITY DEFINER
+   8:  SET search_path TO 'public'
+   9: AS $function$
+  10: DECLARE _rider uuid := public.my_rider_id(); _org uuid; _branch_id uuid; _expected numeric; _n int; _rem uuid; _ref text;
+  11: BEGIN
+  12:   IF _rider IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_a_rider'); END IF;
+  13:   IF _declared IS NULL OR _declared < 0 THEN RETURN jsonb_build_object('ok', false, 'reason', 'invalid_amount'); END IF;
+  14: 
+  15:   SELECT organization_id, coalesce(_branch, branch_id) INTO _org, _branch_id
+  16:     FROM public.rider_profiles WHERE id = _rider;
+  17: 
+  18:   -- Hold the outstanding collections. Without this, two submissions in the same
+  19:   -- moment both saw the same uncollected cash and wrote two remittances for one
+  20:   -- float, the second one empty.
+  21:   PERFORM 1 FROM public.rider_cash_collections
+  22:    WHERE rider_id = _rider AND status = 'collected' AND remittance_id IS NULL
+  23:      AND (_branch IS NULL OR branch_id = _branch)
+  24:    FOR UPDATE;
+  25: 
+  26:   SELECT coalesce(sum(collected_amount), 0), count(*)
+  27:     INTO _expected, _n
+  28:     FROM public.rider_cash_collections
+  29:    WHERE rider_id = _rider AND status = 'collected' AND remittance_id IS NULL
+  30:      AND (_branch IS NULL OR branch_id = _branch);
+  31: 
+  32:   IF _n = 0 THEN RETURN jsonb_build_object('ok', false, 'reason', 'nothing_to_remit'); END IF;
+  33: 
+  34:   _ref := 'REM-' || to_char(now(), 'YYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text,'-',''), 1, 5));
+  35: 
+  36:   INSERT INTO public.rider_cash_remittances
+  37:     (organization_id, branch_id, rider_id, reference, expected_amount, declared_amount, variance, status, submitted_at)
+  38:   VALUES (_org, _branch_id, _rider, _ref, _expected, _declared, _declared - _expected, 'submitted', now())
+  39:   RETURNING id INTO _rem;
+  40: 
+  41:   UPDATE public.rider_cash_collections
+  42:      SET remittance_id = _rem, status = 'remitted', updated_at = now()
+  43:    WHERE rider_id = _rider AND status = 'collected' AND remittance_id IS NULL
+  44:      AND (_branch IS NULL OR branch_id = _branch);
+  45: 
+  46:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value)
+  47:   VALUES (_org, auth.uid(), '', 'delivery.cash.remit', 'delivery', _rem::text,
+  48:           jsonb_build_object('expected', _expected, 'declared', _declared, 'orders', _n));
+  49: 
+  50:   RETURN jsonb_build_object('ok', true, 'remittance_id', _rem, 'reference', _ref,
+  51:                             'expected_amount', _expected, 'declared_amount', _declared,
+  52:                             'variance', _declared - _expected, 'orders', _n);
+  53: END; $function$;
+  54: 
+  55: CREATE OR REPLACE FUNCTION public.folio_reverse_line(_line uuid, _reason text)
+  56:  RETURNS uuid
+  57:  LANGUAGE plpgsql
+  58:  SECURITY DEFINER
+  59:  SET search_path TO 'public'
+  60: AS $function$
+  61: DECLARE _org uuid := public.current_org_id(); _l public.folio_lines; _id uuid;
+  62: BEGIN
+  63:   IF NOT public.has_permission('pms','folios.post_charge') THEN RAISE EXCEPTION 'Not permitted to reverse charges'; END IF;
+  64:   IF COALESCE(trim(_reason),'') = '' THEN RAISE EXCEPTION 'A reversal reason is required'; END IF;
+  65:   -- Locked so a double submission waits and then returns the first reversal,
+  66:   -- instead of racing past the check and hitting a raw uniqueness error.
+  67:   SELECT * INTO _l FROM public.folio_lines WHERE id=_line AND organization_id=_org FOR UPDATE;
+  68:   IF _l.id IS NULL THEN RAISE EXCEPTION 'Charge not found'; END IF;
+  69:   IF _l.line_type = 'reversal' THEN RAISE EXCEPTION 'That line is itself a reversal'; END IF;
+  70:   IF EXISTS (SELECT 1 FROM public.folio_lines WHERE reverses_line_id = _line) THEN
+  71:     RETURN (SELECT id FROM public.folio_lines WHERE reverses_line_id = _line LIMIT 1); END IF;
+  72: 
+  73:   INSERT INTO public.folio_lines (organization_id, branch_id, folio_id, reservation_id, customer_id, line_type,
+  74:     category, revenue_centre, reference, source_module, source_record_id, source_record_uuid, idempotency_key,
+  75:     description, quantity, unit_price, gross_amount, discount_amount, tax_amount, service_charge_amount,
+  76:     net_amount, posted_by, actor_id, correlation_id, status, reverses_line_id)
+  77:   VALUES (_org, _l.branch_id, _l.folio_id, _l.reservation_id, _l.customer_id, 'reversal',
+  78:     _l.category, _l.revenue_centre, _l.reference, _l.source_module, _l.source_record_id, _l.source_record_uuid,
+  79:     'reversal:' || _line::text, 'Reversal: ' || _l.description || ' â€” ' || _reason, _l.quantity, -_l.unit_price,
+  80:     -_l.gross_amount, -_l.discount_amount, -_l.tax_amount, -_l.service_charge_amount, -_l.net_amount,
+  81:     auth.uid(), auth.uid(), _l.correlation_id, 'posted', _line)
+  82:   RETURNING id INTO _id;
+  83: 
+  84:   UPDATE public.folios SET total_charges = total_charges - _l.gross_amount,
+  85:     total_taxes = total_taxes - _l.tax_amount, balance = balance - _l.net_amount, updated_at = now()
+  86:   WHERE id = _l.folio_id;
+  87: 
+  88:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, previous_value, new_value, reason)
+  89:   VALUES (_org, auth.uid(), '', 'pms.folio.reverse_charge', 'finance', _l.folio_id::text,
+  90:     to_jsonb(_l), jsonb_build_object('reversal_line', _id), _reason);
+  91:   RETURN _id;
+  92: END; $function$;
+  93: 
+  94: CREATE OR REPLACE FUNCTION public.neo_post_pos_order(_order uuid)
+  95:  RETURNS jsonb
+  96:  LANGUAGE plpgsql
+  97:  SECURITY DEFINER
+  98:  SET search_path TO 'public'
+  99: AS $function$
+ 100: declare org uuid:=public.current_org_id(); o public.pos_orders; line uuid; prior text;
+ 101: begin
+ 102:   if org is null or not (public.is_org_admin() or public.has_permission('finance','view') or public.has_permission('restaurant','orders.settle') or public.neo_system_posting()) then raise exception 'insufficient_privilege' using errcode='42501'; end if;
+ 103:   -- Locked so two settlements of the same bill cannot both pass the
+ 104:   -- already-posted check and charge the guest folio twice.
+ 105:   select * into o from public.pos_orders where id=_order and organization_id=org for update;
+ 106:   if not found then return jsonb_build_object('ok',false,'reason','not_found'); end if;
+ 107:   if o.status not in ('closed','paid','settled','completed','charged-to-room') then return jsonb_build_object('ok',false,'reason','not_finalised','status',o.status); end if;
+ 108:   if o.folio_post_status='posted' then return jsonb_build_object('ok',true,'reason','already_posted'); end if;
+ 109:   if o.folio_id is null then return jsonb_build_object('ok',false,'reason','no_folio','detail','The order is not attached to a guest folio, so it cannot be posted as a folio charge.'); end if;
+ 110:   prior:=coalesce(current_setting('neo.system_posting',true),'off');
+ 111:   perform set_config('neo.system_posting','on',true);
+ 112:   line:=public.folio_post_charge(o.folio_id,'food-beverage','Point of sale order '||o.order_number,1,o.subtotal,o.tax_total,o.service_charge_total,o.discount_total,'pos',o.id,'fnb','pos:'||o.id::text,null);
+ 113:   perform set_config('neo.system_posting',prior,true);
+ 114:   update public.pos_orders set folio_post_status='posted',updated_at=now() where id=o.id;
+ 115:   return jsonb_build_object('ok',true,'folio_line_id',line);
+ 116: end $function$;
+
+========================================
+FILE: supabase/migrations/20260915082728_8fc44214-157e-47e7-8d77-b19a69484878.sql
+========================================
+   1: ALTER TABLE public.cash_movements DROP CONSTRAINT IF EXISTS cash_movements_type_chk;
+   2: ALTER TABLE public.cash_movements ADD CONSTRAINT cash_movements_type_chk CHECK (
+   3:   movement_type = ANY (ARRAY['float-in','cash-sale','paid-out','petty-cash','drop','count','adjustment','pickup','float-top-up','rider-cash'])
+   4: );
+   5: 
+   6: CREATE OR REPLACE FUNCTION public.cash_shift_expected(_shift uuid)
+   7: RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+   8: AS $function$
+   9:   SELECT COALESCE(s.opening_float,0)
+  10:        + COALESCE((SELECT sum(p.amount) FROM public.pos_payments p
+  11:                     WHERE p.shift_id = s.id AND p.method='cash' AND p.status='confirmed'),0)
+  12:        + COALESCE((SELECT sum(p.amount) FROM public.payments p
+  13:                     WHERE p.shift_id = s.id AND p.method='cash' AND p.status='confirmed'),0)
+  14:        + COALESCE((SELECT sum(m.amount) FROM public.cash_movements m
+  15:                     WHERE m.shift_id = s.id AND m.movement_type = 'rider-cash'),0)
+  16:        - COALESCE(s.total_drops,0) - COALESCE(s.total_paid_outs,0)
+  17:   FROM public.pos_shifts s WHERE s.id = _shift AND s.organization_id = public.current_org_id();
+  18: $function$;
+  19: 
+  20: DROP FUNCTION IF EXISTS public.neo_delivery_remit_reconcile(uuid, numeric, text);
+  21: 
+  22: CREATE OR REPLACE FUNCTION public.neo_delivery_remit_reconcile(
+  23:   _remittance uuid, _counted numeric, _reason text DEFAULT NULL::text, _shift uuid DEFAULT NULL::uuid)
+  24: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  25: AS $function$
+  26: DECLARE
+  27:   _org uuid := public.current_org_id();
+  28:   _r public.rider_cash_remittances;
+  29:   _var numeric;
+  30:   _s public.pos_shifts;
+  31:   _till_recorded boolean := false;
+  32: BEGIN
+  33:   IF _org IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'no_organisation'); END IF;
+  34:   IF NOT (public.has_permission('delivery','payments.reconcile') OR public.is_org_admin()) THEN
+  35:     RAISE EXCEPTION 'The delivery.payments.reconcile permission is required.' USING ERRCODE = '42501';
+  36:   END IF;
+  37: 
+  38:   SELECT * INTO _r FROM public.rider_cash_remittances
+  39:    WHERE id = _remittance AND organization_id = _org FOR UPDATE;
+  40:   IF _r.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'remittance_not_found'); END IF;
+  41:   IF _r.rider_id = public.my_rider_id() THEN
+  42:     RAISE EXCEPTION 'A rider cannot reconcile their own cash.' USING ERRCODE = '42501';
+  43:   END IF;
+  44:   IF NOT public.neo_branch_in_scope(_r.branch_id) THEN
+  45:     RAISE EXCEPTION 'That remittance is outside your access scope.' USING ERRCODE = '42501';
+  46:   END IF;
+  47:   IF _r.status = 'reconciled' THEN
+  48:     RETURN jsonb_build_object('ok', true, 'already_reconciled', true, 'remittance_id', _r.id);
+  49:   END IF;
+  50: 
+  51:   _var := _counted - _r.expected_amount;
+  52:   IF _var <> 0 AND nullif(btrim(coalesce(_reason,'')),'') IS NULL THEN
+  53:     RETURN jsonb_build_object('ok', false, 'reason', 'variance_reason_required', 'variance', _var);
+  54:   END IF;
+  55: 
+  56:   IF _shift IS NOT NULL THEN
+  57:     SELECT * INTO _s FROM public.pos_shifts WHERE id = _shift AND organization_id = _org FOR UPDATE;
+  58:     IF _s.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'till_not_found'); END IF;
+  59:     IF _s.status <> 'open' THEN RETURN jsonb_build_object('ok', false, 'reason', 'till_not_open'); END IF;
+  60:     IF _s.cashier_id IS DISTINCT FROM auth.uid() THEN
+  61:       RETURN jsonb_build_object('ok', false, 'reason', 'till_belongs_to_another_cashier');
+  62:     END IF;
+  63:     IF _s.branch_id IS DISTINCT FROM _r.branch_id THEN
+  64:       RETURN jsonb_build_object('ok', false, 'reason', 'till_property_mismatch');
+  65:     END IF;
+  66:     INSERT INTO public.cash_movements (organization_id, shift_id, movement_type, amount, reason, reference, created_by)
+  67:     VALUES (_org, _shift, 'rider-cash', _counted,
+  68:             'Rider cash counted in: ' || coalesce(_r.reference,'remittance'), coalesce(_r.reference,''), auth.uid());
+  69:     _till_recorded := true;
+  70:   END IF;
+  71: 
+  72:   UPDATE public.rider_cash_remittances
+  73:      SET counted_amount = _counted, variance = _var, variance_reason = nullif(btrim(coalesce(_reason,'')),''),
+  74:          status = CASE WHEN _var = 0 THEN 'reconciled' ELSE 'disputed' END,
+  75:          shift_id = coalesce(_shift, shift_id),
+  76:          received_by = auth.uid(), received_at = coalesce(received_at, now()),
+  77:          reconciled_by = auth.uid(), reconciled_at = now(), updated_at = now()
+  78:    WHERE id = _remittance;
+  79: 
+  80:   UPDATE public.rider_cash_collections
+  81:      SET status = CASE WHEN _var = 0 THEN 'reconciled' ELSE 'disputed' END, updated_at = now()
+  82:    WHERE remittance_id = _remittance;
+  83: 
+  84:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, previous_value, new_value, reason)
+  85:   VALUES (_org, auth.uid(), '', 'delivery.cash.reconcile', 'delivery', _remittance::text,
+  86:           jsonb_build_object('status', _r.status, 'expected', _r.expected_amount, 'declared', _r.declared_amount),
+  87:           jsonb_build_object('counted', _counted, 'variance', _var, 'shift_id', _shift, 'till_recorded', _till_recorded),
+  88:           nullif(btrim(coalesce(_reason,'')),''));
+  89: 
+  90:   RETURN jsonb_build_object('ok', true, 'remittance_id', _remittance, 'counted_amount', _counted,
+  91:                             'variance', _var, 'till_recorded', _till_recorded,
+  92:                             'status', CASE WHEN _var = 0 THEN 'reconciled' ELSE 'disputed' END);
+  93: END; $function$;
+  94: 
+  95: REVOKE ALL ON FUNCTION public.neo_delivery_remit_reconcile(uuid, numeric, text, uuid) FROM PUBLIC, anon;
+  96: GRANT EXECUTE ON FUNCTION public.neo_delivery_remit_reconcile(uuid, numeric, text, uuid) TO authenticated;

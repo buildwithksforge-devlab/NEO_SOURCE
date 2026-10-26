@@ -1,0 +1,337 @@
+﻿
+========================================
+FILE: supabase/migrations/20261025120000_o05_laundry_order_status_sync.sql
+========================================
+   1: -- NEÃ˜ O05: Keep guest laundry order readiness synchronized
+   2: -- with the linked laundry production batch.
+   3: --
+   4: -- Does not post guest charges, create linen movements,
+   5: -- or automatically confirm delivery.
+   6: 
+   7: CREATE OR REPLACE FUNCTION public.neo_laundry_batch_order_sync()
+   8: RETURNS trigger
+   9: LANGUAGE plpgsql
+  10: SECURITY DEFINER
+  11: SET search_path TO 'public'
+  12: AS $function$
+  13: BEGIN
+  14: 
+  15:     IF NEW.guest_order_id IS NULL THEN
+  16:         RETURN NEW;
+  17:     END IF;
+  18: 
+  19:     IF TG_OP = 'UPDATE'
+  20:        AND NEW.status IS NOT DISTINCT FROM OLD.status
+  21:        AND NEW.guest_order_id IS NOT DISTINCT FROM OLD.guest_order_id
+  22:     THEN
+  23:         RETURN NEW;
+  24:     END IF;
+  25: 
+  26:     -- Production is ready, but customer handover has not occurred.
+  27:     IF NEW.status IN ('ready', 'handed-over', 'completed') THEN
+  28: 
+  29:         UPDATE public.guest_laundry_orders g
+  30:            SET status = 'ready-for-delivery',
+  31:                updated_at = now()
+  32:          WHERE g.id = NEW.guest_order_id
+  33:            AND g.organization_id = NEW.organization_id
+  34:            AND g.branch_id IS NOT DISTINCT FROM NEW.branch_id
+  35:            AND g.status = 'collected'
+  36: 
+  37:            -- Never release an order while another linked
+  38:            -- production batch remains unfinished.
+  39:            AND NOT EXISTS (
+  40:                SELECT 1
+  41:                FROM public.laundry_batches b
+  42:                WHERE b.guest_order_id = NEW.guest_order_id
+  43:                  AND b.organization_id = NEW.organization_id
+  44:                  AND b.id <> NEW.id
+  45:                  AND b.status NOT IN (
+  46:                      'ready',
+  47:                      'handed-over',
+  48:                      'completed',
+  49:                      'cancelled'
+  50:                  )
+  51:            );
+  52: 
+  53:     END IF;
+  54: 
+  55:     RETURN NEW;
+  56: END;
+  57: $function$;
+  58: 
+  59: DROP TRIGGER IF EXISTS trg_laundry_batch_order_sync
+  60: ON public.laundry_batches;
+  61: 
+  62: CREATE TRIGGER trg_laundry_batch_order_sync
+  63: AFTER INSERT OR UPDATE OF status, guest_order_id
+  64: ON public.laundry_batches
+  65: FOR EACH ROW
+  66: EXECUTE FUNCTION public.neo_laundry_batch_order_sync();
+  67: 
+  68: REVOKE ALL ON FUNCTION public.neo_laundry_batch_order_sync()
+  69: FROM PUBLIC, anon, authenticated;
+
+========================================
+FILE: supabase/migrations/20260924140000_guest_laundry_lifecycle_guard.sql
+========================================
+   1: -- Final certification: guest laundry lifecycle must converge through the actual
+   2: -- laundry batch before a guest order can be delivered.  A browser status edit
+   3: -- must never be enough to manufacture processing or delivery evidence.
+   4: 
+   5: CREATE OR REPLACE FUNCTION public.neo_laundry_completion_guard()
+   6: RETURNS trigger
+   7: LANGUAGE plpgsql
+   8: SECURITY DEFINER
+   9: SET search_path TO 'public'
+  10: AS $function$
+  11: DECLARE
+  12:   _system_transition boolean := current_setting('neo.laundry_system_transition', true) = 'on';
+  13:   _batch_status text;
+  14: BEGIN
+  15:   IF NEW.status IN ('received','washing','drying','ironing','quality-check','packaged',
+  16:                     'ready-for-delivery','delivered','completed','closed') THEN
+  17:     SELECT b.status INTO _batch_status
+  18:       FROM public.laundry_batches b
+  19:      WHERE b.organization_id = NEW.organization_id
+  20:        AND b.branch_id = NEW.branch_id
+  21:        AND b.guest_order_id = NEW.id
+  22:        AND b.batch_kind = 'guest'
+  23:      ORDER BY b.created_at DESC
+  24:      LIMIT 1;
+  25: 
+  26:     IF _batch_status IS NULL THEN
+  27:       RAISE EXCEPTION 'Receive this guest laundry into a guest batch before moving it into processing or delivery.'
+  28:         USING ERRCODE = '23514';
+  29:     END IF;
+  30:   END IF;
+  31: 
+  32:   IF NEW.status IN ('delivered','completed','closed') THEN
+  33:     IF coalesce(btrim(NEW.laundry_number), '') = '' THEN
+  34:       RAISE EXCEPTION 'This laundry order has no order number yet, so it cannot be completed.'
+  35:         USING ERRCODE = '23514';
+  36:     END IF;
+  37:     IF coalesce(NEW.total, 0) <= 0 THEN
+  38:       RAISE EXCEPTION 'This laundry order has no priced items, so it cannot be completed. Price the items first.'
+  39:         USING ERRCODE = '23514';
+  40:     END IF;
+  41:     IF NEW.customer_id IS NULL AND NEW.reservation_id IS NULL THEN
+  42:       RAISE EXCEPTION 'Link the laundry to its customer or stay before delivery.'
+  43:         USING ERRCODE = '23514';
+  44:     END IF;
+  45:     IF _batch_status <> 'completed' THEN
+  46:       RAISE EXCEPTION 'Reconcile the guest garment batch before confirming delivery.'
+  47:         USING ERRCODE = '23514';
+  48:     END IF;
+  49:     IF NEW.delivered_at IS NULL OR NEW.delivery_confirmed_by IS NULL THEN
+  50:       RAISE EXCEPTION 'Laundry delivery needs the delivery time and confirming staff member.'
+  51:         USING ERRCODE = '23514';
+  52:     END IF;
+  53:   END IF;
+  54: 
+  55:   IF NEW.status IN ('completed','closed') AND COALESCE(NEW.posting_status,'unposted') <> 'posted' THEN
+  56:     RAISE EXCEPTION 'Post the delivered laundry charge before closing the laundry order.'
+  57:       USING ERRCODE = '23514';
+  58:   END IF;
+  59: 
+  60:   -- Batch synchronisation is the canonical writer for processing states.  All
+  61:   -- other callers have a deliberately small transition graph.
+  62:   IF TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status AND NOT _system_transition THEN
+  63:     IF NOT (
+  64:       (OLD.status IN ('requested','awaiting-collection') AND NEW.status IN ('collected','on-hold','cancelled')) OR
+  65:       (OLD.status = 'collected' AND NEW.status IN ('received','on-hold','disputed','cancelled')) OR
+  66:       (OLD.status = 'ready-for-delivery' AND NEW.status IN ('delivered','on-hold','disputed')) OR
+  67:       (OLD.status = 'delivered' AND NEW.status IN ('completed','disputed')) OR
+  68:       (OLD.status = 'on-hold' AND NEW.status IN ('requested','awaiting-collection','collected','disputed','cancelled')) OR
+  69:       (OLD.status = 'disputed' AND NEW.status IN ('on-hold','ready-for-delivery','cancelled'))
+  70:     ) THEN
+  71:       RAISE EXCEPTION 'Laundry status % cannot move directly to %. Use the guest batch workflow for processing states.',
+  72:         OLD.status, NEW.status USING ERRCODE = '23514';
+  73:     END IF;
+  74:   END IF;
+  75: 
+  76:   RETURN NEW;
+  77: END;
+  78: $function$;
+  79: 
+  80: DROP TRIGGER IF EXISTS neo_laundry_completion_guard_trg ON public.guest_laundry_orders;
+  81: CREATE TRIGGER neo_laundry_completion_guard_trg
+  82: BEFORE INSERT OR UPDATE ON public.guest_laundry_orders
+  83: FOR EACH ROW EXECUTE FUNCTION public.neo_laundry_completion_guard();
+  84: 
+  85: 
+  86: -- Replace the older BEFORE-UPDATE laundry autopost. Calling Finance from a
+  87: -- BEFORE trigger can recursively update the same order. Final delivery is now
+  88: -- written first, then posting runs as an AFTER trigger (and the explicit RPC
+  89: -- retry remains idempotent).
+  90: DROP TRIGGER IF EXISTS guest_laundry_orders_autopost ON public.guest_laundry_orders;
+  91: 
+  92: CREATE OR REPLACE FUNCTION public.neo_laundry_autopost_after_delivery()
+  93: RETURNS trigger
+  94: LANGUAGE plpgsql
+  95: SECURITY DEFINER
+  96: SET search_path TO 'public'
+  97: AS $function$
+  98: DECLARE _res jsonb;
+  99: BEGIN
+ 100:   IF NEW.status IN ('delivered','completed','closed')
+ 101:      AND COALESCE(NEW.posting_status,'unposted') <> 'posted'
+ 102:      AND (NEW.status IS DISTINCT FROM OLD.status
+ 103:           OR NEW.total IS DISTINCT FROM OLD.total
+ 104:           OR NEW.folio_id IS DISTINCT FROM OLD.folio_id) THEN
+ 105:     _res := public.neo_finance_post_source('laundry',NEW.id,true);
+ 106:     IF NOT COALESCE((_res->>'ok')::boolean,false) THEN
+ 107:       UPDATE public.guest_laundry_orders
+ 108:          SET posting_status='blocked',
+ 109:              discrepancy_notes=concat_ws(' ',NULLIF(discrepancy_notes,''),
+ 110:                COALESCE(_res->>'detail',_res->>'reason','Laundry finance posting failed.'))
+ 111:        WHERE id=NEW.id AND COALESCE(posting_status,'unposted') <> 'posted';
+ 112:     END IF;
+ 113:   END IF;
+ 114:   RETURN NEW;
+ 115: END;
+ 116: $function$;
+ 117: 
+ 118: DROP TRIGGER IF EXISTS neo_laundry_autopost_after_delivery_trg ON public.guest_laundry_orders;
+ 119: CREATE TRIGGER neo_laundry_autopost_after_delivery_trg
+ 120: AFTER UPDATE OF status,total,folio_id ON public.guest_laundry_orders
+ 121: FOR EACH ROW EXECUTE FUNCTION public.neo_laundry_autopost_after_delivery();
+ 122: 
+ 123: -- The guest-order display state follows the real guest batch.  Completing a
+ 124: -- laundry batch means processing/reconciliation is complete; it does NOT mean
+ 125: -- the guest has received the garments, so the order remains ready-for-delivery.
+ 126: CREATE OR REPLACE FUNCTION public.neo_sync_guest_laundry_from_batch()
+ 127: RETURNS trigger
+ 128: LANGUAGE plpgsql
+ 129: SECURITY DEFINER
+ 130: SET search_path TO 'public'
+ 131: AS $function$
+ 132: DECLARE
+ 133:   _target text;
+ 134: BEGIN
+ 135:   IF NEW.batch_kind <> 'guest' OR NEW.guest_order_id IS NULL THEN
+ 136:     RETURN NEW;
+ 137:   END IF;
+ 138: 
+ 139:   _target := CASE NEW.status
+ 140:     WHEN 'received' THEN 'received'
+ 141:     WHEN 'washing' THEN 'washing'
+ 142:     WHEN 'drying' THEN 'drying'
+ 143:     WHEN 'finishing' THEN 'quality-check'
+ 144:     WHEN 'ready' THEN 'ready-for-delivery'
+ 145:     WHEN 'handed-over' THEN 'ready-for-delivery'
+ 146:     WHEN 'completed' THEN 'ready-for-delivery'
+ 147:     ELSE NULL
+ 148:   END;
+ 149: 
+ 150:   IF _target IS NULL THEN RETURN NEW; END IF;
+ 151: 
+ 152:   PERFORM set_config('neo.laundry_system_transition','on',true);
+ 153:   UPDATE public.guest_laundry_orders g
+ 154:      SET status = _target,
+ 155:          collected_at = CASE
+ 156:            WHEN _target = 'received' AND g.collected_at IS NULL THEN now()
+ 157:            ELSE g.collected_at
+ 158:          END,
+ 159:          updated_at = now()
+ 160:    WHERE g.id = NEW.guest_order_id
+ 161:      AND g.organization_id = NEW.organization_id
+ 162:      AND g.branch_id = NEW.branch_id
+ 163:      AND g.status NOT IN ('delivered','completed','closed','cancelled')
+ 164:      AND g.status IS DISTINCT FROM _target;
+ 165: 
+ 166:   RETURN NEW;
+ 167: END;
+ 168: $function$;
+ 169: 
+ 170: DROP TRIGGER IF EXISTS neo_sync_guest_laundry_from_batch_trg ON public.laundry_batches;
+ 171: CREATE TRIGGER neo_sync_guest_laundry_from_batch_trg
+ 172: AFTER INSERT OR UPDATE OF status ON public.laundry_batches
+ 173: FOR EACH ROW EXECUTE FUNCTION public.neo_sync_guest_laundry_from_batch();
+ 174: 
+ 175: -- Final guest handover is explicit, actor-attributed and idempotent. Processing
+ 176: -- is not advanced here: it must already have converged through the guest batch.
+ 177: CREATE OR REPLACE FUNCTION public.neo_laundry_order_advance(
+ 178:   _order uuid,
+ 179:   _status text,
+ 180:   _note text DEFAULT NULL
+ 181: )
+ 182: RETURNS jsonb
+ 183: LANGUAGE plpgsql
+ 184: SECURITY DEFINER
+ 185: SET search_path TO 'public'
+ 186: AS $function$
+ 187: DECLARE
+ 188:   _org uuid := public.current_org_id();
+ 189:   _row public.guest_laundry_orders%ROWTYPE;
+ 190:   _posting jsonb;
+ 191: BEGIN
+ 192:   IF _org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;
+ 193:   IF NOT (
+ 194:     public.has_permission('laundry','orders','edit') OR
+ 195:     public.has_permission('laundry','orders','approve') OR
+ 196:     public.is_org_admin()
+ 197:   ) THEN
+ 198:     RAISE EXCEPTION 'Not permitted to update guest laundry' USING ERRCODE='42501';
+ 199:   END IF;
+ 200: 
+ 201:   SELECT * INTO _row
+ 202:     FROM public.guest_laundry_orders
+ 203:    WHERE id=_order AND organization_id=_org
+ 204:    FOR UPDATE;
+ 205:   IF _row.id IS NULL THEN RAISE EXCEPTION 'Laundry order not found'; END IF;
+ 206: 
+ 207:   IF _status = _row.status THEN
+ 208:     RETURN jsonb_build_object('ok',true,'idempotent',true,'status',_row.status,
+ 209:       'posting_status',_row.posting_status);
+ 210:   END IF;
+ 211: 
+ 212:   IF _status = 'delivered' THEN
+ 213:     UPDATE public.guest_laundry_orders
+ 214:        SET status='delivered',
+ 215:            delivered_at=COALESCE(delivered_at,now()),
+ 216:            delivery_confirmed_by=COALESCE(delivery_confirmed_by,auth.uid()),
+ 217:            discrepancy_notes=concat_ws(' ',NULLIF(discrepancy_notes,''),NULLIF(btrim(_note),'')),
+ 218:            updated_at=now()
+ 219:      WHERE id=_order;
+ 220: 
+ 221:     -- Delivery and accounting are separate facts.  Retry the canonical Finance
+ 222:     -- posting and leave the order visibly blocked when the guest/folio/payment
+ 223:     -- context is not sufficient rather than pretending it was billed.
+ 224:     _posting := public.neo_laundry_retry_posting(_order);
+ 225: 
+ 226:     SELECT * INTO _row FROM public.guest_laundry_orders WHERE id=_order;
+ 227:     PERFORM public.log_audit_event(
+ 228:       _org,'laundry.order.delivered','laundry',_order::text,
+ 229:       jsonb_build_object('status','ready-for-delivery'),
+ 230:       jsonb_build_object('status',_row.status,'delivered_at',_row.delivered_at,
+ 231:                          'posting_status',_row.posting_status,'posting',_posting),
+ 232:       COALESCE(NULLIF(btrim(_note),''),'Guest laundry handed back'));
+ 233: 
+ 234:     RETURN jsonb_build_object('ok',true,'status',_row.status,
+ 235:       'delivered_at',_row.delivered_at,'posting_status',_row.posting_status,
+ 236:       'posting',_posting);
+ 237:   END IF;
+ 238: 
+ 239:   IF _status = 'completed' THEN
+ 240:     UPDATE public.guest_laundry_orders
+ 241:        SET status='completed',updated_at=now()
+ 242:      WHERE id=_order;
+ 243:     RETURN jsonb_build_object('ok',true,'status','completed');
+ 244:   END IF;
+ 245: 
+ 246:   UPDATE public.guest_laundry_orders
+ 247:      SET status=_status,
+ 248:          collected_at=CASE WHEN _status='collected' AND collected_at IS NULL THEN now() ELSE collected_at END,
+ 249:          discrepancy_notes=CASE WHEN _status IN ('on-hold','disputed')
+ 250:            THEN concat_ws(' ',NULLIF(discrepancy_notes,''),NULLIF(btrim(_note),''))
+ 251:            ELSE discrepancy_notes END,
+ 252:          updated_at=now()
+ 253:    WHERE id=_order;
+ 254: 
+ 255:   RETURN jsonb_build_object('ok',true,'status',_status);
+ 256: END;
+ 257: $function$;
+ 258: 
+ 259: REVOKE ALL ON FUNCTION public.neo_laundry_order_advance(uuid,text,text) FROM PUBLIC, anon;
+ 260: GRANT EXECUTE ON FUNCTION public.neo_laundry_order_advance(uuid,text,text) TO authenticated, service_role;

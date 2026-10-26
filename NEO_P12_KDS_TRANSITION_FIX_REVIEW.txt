@@ -1,0 +1,412 @@
+﻿
+========================================
+FILE: supabase/migrations/20260923060604_01075328-bccb-4cb9-89b2-20115b551872.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_kitchen_assert_station_authority(_ticket uuid)
+   2: RETURNS void
+   3: LANGUAGE plpgsql
+   4: STABLE SECURITY DEFINER
+   5: SET search_path TO 'public'
+   6: AS $function$
+   7: DECLARE _t record;
+   8: BEGIN
+   9:   SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket;
+  10:   IF _t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+  11:   IF _t.organization_id <> public.current_org_id() THEN
+  12:     RAISE EXCEPTION 'Ticket % is outside your organisation', _t.ticket_number USING ERRCODE = '42501';
+  13:   END IF;
+  14:   -- Production authority is station reach only. Raising the order (created_by /
+  15:   -- waiter) lets you WATCH the ticket and close it out for service; it never
+  16:   -- grants the right to accept, start, finish or cancel another station's work.
+  17:   IF _t.station_id IS NOT NULL
+  18:      AND _t.station_id = ANY (public.neo_kitchen_visible_station_ids()) THEN
+  19:     RETURN;
+  20:   END IF;
+  21:   IF _t.assigned_chef_id = auth.uid() THEN RETURN; END IF;
+  22:   RAISE EXCEPTION 'You are not assigned to the % station, so you cannot change this ticket',
+  23:     COALESCE((SELECT name FROM public.operational_stations WHERE id = _t.station_id), 'production')
+  24:     USING ERRCODE = '42501';
+  25: END;
+  26: $function$;
+  27: 
+  28: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+  29:  RETURNS jsonb
+  30:  LANGUAGE plpgsql
+  31:  SECURITY DEFINER
+  32:  SET search_path TO 'public'
+  33: AS $function$
+  34: DECLARE
+  35:   _org uuid := public.current_org_id();
+  36:   _t record; _i record; _allowed text[]; _moved int := 0;
+  37:   _path text[] := ARRAY['new','accepted','preparing','ready','served','completed'];
+  38:   _target_idx int; _cur_idx int; _step text; _final text;
+  39: BEGIN
+  40:   SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket AND organization_id = _org;
+  41:   IF _t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+  42:   IF _to IN ('served','completed') AND public.neo_kitchen_caller_owns_order_ticket(_ticket) THEN
+  43:     PERFORM public.neo_kitchen_assert_ticket_scope(_ticket);
+  44:   ELSE
+  45:     PERFORM public.neo_kitchen_assert_station_authority(_ticket);
+  46:   END IF;
+  47:   IF _t.status IN ('completed','cancelled') THEN
+  48:     RAISE EXCEPTION 'Ticket % is already % and cannot change', _t.ticket_number, _t.status;
+  49:   END IF;
+  50: 
+  51:   _allowed := CASE _t.status
+  52:     WHEN 'new' THEN ARRAY['accepted','cancelled']
+  53:     WHEN 'accepted' THEN ARRAY['preparing','cancelled']
+  54:     WHEN 'preparing' THEN ARRAY['ready','cancelled']
+  55:     WHEN 'partially-ready' THEN ARRAY['ready','cancelled']
+  56:     WHEN 'ready' THEN ARRAY['served']
+  57:     WHEN 'served' THEN ARRAY['completed']
+  58:     ELSE ARRAY[]::text[] END;
+  59:   IF NOT (_to = ANY (_allowed)) THEN
+  60:     RAISE EXCEPTION 'Cannot move ticket % from % to %', _t.ticket_number, _t.status, _to;
+  61:   END IF;
+  62: 
+  63:   IF _to = 'cancelled' THEN
+  64:     IF COALESCE(btrim(_reason), '') = '' THEN RAISE EXCEPTION 'A reason is required to cancel a ticket'; END IF;
+  65:     FOR _i IN SELECT * FROM public.station_ticket_items WHERE ticket_id = _ticket AND status NOT IN ('cancelled','completed') LOOP
+  66:       IF _i.status IN ('ready','collected','served') THEN
+  67:         RAISE EXCEPTION 'Ticket % cannot be cancelled: item is already %', _t.ticket_number, _i.status;
+  68:       END IF;
+  69:       IF _i.status <> 'cancel-pending' THEN
+  70:         PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+  71:       END IF;
+  72:       PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+  73:       _moved := _moved + 1;
+  74:     END LOOP;
+  75:     _final := public.neo_kitchen_aggregate_ticket(_ticket);
+  76:     RETURN jsonb_build_object('ticket_status', _final, 'items_moved', _moved);
+  77:   END IF;
+  78: 
+  79:   _target_idx := array_position(_path, _to);
+  80:   FOR _i IN SELECT * FROM public.station_ticket_items WHERE ticket_id = _ticket AND status NOT IN ('cancelled','completed') LOOP
+  81:     _cur_idx := array_position(_path, _i.status);
+  82:     IF _cur_idx IS NULL AND _i.status = 'collected' THEN
+  83:       _cur_idx := array_position(_path, 'ready');
+  84:     END IF;
+  85:     IF _cur_idx IS NULL THEN
+  86:       RAISE EXCEPTION 'Ticket % cannot move to %: item is %', _t.ticket_number, _to, _i.status;
+  87:     END IF;
+  88:     WHILE _cur_idx < _target_idx LOOP
+  89:       _cur_idx := _cur_idx + 1;
+  90:       _step := _path[_cur_idx];
+  91:       PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+  92:       _moved := _moved + 1;
+  93:     END LOOP;
+  94:   END LOOP;
+  95: 
+  96:   _final := public.neo_kitchen_aggregate_ticket(_ticket);
+  97:   IF _final <> _to THEN
+  98:     RAISE EXCEPTION 'Ticket % could not reach % (items resolve to %)', _t.ticket_number, _to, _final;
+  99:   END IF;
+ 100:   RETURN jsonb_build_object('ticket_status', _final, 'items_moved', _moved);
+ 101: END;
+ 102: $function$;
+ 103: 
+ 104: GRANT EXECUTE ON FUNCTION public.neo_kitchen_assert_station_authority(uuid) TO authenticated;
+
+========================================
+FILE: supabase/migrations/20260922174127_2f041c85-a9db-433e-b576-a2e6b5bef1f3.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_guest_order_tracking(_org uuid, _reference text)
+   2:  RETURNS jsonb
+   3:  LANGUAGE plpgsql
+   4:  STABLE SECURITY DEFINER
+   5:  SET search_path TO 'public'
+   6: AS $function$
+   7: DECLARE
+   8:   _cust uuid := public.my_customer_id(); _d public.delivery_orders; _rider public.rider_profiles;
+   9:   _pay public.pos_payments; _svc numeric; _started boolean;
+  10: BEGIN
+  11:   IF _cust IS NULL THEN RETURN NULL; END IF;
+  12:   SELECT * INTO _d FROM public.delivery_orders
+  13:    WHERE organization_id = _org AND order_number = _reference AND customer_id = _cust;
+  14:   IF _d.id IS NULL THEN RETURN NULL; END IF;
+  15: 
+  16:   IF _d.rider_id IS NOT NULL THEN
+  17:     SELECT * INTO _rider FROM public.rider_profiles WHERE id = _d.rider_id;
+  18:   END IF;
+  19: 
+  20:   SELECT * INTO _pay FROM public.pos_payments
+  21:    WHERE order_id = _d.pos_order_id AND status IN ('paid','completed','captured')
+  22:    ORDER BY created_at DESC LIMIT 1;
+  23: 
+  24:   _svc := coalesce(_d.service_charge_total, 0);
+  25: 
+  26:   -- "Started" means a station has taken the work on, so the guest can no
+  27:   -- longer cancel it themselves.
+  28:   _started := EXISTS (
+  29:     SELECT 1 FROM public.kitchen_tickets t
+  30:      WHERE t.order_id = _d.pos_order_id
+  31:        AND t.status NOT IN ('new','queued','pending','cancelled')
+  32:   );
+  33: 
+  34:   RETURN jsonb_build_object(
+  35:     'id', _d.id,
+  36:     'order_number', _d.order_number,
+  37:     'fulfilment_type', _d.fulfilment_type,
+  38:     'order_status', _d.order_status,
+  39:     'kitchen_status', _d.kitchen_status,
+  40:     'dispatch_status', _d.dispatch_status,
+  41:     'payment_status', _d.payment_status,
+  42:     'payment_method', _d.payment_method,
+  43:     'subtotal', _d.subtotal,
+  44:     'tax_total', _d.tax_total,
+  45:     'service_charge', _svc,
+  46:     'discount_total', _d.discount_total,
+  47:     'delivery_fee', _d.delivery_fee,
+  48:     'grand_total', _d.grand_total,
+  49:     'currency', coalesce(_d.currency, 'KES'),
+  50:     'receipt_number', _pay.receipt_number,
+  51:     'paid_at', _pay.paid_at,
+  52:     'created_at', _d.created_at,
+  53:     'estimated_delivery_at', _d.estimated_delivery_at,
+  54:     'delivered_at', _d.delivered_at,
+  55:     'cancelled_at', _d.cancelled_at,
+  56:     'can_cancel', (
+  57:       _d.order_status NOT IN ('cancelled','rejected','delivered','completed','collected')
+  58:       AND coalesce(_d.dispatch_status, '') NOT IN ('picked-up','on-the-way','delivered')
+  59:       AND _d.payment_status NOT IN ('paid','charged','refunded')
+  60:       AND NOT _started
+  61:     ),
+  62:     'courier', CASE WHEN _rider.id IS NULL THEN NULL ELSE jsonb_build_object(
+  63:         'display_name', split_part(coalesce(_rider.display_name, 'Courier'), ' ', 1),
+  64:         'vehicle_type', _rider.vehicle_type,
+  65:         'availability_status', _rider.availability_status) END,
+  66:     'items', (SELECT coalesce(jsonb_agg(jsonb_build_object(
+  67:                   'name', oi.item_name, 'quantity', oi.quantity,
+  68:                   'line_total', oi.line_total, 'status', oi.status) ORDER BY oi.created_at), '[]'::jsonb)
+  69:                 FROM public.pos_order_items oi WHERE oi.order_id = _d.pos_order_id),
+  70:     'timeline', (SELECT coalesce(jsonb_agg(jsonb_build_object(
+  71:                   'status', h.new_status, 'kind', h.status_kind, 'at', h.created_at)
+  72:                   ORDER BY h.created_at), '[]'::jsonb)
+  73:                 FROM public.delivery_order_status_history h WHERE h.delivery_order_id = _d.id)
+  74:   );
+  75: END $function$;
+  76: 
+  77: CREATE OR REPLACE FUNCTION public.neo_guest_order_cancel(_org uuid, _reference text, _reason text DEFAULT NULL)
+  78:  RETURNS jsonb
+  79:  LANGUAGE plpgsql
+  80:  SECURITY DEFINER
+  81:  SET search_path TO 'public'
+  82: AS $function$
+  83: DECLARE
+  84:   _cust uuid := public.my_customer_id(); _d public.delivery_orders; _started boolean;
+  85: BEGIN
+  86:   IF _cust IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_signed_in'); END IF;
+  87: 
+  88:   SELECT * INTO _d FROM public.delivery_orders
+  89:    WHERE organization_id = _org AND order_number = _reference AND customer_id = _cust
+  90:    FOR UPDATE;
+  91:   IF _d.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'unknown_order'); END IF;
+  92: 
+  93:   IF _d.order_status = 'cancelled' THEN
+  94:     RETURN jsonb_build_object('ok', true, 'already_cancelled', true);
+  95:   END IF;
+  96: 
+  97:   _started := EXISTS (
+  98:     SELECT 1 FROM public.kitchen_tickets t
+  99:      WHERE t.order_id = _d.pos_order_id
+ 100:        AND t.status NOT IN ('new','queued','pending','cancelled')
+ 101:   );
+ 102: 
+ 103:   IF _d.payment_status IN ('paid','charged','refunded')
+ 104:      OR _d.order_status IN ('delivered','completed','collected','rejected')
+ 105:      OR coalesce(_d.dispatch_status,'') IN ('picked-up','on-the-way','delivered')
+ 106:      OR _started THEN
+ 107:     RETURN jsonb_build_object('ok', false, 'reason', 'already_started');
+ 108:   END IF;
+ 109: 
+ 110:   UPDATE public.kitchen_tickets
+ 111:      SET status = 'cancelled'
+ 112:    WHERE order_id = _d.pos_order_id
+ 113:      AND status IN ('new','queued','pending');
+ 114: 
+ 115:   UPDATE public.pos_orders
+ 116:      SET status = 'cancelled'
+ 117:    WHERE id = _d.pos_order_id
+ 118:      AND status <> 'cancelled';
+ 119: 
+ 120:   UPDATE public.delivery_orders
+ 121:      SET order_status = 'cancelled',
+ 122:          kitchen_status = 'cancelled',
+ 123:          cancelled_at = now(),
+ 124:          cancellation_reason = nullif(trim(coalesce(_reason, '')), '')
+ 125:    WHERE id = _d.id;
+ 126: 
+ 127:   INSERT INTO public.delivery_order_status_history
+ 128:     (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, reason)
+ 129:   VALUES (_org, _d.id, 'order', _d.order_status, 'cancelled', 'customer',
+ 130:           nullif(trim(coalesce(_reason, '')), ''));
+ 131: 
+ 132:   RETURN jsonb_build_object('ok', true, 'order_number', _d.order_number);
+ 133: END $function$;
+ 134: 
+ 135: REVOKE EXECUTE ON FUNCTION public.neo_guest_order_cancel(uuid, text, text) FROM PUBLIC, anon;
+ 136: GRANT EXECUTE ON FUNCTION public.neo_guest_order_cancel(uuid, text, text) TO authenticated;
+
+========================================
+FILE: supabase/migrations/20261005123000_batch_operational_consumption.sql
+========================================
+ 370: -- Sale consumption
+ 371: -- batch_canonical_recipe_consumption
+ 372: -- ============================================================
+ 373: 
+ 374: CREATE OR REPLACE FUNCTION public.inventory_consume_order_item_core(
+ 375:   _order_item uuid
+ 376: )
+ 377: RETURNS jsonb
+ 378: LANGUAGE plpgsql
+ 379: SECURITY DEFINER
+ 380: SET search_path TO 'public'
+ 381: AS $$
+ 382: DECLARE
+ 383:   v_item record;
+ 384:   v_menu record;
+ 385:   v_recipe record;
+ 386:   v_comp record;
+ 387:   v_stock record;
+ 388: 
+ 389:   v_location uuid;
+ 390:   v_station_location uuid;
+ 391:   v_line_location uuid;
+ 392: 
+ 393:   v_batches numeric;
+ 394:   v_cost numeric := 0;
+ 395:   v_lines integer := 0;
+ 396:   v_group_lines integer := 0;
+ 397:   v_volume_lines integer := 0;
+ 398:   v_waste_lines integer := 0;
+ 399:   v_ml numeric;
+ 400: 
+ 401:   v_org uuid;
+ 402:   v_branch uuid;
+ 403:   v_station uuid;
+ 404:   v_mode text;
+ 405: 
+ 406:   v_order_number text;
+ 407:   v_menu_name text;
+ 408:   v_station_name text;
+ 409:   v_ticket_number text;
+ 410:   v_actor text;
+ 411:   v_store_name text;
+ 412:   v_note text;
+ 413:   v_channel text;
+ 414: 
+ 415:   v_components jsonb := '[]'::jsonb;
+ 416:   v_kind text;
+ 417:   v_movement_type text;
+ 418:   v_key text;
+ 419: 
+ 420:   v_batch_use numeric;
+ 421:   v_batch_use_recipe numeric;
+ 422:   v_batch_unit text;
+ 423: BEGIN
+ 424:   SELECT oi.*, o.branch_id, o.organization_id AS org, o.status AS order_status
+ 425:     INTO v_item
+ 426:     FROM public.pos_order_items oi
+ 427:     JOIN public.pos_orders o ON o.id = oi.order_id
+ 428:    WHERE oi.id = _order_item;
+ 429: 
+ 430:   IF v_item IS NULL THEN
+ 431:     RETURN jsonb_build_object('status', 'no-item');
+ 432:   END IF;
+ 433: 
+ 434:   v_org := v_item.org;
+ 435:   v_branch := v_item.branch_id;
+ 436: 
+ 437:   IF v_item.order_status IN ('cancelled','voided','void-pending')
+ 438:      OR v_item.status IN ('draft','cancelled','voided','cancel-pending') THEN
+ 439: 
+ 440:     INSERT INTO public.inventory_posting_events (
+ 441:       organization_id, branch_id, order_id, order_item_id,
+ 442:       posting_type, idempotency_key, status, payload
+ 443:     )
+ 444:     VALUES (
+ 445:       v_org, v_branch, v_item.order_id, _order_item,
+ 446:       'consumption',
+ 447:       'skip:' || _order_item::text,
+ 448:       'skipped',
+ 449:       jsonb_build_object(
+ 450:         'reason','lifecycle',
+ 451:         'order_status',v_item.order_status,
+ 452:         'item_status',v_item.status
+ 453:       )
+ 454:     )
+ 455:     ON CONFLICT DO NOTHING;
+ 456: 
+ 457:     RETURN jsonb_build_object(
+ 458:       'status','skipped-lifecycle',
+ 459:       'order_status',v_item.order_status
+ 460:     );
+ 461:   END IF;
+ 462: 
+ 463:   IF EXISTS (
+ 464:     SELECT 1
+ 465:       FROM public.inventory_posting_events
+ 466:      WHERE order_item_id = _order_item
+ 467:        AND status = 'posted'
+ 468:   ) THEN
+ 469:     RETURN jsonb_build_object('status','already-posted');
+ 470:   END IF;
+ 471: 
+ 472:   SELECT o.order_number,
+ 473:          replace(lower(COALESCE(o.order_type,'')), '_', '-')
+ 474:     INTO v_order_number, v_channel
+ 475:     FROM public.pos_orders o
+ 476:    WHERE o.id = v_item.order_id;
+ 477: 
+ 478:   SELECT *
+ 479:     INTO v_menu
+ 480:     FROM public.menu_items
+ 481:    WHERE id = v_item.menu_item_id;
+ 482: 
+ 483:   v_menu_name := v_menu.name;
+ 484: 
+ 485:   SELECT *
+ 486:     INTO v_recipe
+ 487:     FROM public.recipes
+ 488:    WHERE organization_id = v_org
+ 489:      AND menu_item_id = v_item.menu_item_id
+ 490:      AND recipe_type IN ('menu_item','direct_sale')
+ 491:      AND status = 'active'
+ 492:    ORDER BY (recipe_type = 'menu_item') DESC, version DESC
+ 493:    LIMIT 1;
+ 494: 
+ 495:   v_mode := COALESCE(v_menu.consumption_mode, 'none');
+ 496: 
+ 497:   IF v_mode = 'none' AND v_recipe IS NOT NULL THEN
+ 498:     v_mode :=
+ 499:       CASE
+ 500:         WHEN v_recipe.recipe_type = 'direct_sale'
+ 501:           THEN 'direct_stock'
+ 502:         ELSE 'recipe'
+ 503:       END;
+ 504:   END IF;
+ 505: 
+ 506:   IF v_mode = 'none' THEN
+ 507:     RETURN jsonb_build_object(
+ 508:       'status','no-consumption',
+ 509:       'menu_item',v_menu_name
+ 510:     );
+ 511:   END IF;
+ 512: 
+ 513:   IF v_menu.consumption_channels IS NOT NULL
+ 514:      AND array_length(v_menu.consumption_channels, 1) > 0
+ 515:      AND NOT (v_channel = ANY (v_menu.consumption_channels)) THEN
+ 516:     RETURN jsonb_build_object(
+ 517:       'status','channel-excluded',
+ 518:       'order_channel',v_channel
+ 519:     );
+ 520:   END IF;
+ 521: 
+ 522:   v_station := COALESCE(
+ 523:     v_item.station_id,
+ 524:     v_menu.station_id,
+ 525:     v_recipe.station_id
+ 526:   );
+ 527: 
+ 528:   SELECT sl.id
+ 529:     INTO v_station_location
