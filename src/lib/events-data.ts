@@ -1351,6 +1351,7 @@ export function useRecordEventPayment() {
     entryType: string;
     method: string;
     reference?: string | undefined;
+    intentKey?: string | undefined;
     reason?: string | undefined;
     /** Which of the hotel's accounts received the money. */
     destinationAccountId?: string | null | undefined;
@@ -1362,6 +1363,7 @@ export function useRecordEventPayment() {
         _entry_type: v.entryType,
         _method: v.method,
         _reference: v.reference ?? null,
+        _intent_key: v.intentKey ?? null,
         _reason: v.reason ?? null,
         _account: v.destinationAccountId ?? null,
       } as never);

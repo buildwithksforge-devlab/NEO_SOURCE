@@ -7,7 +7,7 @@
  * real split rather than one lump figure. The browser never sums the bill —
  * charged, received and outstanding all come from the database statement.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Banknote } from "lucide-react";
 import { toast } from "sonner";
@@ -69,6 +69,7 @@ function Page() {
   const [amounts, setAmounts] = useState<Record<TenderKey, string>>({ cash: "", card: "", mpesa: "" });
   const [references, setReferences] = useState<Record<TenderKey, string>>({ cash: "", card: "", mpesa: "" });
   const [note, setNote] = useState("");
+  const submissionInProgress = useRef(false);
   const [errors, setErrors] = useState<Partial<Record<TenderKey | "booking", string>>>({});
 
   // The till the cashier has open. Cash taken for an event lands in this
@@ -101,50 +102,159 @@ function Page() {
   const entered = TENDERS.reduce((sum, t) => sum + (Number(amounts[t.key]) || 0), 0);
 
   const submit = async () => {
+    if (submissionInProgress.current || record.isPending) return;
+
     const next: Partial<Record<TenderKey | "booking", string>> = {};
     if (!bookingId) next.booking = "Choose the event this money belongs to.";
 
     const payable = TENDERS.filter((t) => amounts[t.key].trim() !== "");
+
     for (const tender of payable) {
       const value = Number(amounts[tender.key]);
-      if (Number.isNaN(value) || value <= 0) {
+
+      if (!Number.isFinite(value) || value <= 0) {
         next[tender.key] = "Enter an amount greater than zero.";
         continue;
       }
+
       if (tender.referenceRequired && !references[tender.key].trim()) {
         next[tender.key] = `A ${tender.label} reference is required.`;
       }
     }
-    if (payable.length === 0) next.cash = "Enter at least one amount.";
+
+    if (payable.length === 0) {
+      next.cash = "Enter at least one amount.";
+    }
 
     setErrors(next);
+
     if (Object.keys(next).length > 0 || !bookingId) return;
 
-    let posted = 0;
-    for (const tender of payable) {
-      const result = (await record.mutateAsync({
-        bookingId,
-        amount: Number(amounts[tender.key]),
-        entryType,
-        method: tender.key,
-        reference: references[tender.key].trim() || undefined,
-        reason: note.trim() || undefined,
-      })) as { ok?: boolean; reason?: string; detail?: string };
-      if (result?.ok === false) {
-        setErrors({ [tender.key]: result.detail ?? "That entry was refused." });
-        toast.error(result.detail ?? "That entry was refused.");
-        break;
-      }
-      posted += 1;
-    }
-    if (posted === 0) return;
-    void qc.invalidateQueries({ queryKey: ["pos", "shift-expected", shiftId] });
-    setAmounts({ cash: "", card: "", mpesa: "" });
-    setReferences({ cash: "", card: "", mpesa: "" });
-    setNote("");
-    toast.success(`${posted} ${posted === 1 ? "receipt" : "receipts"} recorded against the event bill.`);
-  };
+    submissionInProgress.current = true;
 
+    let posted = 0;
+    let stopped = false;
+
+    try {
+      for (const tender of payable) {
+        const amount = Number(amounts[tender.key]);
+        const reference = references[tender.key].trim();
+        const reason = note.trim();
+
+        // Identify the exact payment attempt without putting a payment
+        // reference or other sensitive details in the storage key.
+        const fingerprint = JSON.stringify({
+          bookingId,
+          entryType,
+          method: tender.key,
+          amount,
+          reference,
+          reason,
+        });
+
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(fingerprint),
+        );
+
+        const hash = Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+
+        const storageKey = `neo:event-payment-attempt:${hash}`;
+
+        // Store the identifier BEFORE sending the collection request.
+        // Retain it if the response is uncertain.
+        let intentKey = sessionStorage.getItem(storageKey);
+
+        if (!intentKey) {
+          intentKey = crypto.randomUUID();
+          sessionStorage.setItem(storageKey, intentKey);
+        }
+
+        try {
+          const result = (await record.mutateAsync({
+            bookingId,
+            amount,
+            entryType,
+            method: tender.key,
+            reference: reference || undefined,
+            reason: reason || undefined,
+            intentKey,
+          })) as {
+            ok?: boolean;
+            reason?: string;
+            detail?: string;
+            replayed?: boolean;
+          };
+
+          if (result?.ok !== true) {
+            stopped = true;
+
+            setErrors({
+              [tender.key]:
+                result?.detail ??
+                "Payment was not confirmed. Review the entry before retrying.",
+            });
+
+            toast.error(
+              result?.detail ??
+                "Payment was not confirmed. Check the payment register.",
+            );
+
+            break;
+          }
+
+          // Clear this tender only after the database confirms success.
+          sessionStorage.removeItem(storageKey);
+
+          setAmounts((previous) => ({
+            ...previous,
+            [tender.key]: "",
+          }));
+
+          setReferences((previous) => ({
+            ...previous,
+            [tender.key]: "",
+          }));
+
+          posted += 1;
+        } catch {
+          stopped = true;
+
+          // A network failure does not prove the payment failed.
+          // Retain the exact attempt ID for a safe retry.
+          setErrors({
+            [tender.key]:
+              "Payment outcome uncertain. Check the register, then retry using the same entry.",
+          });
+
+          toast.error(
+            `${tender.label}: payment outcome uncertain. Check the register before collecting again.`,
+          );
+
+          break;
+        }
+      }
+
+      if (posted > 0) {
+        void qc.invalidateQueries({
+          queryKey: ["pos", "shift-expected", shiftId],
+        });
+
+        toast.success(
+          `${posted} ${posted === 1 ? "receipt" : "receipts"} confirmed.`,
+        );
+      }
+
+      if (!stopped && posted === payable.length) {
+        setNote("");
+        setErrors({});
+      }
+    } finally {
+      submissionInProgress.current = false;
+    }
+  };
   return (
     <div className="space-y-6">
       <PageHeader
