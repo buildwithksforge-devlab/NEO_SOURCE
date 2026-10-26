@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
 import { useMyOrderPin } from "@/lib/delivery-data";
+import { supabase } from "@/integrations/supabase/client";
+import { validateMpesaReceiptCode } from "@/lib/delivery-mpesa-reference";
 import { STALE_LOCATION_SECONDS, locationAgeSeconds, useDeliveryLive } from "@/lib/delivery-live";
 import {
   money,
@@ -52,10 +54,13 @@ function TrackPage() {
 
   const charge = useDeliveryMpesaCharge();
   const [retryPhone, setRetryPhone] = useState("");
+  const [tillReceiptCode, setTillReceiptCode] = useState("");
+  const [tillSubmitting, setTillSubmitting] = useState(false);
+  const [tillSubmitted, setTillSubmitted] = useState(false);
   const paymentMethod = String(order.data?.["payment_method"] ?? "");
   const paymentStatus = String(order.data?.["payment_status"] ?? "");
   // An M-Pesa request that failed, was declined or never completed leaves the
-  // bill outstanding — the guest must be able to send the request again.
+  // bill outstanding â€” the guest must be able to send the request again.
   const canRetryPayment =
     paymentMethod === "mpesa" &&
     !["paid", "refunded", "voided"].includes(paymentStatus) &&
@@ -92,7 +97,7 @@ function TrackPage() {
             <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
               Placed {new Date(String(order.data["created_at"])).toLocaleString()}
               {order.data["estimated_delivery_at"]
-                ? ` · Expected ${new Date(String(order.data["estimated_delivery_at"])).toLocaleTimeString()}`
+                ? ` Â· Expected ${new Date(String(order.data["estimated_delivery_at"])).toLocaleTimeString()}`
                 : ""}
             </p>
 
@@ -131,7 +136,7 @@ function TrackPage() {
             <div className="mt-2 flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Payment</span>
               <span style={{ color: brandFallback.secondary }}>
-                {String(order.data["payment_method"] ?? "—")} · {String(order.data["payment_status"] ?? "—")}
+                {String(order.data["payment_method"] ?? "â€”")} Â· {String(order.data["payment_status"] ?? "â€”")}
               </span>
             </div>
 
@@ -174,8 +179,101 @@ function TrackPage() {
                     void order.refetch();
                   }}
                 >
-                  {charge.isPending ? "Sending payment request…" : "Send payment request"}
+                  {charge.isPending ? "Sending payment requestâ€¦" : "Send payment request"}
                 </BrandButton>
+              </div>
+            ) : null}
+
+            {paymentMethod === "mpesa" &&
+             !["paid", "settled", "completed", "refunded", "voided"].includes(paymentStatus) &&
+             !["cancelled", "rejected", "failed"].includes(status) ? (
+              <div className="mt-5 border-t border-black/10 pt-4">
+                <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  Already paid to our M-PESA Till?
+                </p>
+
+                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                  If you paid the hotel's official Till directly, submit the M-PESA
+                  transaction code for verification. Submitting a code does not
+                  confirm payment.
+                </p>
+
+                <Label htmlFor="till-receipt" className="mt-3 block">
+                  M-PESA transaction code
+                </Label>
+
+                <Input
+                  id="till-receipt"
+                  className="mt-1"
+                  value={tillReceiptCode}
+                  onChange={(e) => setTillReceiptCode(e.target.value)}
+                  placeholder="Transaction code"
+                  autoComplete="off"
+                  disabled={tillSubmitting || tillSubmitted}
+                />
+
+                <BrandButton
+                  className="mt-3 w-full"
+                  disabled={tillSubmitting || tillSubmitted || !tillReceiptCode.trim()}
+                  onClick={async () => {
+                    try {
+                      const code = validateMpesaReceiptCode(tillReceiptCode);
+                      setTillSubmitting(true);
+
+                      const client = supabase as unknown as {
+                        rpc: (
+                          name: string,
+                          args: Record<string, unknown>
+                        ) => Promise<{
+                          data: {
+                            ok?: boolean;
+                            status?: string;
+                            detail?: string;
+                            reason?: string;
+                          } | null;
+                          error: { message: string } | null;
+                        }>;
+                      };
+
+                      const { data, error } = await client.rpc(
+                        "neo_delivery_mpesa_till_claim_submit",
+                        {
+                          _order: String(order.data?.["id"] ?? ""),
+                          _receipt: code,
+                        }
+                      );
+
+                      if (error) throw new Error(error.message);
+                      if (!data?.ok) {
+                        throw new Error(
+                          data?.detail ?? data?.reason ?? "Reference not accepted."
+                        );
+                      }
+
+                      setTillSubmitted(true);
+                      toast.success("Reference submitted for Finance verification.");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not submit M-PESA reference."
+                      );
+                    } finally {
+                      setTillSubmitting(false);
+                    }
+                  }}
+                >
+                  {tillSubmitting
+                    ? "Submitting reference..."
+                    : tillSubmitted
+                      ? "Awaiting Finance verification"
+                      : "Submit transaction code"}
+                </BrandButton>
+
+                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                  Keep your M-PESA confirmation message. The order remains
+                  unpaid until the hotel verifies the transaction.
+                </p>
               </div>
             ) : null}
           </section>
@@ -186,8 +284,8 @@ function TrackPage() {
 }
 
 /**
- * Where the order is going, who is bringing it and — while the run is live and
- * the property allows it — the courier's last known position. There is no map
+ * Where the order is going, who is bringing it and â€” while the run is live and
+ * the property allows it â€” the courier's last known position. There is no map
  * provider here: a position is shown as a place and an age, with a link the
  * guest's own phone can open.
  */
@@ -234,7 +332,7 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
             {courier.display_name} is bringing your order
           </p>
           <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
-            {[courier.vehicle_type, courier.vehicle_registration].filter(Boolean).join(" · ") ||
+            {[courier.vehicle_type, courier.vehicle_registration].filter(Boolean).join(" Â· ") ||
               "Vehicle details not recorded"}
           </p>
           {courier.phone ? (
@@ -265,7 +363,7 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
                 {age !== null && age < 60
                   ? "Updated moments ago"
                   : `Updated ${Math.round((age ?? 0) / 60)} min ago`}
-                {stale ? " — the signal has dropped, so this may have moved." : ""}
+                {stale ? " â€” the signal has dropped, so this may have moved." : ""}
               </p>
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
@@ -290,7 +388,7 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
 
 /**
  * The collection PIN, shown only to the customer who placed this order.
- * Staff and riders cannot read it anywhere — the rider types it in and the
+ * Staff and riders cannot read it anywhere â€” the rider types it in and the
  * database checks it against a stored fingerprint.
  */
 function DeliveryPinCard({ orderId }: { orderId: string }) {
@@ -317,7 +415,7 @@ function DeliveryPinCard({ orderId }: { orderId: string }) {
       ) : (
         <>
           <p className="mt-2 text-3xl font-semibold tracking-[0.35em]" style={{ color: brandFallback.secondary }}>
-            {data.pin ?? "——————"}
+            {data.pin ?? "â€”â€”â€”â€”â€”â€”"}
           </p>
           <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
             Give this to the rider when your order arrives. Do not share it with anyone else.
@@ -341,3 +439,4 @@ function DeliveryPinCard({ orderId }: { orderId: string }) {
     </section>
   );
 }
+

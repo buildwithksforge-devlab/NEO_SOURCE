@@ -1,5 +1,5 @@
-/**
- * The payment register — every collection, whatever module took it.
+﻿/**
+ * The payment register â€” every collection, whatever module took it.
  *
  * Rows come from one source (`neo_payment_register`), which the database keeps
  * in step with folio payments, till payments, event payments and M-Pesa
@@ -33,6 +33,7 @@ import { money, shortDate, titleCase } from "@/lib/finance";
 import { useFinanceFactScope } from "@/lib/finance-data";
 import { useAuth } from "@/lib/auth";
 import { usePaymentLifecycle } from "@/lib/payment-lifecycle";
+import { DeliveryTillVerification } from "@/components/finance/DeliveryTillVerification";
 import {
   PAYMENT_STATES,
   PAYMENT_STATE_HINT,
@@ -153,6 +154,8 @@ function PaymentsPage() {
 
       <SummaryStrip lead={lead} figures={figures} />
 
+      {mayVerify ? <DeliveryTillVerification /> : null}
+
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <Label className="text-xs text-muted-foreground">Stage</Label>
@@ -190,7 +193,7 @@ function PaymentsPage() {
           </Select>
         </div>
         <p className="text-xs text-muted-foreground">
-          {shortDate(scope.from)} – {shortDate(scope.to)}
+          {shortDate(scope.from)} â€“ {shortDate(scope.to)}
         </p>
       </div>
 
@@ -243,10 +246,10 @@ function Row({
   return (
     <tr>
       <td className="py-2 pr-4 font-medium">
-        {row.reference ?? "—"}
+        {row.reference ?? "â€”"}
         <span className="block text-xs text-muted-foreground">
           {shortDate(row.requested_at)}
-          {row.environment ? ` · ${row.environment}` : ""}
+          {row.environment ? ` Â· ${row.environment}` : ""}
         </span>
       </td>
       <td className="py-2 pr-4">
@@ -282,7 +285,7 @@ function Row({
         ) : needsVerification ? (
           <span className="text-destructive">Not checked</span>
         ) : (
-          "—"
+          "â€”"
         )}
       </td>
       <td className="py-2">
@@ -295,3 +298,4 @@ function Row({
     </tr>
   );
 }
+

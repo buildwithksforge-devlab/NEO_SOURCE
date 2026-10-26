@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Money against a delivery order.
  *
  * The invoice must exist first; this dialog only tells the database how much
  * came in and how, and the database writes the receipt, the balance and the
  * accounting entry.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,6 +52,13 @@ export function DeliveryPaymentDialog({
   // Method is how it was paid; this is which hotel account received it.
   const [account, setAccount] = useState<string | null>(null);
 
+  // Preserve the identifier for retries of the same payment details.
+  // A new set of details creates a new payment attempt.
+  const paymentAttempt = useRef<{
+    fingerprint: string;
+    id: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!orderId) return;
     setEntryType("payment");
@@ -59,6 +66,8 @@ export function DeliveryPaymentDialog({
     setAmount(suggestedAmount ? String(suggestedAmount) : "");
     setReference("");
     setReason("");
+    setAccount(null);
+    paymentAttempt.current = null;
   }, [orderId, defaultMethod, suggestedAmount]);
 
   const value = Number(amount);
@@ -68,7 +77,7 @@ export function DeliveryPaymentDialog({
     <Dialog open={orderId !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Record money — {orderNumber ?? "delivery order"}</DialogTitle>
+          <DialogTitle>Record money â€” {orderNumber ?? "delivery order"}</DialogTitle>
           <DialogDescription>
             The receipt, the invoice balance and the accounting entry are all written together.
           </DialogDescription>
@@ -107,7 +116,7 @@ export function DeliveryPaymentDialog({
               id="delivery-payment-reference"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="M-Pesa code, slip number…"
+              placeholder="M-Pesa code, slip numberâ€¦"
             />
           </div>
 
@@ -136,6 +145,26 @@ export function DeliveryPaymentDialog({
             disabled={!valid || !orderId || record.isPending}
             onClick={() => {
               if (!orderId || !valid) return;
+              const fingerprint = JSON.stringify({
+                orderId,
+                amount: value,
+                method,
+                entryType,
+                reference: reference.trim(),
+                reason: reason.trim(),
+                account,
+              });
+
+              if (
+                !paymentAttempt.current ||
+                paymentAttempt.current.fingerprint !== fingerprint
+              ) {
+                paymentAttempt.current = {
+                  fingerprint,
+                  id: crypto.randomUUID(),
+                };
+              }
+
               record.mutate(
                 {
                   orderId,
@@ -145,15 +174,22 @@ export function DeliveryPaymentDialog({
                   reference,
                   reason,
                   destinationAccountId: account,
+                  idempotencyKey: paymentAttempt.current.id,
                 },
-                { onSuccess: () => onOpenChange(false) },
+                {
+                  onSuccess: () => {
+                    paymentAttempt.current = null;
+                    onOpenChange(false);
+                  },
+                },
               );
             }}
           >
-            {record.isPending ? "Recording…" : "Record"}
+            {record.isPending ? "Recordingâ€¦" : "Record"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
