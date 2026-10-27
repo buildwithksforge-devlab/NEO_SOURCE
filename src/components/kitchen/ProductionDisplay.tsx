@@ -178,7 +178,7 @@ function DisplayBoard({
                     try {
                       await pairSharedDisplay(
                         branchId,
-                        stations.map((s) => s.id),
+                        [stationId],
                         `${propertyName} · ${DISPLAY_LABELS[department]}`,
                         department === "overview",
                       );
@@ -190,7 +190,7 @@ function DisplayBoard({
                     }
                   }}
                 >
-                  {pairing ? "Pairing…" : "Pair stations & sign out this browser"}
+                  {pairing ? "Pairing…" : "Pair this station for staff PIN operation"}
                 </Button>
               </>
             ) : null}
