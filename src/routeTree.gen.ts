@@ -404,6 +404,7 @@ import { Route as ShellPmsReservationsIdRouteImport } from './routes/_shell.pms.
 import { Route as ShellPmsReservationsNewRouteImport } from './routes/_shell.pms.reservations.new'
 import { Route as ShellPosOrdersIndexRouteImport } from './routes/_shell.pos.orders.index'
 import { Route as ShellPosOrdersIdRouteImport } from './routes/_shell.pos.orders.$id'
+import { Route as ApiPublicPrintAgentActionRouteImport } from './routes/api/public/print-agent.$action'
 import { Route as DeliveryHotelSlugTrackOrderReferenceRouteImport } from './routes/delivery.$hotelSlug.track.$orderReference'
 import { Route as GuestHotelSlugOrdersOrderReferenceRouteImport } from './routes/guest.$hotelSlug.orders_.$orderReference'
 import { Route as GuestHotelSlugReservationsReservationReferenceRouteImport } from './routes/guest.$hotelSlug.reservations.$reservationReference'
@@ -2436,6 +2437,12 @@ const ShellPosOrdersIdRoute = ShellPosOrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => ShellPosRoute,
 } as any)
+const ApiPublicPrintAgentActionRoute =
+  ApiPublicPrintAgentActionRouteImport.update({
+    id: '/api/public/print-agent/$action',
+    path: '/api/public/print-agent/$action',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DeliveryHotelSlugTrackOrderReferenceRoute =
   DeliveryHotelSlugTrackOrderReferenceRouteImport.update({
     id: '/track/$orderReference',
@@ -2873,6 +2880,7 @@ export interface FileRoutesByFullPath {
   '/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -3258,6 +3266,7 @@ export interface FileRoutesByTo {
   '/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -3664,6 +3673,7 @@ export interface FileRoutesById {
   '/_shell/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/_shell/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/_shell/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders_/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -4070,6 +4080,7 @@ export interface FileRouteTypes {
     | '/pms/reservations/$id'
     | '/pms/reservations/new'
     | '/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4455,6 +4466,7 @@ export interface FileRouteTypes {
     | '/pms/reservations/$id'
     | '/pms/reservations/new'
     | '/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4860,6 +4872,7 @@ export interface FileRouteTypes {
     | '/_shell/pms/reservations/$id'
     | '/_shell/pms/reservations/new'
     | '/_shell/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders_/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4901,6 +4914,7 @@ export interface RootRouteChildren {
   RiderIndexRoute: typeof RiderIndexRoute
   StartIndexRoute: typeof StartIndexRoute
   ApiInternalWorkerPushRoute: typeof ApiInternalWorkerPushRoute
+  ApiPublicPrintAgentActionRoute: typeof ApiPublicPrintAgentActionRoute
   ApiPublicDeliveryCallbackTokenRoute: typeof ApiPublicDeliveryCallbackTokenRoute
   ApiPublicDeliverySimulatorCourierRoute: typeof ApiPublicDeliverySimulatorCourierRoute
   ApiPublicMpesaCallbackTokenRoute: typeof ApiPublicMpesaCallbackTokenRoute
@@ -7675,6 +7689,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellPosOrdersIdRouteImport
       parentRoute: typeof ShellPosRoute
     }
+    '/api/public/print-agent/$action': {
+      id: '/api/public/print-agent/$action'
+      path: '/api/public/print-agent/$action'
+      fullPath: '/api/public/print-agent/$action'
+      preLoaderRoute: typeof ApiPublicPrintAgentActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/delivery/$hotelSlug/track/$orderReference': {
       id: '/delivery/$hotelSlug/track/$orderReference'
       path: '/track/$orderReference'
@@ -8720,6 +8741,7 @@ const rootRouteChildren: RootRouteChildren = {
   RiderIndexRoute: RiderIndexRoute,
   StartIndexRoute: StartIndexRoute,
   ApiInternalWorkerPushRoute: ApiInternalWorkerPushRoute,
+  ApiPublicPrintAgentActionRoute: ApiPublicPrintAgentActionRoute,
   ApiPublicDeliveryCallbackTokenRoute: ApiPublicDeliveryCallbackTokenRoute,
   ApiPublicDeliverySimulatorCourierRoute:
     ApiPublicDeliverySimulatorCourierRoute,
