@@ -37,6 +37,7 @@ import {
   useApproveRequisitionAtStores,
   useIssueRequisition,
   useSetIssuingStore,
+  useSetReceivingStore,
   useRaiseReplenishment,
   useRejectRequisition,
   useStoresAvailability,
@@ -111,6 +112,7 @@ function StoresRequisitionsPage() {
   const reject = useRejectRequisition();
   const replenish = useRaiseReplenishment();
   const setStore = useSetIssuingStore();
+  const setReceivingStore = useSetReceivingStore();
   const locationsQuery = useStockLocations();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -237,6 +239,7 @@ function StoresRequisitionsPage() {
     const canIssue = mayIssue && approvedForIssue;
     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
     const sourceStoreId = str(requisition["source_location_id"], "");
+    const destinationStoreId = str(requisition["destination_location_id"], "");
     const sourceStoreName = str(
       (requisition["source_store"] as StoresRow | null)?.["name"],
       "Not chosen yet",
@@ -440,6 +443,56 @@ function StoresRequisitionsPage() {
 
 
           {canIssue ? (
+            <InspectorSection title="Receiving departmental store">
+              <p className="mb-2 text-sm text-muted-foreground">
+                Choose where the department will receive the stock.
+              </p>
+
+              <Select
+                value={destinationStoreId}
+                onValueChange={(value) => {
+                  if (value === sourceStoreId) {
+                    window.alert(
+                      "Issuing and receiving stores must be different."
+                    );
+                    return;
+                  }
+
+                  setReceivingStore.mutate({
+                    requisitionId: id,
+                    locationId: value,
+                  });
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select receiving store" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {storeOptions
+                    .filter(
+                      (location) =>
+                        String(location["id"]) !== sourceStoreId
+                    )
+                    .map((location) => (
+                      <SelectItem
+                        key={String(location["id"])}
+                        value={String(location["id"])}
+                      >
+                        {str(location["name"], "Store")}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              {!destinationStoreId ? (
+                <p className="mt-2 text-xs text-amber-600">
+                  Select a receiving departmental store before issuing stock.
+                </p>
+              ) : null}
+            </InspectorSection>
+          ) : null}
+          {canIssue ? (
             <InspectorSection title="Reason">
               <Textarea
                 rows={2}
@@ -523,6 +576,8 @@ function StoresRequisitionsPage() {
                   issue.isPending ||
                   issueLines.length === 0 ||
                   !sourceStoreId ||
+                  !destinationStoreId ||
+                  sourceStoreId === destinationStoreId ||
                   issueLines.some((entry) =>
                     !lines.some(
                       (line) =>

@@ -142,6 +142,53 @@ export function useReleaseRequisitionToStores() {
  * Name the store the goods will actually leave from. Stock cannot be issued
  * until this is set, because a movement without an origin is not a movement.
  */
+/**
+ * Assign the destination store for a departmental requisition.
+ *
+ * This only selects the receiving location.
+ * No stock is moved by this operation.
+ *
+ * Actual stock movements remain the responsibility
+ * of the authoritative database issue function.
+ */
+export function useSetReceivingStore() {
+  const invalidate = useStoresInvalidate();
+
+  return useMutation({
+    mutationFn: async (input: {
+      requisitionId: string;
+      locationId: string;
+    }) => {
+      const { data, error } = await db
+        .from("internal_requisitions")
+        .update({
+          destination_location_id: input.locationId,
+        })
+        .eq("id", input.requisitionId)
+        .select("id, destination_location_id")
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.destination_location_id !== input.locationId) {
+        throw new Error(
+          "Receiving store was not saved. Check Stores permissions."
+        );
+      }
+    },
+
+    onSuccess: () => {
+      invalidate();
+      toast.success("Receiving departmental store assigned");
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
 export function useSetIssuingStore() {
   const invalidate = useStoresInvalidate();
   return useMutation({
