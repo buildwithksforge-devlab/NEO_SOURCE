@@ -27,6 +27,24 @@ describe("restricted shared display client", () => {
     await ensureSharedScreenSignedOut();
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
+
+  it("stores the restricted display token only after supervisor sign-out succeeds", async () => {
+    let tokenPresentDuringSignOut: string | null = "not-checked";
+
+    mocks.rpc.mockResolvedValueOnce({
+      data: { ok: true, token: "restricted-token", session_id: "session" },
+      error: null,
+    });
+    mocks.signOut.mockImplementation(async () => {
+      tokenPresentDuringSignOut = sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY);
+      return { error: null };
+    });
+
+    await pairSharedDisplay("property", ["station"], "Kitchen", false);
+
+    expect(tokenPresentDuringSignOut).toBeNull();
+    expect(sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBe("restricted-token");
+  });
   it("refuses shared mode when the remaining supervisor session cannot sign out", async () => {
     mocks.getSession.mockResolvedValue({
       data: { session: { access_token: "supervisor" } },

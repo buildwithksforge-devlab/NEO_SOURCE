@@ -91,17 +91,31 @@ export async function pairSharedDisplay(
     },
   );
   if (error) throw new Error(error.message);
+  let supervisorSignedOut = false;
   try {
-    // Persist only the restricted token, never the supervisor's JWT or a PIN.
-    sessionStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
+    // Complete supervisor sign-out before storing the restricted display
+    // token. The auth sign-out lifecycle may clear session storage.
     const result = await supabase.auth.signOut({ scope: "local" });
     if (result.error) throw result.error;
+    supervisorSignedOut = true;
+
+    // Persist only the restricted token, never the supervisor's JWT or a PIN.
+    sessionStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
+    if (sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== data.token) {
+      throw new Error("This browser could not retain the paired display session.");
+    }
   } catch (error) {
     sessionStorage.removeItem(DISPLAY_TOKEN_STORAGE_KEY);
-    // Pairing failed: revoke the unused restricted session if still signed in.
-    await guardedRpc(supabase, "neo_production_display_manage", { _close: data.session_id });
+
+    // Revoke while the authenticated supervisor session is still available.
+    if (!supervisorSignedOut) {
+      await guardedRpc(supabase, "neo_production_display_manage", {
+        _close: data.session_id,
+      });
+    }
     throw error;
   }
+
   // Full navigation discards authenticated React/Query caches in this tab.
   window.location.replace("/station-screen");
 }
