@@ -91,6 +91,7 @@ export const navigation: NavGroup[] = [
     title: "Overview",
     items: [
       { label: "Dashboard", to: "/workspace", icon: LayoutDashboard, roles: ALL },
+      { label: "My Personal PIN", to: "/staff-display-code", icon: ShieldCheck, roles: ALL },
       {
         label: "Staff Board",
         to: "/staff-board",
@@ -371,12 +372,7 @@ export const navigation: NavGroup[] = [
         icon: ChefHat,
         roles: ["owner", "manager"],
       },
-      {
-        label: "My Display Code & PIN",
-        to: "/staff-display-code",
-        icon: ChefHat,
-        roles: ["owner", "manager", "kitchen", "waiter"],
-      },
+
       {
         label: "Production Overview",
         to: "/production-overview",

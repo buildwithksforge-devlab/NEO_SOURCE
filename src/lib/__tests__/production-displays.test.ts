@@ -6,6 +6,7 @@ import {
   DISPLAY_ROUTES,
 } from "@/lib/production-displays";
 import { pathPermitted } from "@/lib/capabilities";
+import { navigationForRole, type Role } from "@/lib/navigation";
 
 const stations = [
   { id: "k", name: "Hot Kitchen", station_type: "production" },
@@ -39,20 +40,29 @@ describe("production display boundaries", () => {
     expect(selectedDisplayStation([], undefined)).toBeUndefined();
     expect(displayStations([], "overview")).toEqual([]);
   });
-  it("does not offer a display PIN to a read-only production observer", () => {
-    expect(pathPermitted(canOnly("kitchen", "queue"), "/staff-display-code")).toBe(false);
-    expect(
-      pathPermitted(
-        (m, f, a) => m === "kitchen" && f === "ticket" && a === "accept",
-        "/staff-display-code",
-      ),
-    ).toBe(true);
-    expect(
-      pathPermitted(
-        (m, f, a) => m === "bar" && f === "queue" && a === "edit",
-        "/staff-display-code",
-      ),
-    ).toBe(true);
+  it("allows personal PIN setup without granting production permissions", () => {
+    const denied = () => false;
+
+    // Personal settings are available within the authenticated shell.
+    expect(pathPermitted(denied, "/staff-display-code")).toBe(true);
+
+    // A non-production employee must not gain station privileges.
+    expect(pathPermitted(denied, "/production-displays")).toBe(false);
+    expect(pathPermitted(denied, DISPLAY_ROUTES.kitchen)).toBe(false);
+    expect(pathPermitted(denied, DISPLAY_ROUTES.bar)).toBe(false);
+    expect(pathPermitted(denied, DISPLAY_ROUTES.coffee)).toBe(false);
+    expect(pathPermitted(denied, DISPLAY_ROUTES.pastry)).toBe(false);
+
+    // A Laundry or Housekeeping permission does not grant Kitchen access.
+    const laundryOnly = (module: string) => module === "laundry";
+    expect(pathPermitted(laundryOnly, "/staff-display-code")).toBe(true);
+    expect(pathPermitted(laundryOnly, DISPLAY_ROUTES.kitchen)).toBe(false);
+
+    // Existing Kitchen authorization remains unchanged.
+    const kitchenStaff = (module: string, feature: string, action?: string) =>
+      module === "kitchen" && feature === "ticket" && action === "accept";
+
+    expect(pathPermitted(kitchenStaff, "/staff-display-code")).toBe(true);
   });
   it("opens bar through its own queue permission without opening kitchen or manager overview", () => {
     const can = canOnly("bar", "queue");
@@ -67,5 +77,36 @@ describe("production display boundaries", () => {
   it("requires explicit all-stations oversight to open the combined display", () => {
     expect(pathPermitted(canOnly("kitchen", "queue"), DISPLAY_ROUTES.overview)).toBe(false);
     expect(pathPermitted(canOnly("kitchen", "all_stations"), DISPLAY_ROUTES.overview)).toBe(true);
+  });
+  it("shows personal PIN settings to every staff navigation role", () => {
+    const roles: Role[] = [
+      "owner",
+      "manager",
+      "front-office",
+      "waiter",
+      "kitchen",
+      "housekeeping",
+      "maintenance",
+      "store",
+      "accountant",
+      "marketing",
+      "hr",
+    ];
+
+    for (const role of roles) {
+      const items = navigationForRole(role).flatMap((group) => group.items);
+
+      expect(
+        items.filter((item) => item.to === "/staff-display-code"),
+      ).toHaveLength(1);
+    }
+
+    const housekeeping = navigationForRole("housekeeping").flatMap(
+      (group) => group.items,
+    );
+
+    expect(
+      housekeeping.some((item) => item.to === "/production-displays"),
+    ).toBe(false);
   });
 });

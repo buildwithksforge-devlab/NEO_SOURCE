@@ -32,6 +32,7 @@ export const UNIVERSAL_ROUTES = new Set([
   "/hr/me",
   "/dashboards",
   "/unauthorized",
+  "/staff-display-code",
   "/session-expired",
 ]);
 
@@ -42,7 +43,7 @@ type Entry = { prefix: string; module: string; feature: string; action?: string 
  * feature while `/pos/orders/42` resolves to the orders feature.
  */
 export const ROUTE_CAPABILITIES: Entry[] = [
-  { prefix: "/staff-display-code", module: "kitchen", feature: "ticket", action: "accept" },
+
   { prefix: "/production-displays", module: "kitchen", feature: "production", action: "manage" },
   // ---------- Front Office ----------
   { prefix: "/pms", module: "front-office", feature: "overview" },
@@ -593,13 +594,6 @@ export function capabilityForPath(path: string): Capability | null {
  * every alternative names an explicit feature the role already holds.
  */
 export const ROUTE_CAPABILITY_ALTERNATIVES: Record<string, Capability[]> = {
-  "/staff-display-code": [
-    { module: "bar", feature: "queue", action: "edit" },
-    { module: "kitchen", feature: "item", action: "prepare" },
-    { module: "kitchen", feature: "production", action: "manage" },
-    { module: "kitchen", feature: "chef", action: "assign" },
-    { module: "bar", feature: "queue", action: "assign" },
-  ],
   "/production-displays": [
     { module: "kitchen", feature: "chef", action: "assign" },
     { module: "bar", feature: "queue", action: "assign" },

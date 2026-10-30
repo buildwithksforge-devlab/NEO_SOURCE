@@ -312,12 +312,13 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
           to="/station-screen"
           className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
         >
-          Open Station Display - Staff Code + PIN
+          Open Paired Production Display
         </Link>
 
         <p className="text-center text-xs text-neo-steel">
-          A supervisor must pair this display first. Your personal PIN
-          authorizes production actions, not full-workspace login.
+          Paired Kitchen, Coffee, Bar and Pastry screens show incoming work without
+          a staff workspace login. Each action requires only your personal PIN.
+          Supervisors pair screens from Production Displays inside NEØ.
         </p>
       </div>
     </form>

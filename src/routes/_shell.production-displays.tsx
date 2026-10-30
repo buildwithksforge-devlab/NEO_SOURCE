@@ -49,8 +49,19 @@ function DisplayControls() {
     <div className="space-y-5">
       <PageHeader
         title="Shared display controls"
-        description="Open a department display to pair its stations. Pairing signs this browser out and creates restricted screen access for 12 hours."
+        description="Open a department display to pair its stations. To pair a screen, choose a department and station, then select Pair this station. This device signs out and opens the independent screen for 12 hours."
       />
+      <div className="rounded-lg border border-neo-mist bg-white p-4 text-sm">
+        <p className="font-semibold">Independent station screen</p>
+        <p className="mt-1 text-neo-steel">
+          A paired device receives new POS tickets without an employee signing into the full
+          operating system. Staff approve Accept, Preparing and Ready with their personal PIN.
+          Pairing or renewal requires an authorized production supervisor.
+        </p>
+        <Link to="/station-screen" className="mt-2 inline-flex font-medium text-neo-aqua underline">
+          Open this device&apos;s station screen
+        </Link>
+      </div>
       <nav aria-label="Production display entrances" className="flex flex-wrap gap-3">
         {Object.entries(DISPLAY_ROUTES)
           .filter(([, path]) => pathPermitted(can, path))

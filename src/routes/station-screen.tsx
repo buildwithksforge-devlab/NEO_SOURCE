@@ -33,7 +33,7 @@ function SharedScreen() {
   const [token] = useState(() => sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) ?? "");
   const [online, setOnline] = useState(() => navigator.onLine);
   const [selected, setSelected] = useState<SharedDisplayAction | null>(null);
-  const [code, setCode] = useState("");
+
   const [pin, setPin] = useState("");
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
@@ -45,7 +45,9 @@ function SharedScreen() {
     enabled: Boolean(token),
     retry: false,
     gcTime: 0,
-    refetchInterval: (q) => (q.state.error ? false : 5000),
+    // Keep retrying after transient network/server failures. Stopping polling on
+    // the first error stranded an otherwise active station until manual refresh.
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
   });
   useEffect(() => {
@@ -62,7 +64,6 @@ function SharedScreen() {
   }, [snapshot.refetch]);
   const close = () => {
     setSelected(null);
-    setCode("");
     setPin("");
     setReason("");
     setMessage("");
@@ -71,10 +72,9 @@ function SharedScreen() {
     retry: false,
     mutationFn: async () => {
       if (!online || !selected) throw new Error("Reconnect before submitting an action.");
-      return actOnSharedDisplay(token, code, pin, { ...selected, reason });
+      return actOnSharedDisplay(token, pin, { ...selected, reason });
     },
     onSettled: () => {
-      setCode("");
       setPin("");
     },
     onSuccess: (result) => {
@@ -90,7 +90,7 @@ function SharedScreen() {
     },
     onError: (error: Error) => {
       setMessage(
-        `${error.message} Your code and PIN have been cleared. Re-enter them to retry this same action.`,
+        `${error.message} Your PIN has been cleared. Enter it again to retry this action.`,
       );
     },
   });
@@ -126,7 +126,7 @@ function SharedScreen() {
           <p className="text-sm">
             {data?.read_only
               ? "View only"
-              : "Identify yourself with your staff code and PIN for each action."}
+              : "Enter your personal PIN for every production action."}
           </p>
           {data ? (
             <p className="text-xs text-muted-foreground">
@@ -264,7 +264,7 @@ function SharedScreen() {
                 : titleCase(selected?.to ?? "Staff action")}
             </DialogTitle>
             <DialogDescription>
-              This identifies you for this action only. Your code and PIN clear after submission.
+              Enter your unique six-digit PIN. NEØ identifies you and checks your station permissions.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -274,19 +274,6 @@ function SharedScreen() {
               action.mutate();
             }}
           >
-            <div>
-              <Label htmlFor="display-code">Staff code</Label>
-              <Input
-                id="display-code"
-                autoComplete="off"
-                autoFocus
-                value={code}
-                maxLength={24}
-                onChange={(e) => setCode(e.target.value)}
-                disabled={action.isPending}
-                required
-              />
-            </div>
             <div>
               <Label htmlFor="display-pin">Personal PIN</Label>
               <Input
@@ -301,6 +288,52 @@ function SharedScreen() {
                 disabled={action.isPending}
                 required
               />
+            </div>
+            <div className="mx-auto max-w-xs space-y-3">
+              <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Enter your personal PIN
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                  <Button
+                    key={digit}
+                    type="button"
+                    variant="outline"
+                    className="h-14 text-xl font-semibold"
+                    disabled={action.isPending}
+                    onClick={() => setPin((value) => (value + digit).slice(0, 6))}
+                  >
+                    {digit}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14"
+                  disabled={action.isPending}
+                  onClick={() => setPin((value) => value.slice(0, -1))}
+                >
+                  Delete
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14 text-xl font-semibold"
+                  disabled={action.isPending}
+                  onClick={() => setPin((value) => (value + "0").slice(0, 6))}
+                >
+                  0
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-14"
+                  disabled={action.isPending}
+                  onClick={() => setPin("")}
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
             {selected?.to === "delay" ? (
               <div>
@@ -321,7 +354,7 @@ function SharedScreen() {
                 {message}
               </p>
             ) : null}
-            <Button type="submit" disabled={disabled || pin.length !== 6 || !code.trim()}>
+            <Button type="submit" disabled={disabled || pin.length !== 6}>
               {action.isPending ? "Recording…" : "Confirm staff action"}
             </Button>
           </form>

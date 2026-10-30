@@ -47,10 +47,10 @@ function StaffDisplayCode() {
     <div className="mx-auto max-w-xl space-y-5">
       <PageHeader
         eyebrow="My staff account"
-        title="My display code & PIN"
-        description="Use your staff code and personal PIN when accepting or preparing work on a shared station display."
+        title="My personal staff PIN"
+        description="Set your unique six-digit PIN. On a paired station screen, enter only this PIN to authorize work. NEØ identifies you and checks your assigned station permissions."
       />
-      {state.isLoading ? <p>Loading your display code…</p> : null}
+      {state.isLoading ? <p>Loading your personal PIN status…</p> : null}
       {state.error ? (
         <p role="alert" className="text-destructive">
           {state.error.message}
@@ -59,14 +59,10 @@ function StaffDisplayCode() {
       {state.data ? (
         <>
           <div className="rounded-lg border p-4">
-            <p>
-              Staff code:{" "}
-              <strong>{state.data.staff_code ?? "Assigned when you first save your PIN"}</strong>
-            </p>
             <p className="text-sm">
               {state.data.pin_set
-                ? "Your display PIN is active."
-                : "You have no active display PIN."}
+                ? "Your personal PIN is active."
+                : "You have no active personal PIN."}
             </p>
           </div>
           <form
@@ -110,7 +106,7 @@ function StaffDisplayCode() {
           </form>
           {state.data.pin_set ? (
             <Button variant="outline" disabled={save.isPending} onClick={() => save.mutate(true)}>
-              Disable my display PIN
+              Disable my personal PIN
             </Button>
           ) : null}
         </>

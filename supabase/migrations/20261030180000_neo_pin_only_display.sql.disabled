@@ -1,0 +1,208 @@
+-- NEØ: PIN-only production display authentication.
+-- STAGED / DISABLED until verified against the deployed Supabase schema.
+-- Reuses existing authorized production ticket transitions and audit records.
+-- Does not grant a PIN-authenticated employee full workspace access.
+
+BEGIN;
+
+DO $preflight$
+BEGIN
+  IF to_regprocedure('public.neo_production_staff_pin(text,boolean)') IS NULL
+    OR to_regprocedure('public.neo_production_display_act(text,text,text,uuid,text,text,uuid,text)') IS NULL
+    OR to_regprocedure('public.neo_production_require_session(text)') IS NULL
+    OR to_regprocedure('extensions.crypt(text,text)') IS NULL
+    OR to_regclass('public.neo_production_staff_codes') IS NULL
+    OR to_regclass('public.neo_production_display_sessions') IS NULL
+  THEN
+    RAISE EXCEPTION
+      'Existing production display backend is required. Migration stopped.';
+  END IF;
+END
+$preflight$;
+
+CREATE OR REPLACE FUNCTION public.neo_production_staff_pin(_pin text DEFAULT NULL, _disable boolean DEFAULT false)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_org uuid:=public.current_org_id(); c public.neo_production_staff_codes; v_code text;
+BEGIN
+  IF auth.uid() IS NULL
+     OR NOT public.is_active_staff()
+     OR v_org IS NULL
+  THEN
+    RAISE EXCEPTION 'An active staff account is required.'
+      USING ERRCODE='42501';
+  END IF;
+  SELECT * INTO c FROM public.neo_production_staff_codes WHERE organization_id=v_org AND user_id=auth.uid() FOR UPDATE;
+  IF _disable THEN
+    UPDATE public.neo_production_staff_codes SET enabled=false, updated_at=now()
+      WHERE organization_id=v_org AND user_id=auth.uid();
+    RETURN jsonb_build_object('ok',true,'staff_code',c.staff_code,'pin_set',false);
+  END IF;
+  IF _pin IS NOT NULL THEN
+    IF _pin !~ '^[0-9]{6}$' THEN RAISE EXCEPTION 'Use a six-digit personal PIN.' USING ERRCODE='22023'; END IF;
+    -- Serialize PIN changes within the same organization.
+    PERFORM pg_advisory_xact_lock(20261030, hashtext(v_org::text));
+
+    -- A PIN must not identify two active employees.
+    IF EXISTS (
+      SELECT 1
+      FROM public.neo_production_staff_codes existing
+      WHERE existing.organization_id = v_org
+        AND existing.user_id <> auth.uid()
+        AND existing.enabled = true
+        AND extensions.crypt(_pin, existing.pin_hash) = existing.pin_hash
+    ) THEN
+      RAISE EXCEPTION 'This PIN is unavailable. Choose another six-digit PIN.'
+        USING ERRCODE = '23505';
+    END IF;
+    SELECT upper(btrim(staff_id)) INTO v_code FROM public.profiles WHERE id=auth.uid();
+    IF coalesce(v_code,'') !~ '^[A-Z0-9-]{3,24}$' THEN
+      v_code:=upper(substr(replace(auth.uid()::text,'-',''),1,10));
+    END IF;
+    INSERT INTO public.neo_production_staff_codes(organization_id,user_id,staff_code,pin_hash)
+      VALUES(v_org,auth.uid(),coalesce(c.staff_code,v_code),extensions.crypt(_pin,extensions.gen_salt('bf',10)))
+    ON CONFLICT (organization_id,user_id) DO UPDATE SET
+      pin_hash=EXCLUDED.pin_hash, enabled=true, failed_attempts=0, blocked_until=NULL, updated_at=now();
+  END IF;
+  SELECT * INTO c FROM public.neo_production_staff_codes WHERE organization_id=v_org AND user_id=auth.uid();
+  RETURN jsonb_build_object('ok',true,'staff_code',c.staff_code,'pin_set',coalesce(c.enabled,false));
+END $$;
+-- Keep this enrollment RPC available only to authenticated staff accounts.
+REVOKE ALL ON FUNCTION public.neo_production_staff_pin(text,boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.neo_production_staff_pin(text,boolean) TO authenticated;
+
+-- Identify an employee from a personal six-digit PIN.
+-- A restricted, supervisor-paired display token supplies organization scope.
+
+CREATE OR REPLACE FUNCTION public.neo_production_display_act_pin_only(
+    _token text,
+    _pin text,
+    _ticket uuid,
+    _to text,
+    _expected text,
+    _request uuid,
+    _reason text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    s public.neo_production_display_sessions;
+    v_matches integer := 0;
+    v_staff_code text;
+    v_result jsonb;
+BEGIN
+    -- Validate the restricted display session.
+    s := public.neo_production_require_session(_token);
+
+    SELECT *
+      INTO s
+      FROM public.neo_production_display_sessions
+     WHERE id = s.id
+     FOR UPDATE;
+
+    IF s.closed_at IS NOT NULL
+       OR s.expires_at <= now()
+       OR s.read_only
+    THEN
+        RETURN jsonb_build_object(
+            'ok', false,
+            'reason', 'display_unavailable',
+            'message', 'This display cannot perform production actions.'
+        );
+    END IF;
+
+    IF s.blocked_until > now() THEN
+        RETURN jsonb_build_object(
+            'ok', false,
+            'reason', 'locked',
+            'message', 'Too many attempts. Ask your supervisor for help.'
+        );
+    END IF;
+
+    -- Expired attempt windows start afresh.
+    IF s.attempt_window < now() - interval '15 minutes' THEN
+        UPDATE public.neo_production_display_sessions
+           SET failed_attempts = 0,
+               blocked_until = NULL,
+               attempt_window = now()
+         WHERE id = s.id;
+
+        s.failed_attempts := 0;
+    END IF;
+
+    -- PIN matching is restricted to this hotel's organization.
+    -- We must find exactly one enabled employee.
+    IF _pin IS NOT NULL AND _pin ~ '^[0-9]{6}$' THEN
+        SELECT count(*)::integer,
+               min(c.staff_code)
+          INTO v_matches, v_staff_code
+          FROM public.neo_production_staff_codes c
+         WHERE c.organization_id = s.organization_id
+           AND c.enabled = true
+           AND extensions.crypt(_pin, c.pin_hash) = c.pin_hash;
+    END IF;
+
+    IF v_matches <> 1 OR v_staff_code IS NULL THEN
+
+        -- Rate limiting must survive rejected attempts.
+        UPDATE public.neo_production_display_sessions
+           SET failed_attempts = s.failed_attempts + 1,
+               attempt_window = CASE
+                   WHEN s.attempt_window < now() - interval '15 minutes'
+                   THEN now()
+                   ELSE s.attempt_window
+               END,
+               blocked_until = CASE
+                   WHEN s.failed_attempts + 1 >= 5
+                   THEN now() + interval '15 minutes'
+                   ELSE NULL
+               END
+         WHERE id = s.id;
+
+        RETURN jsonb_build_object(
+            'ok', false,
+            'reason', 'credentials',
+            'message', 'PIN not accepted. Check your PIN or ask your supervisor.'
+        );
+    END IF;
+
+    -- The original action routine performs the authoritative checks:
+    -- employee status, organization, branch, station assignment,
+    -- department permissions, ticket state, idempotency and audit logging.
+    v_result := public.neo_production_display_act(
+        _token,
+        v_staff_code,
+        _pin,
+        _ticket,
+        _to,
+        _expected,
+        _request,
+        _reason
+    );
+
+    -- Clear failed-attempt counter only after successful authorization.
+    IF coalesce((v_result->>'ok')::boolean, false) THEN
+        UPDATE public.neo_production_display_sessions
+           SET failed_attempts = 0,
+               blocked_until = NULL,
+               attempt_window = now()
+         WHERE id = s.id;
+    END IF;
+
+    RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.neo_production_display_act_pin_only(
+    text,text,uuid,text,text,uuid,text
+) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.neo_production_display_act_pin_only(
+    text,text,uuid,text,text,uuid,text
+) TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;

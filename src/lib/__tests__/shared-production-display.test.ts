@@ -52,13 +52,15 @@ describe("restricted shared display client", () => {
       reason: "",
     };
     mocks.rpc.mockResolvedValue({ data: { ok: true }, error: null });
-    await actOnSharedDisplay("restricted-token", " scn-kit-005 ", "816294", action);
-    await actOnSharedDisplay("restricted-token", "scn-kit-005", "816294", action);
+    await actOnSharedDisplay("restricted-token", "816294", action);
+    await actOnSharedDisplay("restricted-token", "816294", action);
     expect(mocks.rpc.mock.calls[0]?.[2]).toEqual(mocks.rpc.mock.calls[1]?.[2]);
+    expect(mocks.rpc.mock.calls[0]?.[1]).toBe("neo_production_display_act_pin_only");
+    expect(mocks.rpc.mock.calls[0]?.[2]).not.toHaveProperty("_code");
     expect(mocks.rpc.mock.calls[0]?.[2]).toMatchObject({
       _request: "same-request",
       _expected: "new",
-      _code: "SCN-KIT-005",
+      _pin: "816294",
     });
     expect(sessionStorage.length).toBe(0);
   });

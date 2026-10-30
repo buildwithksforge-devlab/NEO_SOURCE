@@ -54,16 +54,14 @@ export async function readSharedDisplay(token: string): Promise<SharedDisplaySna
 }
 export async function actOnSharedDisplay(
   token: string,
-  code: string,
   pin: string,
   action: SharedDisplayAction,
 ): Promise<DisplayActionResult> {
   const { data, error } = await guardedRpc<DisplayActionResult>(
     supabase,
-    "neo_production_display_act",
+    "neo_production_display_act_pin_only",
     {
       _token: token,
-      _code: code.trim().toUpperCase(),
       _pin: pin,
       _ticket: action.ticketId,
       _to: action.to,
