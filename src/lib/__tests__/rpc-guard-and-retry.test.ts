@@ -115,6 +115,28 @@ describe("retry after re-authentication", () => {
 });
 
 describe("no unguarded routine call remains in client code", () => {
+  it("retains server-side bearer-token authentication for printing", () => {
+    const agent = readFileSync(
+      "src/routes/api/public/print-agent.$action.ts",
+      "utf8",
+    );
+
+    expect(agent).toMatch(/server:\s*\{/);
+    expect(agent).toMatch(/POST:\s*async/);
+    expect(agent).toContain('request.headers.get("authorization")');
+    expect(agent).toContain("neopc_[0-9a-f]{64}");
+    expect(agent).toContain("sha256Hex(token)");
+    expect(agent).toContain("supabaseAdmin");
+
+    for (const rpc of [
+      "neo_print_agent_printers",
+      "neo_print_agent_claim",
+      "neo_print_agent_finish",
+    ]) {
+      expect(agent).toContain(`"${rpc}"`);
+    }
+  });
+
   it("routes every browser-side rpc through the guard", () => {
     const files = globSync("src/**/*.{ts,tsx}").filter(
       // property-entrance.ts holds the one deliberate signed-out lookup: the
@@ -125,7 +147,7 @@ describe("no unguarded routine call remains in client code", () => {
       // hotel list, a hotel's public page and the entrance states are read
       // before anyone signs in, and grant nothing on their own.
       (f) =>
-        !/__tests__|\.functions\.ts|\.server\.ts|rpc-guard|rpc-telemetry|property-entrance\.ts|front-door\.ts/.test(
+        !/__tests__|\.functions\.ts|\.server\.ts|rpc-guard|rpc-telemetry|property-entrance\.ts|front-door\.ts|print-agent\.\$action\.ts/.test(
           f,
         ),
     );

@@ -92,7 +92,7 @@ export function useIndividualOverrides() {
   });
 }
 
-function departmentNames() {
+function useDepartmentNames() {
   return useQuery({
     queryKey: ["access-matrix-departments"],
     staleTime: 5 * 60_000,
@@ -137,7 +137,7 @@ export function useAccessMatrix() {
   const roles = useOrgRoles();
   const grants = useAllRolePermissions();
   const dashboards = useRoleDashboardAssignments();
-  const departments = departmentNames();
+  const departments = useDepartmentNames();
   const overrides = useIndividualOverrides();
 
   const features = useMemo(() => moduleFeatures(), []);

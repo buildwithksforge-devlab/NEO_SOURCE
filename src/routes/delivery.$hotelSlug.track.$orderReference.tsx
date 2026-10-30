@@ -1,4 +1,4 @@
-﻿import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
 import { useMyOrderPin } from "@/lib/delivery-data";
 import { supabase } from "@/integrations/supabase/client";
+import { guardedRpc } from "@/lib/rpc-guard";
 import { validateMpesaReceiptCode } from "@/lib/delivery-mpesa-reference";
 import { STALE_LOCATION_SECONDS, locationAgeSeconds, useDeliveryLive } from "@/lib/delivery-live";
 import {
@@ -220,22 +221,12 @@ function TrackPage() {
                       const code = validateMpesaReceiptCode(tillReceiptCode);
                       setTillSubmitting(true);
 
-                      const client = supabase as unknown as {
-                        rpc: (
-                          name: string,
-                          args: Record<string, unknown>
-                        ) => Promise<{
-                          data: {
+                      const { data, error } = await guardedRpc<{
                             ok?: boolean;
                             status?: string;
                             detail?: string;
                             reason?: string;
-                          } | null;
-                          error: { message: string } | null;
-                        }>;
-                      };
-
-                      const { data, error } = await client.rpc(
+                          }>(supabase,
                         "neo_delivery_mpesa_till_claim_submit",
                         {
                           _order: String(order.data?.["id"] ?? ""),

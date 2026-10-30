@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Plus } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
 import { RecordDialog } from "@/components/kitchen/RecordDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+import { useReleaseRequisitionToStores, useStoresContext } from "@/lib/stores-department";
 import { titleCase, type Row } from "@/lib/kitchen";
 import {
   useIngredientRequests,
@@ -40,7 +44,56 @@ export const Route = createFileRoute("/_shell/kitchen/stores")({
 });
 
 function Page() {
-  const { can } = useAuth();
+  const { can, canExact, user } = useAuth();
+  const qc = useQueryClient();
+
+  const canApproveKitchen =
+    canExact("kitchen", "requisitions", "approve") ||
+    canExact("kitchen", "approve");
+
+  const { organizationId, branchId } = useStoresContext();
+
+  const kitchenDepartment = useScopedDepartmentByKey("kitchen");
+
+  const kitchenDepartmentId = kitchenDepartment.data?.["id"]
+    ? String(kitchenDepartment.data["id"])
+    : null;
+
+  const supervisorApproval = useReleaseRequisitionToStores();
+
+  const pendingApprovals = useQuery({
+    queryKey: [
+      "kitchen",
+      "supervisor-requisitions",
+      organizationId,
+      branchId,
+      kitchenDepartmentId,
+    ],
+    enabled: Boolean(
+      canApproveKitchen &&
+      organizationId &&
+      branchId &&
+      kitchenDepartmentId
+    ),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("internal_requisitions")
+        .select(
+          "id, request_number, requested_by, reason, internal_requisition_lines(description, quantity_requested, unit)"
+        )
+        .eq("organization_id", String(organizationId))
+        .eq("branch_id", String(branchId))
+        .eq("department_id", String(kitchenDepartmentId))
+        .eq("status", "pending-supervisor")
+        .order("request_date", { ascending: false })
+        .limit(100);
+
+      if (error) throw new Error(error.message);
+
+      return data ?? [];
+    },
+  });
+
   const requests = useIngredientRequests();
   const shortages = useShortageAlerts();
   const stations = useKitchenStations();
@@ -201,6 +254,85 @@ function Page() {
         }
       />
 
+      {canApproveKitchen ? (
+        <SectionCard
+          title="Kitchen supervisor approvals"
+          description="Review Kitchen requests before Stores issues stock."
+        >
+          {kitchenDepartment.isLoading || pendingApprovals.isLoading ? (
+            <p className="py-3 text-sm">
+              Loading Kitchen approvals...
+            </p>
+          ) : kitchenDepartment.error || pendingApprovals.error ? (
+            <p role="alert" className="py-3 text-sm text-destructive">
+              Unable to load approvals: {String(kitchenDepartment.error ?? pendingApprovals.error)}
+            </p>
+          ) : !branchId || !kitchenDepartmentId ? (
+            <p role="alert" className="py-3 text-sm text-destructive">
+              Your Kitchen department or property assignment could not be found.
+            </p>
+          ) : (pendingApprovals.data ?? []).length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">
+              No Kitchen requests waiting for approval.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {(pendingApprovals.data ?? []).map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {r.request_number ?? "Requisition"}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      {(r.internal_requisition_lines ?? [])
+                        .map((line) =>
+                          `${line.description}: ${line.quantity_requested} ${line.unit}`
+                        )
+                        .join("; ")}
+                    </p>
+
+                    {r.requested_by === user?.id ? (
+                      <p className="text-xs text-muted-foreground">
+                        You cannot approve your own request.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <Button
+                    size="sm"
+                    disabled={
+                      supervisorApproval.isPending ||
+                      r.requested_by === user?.id
+                    }
+                    onClick={() =>
+                      supervisorApproval.mutate(
+                        { requisitionId: r.id },
+                        {
+                          onSuccess: () => {
+                            void qc.invalidateQueries({
+                              queryKey: ["kitchen", "supervisor-requisitions"],
+                            });
+
+                            void qc.invalidateQueries({
+                              queryKey: ["kitchen", "requests"],
+                            });
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Approve &amp; send to Stores
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      ) : null}
       <SectionCard
         title="Ingredient requests"
         description="Requisitions raised by kitchen stations."

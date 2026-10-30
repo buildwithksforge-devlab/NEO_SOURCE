@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { guardedRpc } from "@/lib/rpc-guard";
 const db = supabase as any;
 import {
   DataTable,
@@ -129,7 +130,7 @@ function QuotationPricingEditor({
       if (!Number.isFinite(discount) || discount < 0)
         throw new Error("Discount cannot be negative.");
 
-      const { data, error } = await db.rpc("neo_event_quotation_price", {
+      const { data, error } = await guardedRpc(supabase, "neo_event_quotation_price", {
         _quotation: String(quotation["id"]),
         _items: lines,
         _discount: discount,

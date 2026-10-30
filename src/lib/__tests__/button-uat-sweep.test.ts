@@ -73,11 +73,31 @@ describe("button-by-button UAT — visibility gates", () => {
 });
 
 describe("button-by-button UAT — mutation wiring", () => {
+  it("keeps shared KDS mutations connected to the token-scoped RPC", () => {
+    const screen = readFileSync("src/routes/station-screen.tsx", "utf8");
+    const helper = readFileSync("src/lib/shared-production-display.ts", "utf8");
+    const manifest = readFileSync("src/lib/rpc-manifest.ts", "utf8");
+    const sql = readFileSync(
+      "supabase/migrations/20261021110000_shared_production_displays.sql",
+      "utf8",
+    );
+
+    expect(screen).toMatch(/mutationFn:[\s\S]{0,350}actOnSharedDisplay\(/);
+    expect(helper).toMatch(
+      /guardedRpc<DisplayActionResult>\(\s*supabase,\s*"neo_production_display_act"/,
+    );
+    expect(helper).toContain("_token: token");
+    expect(helper).toContain("_pin: pin");
+    expect(manifest).toMatch(/neo_production_display_act:\s*"anon"/);
+    expect(sql).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.neo_production_display_act\([^)]*\) TO anon, authenticated;/,
+    );
+  });
   it("never ships a mutating screen without a real write path", () => {
     const dead = mutating
       .filter((f) => {
         const s = read(f);
-        return !/supabase\s*\.|rpc\(|guardedRpc\(|trustedRpc\(|from\("|useServerFn|-data"|\.functions"/.test(s);
+        return !/supabase\s*\.|rpc\(|guardedRpc(?:<[^>]+>)?\s*\(|trustedRpc\(|from\("|useServerFn|-data"|\.functions"|actOnSharedDisplay\s*\(/.test(s);
       })
       .sort();
     expect(dead, "these screens have mutations with no data path").toEqual([]);

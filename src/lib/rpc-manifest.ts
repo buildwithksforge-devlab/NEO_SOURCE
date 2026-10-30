@@ -14,6 +14,18 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_delivery_mpesa_till_claim_submit: "authenticated",
+  // Staff operations use authenticated sessions.
+  neo_delivery_record_payment_v2: "authenticated",
+  neo_event_stock_need_create: "authenticated",
+  neo_event_stock_need_to_requisition: "authenticated",
+  neo_requisition_assign_stock_item: "authenticated",
+
+  // Print-agent routines use the trusted server client.
+  neo_print_agent_claim: "service_role",
+  neo_print_agent_finish: "service_role",
+  neo_print_agent_printers: "service_role",
+
   // Bearer-token restricted displays work after the supervisor signs out.
   neo_production_display_read: "anon",
   neo_production_display_act: "anon",
@@ -211,6 +223,9 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // Front office and PMS
   pms_assign_room: "authenticated",
   pms_available_rooms: "authenticated",
+  neo_event_quotation_price: "authenticated",
+  neo_delivery_mpesa_till_claim_queue: "authenticated",
+  neo_delivery_mpesa_till_claim_approve: "authenticated",
   pms_check_in: "authenticated",
   neo_reservation_create: "authenticated",
   pms_revert_check_in: "authenticated",
@@ -500,7 +515,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   req_approve: "authenticated",
   req_confirm_receipt: "authenticated",
   neo_req_issue_safe: "authenticated",
-  req_issue: "authenticated",
   req_record_consumption: "authenticated",
   req_submit: "authenticated",
 
@@ -596,7 +610,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_event_billing_reopen: "authenticated",
   neo_event_reports: "authenticated",
   neo_event_booking_create: "authenticated",
-  neo_event_confirm_booking: "authenticated",
   neo_event_booking_transfer: "authenticated",
   neo_event_convert_enquiry: "authenticated",
   neo_event_convert_quotation: "authenticated",
@@ -681,7 +694,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_delivery_pin_resend: "authenticated",
   neo_delivery_pin_reveal: "authenticated",
   neo_delivery_pin_status: "authenticated",
-  neo_delivery_record_payment: "authenticated",
   neo_delivery_rider_performance_distance: "authenticated",
   neo_delivery_rider_routes: "authenticated",
   neo_delivery_route_log: "authenticated",

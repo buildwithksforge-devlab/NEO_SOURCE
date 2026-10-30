@@ -300,6 +300,26 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
           "Sign In"
         )}
       </Button>
+      <div
+        data-neo-station-display-entry
+        className="mt-5 space-y-3 border-t border-neo-mist pt-5"
+      >
+        <p className="text-center text-sm font-medium text-neo-midnight">
+          Kitchen, Coffee, Bar &amp; Pastry
+        </p>
+
+        <Link
+          to="/station-screen"
+          className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
+        >
+          Open Station Display - Staff Code + PIN
+        </Link>
+
+        <p className="text-center text-xs text-neo-steel">
+          A supervisor must pair this display first. Your personal PIN
+          authorizes production actions, not full-workspace login.
+        </p>
+      </div>
     </form>
   );
 }

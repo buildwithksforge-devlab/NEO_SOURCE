@@ -1,7 +1,8 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { guardedRpc } from "@/lib/rpc-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,8 +75,7 @@ export function DeliveryTillVerification() {
   const queue = useQuery({
     queryKey: ["finance", "delivery-mpesa-till-claims"],
     queryFn: async (): Promise<TillClaim[]> => {
-      const { data, error } = await rpcClient.rpc(
-        "neo_delivery_mpesa_till_claim_queue"
+      const { data, error } = await guardedRpc(supabase, "neo_delivery_mpesa_till_claim_queue"
       );
 
       if (error) throw new Error(error.message);
@@ -203,8 +203,7 @@ export function DeliveryTillVerification() {
         );
       }
 
-      const { data, error } = await rpcClient.rpc(
-        "neo_delivery_mpesa_till_claim_approve",
+      const { data, error } = await guardedRpc(supabase, "neo_delivery_mpesa_till_claim_approve",
         {
           _claim: selected.claim_id,
           _verified_amount: verifiedAmount,
