@@ -89,7 +89,7 @@ describe("database callable surface", () => {
     // The NEØ front door adds the public hotel list, a hotel's public page and
     // its entrance states: published information only, granting nothing.
     expect(anon).toEqual([
-      "neo_production_display_act",
+      "neo_production_display_act_pin_only",
       "neo_production_display_read",
       "neo_property_doors",
       "neo_property_entrance",

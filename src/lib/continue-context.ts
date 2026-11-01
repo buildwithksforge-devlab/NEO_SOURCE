@@ -109,7 +109,7 @@ export async function resolveMyContexts(): Promise<NeoContext[]> {
         kind: "work",
         label: "Work",
         detail: "Your staff workspace and the screens your permissions reach.",
-        route: "/workspace?home=1",
+        route: `/workspace?home=1&property=${encodeURIComponent(e.branch_id)}`,
       });
     }
     if (e.partner) {

@@ -367,6 +367,7 @@ import { Route as ShellSecurityPatrolsRouteImport } from './routes/_shell.securi
 import { Route as ShellSecurityPostsRouteImport } from './routes/_shell.security.posts'
 import { Route as ShellSecurityVisitorsRouteImport } from './routes/_shell.security.visitors'
 import { Route as ApiInternalWorkerPushRouteImport } from './routes/api/internal/worker-push'
+import { Route as ApiPublicStaffPinLoginRouteImport } from './routes/api/public/staff-pin-login'
 import { Route as DeliveryHotelSlugIndexRouteImport } from './routes/delivery.$hotelSlug.index'
 import { Route as DeliveryHotelSlugCartRouteImport } from './routes/delivery.$hotelSlug.cart'
 import { Route as DeliveryHotelSlugCheckoutRouteImport } from './routes/delivery.$hotelSlug.checkout'
@@ -2245,6 +2246,11 @@ const ApiInternalWorkerPushRoute = ApiInternalWorkerPushRouteImport.update({
   path: '/api/internal/worker-push',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStaffPinLoginRoute = ApiPublicStaffPinLoginRouteImport.update({
+  id: '/api/public/staff-pin-login',
+  path: '/api/public/staff-pin-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeliveryHotelSlugIndexRoute = DeliveryHotelSlugIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -2830,6 +2836,7 @@ export interface FileRoutesByFullPath {
   '/security/posts': typeof ShellSecurityPostsRoute
   '/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -3216,6 +3223,7 @@ export interface FileRoutesByTo {
   '/security/posts': typeof ShellSecurityPostsRoute
   '/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -3623,6 +3631,7 @@ export interface FileRoutesById {
   '/_shell/security/posts': typeof ShellSecurityPostsRoute
   '/_shell/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -4030,6 +4039,7 @@ export interface FileRouteTypes {
     | '/security/posts'
     | '/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -4416,6 +4426,7 @@ export interface FileRouteTypes {
     | '/security/posts'
     | '/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -4822,6 +4833,7 @@ export interface FileRouteTypes {
     | '/_shell/security/posts'
     | '/_shell/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -4914,6 +4926,7 @@ export interface RootRouteChildren {
   RiderIndexRoute: typeof RiderIndexRoute
   StartIndexRoute: typeof StartIndexRoute
   ApiInternalWorkerPushRoute: typeof ApiInternalWorkerPushRoute
+  ApiPublicStaffPinLoginRoute: typeof ApiPublicStaffPinLoginRoute
   ApiPublicPrintAgentActionRoute: typeof ApiPublicPrintAgentActionRoute
   ApiPublicDeliveryCallbackTokenRoute: typeof ApiPublicDeliveryCallbackTokenRoute
   ApiPublicDeliverySimulatorCourierRoute: typeof ApiPublicDeliverySimulatorCourierRoute
@@ -7430,6 +7443,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiInternalWorkerPushRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/staff-pin-login': {
+      id: '/api/public/staff-pin-login'
+      path: '/api/public/staff-pin-login'
+      fullPath: '/api/public/staff-pin-login'
+      preLoaderRoute: typeof ApiPublicStaffPinLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/delivery/$hotelSlug/': {
       id: '/delivery/$hotelSlug/'
       path: '/'
@@ -8741,6 +8761,7 @@ const rootRouteChildren: RootRouteChildren = {
   RiderIndexRoute: RiderIndexRoute,
   StartIndexRoute: StartIndexRoute,
   ApiInternalWorkerPushRoute: ApiInternalWorkerPushRoute,
+  ApiPublicStaffPinLoginRoute: ApiPublicStaffPinLoginRoute,
   ApiPublicPrintAgentActionRoute: ApiPublicPrintAgentActionRoute,
   ApiPublicDeliveryCallbackTokenRoute: ApiPublicDeliveryCallbackTokenRoute,
   ApiPublicDeliverySimulatorCourierRoute:

@@ -203,6 +203,13 @@ GRANT EXECUTE ON FUNCTION public.neo_production_display_act_pin_only(
     text,text,uuid,text,text,uuid,text
 ) TO anon, authenticated;
 
+-- The PIN-only wrapper delegates internally to the original routine. Clients
+-- must not bypass PIN-only identity resolution by calling the old staff-code
+-- signature directly.
+REVOKE ALL ON FUNCTION public.neo_production_display_act(
+    text,text,text,uuid,text,text,uuid,text
+) FROM PUBLIC, anon, authenticated;
+
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;

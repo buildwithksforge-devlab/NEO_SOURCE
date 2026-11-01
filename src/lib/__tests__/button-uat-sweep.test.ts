@@ -53,6 +53,8 @@ const SELF_SERVICE = new Set([
   "/my-engagement",
   "/profile",
   "/hr/me",
+  "/staff-display-code",
+  "/workspace",
 ]);
 
 describe("button-by-button UAT — visibility gates", () => {
@@ -78,19 +80,19 @@ describe("button-by-button UAT — mutation wiring", () => {
     const helper = readFileSync("src/lib/shared-production-display.ts", "utf8");
     const manifest = readFileSync("src/lib/rpc-manifest.ts", "utf8");
     const sql = readFileSync(
-      "supabase/migrations/20261021110000_shared_production_displays.sql",
+      "supabase/migrations/20261030180000_neo_pin_only_display.sql",
       "utf8",
     );
 
     expect(screen).toMatch(/mutationFn:[\s\S]{0,350}actOnSharedDisplay\(/);
     expect(helper).toMatch(
-      /guardedRpc<DisplayActionResult>\(\s*supabase,\s*"neo_production_display_act"/,
+      /guardedRpc<DisplayActionResult>\(\s*supabase,\s*"neo_production_display_act_pin_only"/,
     );
     expect(helper).toContain("_token: token");
     expect(helper).toContain("_pin: pin");
-    expect(manifest).toMatch(/neo_production_display_act:\s*"anon"/);
+    expect(manifest).toMatch(/neo_production_display_act_pin_only:\s*"anon"/);
     expect(sql).toMatch(
-      /GRANT EXECUTE ON FUNCTION public\.neo_production_display_act\([^)]*\) TO anon, authenticated;/,
+      /GRANT EXECUTE ON FUNCTION public\.neo_production_display_act_pin_only\([\s\S]*?\)\s+TO anon, authenticated;/,
     );
   });
   it("never ships a mutating screen without a real write path", () => {
