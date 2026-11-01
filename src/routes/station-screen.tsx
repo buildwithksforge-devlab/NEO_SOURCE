@@ -90,7 +90,7 @@ function SharedScreen() {
     },
     onError: (error: Error) => {
       setMessage(
-        `${error.message} Your PIN has been cleared. Enter it again to retry this action.`,
+        `The action could not be recorded. Your PIN has been cleared. Check the connection and enter it again.`,
       );
     },
   });
@@ -171,7 +171,7 @@ function SharedScreen() {
       ) : null}
       {snapshot.error ? (
         <p role="alert" className="rounded-lg border border-destructive p-3">
-          {snapshot.error.message}
+          The station display could not refresh. Check the connection and try again.
         </p>
       ) : null}
       {snapshot.isLoading ? <p role="status">Loading station tickets…</p> : null}

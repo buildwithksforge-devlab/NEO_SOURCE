@@ -49,7 +49,7 @@ function WorkspaceEntranceLayout() {
       </main>
 
       <footer className="neo-safe-b neo-page-gutter shrink-0 border-t border-border bg-background/95 py-3">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <PoweredByNeoSignature />
           <CreatorCredit className="text-[0.7rem] opacity-70" />
         </div>

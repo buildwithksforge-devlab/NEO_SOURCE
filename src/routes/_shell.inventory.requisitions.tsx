@@ -372,7 +372,7 @@ function StoresRequisitionsPage() {
                           Inventory item linked
                         </p>
                       ) : (
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-warning">
                           Match this request to an inventory item before issuing.
                         </p>
                       )}
@@ -486,7 +486,7 @@ function StoresRequisitionsPage() {
               </Select>
 
               {!destinationStoreId ? (
-                <p className="mt-2 text-xs text-amber-600">
+                <p className="mt-2 text-xs text-warning">
                   Select a receiving departmental store before issuing stock.
                 </p>
               ) : null}

@@ -53,7 +53,7 @@ function StaffDisplayCode() {
       {state.isLoading ? <p>Loading your personal PIN status…</p> : null}
       {state.error ? (
         <p role="alert" className="text-destructive">
-          {state.error.message}
+          Your staff PIN status could not be loaded. Try again.
         </p>
       ) : null}
       {state.data ? (

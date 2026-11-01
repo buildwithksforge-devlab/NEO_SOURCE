@@ -50,7 +50,7 @@ function DisplayControls() {
         title="Shared display controls"
         description="Manage and revoke standalone production screens. New screens are configured from the property work entrance before entering the main NEØ system."
       />
-      <div className="rounded-lg border border-neo-mist bg-white p-4 text-sm">
+      <div className="rounded-lg border border-neo-mist bg-background p-4 text-sm">
         <p className="font-semibold">Independent station screen</p>
         <p className="mt-1 text-neo-steel">
           A paired device receives new POS tickets without an employee signing into the full
@@ -81,7 +81,7 @@ function DisplayControls() {
       {sessions.isLoading ? <p>Loading shared screens…</p> : null}
       {sessions.error ? (
         <p role="alert" className="text-destructive">
-          {sessions.error.message}
+          Shared screen sessions could not be loaded. Try again.
         </p>
       ) : null}
       {sessions.data

@@ -40,3 +40,5 @@ dist-ssr
 
 **/__pycache__/
 *.pyc
+
+/neo-print-agent.json

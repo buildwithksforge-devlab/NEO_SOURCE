@@ -55,6 +55,28 @@ const LINES = [
   },
 ];
 
+vi.mock("@/components/common/PermittedLink", () => ({
+  usePagePermitted: () => () => true,
+  PermittedLink: ({
+    children,
+    to,
+    className,
+    "aria-current": ariaCurrent,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+    "aria-current"?: React.AriaAttributes["aria-current"];
+  }) => (
+    <a
+      href={to}
+      className={className}
+      aria-current={ariaCurrent}
+    >
+      {children}
+    </a>
+  ),
+}));
 vi.mock("@/lib/auth", () => ({
   useAuth: () => ({ loading: false, isAdmin: true, can: () => true }),
 }));

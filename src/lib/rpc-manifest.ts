@@ -26,6 +26,10 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_print_agent_finish: "service_role",
   neo_print_agent_printers: "service_role",
 
+  // Authenticated printer administrators pair and revoke property agents.
+  neo_print_agent_register: "authenticated",
+  neo_print_agent_revoke: "authenticated",
+
   // Trusted-property staff PIN sign-in.
   neo_staff_login_device_pair: "authenticated",
   neo_staff_login_device_revoke: "authenticated",
