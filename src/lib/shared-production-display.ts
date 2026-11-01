@@ -2,7 +2,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import type { KitchenTicket } from "@/lib/kitchen-tickets";
 
-export const DISPLAY_TOKEN_STORAGE_KEY = "neo.production.display.token.v1";
+export const DISPLAY_TOKEN_STORAGE_KEY =
+  "neo.production.display.token.v1";
+export const DISPLAY_EXPIRY_STORAGE_KEY =
+  "neo.production.display.expires.v1";
+
 export type SharedDisplayAction = {
   ticketId: string;
   to: string;
@@ -10,6 +14,7 @@ export type SharedDisplayAction = {
   requestId: string;
   reason: string;
 };
+
 export type SharedDisplaySnapshot = {
   ok: boolean;
   session_id: string;
@@ -22,6 +27,7 @@ export type SharedDisplaySnapshot = {
   stations: { id: string; name: string }[];
   tickets: (KitchenTicket & { claimed_by?: string | null })[];
 };
+
 export type DisplayActionResult = {
   ok: boolean;
   reason?: string;
@@ -29,6 +35,46 @@ export type DisplayActionResult = {
   actor_name?: string;
   idempotent?: boolean;
 };
+
+function storageAvailable() {
+  return typeof window !== "undefined";
+}
+
+export function clearSharedDisplayToken() {
+  if (!storageAvailable()) return;
+
+  window.localStorage.removeItem(DISPLAY_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(DISPLAY_EXPIRY_STORAGE_KEY);
+}
+
+export function readSharedDisplayToken() {
+  if (!storageAvailable()) return "";
+
+  try {
+    const token =
+      window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) ?? "";
+    const expiresAt =
+      window.localStorage.getItem(DISPLAY_EXPIRY_STORAGE_KEY);
+
+    if (!token || token.length > 256) {
+      clearSharedDisplayToken();
+      return "";
+    }
+
+    if (
+      expiresAt &&
+      (!Number.isFinite(Date.parse(expiresAt)) ||
+        Date.parse(expiresAt) <= Date.now())
+    ) {
+      clearSharedDisplayToken();
+      return "";
+    }
+
+    return token;
+  } catch {
+    return "";
+  }
+}
 
 export function productionActions(status: string): string[] {
   return (
@@ -43,15 +89,27 @@ export function productionActions(status: string): string[] {
   );
 }
 
-export async function readSharedDisplay(token: string): Promise<SharedDisplaySnapshot> {
+export async function readSharedDisplay(
+  token: string,
+): Promise<SharedDisplaySnapshot> {
   const { data, error } = await guardedRpc<SharedDisplaySnapshot>(
     supabase,
     "neo_production_display_read",
     { _token: token },
   );
+
   if (error) throw new Error(error.message);
+
+  if (data?.expires_at && storageAvailable()) {
+    window.localStorage.setItem(
+      DISPLAY_EXPIRY_STORAGE_KEY,
+      data.expires_at,
+    );
+  }
+
   return data;
 }
+
 export async function actOnSharedDisplay(
   token: string,
   pin: string,
@@ -70,6 +128,7 @@ export async function actOnSharedDisplay(
       _reason: action.reason || null,
     },
   );
+
   if (error) throw new Error(error.message);
   return data;
 }
@@ -80,7 +139,12 @@ export async function pairSharedDisplay(
   label: string,
   readOnly: boolean,
 ) {
-  const { data, error } = await guardedRpc<{ ok: boolean; token: string; session_id: string }>(
+  const { data, error } = await guardedRpc<{
+    ok: boolean;
+    token: string;
+    session_id: string;
+    expires_at?: string;
+  }>(
     supabase,
     "neo_production_display_pair",
     {
@@ -90,43 +154,75 @@ export async function pairSharedDisplay(
       _read_only: readOnly,
     },
   );
+
   if (error) throw new Error(error.message);
-  let supervisorSignedOut = false;
-  try {
-    // Complete supervisor sign-out before storing the restricted display
-    // token. The auth sign-out lifecycle may clear session storage.
-    const result = await supabase.auth.signOut({ scope: "local" });
-    if (result.error) throw result.error;
-    supervisorSignedOut = true;
 
-    // Persist only the restricted token, never the supervisor's JWT or a PIN.
-    sessionStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
-    if (sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== data.token) {
-      throw new Error("This browser could not retain the paired display session.");
-    }
-  } catch (error) {
-    sessionStorage.removeItem(DISPLAY_TOKEN_STORAGE_KEY);
-
-    // Revoke while the authenticated supervisor session is still available.
-    if (!supervisorSignedOut) {
-      await guardedRpc(supabase, "neo_production_display_manage", {
-        _close: data.session_id,
-      });
-    }
-    throw error;
+  if (!data?.ok || !data.token || !data.session_id) {
+    throw new Error("The paired-display response was incomplete.");
   }
 
-  // Full navigation discards authenticated React/Query caches in this tab.
+  try {
+    // The restricted display credential belongs to this browser, not to the
+    // supervisor. localStorage allows the paired station to survive tab and
+    // browser restarts; the server expiry and supervisor revocation still win.
+    window.localStorage.setItem(
+      DISPLAY_TOKEN_STORAGE_KEY,
+      data.token,
+    );
+
+    if (data.expires_at) {
+      window.localStorage.setItem(
+        DISPLAY_EXPIRY_STORAGE_KEY,
+        data.expires_at,
+      );
+    } else {
+      window.localStorage.removeItem(
+        DISPLAY_EXPIRY_STORAGE_KEY,
+      );
+    }
+
+    if (
+      window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !==
+      data.token
+    ) {
+      throw new Error(
+        "This browser could not retain the paired display session.",
+      );
+    }
+
+    const result = await supabase.auth.signOut({ scope: "local" });
+
+    if (result.error) throw result.error;
+  } catch (pairingError) {
+    clearSharedDisplayToken();
+
+    // If sign-out or browser storage failed, close the new display session
+    // while the supervisor session is still available.
+    await guardedRpc(
+      supabase,
+      "neo_production_display_manage",
+      { _close: data.session_id },
+    ).catch(() => undefined);
+
+    throw pairingError;
+  }
+
   window.location.replace("/station-screen");
 }
 
 /** Shared screens never retain an authenticated operator browser session. */
 export async function ensureSharedScreenSignedOut() {
   const { data, error } = await supabase.auth.getSession();
+
   if (error) throw error;
+
   if (data.session) {
     const result = await supabase.auth.signOut({ scope: "local" });
-    if (result.error)
-      throw new Error("Sign out of the staff account before using this shared screen.");
+
+    if (result.error) {
+      throw new Error(
+        "Sign out of the staff account before using this shared screen.",
+      );
+    }
   }
 }

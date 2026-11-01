@@ -5,6 +5,8 @@ export const STAFF_DEVICE_TOKEN_KEY =
   "neo.staffPinDevice.token";
 export const STAFF_DEVICE_META_KEY =
   "neo.staffPinDevice.meta";
+export const STAFF_PIN_SESSION_KEY =
+  "neo.staffPinSession.v1";
 
 const DEVICE_TOKEN = /^neowd_[0-9a-f]{64}$/;
 
@@ -35,6 +37,21 @@ type PinLoginResponse = {
 
 function storageAvailable() {
   return typeof window !== "undefined";
+}
+
+export function markStaffPinSession() {
+  if (!storageAvailable()) return;
+  window.sessionStorage.setItem(STAFF_PIN_SESSION_KEY, "1");
+}
+
+export function clearStaffPinSession() {
+  if (!storageAvailable()) return;
+  window.sessionStorage.removeItem(STAFF_PIN_SESSION_KEY);
+}
+
+export function isStaffPinSession() {
+  if (!storageAvailable()) return false;
+  return window.sessionStorage.getItem(STAFF_PIN_SESSION_KEY) === "1";
 }
 
 export function readTrustedStaffDevice():
@@ -213,6 +230,8 @@ export async function signInWithStaffPin(
       "The staff session could not be started. Please try again.",
     );
   }
+
+  markStaffPinSession();
 
   return { branchId: payload.branch_id };
 }

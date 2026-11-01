@@ -3,12 +3,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
-import { useAuth } from "@/lib/auth";
+
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { PageHeader } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
-import { DISPLAY_LABELS, DISPLAY_ROUTES } from "@/lib/production-displays";
-import { pathPermitted } from "@/lib/capabilities";
+
 
 export const Route = createFileRoute("/_shell/production-displays")({ component: DisplayControls });
 type Session = {
@@ -19,7 +18,7 @@ type Session = {
   expires_at: string;
 };
 function DisplayControls() {
-  const { can } = useAuth();
+
   const { branchId } = useActivePropertyFilter();
   const sessions = useQuery({
     queryKey: ["production-display-sessions"],
@@ -49,7 +48,7 @@ function DisplayControls() {
     <div className="space-y-5">
       <PageHeader
         title="Shared display controls"
-        description="Open a department display to pair its stations. To pair a screen, choose a department and station, then select Pair this station. This device signs out and opens the independent screen for 12 hours."
+        description="Manage and revoke standalone production screens. New screens are configured from the property work entrance before entering the main NEØ system."
       />
       <div className="rounded-lg border border-neo-mist bg-white p-4 text-sm">
         <p className="font-semibold">Independent station screen</p>
@@ -61,16 +60,21 @@ function DisplayControls() {
         <Link to="/station-screen" className="mt-2 inline-flex font-medium text-neo-aqua underline">
           Open this device&apos;s station screen
         </Link>
+
+        <div className="mt-3">
+          <Link
+            to="/workspace"
+            search={{
+              home: "1",
+              ...(branchId ? { property: branchId } : {}),
+            }}
+            className="inline-flex rounded-lg border border-neo-turquoise px-4 py-2 font-semibold text-neo-midnight"
+          >
+            Set up a new display
+          </Link>
+        </div>
       </div>
-      <nav aria-label="Production display entrances" className="flex flex-wrap gap-3">
-        {Object.entries(DISPLAY_ROUTES)
-          .filter(([, path]) => pathPermitted(can, path))
-          .map(([department, path]) => (
-            <Link key={path} to={path} className="rounded-lg border p-4">
-              {DISPLAY_LABELS[department as keyof typeof DISPLAY_LABELS]}
-            </Link>
-          ))}
-      </nav>
+
       <h2 className="text-lg font-semibold">
         Active shared screens{branchId ? " at this property" : ""}
       </h2>

@@ -15,6 +15,10 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { forgetContext } from "@/lib/continue-context";
 import { toast } from "sonner";
+import {
+  clearStaffPinSession,
+  isStaffPinSession,
+} from "@/lib/staff-pin-login";
 import { clearPendingActions, replayPendingActions } from "@/lib/retry-after-reauth";
 import { recoverMyWorkspace } from "@/lib/workspace-provisioning";
 import {
@@ -673,14 +677,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadContext, refresh, clearWorkspaceState, navigate]);
 
   const signOut = useCallback(async () => {
-    // Cleanup must finish before any other workspace can be mounted.
+    const pinSession = isStaffPinSession();
+
     setPhase("signed-out");
-    // A remembered entrance must never survive a deliberate sign-out.
     forgetContext();
     await supabase.auth.signOut();
     clearWorkspaceState();
+    clearStaffPinSession();
     activeUserId.current = null;
-    navigate({ to: "/auth", replace: true });
+
+    navigate({
+      href: pinSession ? "/auth?mode=pin" : "/auth",
+      replace: true,
+    });
   }, [navigate, clearWorkspaceState]);
 
   // Automatic session timeout after inactivity.
@@ -690,9 +699,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const reset = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
+        const pinSession = isStaffPinSession();
+
         void supabase.auth.signOut().then(() => {
           clearWorkspaceState();
-          navigate({ to: "/session-expired" });
+          clearStaffPinSession();
+
+          if (pinSession) {
+            window.location.replace("/auth?mode=pin");
+          } else {
+            navigate({ to: "/session-expired" });
+          }
         });
       }, IDLE_TIMEOUT_MS);
     };

@@ -244,7 +244,7 @@ export function StaffPinSignIn() {
         onClick={forgetDevice}
         className="w-full text-center text-xs font-medium text-neo-steel hover:text-destructive hover:underline"
       >
-        Remove this device’s PIN access
+        Forget this browser's PIN setup
       </button>
     </form>
   );

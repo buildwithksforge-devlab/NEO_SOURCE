@@ -22,12 +22,16 @@ import { AccessDeniedPanel } from "@/components/common/AccessState";
 import { PageHeader } from "@/components/common/DataDisplay";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  displayStations,
   DISPLAY_LABELS,
   DISPLAY_ROUTES,
   type DisplayDepartment,
 } from "@/lib/production-displays";
 import { supabase } from "@/integrations/supabase/client";
+import { useScopedStations } from "@/lib/kitchen-tickets";
+import { pairSharedDisplay } from "@/lib/shared-production-display";
 import {
+  isStaffPinSession,
   pairTrustedStaffDevice,
   revokeTrustedStaffDevice,
 } from "@/lib/staff-pin-login";
@@ -92,6 +96,7 @@ function Dashboard() {
     access,
     canModule,
     can,
+    canExact,
     phase,
     isAdmin,
   } = useAuth();
@@ -112,6 +117,12 @@ function Dashboard() {
     can("administration", "users", "manage") ||
     can("administration", "users", "invite") ||
     can("administration", "users", "assign_roles");
+
+  const canPairDisplay =
+    isAdmin ||
+    canExact("kitchen", "production.manage") ||
+    canExact("kitchen", "chef.assign") ||
+    canExact("bar", "queue", "assign");
 
   const requestedBranch = useMemo(
     () =>
@@ -157,28 +168,41 @@ function Dashboard() {
     [access.accessScope, access.dashboardKey, canModule, can],
   );
 
-  const displayChoices = useMemo<DisplayChoice[]>(
-    () =>
-      DISPLAY_DEPARTMENTS.map((department) => ({
-        department,
-        label: DISPLAY_LABELS[department],
-        route: DISPLAY_ROUTES[department],
-      })).filter((choice) => canAccessPath(can, choice.route)),
-    [can],
-  );
+  const displayChoices = useMemo<DisplayChoice[]>(() => {
+    if (!canPairDisplay) return [];
+
+    return DISPLAY_DEPARTMENTS.map((department) => ({
+      department,
+      label: DISPLAY_LABELS[department],
+      route: DISPLAY_ROUTES[department],
+    })).filter((choice) => canAccessPath(can, choice.route));
+  }, [can, canPairDisplay]);
 
   const applyingRequestedProperty = Boolean(
     requestedBranch && activeBranchId !== requestedBranch.id,
   );
+
+  const pinHomeTarget =
+    askedForHome &&
+    isStaffPinSession() &&
+    phase === "ready" &&
+    !branchesLoading &&
+    !applyingRequestedProperty &&
+    activeBranch &&
+    workHome.route !== "/workspace"
+      ? workHome.route
+      : null;
+
+  useEffect(() => {
+    if (!pinHomeTarget) return;
+    void navigate({ href: pinHomeTarget, replace: true });
+  }, [navigate, pinHomeTarget]);
 
   function enterSystem() {
     const target = workHome.route === "/workspace" ? "/workspace" : workHome.route;
     void navigate({ href: target, replace: true });
   }
 
-  function openDisplay(route: string) {
-    void navigate({ href: route });
-  }
 
   async function authorizeThisDevice() {
     if (!activeBranch || authorizingDevice) return;
@@ -219,7 +243,12 @@ function Dashboard() {
   }
 
   if (askedForHome) {
-    if (phase !== "ready" || branchesLoading || applyingRequestedProperty) {
+    if (
+      phase !== "ready" ||
+      branchesLoading ||
+      applyingRequestedProperty ||
+      Boolean(pinHomeTarget)
+    ) {
       return <Skeleton className="mx-auto mt-8 h-72 w-full max-w-5xl" />;
     }
 
@@ -245,10 +274,10 @@ function Dashboard() {
 
     return (
       <WorkspaceEntrance
+        propertyId={activeBranch.id}
         propertyName={activeBranch.name}
         displays={displayChoices}
         onEnterSystem={enterSystem}
-        onOpenDisplay={openDisplay}
         canAuthorizeDevice={canAuthorizeDevice}
         authorizingDevice={authorizingDevice}
         onAuthorizeDevice={authorizeThisDevice}
@@ -291,22 +320,133 @@ function Dashboard() {
 }
 
 function WorkspaceEntrance({
+  propertyId,
   propertyName,
   displays,
   onEnterSystem,
-  onOpenDisplay,
   canAuthorizeDevice,
   authorizingDevice,
   onAuthorizeDevice,
 }: {
+  propertyId: string;
   propertyName: string;
   displays: DisplayChoice[];
   onEnterSystem: () => void;
-  onOpenDisplay: (route: string) => void;
   canAuthorizeDevice: boolean;
   authorizingDevice: boolean;
   onAuthorizeDevice: () => void;
 }) {
+  const stationScope = useScopedStations();
+  const [selectedDisplay, setSelectedDisplay] =
+    useState<DisplayChoice | null>(null);
+  const [selectedStationIds, setSelectedStationIds] =
+    useState<string[]>([]);
+  const [displayLabel, setDisplayLabel] = useState("");
+  const [pairingDisplay, setPairingDisplay] = useState(false);
+
+  const availableStations = useMemo(
+    () =>
+      selectedDisplay
+        ? displayStations(
+            stationScope.stations,
+            selectedDisplay.department,
+          )
+        : [],
+    [selectedDisplay, stationScope.stations],
+  );
+
+  function openDisplaySetup(display: DisplayChoice) {
+    if (stationScope.isLoading) {
+      toast.info("Loading the stations available at this property.");
+      return;
+    }
+
+    if (stationScope.error) {
+      toast.error(stationScope.error.message);
+      return;
+    }
+
+    const stations = displayStations(
+      stationScope.stations,
+      display.department,
+    );
+
+    if (!stations.length) {
+      toast.error(
+        `No active ${display.label.toLowerCase()} stations are available at this property.`,
+      );
+      return;
+    }
+
+    setSelectedDisplay(display);
+    setSelectedStationIds(
+      stations.length === 1 && stations[0] ? [stations[0].id] : [],
+    );
+    setDisplayLabel(`${propertyName} · ${display.label}`);
+  }
+
+  function toggleStation(stationId: string) {
+    setSelectedStationIds((current) => {
+      if (current.includes(stationId)) {
+        return current.filter((id) => id !== stationId);
+      }
+
+      if (current.length >= 16) {
+        toast.error("A display can contain at most 16 stations.");
+        return current;
+      }
+
+      return [...current, stationId];
+    });
+  }
+
+  async function pairDisplayDevice() {
+    if (
+      !selectedDisplay ||
+      !selectedStationIds.length ||
+      pairingDisplay
+    ) {
+      return;
+    }
+
+    const permittedIds = new Set(
+      availableStations.map((station) => station.id),
+    );
+
+    if (
+      selectedStationIds.some(
+        (stationId) => !permittedIds.has(stationId),
+      )
+    ) {
+      toast.error("Choose stations from the selected display department.");
+      return;
+    }
+
+    const label = displayLabel.trim();
+
+    if (label.length < 2 || label.length > 80) {
+      toast.error("Enter a display name between 2 and 80 characters.");
+      return;
+    }
+
+    setPairingDisplay(true);
+
+    try {
+      await pairSharedDisplay(
+        propertyId,
+        selectedStationIds,
+        label,
+        false,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "This production display could not be paired.",
+      );
+      setPairingDisplay(false);
+    }
+  }
   return (
     <main
       data-neo-workspace-entry
@@ -315,7 +455,7 @@ function WorkspaceEntrance({
       <PageHeader
         eyebrow={propertyName}
         title="Choose how you want to work"
-        description="Enter the main NEØ system or open a production display available to your role and assigned stations."
+        description="Enter the main NEØ system, configure a standalone production display, or authorise this device for staff PIN sign-in."
       />
 
       <section
@@ -342,22 +482,113 @@ function WorkspaceEntrance({
           <button
             key={display.department}
             type="button"
-            onClick={() => onOpenDisplay(display.route)}
+            disabled={stationScope.isLoading}
+            onClick={() => openDisplaySetup(display)}
             className="group flex min-h-48 flex-col items-start rounded-2xl border border-border bg-card p-6 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span className="grid size-11 place-items-center rounded-xl bg-neo-turquoise/15 text-neo-aqua">
               <Monitor className="size-5" aria-hidden />
             </span>
             <span className="mt-5 text-lg font-semibold text-foreground">
-              {display.label}
+              Set up {display.label}
             </span>
             <span className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Open the stations permitted for this property. Authorized supervisors
-              can pair the device for staff PIN operation.
+              Select the relevant stations and pair this computer as an
+              independent 12-hour production screen.
             </span>
           </button>
         ))}
       </section>
+
+      {selectedDisplay ? (
+        <section
+          data-neo-display-device-setup
+          className="space-y-5 rounded-2xl border border-neo-turquoise/30 bg-card p-5 shadow-sm"
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neo-aqua">
+              Standalone production screen
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-foreground">
+              Configure {selectedDisplay.label}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This device will be restricted to the selected property and
+              stations. The supervisor account signs out when pairing succeeds.
+            </p>
+          </div>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-foreground">
+              Device name
+            </span>
+            <input
+              value={displayLabel}
+              maxLength={80}
+              onChange={(event) => setDisplayLabel(event.target.value)}
+              className="min-h-11 w-full rounded-xl border border-border bg-background px-4 text-foreground outline-none focus:border-neo-turquoise focus:ring-2 focus:ring-neo-turquoise/20"
+            />
+          </label>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">
+              Stations shown on this display
+            </p>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {availableStations.map((station) => {
+                const selected = selectedStationIds.includes(station.id);
+
+                return (
+                  <button
+                    key={station.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleStation(station.id)}
+                    className={`min-h-11 rounded-xl border px-4 text-left text-sm font-medium transition ${
+                      selected
+                        ? "border-neo-turquoise bg-neo-turquoise/10 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover:border-neo-turquoise/60"
+                    }`}
+                  >
+                    {station.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              disabled={pairingDisplay}
+              onClick={() => {
+                setSelectedDisplay(null);
+                setSelectedStationIds([]);
+                setDisplayLabel("");
+              }}
+              className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold text-foreground"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                pairingDisplay ||
+                !selectedStationIds.length ||
+                displayLabel.trim().length < 2
+              }
+              onClick={() => void pairDisplayDevice()}
+              className="min-h-11 rounded-xl bg-neo-turquoise px-5 text-sm font-semibold text-neo-midnight disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pairingDisplay
+                ? "Pairing display…"
+                : "Pair and open display"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {canAuthorizeDevice ? (
         <section

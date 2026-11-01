@@ -16,7 +16,7 @@ import {
 describe("restricted shared display client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sessionStorage.clear();
+    localStorage.clear();
   });
   it("signs out a supervisor who returns from controls before showing the shared screen", async () => {
     mocks.getSession.mockResolvedValue({
@@ -28,7 +28,7 @@ describe("restricted shared display client", () => {
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("stores the restricted display token only after supervisor sign-out succeeds", async () => {
+  it("retains the restricted display token through supervisor sign-out", async () => {
     let tokenPresentDuringSignOut: string | null = "not-checked";
 
     mocks.rpc.mockResolvedValueOnce({
@@ -36,14 +36,14 @@ describe("restricted shared display client", () => {
       error: null,
     });
     mocks.signOut.mockImplementation(async () => {
-      tokenPresentDuringSignOut = sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY);
+      tokenPresentDuringSignOut = localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY);
       return { error: null };
     });
 
     await pairSharedDisplay("property", ["station"], "Kitchen", false);
 
-    expect(tokenPresentDuringSignOut).toBeNull();
-    expect(sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBe("restricted-token");
+    expect(tokenPresentDuringSignOut).toBe("restricted-token");
+    expect(localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBe("restricted-token");
   });
   it("refuses shared mode when the remaining supervisor session cannot sign out", async () => {
     mocks.getSession.mockResolvedValue({
@@ -80,7 +80,7 @@ describe("restricted shared display client", () => {
       _expected: "new",
       _pin: "816294",
     });
-    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
   });
   it("removes a token and revokes the new screen if supervisor sign-out fails", async () => {
     mocks.rpc
@@ -94,7 +94,7 @@ describe("restricted shared display client", () => {
       "Sign-out failed",
     );
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
-    expect(sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBeNull();
     expect(mocks.rpc.mock.calls[1]?.[1]).toBe("neo_production_display_manage");
     expect(mocks.rpc.mock.calls[1]?.[2]).toEqual({ _close: "session" });
   });
@@ -104,6 +104,6 @@ describe("restricted shared display client", () => {
       pairSharedDisplay("other-property", ["station"], "Kitchen", false),
     ).rejects.toThrow("Outside your station scope");
     expect(mocks.signOut).not.toHaveBeenCalled();
-    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
   });
 });

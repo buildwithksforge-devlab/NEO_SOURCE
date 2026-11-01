@@ -9,6 +9,7 @@ import { navigationForAccess } from "@/lib/nav-permissions";
 import { SidebarNavSkeleton } from "@/components/common/ShellSkeleton";
 
 import { useAuth } from "@/lib/auth";
+import { isStaffPinSession } from "@/lib/staff-pin-login";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -158,6 +159,8 @@ export function SidebarContent({
 
 function SidebarUser({ collapsed }: { collapsed: boolean }) {
   const { profile, roleNames, signOut } = useAuth();
+  const pinSession = isStaffPinSession();
+  const exitLabel = pinSession ? "Lock / Switch Staff" : "Sign out";
   const hasName = Boolean(profile?.full_name?.trim());
   const name = hasName ? profile!.full_name : "Profile setup incomplete";
   const initials = hasName
@@ -192,13 +195,13 @@ function SidebarUser({ collapsed }: { collapsed: boolean }) {
         <TooltipTrigger asChild>
           <button
             onClick={() => void signOut()}
-            aria-label="Sign out"
+            aria-label={exitLabel}
             className="rounded-md p-1.5 text-sidebar-foreground/70 transition-colors duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             <LogOut className="size-4" />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">Sign out</TooltipContent>
+        <TooltipContent side="right">{exitLabel}</TooltipContent>
       </Tooltip>
     </div>
   );

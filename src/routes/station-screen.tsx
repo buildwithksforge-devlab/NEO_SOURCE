@@ -15,7 +15,7 @@ import {
 import { TicketCard } from "@/components/kitchen/TicketCard";
 import {
   ensureSharedScreenSignedOut,
-  DISPLAY_TOKEN_STORAGE_KEY,
+  readSharedDisplayToken,
   readSharedDisplay,
   actOnSharedDisplay,
   productionActions,
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/station-screen")({
 });
 function SharedScreen() {
   const qc = useQueryClient();
-  const [token] = useState(() => sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) ?? "");
+  const [token] = useState(() => readSharedDisplayToken());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [selected, setSelected] = useState<SharedDisplayAction | null>(null);
 

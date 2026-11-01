@@ -235,12 +235,7 @@ export const navigation: NavGroup[] = [
         icon: LayoutDashboard,
         roles: ["owner", "manager", "waiter"],
       },
-      {
-        label: "Bar Display",
-        to: "/bar/display",
-        icon: ClipboardCheck,
-        roles: ["owner", "manager", "waiter"],
-      },
+
       {
         label: "Bar Order Queue",
         to: "/bar/queue",
@@ -300,12 +295,7 @@ export const navigation: NavGroup[] = [
         icon: Receipt,
         roles: ["owner", "manager", "waiter", "accountant"],
       },
-      {
-        label: "POS Production Monitor",
-        to: "/pos/kds",
-        icon: ChefHat,
-        roles: ["owner", "manager", "kitchen", "waiter"],
-      },
+
       {
         label: "Menu Management",
         to: "/pos/menu",
@@ -354,18 +344,8 @@ export const navigation: NavGroup[] = [
         icon: ChefHat,
         roles: ["owner", "manager", "kitchen"],
       },
-      {
-        label: "Kitchen Display",
-        to: "/kitchen/display",
-        icon: ChefHat,
-        roles: ["owner", "manager", "kitchen"],
-      },
-      {
-        label: "Coffee Display",
-        to: "/coffee/display",
-        icon: ChefHat,
-        roles: ["owner", "manager", "kitchen"],
-      },
+
+
       {
         label: "Shared Display Controls",
         to: "/production-displays",
@@ -397,12 +377,7 @@ export const navigation: NavGroup[] = [
         icon: ChefHat,
         roles: ["owner", "manager", "kitchen"],
       },
-      {
-        label: "Pastry Display",
-        to: "/pastry/display",
-        icon: ChefHat,
-        roles: ["owner", "manager", "kitchen"],
-      },
+
       {
         label: "Pastry Order Queue",
         to: "/pastry/queue",

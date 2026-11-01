@@ -10,6 +10,8 @@ import { awaitAuthenticatedUser, provisionWorkspace } from "@/lib/workspace-prov
 import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { StaffPinSignIn } from "@/components/auth/StaffPinSignIn";
+import { clearStaffPinSession } from "@/lib/staff-pin-login";
+import { readSharedDisplayToken } from "@/lib/shared-production-display";
 import {
   CreateWorkspaceWizard,
   PENDING_WORKSPACE_KEY,
@@ -170,6 +172,9 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pairedDisplayToken] = useState(() =>
+    readSharedDisplayToken(),
+  );
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -182,6 +187,7 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
       toast.error(msg);
       return;
     }
+    clearStaffPinSession();
     setBusy(true);
     const { error, data } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
@@ -330,27 +336,28 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
           "Sign In"
         )}
       </Button>
-      <div
-        data-neo-station-display-entry
-        className="mt-5 space-y-3 border-t border-neo-mist pt-5"
-      >
-        <p className="text-center text-sm font-medium text-neo-midnight">
-          Kitchen, Coffee, Bar &amp; Pastry
-        </p>
-
-        <Link
-          to="/station-screen"
-          className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
+      {pairedDisplayToken ? (
+        <div
+          data-neo-station-display-entry
+          className="mt-5 space-y-3 border-t border-neo-mist pt-5"
         >
-          Open Paired Production Display
-        </Link>
+          <p className="text-center text-sm font-medium text-neo-midnight">
+            Paired production display
+          </p>
 
-        <p className="text-center text-xs text-neo-steel">
-          Paired Kitchen, Coffee, Bar and Pastry screens show incoming work without
-          a staff workspace login. Each action requires only your personal PIN.
-          Supervisors pair screens from Production Displays inside NEØ.
-        </p>
-      </div>
+          <Link
+            to="/station-screen"
+            className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
+          >
+            Resume Paired Production Display
+          </Link>
+
+          <p className="text-center text-xs text-neo-steel">
+            This option appears only because this browser already holds a
+            restricted production-display credential.
+          </p>
+        </div>
+      ) : null}
     </form>
   );
 }

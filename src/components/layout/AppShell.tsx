@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { MobileSidebar, SidebarContent } from "./Sidebar";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
@@ -23,10 +23,38 @@ import { hydrateDensity, scopeDensityToUser, setDensityRoleHint } from "@/lib/de
 const COLLAPSE_KEY = "neo.sidebar.collapsed";
 
 export function AppShell() {
+  const href = useRouterState({
+    select: (state) => state.location.href,
+  });
+  const [path, search = ""] = href.split("?");
+  const entranceMode =
+    path === "/workspace" &&
+    new URLSearchParams(search).get("home") === "1";
+
   return (
     <WorkspaceBootGate>
-      <WorkspaceLayout />
+      {entranceMode ? <WorkspaceEntranceLayout /> : <WorkspaceLayout />}
     </WorkspaceBootGate>
+  );
+}
+
+function WorkspaceEntranceLayout() {
+  return (
+    <div
+      data-neo-workspace-entrance-frame
+      className="neo-page-canvas flex min-h-dvh flex-col bg-background"
+    >
+      <main className="flex-1 overflow-y-auto">
+        <Outlet />
+      </main>
+
+      <footer className="neo-safe-b neo-page-gutter shrink-0 border-t border-border bg-background/95 py-3">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <PoweredByNeoSignature />
+          <CreatorCredit className="text-[0.7rem] opacity-70" />
+        </div>
+      </footer>
+    </div>
   );
 }
 
