@@ -29,9 +29,13 @@ const config = readFileSync(
   "utf8",
 );
 
-describe("Staff PIN Edge Function bridge", () => {
+describe("Staff PIN authentication broker bridge", () => {
   it("moves privileged authentication into the backend function", () => {
     expect(route).toContain(
+      "https://horizon-prime-os.lovable.app/api/public/staff-pin-login",
+    );
+
+    expect(route).not.toContain(
       "/functions/v1/neo-staff-pin-login",
     );
 

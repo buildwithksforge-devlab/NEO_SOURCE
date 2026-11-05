@@ -32,26 +32,40 @@ describe("trusted-device staff PIN login contract", () => {
     expect(client).not.toMatch(/staff[_ ]code/i);
   });
 
-  it("resolves PIN identity only through the server service client", () => {
+  it("resolves PIN identity only through the deployed server broker", () => {
     expect(api).toContain(
-      '"neo_staff_login_device_resolve"',
+      "https://horizon-prime-os.lovable.app/api/public/staff-pin-login",
     );
-    expect(api).toMatch(
-      /await import\(\s*"@\/integrations\/supabase\/client\.server"\s*\)/,
+    expect(api).toContain(
+      '"x-neo-device-token": deviceToken',
+    );
+    expect(api).not.toContain(
+      "neo_staff_login_device_resolve",
+    );
+    expect(api).not.toContain(
+      "@/integrations/supabase/client.server",
     );
     expect(client).not.toContain(
       "neo_staff_login_device_resolve",
     );
   });
 
-  it("keeps user ID and email server-side", () => {
-    expect(api).toContain(
-      "supabaseAdmin.auth.admin.getUserById(userId)",
+  it("keeps privileged identity and Auth administration behind the broker", () => {
+    expect(api).not.toContain(
+      "supabaseAdmin",
     );
-    expect(api).toContain(
-      "supabaseAdmin.auth.admin.generateLink",
+    expect(api).not.toContain(
+      "getUserById",
     );
-    expect(api).toContain("hashed_token");
+    expect(api).not.toContain(
+      "generateLink",
+    );
+    expect(api).toMatch(
+      /token_hash:\s*loginToken/,
+    );
+    expect(api).toMatch(
+      /branch_id:\s*branchId/,
+    );
     expect(api).not.toMatch(
       /return response\(\{[\s\S]*?(user_id|email)\s*:/,
     );

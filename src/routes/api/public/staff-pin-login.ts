@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const DEVICE_TOKEN = /^neowd_[0-9a-f]{64}$/;
+const STAFF_PIN_BROKER_URL =
+  "https://horizon-prime-os.lovable.app/api/public/staff-pin-login";
+const CLOUDFLARE_APP_ORIGIN =
+  "https://neo-preview.neo-hospitality.workers.dev";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -119,30 +123,6 @@ export const Route = createFileRoute(
           );
         }
 
-        const supabaseUrl =
-          process.env["SUPABASE_URL"]
-            ?.trim()
-            .replace(/\/+$/, "");
-
-        const publishableKey =
-          process.env["SUPABASE_PUBLISHABLE_KEY"]
-            ?.trim();
-
-        if (!supabaseUrl || !publishableKey) {
-          console.error(
-            "[staff-pin-login] edge_configuration_missing",
-          );
-
-          return response(
-            {
-              error: "server_error",
-              message:
-                "Staff PIN sign-in is temporarily unavailable.",
-            },
-            503,
-          );
-        }
-
         const controller =
           new AbortController();
 
@@ -156,11 +136,11 @@ export const Route = createFileRoute(
 
         try {
           upstream = await fetch(
-            `${supabaseUrl}/functions/v1/neo-staff-pin-login`,
+            STAFF_PIN_BROKER_URL,
             {
               method: "POST",
               headers: {
-                apikey: publishableKey,
+                Origin: CLOUDFLARE_APP_ORIGIN,
                 "Content-Type": "application/json",
                 "x-neo-device-token": deviceToken,
               },
