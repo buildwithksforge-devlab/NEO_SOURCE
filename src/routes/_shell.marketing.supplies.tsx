@@ -22,6 +22,7 @@ import {
   str,
   useMarketingStockNeeds,
   useReportMarketingStockNeed,
+  useCreateMarketingRequisition,
   useReviewMarketingStockNeed,
   type MktRow,
 } from "@/lib/marketing-department";
@@ -53,6 +54,7 @@ export const Route = createFileRoute("/_shell/marketing/supplies")({
 });
 
 const NEED_TONE: Record<string, "success" | "warning" | "destructive" | "default"> = {
+  reported: "warning",
   pending: "warning",
   acknowledged: "default",
   requisitioned: "success",
@@ -67,6 +69,7 @@ function MarketingSuppliesPage() {
   const needs = useMarketingStockNeeds("all");
   const report = useReportMarketingStockNeed();
   const review = useReviewMarketingStockNeed();
+  const createRequisition = useCreateMarketingRequisition();
 
   const [item, setItem] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -168,7 +171,7 @@ function MarketingSuppliesPage() {
               <TableBody>
                 {rows.map((row) => {
                   const status = str(row["status"], "pending");
-                  const open = ["pending", "acknowledged"].includes(status);
+                  const open = ["reported", "pending", "acknowledged"].includes(status);
                   return (
                     <TableRow key={String(row["id"])}>
                       <TableCell>
@@ -191,6 +194,13 @@ function MarketingSuppliesPage() {
                           <div className="flex justify-end gap-2">
                             <Button
                               size="sm"
+                              disabled={createRequisition.isPending || review.isPending}
+                              onClick={() => createRequisition.mutate(String(row["id"]))}
+                            >
+                              Create Requisition
+                            </Button>
+                            <Button
+                              size="sm"
                               variant="outline"
                               disabled={review.isPending}
                               onClick={() =>
@@ -201,6 +211,13 @@ function MarketingSuppliesPage() {
                               }
                             >
                               Acknowledge
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={createRequisition.isPending || review.isPending}
+                              onClick={() => createRequisition.mutate(String(row["id"]))}
+                            >
+                              Create Requisition
                             </Button>
                             <Button
                               size="sm"

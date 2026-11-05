@@ -38,9 +38,10 @@ describe("pre-arrival deposit gate", () => {
     expect(gate.message).toContain("used once");
   });
 
-  it("never blocks on an unreadable position — the database trigger still guards it", () => {
-    expect(depositGate(undefined).blocked).toBe(false);
-    expect(depositGate({ ok: false, reason: "Reservation not found" }).blocked).toBe(false);
+  it("fails closed when the deposit position cannot be verified", () => {
+    expect(depositGate(undefined).blocked).toBe(true);
+    expect(depositGate(null).blocked).toBe(true);
+    expect(depositGate({ ok: false, reason: "Reservation not found" }).blocked).toBe(true);
   });
 });
 

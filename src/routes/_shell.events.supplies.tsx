@@ -15,6 +15,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
+import { useBookings } from "@/lib/events-data";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { titleCase } from "@/lib/operations";
 import {
   BANQUET_SUPPLY_SUGGESTIONS,
@@ -64,6 +72,8 @@ function EventSuppliesPage() {
   const { can } = useAuth();
   const mayReview = can("events", "stock_needs.approve");
 
+  const bookings = useBookings();
+  const [bookingId, setBookingId] = useState("");
   const needs = useEventStockNeeds("all");
   const report = useReportEventStockNeed();
   const review = useReviewEventStockNeed();
@@ -87,6 +97,33 @@ function EventSuppliesPage() {
         description={`Common items: ${BANQUET_SUPPLY_SUGGESTIONS.join(", ")}.`}
       >
         <div className="grid gap-3 md:grid-cols-4">
+          <div className="space-y-1.5 md:col-span-4">
+            <Label>Event booking</Label>
+            <Select value={bookingId} onValueChange={setBookingId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select the event requiring supplies" />
+              </SelectTrigger>
+              <SelectContent>
+                {((bookings.data ?? []) as SevRow[])
+                  .filter((event) =>
+                    !["cancelled", "closed"].includes(
+                      sevStr(event["status"], "")
+                    )
+                  )
+                  .map((event) => (
+                    <SelectItem
+                      key={sevStr(event["id"], "")}
+                      value={sevStr(event["id"], "")}
+                    >
+                      {sevStr(
+                        event["event_name"],
+                        sevStr(event["event_reference"], "Event")
+                      )} - {sevStr(event["event_date"], "")}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1.5 md:col-span-2">
             <Label htmlFor="need-item">Item</Label>
             <Input
@@ -109,10 +146,10 @@ function EventSuppliesPage() {
           <div className="flex items-end">
             <Button
               className="w-full"
-              disabled={!item.trim() || report.isPending}
+              disabled={!bookingId || !item.trim() || report.isPending}
               onClick={() =>
                 report.mutate(
-                  { item, quantity: Number(quantity) || 1, notes },
+                  { bookingId, item, quantity: Number(quantity) || 1, notes },
                   {
                     onSuccess: () => {
                       setItem("");

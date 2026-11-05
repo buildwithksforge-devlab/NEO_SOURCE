@@ -1,0 +1,105 @@
+﻿NEØ F07 — DELIVERY & TRANSPORT
+Commit: 3af3453
+
+=== DELIVERY MODULE FILES ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-dispatch-gateway.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-gateway.functions.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-live.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-reconciliation.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts
+
+=== DELIVERY RPC CONNECTIONS ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:7 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:343 const { data, error } = await guardedRpc(sb, "delivery_quote_cart", { _cart: cartId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:365 const { data, error } = await guardedRpc(sb, "delivery_place_order", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:401 const { data, error } = await guardedRpc(sb, "neo_delivery_staff_place_order", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:680 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_for_customer", { _order: orderId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:693 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_status", { _order: orderId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:737 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_resend", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:749 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_regenerate", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:762 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_override", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:791 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_reveal", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:836 const { data, error } = await guardedRpc(sb, "neo_delivery_pin_board", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:871 const { data, error } = await guardedRpc(sb, "delivery_metrics", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:890 const { error } = await guardedRpc(sb, fn, args);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:949 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_directory", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:966 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_roster", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:980 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_candidates", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1000 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_enrol", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1034 const { error } = await guardedRpc(sb, "neo_delivery_rider_retire", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1078 const { data, error } = await guardedRpc(sb, "neo_delivery_assign", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1141 guardedRpc(sb, "neo_delivery_dispatch_candidates", { _order: orderId }) as unknown as Promise<{
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1169 const { data, error } = await guardedRpc(sb, "neo_rider_me", {});
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1185 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_availability", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1241 const { data, error } = await guardedRpc(sb, "neo_delivery_notification_audit", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1258 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_notifications", { _rider: riderId, _limit: limit });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1334 const { error } = await guardedRpc(sb, "delivery_rider_advance", { _order: input.orderId, _to: input.to });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1350 const { error } = await guardedRpc(sb, "delivery_confirm_delivery", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1479 const { error } = await guardedRpc(sb, "neo_delivery_record_cash_collection", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1532 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_remit", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1564 const { data, error } = await guardedRpc(sb, "neo_delivery_remit_reconcile", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1671 const { data, error } = await guardedRpc(sb, "neo_delivery_dispatch_board", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1712 const { data, error } = await guardedRpc(sb, "neo_delivery_shift_schedule", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1740 const { data, error } = await guardedRpc(sb, "neo_delivery_shift_cancel", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1783 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_performance_distance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1808 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_audit", { _rider: riderId, _limit: 100 });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1843 const { data, error } = await guardedRpc(sb, "neo_delivery_route_log", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1872 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_routes", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1908 const { data, error } = await guardedRpc(sb, "neo_rider_me");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1936 const { data, error } = await guardedRpc(sb, "neo_rider_transport_jobs");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1948 const { error } = await guardedRpc(sb, "neo_rider_transport_advance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1978 const { data, error } = await guardedRpc(sb, "neo_transport_rider_candidates", { _request: requestId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:1996 const { data, error } = await guardedRpc(sb, "neo_delivery_rider_reconcile", { _commit: commit });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:2032 const { data, error } = await guardedRpc(sb, "neo_delivery_claim", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:2068 const { data, error } = await guardedRpc(sb, "neo_delivery_bill", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-data.ts:2112 const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:10 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:79 const { data, error } = await guardedRpc(db, "neo_delivery_department_metrics", args);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:103 const { data, error } = await guardedRpc(db, "neo_delivery_rider_performance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:148 const { data, error } = await guardedRpc(db, "neo_delivery_supply_request_create", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:171 const { data, error } = await guardedRpc(db, "neo_delivery_supply_request_review", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:197 const { data, error } = await guardedRpc(db, "neo_delivery_maintenance_requests", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:217 const { data, error } = await guardedRpc(db, "neo_delivery_maintenance_request", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-department.ts:270 const { data, error } = await guardedRpc(db, "neo_delivery_rider_roster", { _branch: branchId ?? null });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-dispatch-gateway.ts:12 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-dispatch-gateway.ts:88 const { data, error } = await guardedRpc(supabase, "neo_delivery_dispatch_open", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-gateway.functions.ts:77 await (client as RpcClient).rpc("neo_delivery_dispatch_mark_sent", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-gateway.functions.ts:213 await admin.rpc("neo_delivery_dispatch_apply", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-live.ts:18 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-live.ts:81 const { data, error } = await guardedRpc(sb, "neo_guest_delivery_live", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery-live.ts:101 const { data, error } = await guardedRpc(sb, "neo_rider_report_location", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:8 import { guardedRpc } from "@/lib/rpc-guard";
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:112 const { data, error } = await guardedRpc(sb, "neo_public_menu", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:176 const { error } = await guardedRpc(sb, "neo_guest_cart_add_item", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:201 const { error } = await guardedRpc(sb, "neo_guest_cart_set_quantity", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:218 const { error } = await guardedRpc(sb, "neo_guest_cart_update", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:235 const { data, error } = await guardedRpc(sb, "delivery_quote_cart", { _cart: cartId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\public-delivery.ts:246 const { data, error } = await guardedRpc(sb, "delivery_place_order", {
+
+=== DELIVERY ROUTES ===
+admin.delivery-settings.tsx
+admin.delivery-zones.tsx
+admin.email-delivery.tsx
+delivery.$hotelSlug.cart.tsx
+delivery.$hotelSlug.checkout.tsx
+delivery.$hotelSlug.index.tsx
+delivery.$hotelSlug.orders.tsx
+delivery.$hotelSlug.track.$orderReference.tsx
+delivery.$hotelSlug.tsx
+guest.$hotelSlug.transport.tsx
+rider.active.tsx
+rider.index.tsx
+rider.login.tsx
+rider.profile.tsx
+rider.support.tsx
+_shell.delivery.index.tsx
+_shell.delivery.maintenance.tsx
+_shell.delivery.queue.tsx
+_shell.delivery.reports.tsx
+_shell.delivery.requisitions.tsx
+_shell.delivery.tasks.tsx
+_shell.delivery.verification.tsx
+_shell.pms.transport.tsx

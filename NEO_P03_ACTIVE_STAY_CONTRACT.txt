@@ -1,0 +1,64 @@
+﻿20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:843: (SELECT id FROM public.stays WHERE reservation_id=_reservation),
+20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:867: SELECT id INTO _stay FROM public.stays WHERE reservation_id=_reservation;
+20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:881: IF _room.occupancy_status = 'occupied' THEN
+20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:1013: FROM public.stays s
+20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:1046: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql:1095: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260814141422_db5e0bea-1012-4101-a3e8-51b9c176a02d.sql:267: SELECT s.room_id INTO _room FROM public.stays s WHERE s.id=_stay;
+20260814141422_db5e0bea-1012-4101-a3e8-51b9c176a02d.sql:443: FROM public.stays s
+20260820154812_894da73f-bee1-4295-9f22-58a4f3456936.sql:95: UPDATE rooms SET occupancy_status = 'vacant', housekeeping_status = 'dirty', updated_at = now()
+20260820154854_ba21e801-56cc-4154-8335-c961fdf7ddb5.sql:24: UPDATE rooms SET occupancy_status = 'occupied' WHERE id = _room;
+20260821150148_19dac5a5-17de-468a-b042-3c0916fc93f0.sql:149: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation ORDER BY created_at DESC LIMIT 1;
+20260821150309_2c4bc3db-74e4-47e2-95c0-dcc73639d13f.sql:16: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260822132244_42e38318-ca81-4399-9fed-3d814edc3bec.sql:51: SELECT count(*) INTO departures FROM public.stays s
+20260823110935_093f3e98-1742-4917-b9ca-6debeb86bb8e.sql:15: SELECT id INTO _stay FROM public.stays WHERE reservation_id=_reservation;
+20260823110935_093f3e98-1742-4917-b9ca-6debeb86bb8e.sql:29: IF _room.occupancy_status = 'occupied' THEN
+20260823110935_093f3e98-1742-4917-b9ca-6debeb86bb8e.sql:93: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:28: SELECT * INTO _stay FROM public.stays WHERE reservation_id = _reservation FOR UPDATE;
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:61: DELETE FROM public.stays WHERE id = _stay.id;
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:75: room_condition = 'vacant-clean',
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:139: AND r.status = 'checked-in'
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:140: AND NOT EXISTS (SELECT 1 FROM public.stays s WHERE s.reservation_id = r.id)
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:149: FROM public.stays s
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:164: FROM public.stays s
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:179: AND rm.occupancy_status = 'occupied'
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:180: AND NOT EXISTS (SELECT 1 FROM public.stays s WHERE s.room_id = rm.id AND s.checked_out_at IS NULL)
+20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql:189: FROM public.stays s
+20260823135736_7e6d512b-2696-453c-82ca-e9bfbe3093bc.sql:15: SELECT id INTO _stay FROM public.stays WHERE reservation_id=_reservation;
+20260823135736_7e6d512b-2696-453c-82ca-e9bfbe3093bc.sql:29: IF _room.occupancy_status = 'occupied' THEN
+20260823143517_d3c0c65b-4f7b-4ee7-aaa6-eaa73be810a6.sql:13: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260823152715_bb9134df-70d5-454d-83c6-1314a0f84fab.sql:28: count(*) FILTER (WHERE r.departure_date = today AND r.status IN ('checked-in','checked-out')),
+20260823152715_bb9134df-70d5-454d-83c6-1314a0f84fab.sql:29: count(*) FILTER (WHERE r.departure_date = today AND r.status = 'checked-in'),
+20260823152715_bb9134df-70d5-454d-83c6-1314a0f84fab.sql:30: count(*) FILTER (WHERE r.arrival_date = today AND r.status IN ('checked-in','checked-out')),
+20260823152715_bb9134df-70d5-454d-83c6-1314a0f84fab.sql:32: count(*) FILTER (WHERE r.status = 'checked-in')
+20260823152715_bb9134df-70d5-454d-83c6-1314a0f84fab.sql:39: count(*) FILTER (WHERE s.occupancy_status = 'occupied'),
+20260823160512_889a6738-abf8-4986-bdea-fb1a56769e9b.sql:115: AND r.status IN ('checked-in','checked-out','departed','completed')), 0),
+20260823183533_f4f708cc-eed2-4430-a979-eb0e6da49f2e.sql:25: select s.customer_id into v_customer from public.stays s where s.id = (to_jsonb(new)->>'stay_id')::uuid;
+20260823183533_f4f708cc-eed2-4430-a979-eb0e6da49f2e.sql:63: from public.stays s
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:28: SELECT * INTO _stay FROM public.stays WHERE reservation_id = _reservation FOR UPDATE;
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:61: DELETE FROM public.stays WHERE id = _stay.id;
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:75: room_condition = 'vacant-clean',
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:135: AND r.status = 'checked-in'
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:136: AND NOT EXISTS (SELECT 1 FROM public.stays s WHERE s.reservation_id = r.id)
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:144: FROM public.stays s
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:158: FROM public.stays s
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:172: AND rm.occupancy_status = 'occupied'
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:173: AND NOT EXISTS (SELECT 1 FROM public.stays s WHERE s.room_id = rm.id AND s.checked_out_at IS NULL)
+20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql:181: FROM public.stays s
+20260825121652_047b88cf-fa4d-4e49-8529-3df67aae27c0.sql:21: AND r.status = 'checked-in' AND r.departure_date < current_date) AS incomplete,
+20260826072634_df0e4cf0-256c-434d-a33b-2325fad53716.sql:22: AND NOT EXISTS (SELECT 1 FROM public.stays s WHERE s.reservation_id = r.id);
+20260826072634_df0e4cf0-256c-434d-a33b-2325fad53716.sql:26: FROM public.stays s
+20260826072634_df0e4cf0-256c-434d-a33b-2325fad53716.sql:36: FROM public.stays s
+20260830040148_a1812bd0-17aa-444a-bfff-c9ba5b8a0230.sql:16: SELECT id INTO _stay FROM public.stays WHERE reservation_id=_reservation;
+20260830040148_a1812bd0-17aa-444a-bfff-c9ba5b8a0230.sql:30: IF _room.occupancy_status = 'occupied' THEN
+20260830145840_70139988-ba0d-4bc7-8cca-32cd1414db5f.sql:19: SET occupancy_status = 'occupied', updated_at = now()
+20260830145840_70139988-ba0d-4bc7-8cca-32cd1414db5f.sql:99: UPDATE rooms SET occupancy_status = 'vacant', housekeeping_status = 'dirty', updated_at = now()
+20260831043706_a114fd29-7595-4771-b0de-57407fb6c220.sql:45: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation FOR UPDATE;
+20260831045823_d8993219-835b-4244-8912-765e9b835a92.sql:67: (SELECT id FROM public.stays WHERE reservation_id = _reservation),
+20260831045823_d8993219-835b-4244-8912-765e9b835a92.sql:102: SELECT * INTO _stay FROM public.stays
+20260831050052_abb267b0-992c-448b-9292-715775ac34ba.sql:86: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260914005249_756324e7-13ed-4ec4-96d5-26b6bec207c5.sql:12: SELECT * INTO _stay FROM public.stays WHERE reservation_id=_reservation AND organization_id=_org FOR UPDATE;
+20260915050219_0f71c692-a545-4639-b371-58f0769cccd9.sql:13: UPDATE rooms SET occupancy_status = 'vacant', housekeeping_status = 'dirty', updated_at = now()
+20260915142951_f8be5dfe-ee3f-407e-9bd2-87cd8bb4f5d4.sql:28: AND r.departure_date = v_today AND r.status = 'checked-in';
+20260923065612_f9ea7a03-2ec2-46a3-8add-e2cf5df8912b.sql:150: AND r.status IN ('checked-in','checked-out','departed','completed')), 0),
+20260924153000_front_office_connected_guards.sql:29: (SELECT s.id FROM public.stays s WHERE s.reservation_id = r.id

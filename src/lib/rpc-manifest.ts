@@ -14,6 +14,36 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_delivery_mpesa_till_claim_submit: "authenticated",
+  // Staff operations use authenticated sessions.
+  neo_delivery_record_payment_v2: "authenticated",
+  neo_event_stock_need_create: "authenticated",
+  neo_event_stock_need_to_requisition: "authenticated",
+  neo_requisition_assign_stock_item: "authenticated",
+
+  // Print-agent routines use the trusted server client.
+  neo_print_agent_claim: "service_role",
+  neo_print_agent_finish: "service_role",
+  neo_print_agent_printers: "service_role",
+
+  // Authenticated printer administrators pair and revoke property agents.
+  neo_print_agent_register: "authenticated",
+  neo_print_agent_revoke: "authenticated",
+
+  // Trusted-property staff PIN sign-in.
+  neo_staff_login_device_pair: "authenticated",
+  neo_staff_login_device_revoke: "authenticated",
+  neo_staff_login_device_resolve: "service_role",
+
+  // Bearer-token restricted displays work after the supervisor signs out.
+  neo_production_display_read: "anon",
+
+  neo_production_display_act_pin_only: "anon",
+  neo_production_staff_pin: "authenticated",
+  neo_production_display_pair: "authenticated",
+  neo_marketing_need_to_requisition: "authenticated",
+  neo_production_display_manage: "authenticated",
+  neo_kitchen_visible_station_ids: "authenticated",
   neo_beo_revise: "authenticated",
   // Blind receiving: database authorization remains mandatory.
   neo_blind_receiving_orders: "authenticated",
@@ -41,7 +71,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_property_entrance: "anon",
   neo_property_entrance_enter: "authenticated",
 
-  // NEØ front door: the public hotel list and a hotel's own public page are
+  // NEÃƒËœ front door: the public hotel list and a hotel's own public page are
   // readable before sign-in; which entrances a person may actually use is
   // resolved from their real relationship with that hotel.
   neo_public_directory: "anon",
@@ -54,7 +84,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_relationship_property: "authenticated",
 
   // Returning people: the hotels this account already has a real relationship
-  // with, and the NEØ Platform Console (platform operators only).
+  // with, and the NEÃƒËœ Platform Console (platform operators only).
   neo_my_entrances: "authenticated",
   neo_platform_console: "authenticated",
   neo_platform_set_listing: "authenticated",
@@ -203,6 +233,9 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // Front office and PMS
   pms_assign_room: "authenticated",
   pms_available_rooms: "authenticated",
+  neo_event_quotation_price: "authenticated",
+  neo_delivery_mpesa_till_claim_queue: "authenticated",
+  neo_delivery_mpesa_till_claim_approve: "authenticated",
   pms_check_in: "authenticated",
   neo_reservation_create: "authenticated",
   pms_revert_check_in: "authenticated",
@@ -261,13 +294,13 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_procurement_order_approve: "authenticated",
   neo_stores_receive_goods: "authenticated",
 
-  // Platform — tenant-scale indexing classification and standing coverage guard
+  // Platform Ã¢â‚¬â€ tenant-scale indexing classification and standing coverage guard
   neo_index_class: "authenticated",
   neo_index_coverage_scan: "authenticated",
   neo_rbac_model_health: "authenticated",
 
 
-  // Human Resources — staff-account → employee-record reconciliation
+  // Human Resources Ã¢â‚¬â€ staff-account Ã¢â€ â€™ employee-record reconciliation
   neo_hr_reconcile_staff: "authenticated",
   neo_hr_leave_sync_entitlements: "authenticated",
   
@@ -427,7 +460,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_menu_assign_station: "authenticated",
   neo_menu_import_batches: "authenticated",
   neo_menu_departments: "authenticated",
-  // Shared property → department → station → worker selector contract.
+  // Shared property Ã¢â€ â€™ department Ã¢â€ â€™ station Ã¢â€ â€™ worker selector contract.
   neo_scoped_departments: "authenticated",
   neo_scoped_stations: "authenticated",
   neo_scoped_workers: "authenticated",
@@ -468,7 +501,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   inventory_post_stock_take: "authenticated",
   inventory_post_transfer: "authenticated",
   // Store transfers and the stock-need lifecycle (issue, part-issue, route to
-  // Procurement) — every one of these is a staff-only stock write.
+  // Procurement) Ã¢â‚¬â€ every one of these is a staff-only stock write.
   neo_stores_transfer_create: "authenticated",
   neo_stores_transfer_receive: "authenticated",
   neo_stores_transfer_cancel: "authenticated",
@@ -491,22 +524,22 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_matching_policy: "authenticated",
   req_approve: "authenticated",
   req_confirm_receipt: "authenticated",
-  req_issue: "authenticated",
+  neo_req_issue_safe: "authenticated",
   req_record_consumption: "authenticated",
   req_submit: "authenticated",
 
-  // Food & Beverage — department requisitions and wastage
+  // Food & Beverage Ã¢â‚¬â€ department requisitions and wastage
   neo_department_requisition_create: "authenticated",
   neo_kitchen_ingredient_request_create: "authenticated",
   neo_pos_refund_decide: "authenticated",
   neo_waste_record: "authenticated",
   neo_waste_review: "authenticated",
 
-  // Front Office — department stock needs
+  // Front Office Ã¢â‚¬â€ department stock needs
   neo_department_stock_need_create: "authenticated",
   neo_department_stock_need_review: "authenticated",
 
-  // Human Resources — employee file, movements and confidential cases
+  // Human Resources Ã¢â‚¬â€ employee file, movements and confidential cases
   neo_hr_document_record: "authenticated",
   neo_hr_employee_movement: "authenticated",
   neo_hr_employment_terms: "authenticated",
@@ -515,7 +548,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
 
 
 
-  // Inventory & Stores — department requests and controlled counting
+  // Inventory & Stores Ã¢â‚¬â€ department requests and controlled counting
   neo_stores_requisition_reject: "authenticated",
   neo_stores_shortage_to_pr: "authenticated",
   neo_stores_count_submit_variance: "authenticated",
@@ -523,7 +556,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_stock_propose_group_mapping: "authenticated",
   neo_stock_confirm_group_mapping: "authenticated",
 
-  // Bar department — queue, assignment and metrics
+  // Bar department Ã¢â‚¬â€ queue, assignment and metrics
   neo_bar_queue: "authenticated",
   neo_bar_accept_ticket: "authenticated",
   neo_bar_advance_ticket: "authenticated",
@@ -671,7 +704,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_delivery_pin_resend: "authenticated",
   neo_delivery_pin_reveal: "authenticated",
   neo_delivery_pin_status: "authenticated",
-  neo_delivery_record_payment: "authenticated",
   neo_delivery_rider_performance_distance: "authenticated",
   neo_delivery_rider_routes: "authenticated",
   neo_delivery_route_log: "authenticated",

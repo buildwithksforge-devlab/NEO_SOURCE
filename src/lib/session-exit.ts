@@ -22,6 +22,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { forgetContext } from "@/lib/continue-context";
+import {
+  clearStaffPinSession,
+  isStaffPinSession,
+} from "@/lib/staff-pin-login";
 
 export type SessionExitOptions = {
   /** Where the person lands afterwards. Public surfaces only. */
@@ -35,13 +39,22 @@ export async function neoSignOut(
   queryClient: QueryClient | null,
   options: SessionExitOptions = {},
 ): Promise<void> {
-  const destination = options.to ?? (options.reauthenticate ? "/auth" : "/");
+  const pinSession = isStaffPinSession();
+  const destination =
+    options.to ??
+    (options.reauthenticate
+      ? "/auth"
+      : pinSession
+        ? "/auth?mode=pin"
+        : "/");
 
   if (queryClient) {
     await queryClient.cancelQueries().catch(() => undefined);
     queryClient.clear();
   }
   forgetContext();
+  clearStaffPinSession();
+
   try {
     await supabase.auth.signOut();
   } catch {

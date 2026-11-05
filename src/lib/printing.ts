@@ -6,6 +6,7 @@
  * real outcome. Failures retry on the same printer and, once the retry limit
  * is reached, fail over to the configured backup printer.
  */
+import { useScopedStations } from "@/lib/scoped-options";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -419,6 +420,126 @@ export function useRetryPrintJob() {
       }
 
       toast.error(e.message);
+    },
+  });
+}
+export type PrinterStation = {
+  id: string;
+  branch_id: string | null;
+  department_id: string | null;
+  name: string;
+  code: string | null;
+  active: boolean;
+};
+
+export type PrintAgent = {
+  id: string;
+  organization_id: string;
+  branch_id: string | null;
+  name: string;
+  active: boolean;
+  last_seen_at: string | null;
+  created_at: string;
+};
+
+/**
+ * Stations available for printer assignment.
+ */
+export function usePrinterStations(
+  _organizationId: string | null | undefined,
+  branchId?: string | null,
+) {
+  return useScopedStations(
+    null,
+    branchId,
+  );
+}
+/**
+ * Trusted property computers registered to run the local print agent.
+ * Raw bearer tokens are never returned by the database.
+ */
+export function usePrintAgents(
+  organizationId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: [
+      KEY,
+      "agents",
+      organizationId ?? null,
+    ],
+
+    enabled: Boolean(organizationId),
+    refetchInterval: 15000,
+
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("neo_print_agents")
+        .select(
+          "id, organization_id, branch_id, name, active, last_seen_at, created_at",
+        )
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return (data ?? []) as PrintAgent[];
+    },
+  });
+}
+
+/**
+ * Registers only the SHA-256 token hash. The raw token remains on the
+ * property computer and is displayed to the administrator once.
+ */
+export function useRegisterPrintAgent() {
+  const invalidate = useInvalidate();
+
+  return useMutation({
+    mutationFn: (input: {
+      branch: string;
+      name: string;
+      tokenHash: string;
+    }) =>
+      rpc<string>("neo_print_agent_register", {
+        _branch: input.branch,
+        _name: input.name,
+        _token_hash: input.tokenHash,
+      }),
+
+    onSuccess: () => {
+      invalidate();
+      toast.success(
+        "Property print agent registered",
+      );
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useRevokePrintAgent() {
+  const invalidate = useInvalidate();
+
+  return useMutation({
+    mutationFn: (agent: string) =>
+      rpc<string>("neo_print_agent_revoke", {
+        _agent: agent,
+      }),
+
+    onSuccess: () => {
+      invalidate();
+      toast.success(
+        "Print-agent access revoked",
+      );
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 }

@@ -51,6 +51,41 @@ function SettingsPage() {
   const [form, setForm] = useState<PosSettings>(DEFAULT_POS_SETTINGS);
   const [printerDialog, setPrinterDialog] = useState(false);
 
+  const [printerConnection, setPrinterConnection] = useState("browser");
+
+  const connectionMethods = [
+    {
+      value: "browser",
+      label: "System Printer",
+      detail: "Use a printer already installed on this device.",
+    },
+    {
+      value: "bluetooth",
+      label: "Bluetooth",
+      detail: "Connect a compatible nearby printer using a supported print connector.",
+    },
+    {
+      value: "wifi",
+      label: "Wi-Fi",
+      detail: "Connect a network printer on the hotel's Wi-Fi.",
+    },
+    {
+      value: "ethernet",
+      label: "Ethernet / LAN",
+      detail: "Connect a wired network printer.",
+    },
+    {
+      value: "usb",
+      label: "USB",
+      detail: "Connect a printer attached to this device.",
+    },
+    {
+      value: "cloud",
+      label: "Cloud Printer",
+      detail: "Connect a compatible cloud-enabled printing device.",
+    },
+  ];
+
   useEffect(() => {
     if (query.data) setForm(query.data.settings);
   }, [query.data]);
@@ -183,22 +218,67 @@ function SettingsPage() {
         </QueryState>
       </SectionCard>
 
+      <SectionCard
+        className="mt-6"
+        title="Printer connections"
+        description="Choose how a compatible printer will connect to NEØ."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {connectionMethods.map((method) => (
+            <button
+              key={method.value}
+              type="button"
+              onClick={() => {
+                setPrinterConnection(method.value);
+                setPrinterDialog(true);
+              }}
+              className="rounded-lg border p-4 text-left transition-colors hover:bg-muted"
+            >
+              <div className="font-medium">{method.label}</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {method.detail}
+              </p>
+            </button>
+          ))}
+        </div>
+      </SectionCard>
+
       <RecordDialog
         open={printerDialog}
         onOpenChange={setPrinterDialog}
-        title="Add printer profile"
+        title="Configure printer"
         fields={[
           { name: "name", label: "Printer name", required: true },
-          { name: "connection_target", label: "Address or device identifier" },
+          {
+            name: "address",
+            label:
+              printerConnection === "wifi" ||
+              printerConnection === "ethernet"
+                ? "Printer network address"
+                : printerConnection === "cloud"
+                  ? "Cloud printer identifier"
+                  : "Device identifier (if required)",
+          },
         ]}
         selects={[
           {
             name: "station_id",
-            label: "Station",
-            options: (stations.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+            label: "Production station",
+            options: (stations.data ?? []).map((s) => ({
+              value: s.id,
+              label: s.name,
+            })),
           },
         ]}
-        onSubmit={(values) => savePrinter.mutate({ values })}
+        onSubmit={(values) =>
+          savePrinter.mutate({
+            values: {
+              ...values,
+              connection_type: printerConnection,
+              status: "not-configured",
+            },
+          })
+        }
       />
     </div>
   );

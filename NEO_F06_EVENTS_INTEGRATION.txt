@@ -1,0 +1,67 @@
+﻿NEØ F06 — EVENTS & BANQUETING
+Commit: 3af3453
+
+=== DEPARTMENTAL RPC CONNECTIONS ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\events\BanquetingCommandCentre.tsx:71 const { data, error } = await guardedRpc(db, "events_department_readiness", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:409 const { data, error } = await guardedRpc(db, "events_department_readiness", { _booking: bookingId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:553 const { data, error } = await guardedRpc(db, "neo_event_booking_create", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:628 const { data, error } = await guardedRpc(db, "neo_event_convert_enquiry", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:662 const { data, error } = await guardedRpc(db, "neo_event_convert_quotation", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:957 const { data, error } = await guardedRpc(db, "neo_event_beo_ensure", { _booking: bookingId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:987 const { data, error } = await guardedRpc(db, "neo_event_beo_publish", { _beo: beoId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:1067 const { data, error } = await guardedRpc(db, "neo_event_close_out", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:1104 const { data, error } = await guardedRpc(db, "neo_event_chain_status", { _branch: branchId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:1325 const { data, error } = await guardedRpc(db, "neo_event_billing_build", { _booking: bookingId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\events-data.ts:1366 const { data, error } = await guardedRpc(db, "neo_event_billing_finalise", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\fnb.ts:141 const { data, error } = await guardedRpc(db, "neo_department_requisition_create", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:324 neo_event_assign_staff: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:325 neo_event_task_create: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:326 neo_event_task_advance: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:508 neo_department_requisition_create: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:588 events_department_readiness: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:593 neo_event_billing_build: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:595 neo_event_billing_finalise: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:598 neo_event_booking_create: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:600 neo_event_convert_enquiry: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:601 neo_event_convert_quotation: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:602 neo_event_beo_ensure: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:603 neo_event_beo_publish: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:604 neo_event_chain_status: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:688 neo_event_close_out: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts:188 const { data, error } = await guardedRpc(db, "neo_event_assign_staff", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts:296 const { data, error } = await guardedRpc(db, "neo_event_task_create", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\sales-events-department.ts:319 const { data, error } = await guardedRpc(db, "neo_event_task_advance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites-extended.server.ts:357 const { data, error } = await rpc(events, "neo_event_billing_build", { _booking: booking });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites-extended.server.ts:424 const finalise = await rpc(owner, "neo_event_billing_finalise", { _booking: booking, _reason: "System test closure" });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites-extended.server.ts:446 const rebuild = await rpc(events, "neo_event_billing_build", { _booking: booking });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites-extended.server.ts:700 { name: "neo_event_chain_status", args: { _branch: foreignBranch } },
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1006 const converted = await expectOk(events, "neo_event_convert_quotation", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1030 const built = (await expectOk(events, "neo_event_billing_build", { _booking: id })) as {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1048 const ensured = (await expectOk(events, "neo_event_beo_ensure", { _booking: id })) as { id?: string; beo_id?: string } | string;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1054 const published = await expectOk(events, "neo_event_beo_publish", { _beo: beoId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1097 const chain = await expectOk(events, "neo_event_chain_status", { _branch: ctx.a.branchId });
+
+=== EVENTS ROUTES ===
+_shell.automation.events.tsx
+_shell.events.banqueting.tsx
+_shell.events.billing.tsx
+_shell.events.bookings.$id.tsx
+_shell.events.bookings.index.tsx
+_shell.events.calendar.tsx
+_shell.events.enquiries.tsx
+_shell.events.feedback.tsx
+_shell.events.index.tsx
+_shell.events.my-tasks.tsx
+_shell.events.packages.tsx
+_shell.events.payments.tsx
+_shell.events.quotations.tsx
+_shell.events.readiness.tsx
+_shell.events.reconciliation.tsx
+_shell.events.reports.tsx
+_shell.events.resources.tsx
+_shell.events.service.tsx
+_shell.events.settings.tsx
+_shell.events.site-visits.tsx
+_shell.events.supplies.tsx
+_shell.events.tsx
+_shell.events.venues.tsx

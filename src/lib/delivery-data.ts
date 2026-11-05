@@ -1,5 +1,5 @@
-/**
- * Phase 14 — Delivery data layer.
+﻿/**
+ * Phase 14 â€” Delivery data layer.
  * Every write that affects money, status or ownership goes through a
  * SECURITY DEFINER database function so the browser can never dictate
  * prices, fees, order status, rider assignment or payment outcome.
@@ -70,7 +70,7 @@ export function useMyCustomer() {
  * Reference data
  * ------------------------------------------------------------------ */
 
-/** Delivery property picker — projects the shared organisation-scoped list. */
+/** Delivery property picker â€” projects the shared organisation-scoped list. */
 export function useDeliveryBranches() {
   return useBranchOptions();
 }
@@ -380,7 +380,7 @@ export function usePlaceOrder() {
 /**
  * Staff-assisted order (phone orders taken at the property).
  * Prices, zone fee, minimum order, ETA and kitchen routing are all decided by
- * the database function, exactly as for a guest order — the screen only
+ * the database function, exactly as for a guest order â€” the screen only
  * supplies the customer, address, zone, items and tender.
  */
 export function useStaffPlaceDeliveryOrder() {
@@ -421,9 +421,9 @@ export function useStaffPlaceDeliveryOrder() {
       };
     },
     onSuccess: async (res) => {
-      // The PIN is never shown to staff — it goes to the customer directly and
+      // The PIN is never shown to staff â€” it goes to the customer directly and
       // appears on their order tracking screen.
-      toast.success(`Order ${res.order_number} created — collection PIN sent to the customer`);
+      toast.success(`Order ${res.order_number} created â€” collection PIN sent to the customer`);
       await audit("delivery.order.create-assisted", "delivery_orders", res.delivery_order_id, {
         order_number: res.order_number,
         grand_total: res.grand_total,
@@ -525,7 +525,7 @@ export function useToggleFavourite() {
 }
 
 /* ------------------------------------------------------------------ *
- * Orders — customer, staff and rider views
+ * Orders â€” customer, staff and rider views
  * ------------------------------------------------------------------ */
 
 const ORDER_SELECT =
@@ -800,7 +800,7 @@ export function useRevealDeliveryPin() {
         toast.error(result?.detail ?? "The PIN could not be revealed.");
         return;
       }
-      toast.success("PIN revealed — this was recorded against your name");
+      toast.success("PIN revealed â€” this was recorded against your name");
       await qc.invalidateQueries({ queryKey: ["delivery", "pin-status", variables.orderId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -876,7 +876,7 @@ export function useDeliveryMetrics(branchId?: string | null) {
   });
 }
 
-/** Order lifecycle actions — all validated inside the database. */
+/** Order lifecycle actions â€” all validated inside the database. */
 export function useOrderAction() {
   const audit = useAudit();
   const qc = useQueryClient();
@@ -1089,7 +1089,7 @@ export function useAssignRider() {
     },
     onSuccess: (result, input) => {
       forgetFailedAction(`delivery-assign:${input.orderId}`);
-      toast.success(result["reassigned"] ? "Order reassigned — both riders notified" : "Rider assigned");
+      toast.success(result["reassigned"] ? "Order reassigned â€” both riders notified" : "Rider assigned");
       invalidate(qc);
     },
     onError: (e: Error, input) => {
@@ -1249,7 +1249,7 @@ export function useNotificationAudit(branchId?: string | null, limit = 120) {
   });
 }
 
-/** Rider notification trail — the source key is shown so duplicate suppression is auditable. */
+/** Rider notification trail â€” the source key is shown so duplicate suppression is auditable. */
 export function useRiderNotifications(riderId?: string | null, limit = 60) {
   return useQuery({
     queryKey: ["delivery", "rider-notifications", riderId ?? "none", limit],
@@ -1347,13 +1347,26 @@ export function useConfirmDelivery() {
   return useMutation({
     mutationFn: async (input: { orderId: string; pin: string; recipient: string; cash?: number }) => {
       guardPreview();
-      const { error } = await guardedRpc(sb, "delivery_confirm_delivery", {
+      const { data, error } = await guardedRpc(sb, "delivery_confirm_delivery", {
         _order: input.orderId,
         _pin: input.pin,
         _recipient: input.recipient,
         _cash_collected: input.cash ?? null,
       });
+
       if (error) throw new Error(error.message);
+
+      const result = (data ?? {}) as Record<string, unknown>;
+
+      if (result["ok"] !== true) {
+        throw new Error(
+          typeof result["detail"] === "string"
+            ? result["detail"]
+            : "Delivery confirmation was rejected."
+        );
+      }
+
+      return result;
     },
     onSuccess: () => {
       toast.success("Delivery confirmed");
@@ -1504,7 +1517,7 @@ export function useCashRemittances() {
   });
 }
 
-/** Cash the signed-in rider still holds — collections not yet attached to a remittance. */
+/** Cash the signed-in rider still holds â€” collections not yet attached to a remittance. */
 export function useMyOutstandingCash(riderId?: string) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery({
@@ -1546,7 +1559,7 @@ export function useSubmitRemittance() {
   });
 }
 
-/** Cashier/Finance action — a rider can never reconcile their own cash. */
+/** Cashier/Finance action â€” a rider can never reconcile their own cash. */
 /** Plain-language reasons the till could not take the rider's cash. */
 const REMIT_REASONS: Record<string, string> = {
   till_not_found: "That till could not be found.",
@@ -1725,7 +1738,7 @@ export function useScheduleShift() {
       return result;
     },
     onSuccess: () => {
-      toast.success("Shift scheduled — the rider has been notified");
+      toast.success("Shift scheduled â€” the rider has been notified");
       invalidate(qc);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1750,7 +1763,7 @@ export function useCancelShift() {
       return result;
     },
     onSuccess: () => {
-      toast.success("Shift cancelled — the rider has been notified");
+      toast.success("Shift cancelled â€” the rider has been notified");
       invalidate(qc);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1983,7 +1996,7 @@ export function useTransportRiderCandidates(requestId?: string | null) {
 }
 
 /**
- * Rider identity reconciliation — links every rider record to its staff
+ * Rider identity reconciliation â€” links every rider record to its staff
  * account, employee record and property, retires duplicates and enrols staff
  * who hold a rider capability but have no rider record. The database performs
  * every check; the browser only reports the outcome.
@@ -2006,7 +2019,7 @@ export function useReconcileRiders() {
       const unlinked = Number(result["still_unlinked"] ?? 0);
       toast.success(
         result["committed"]
-          ? `Riders reconciled — ${linked} linked, ${created} enrolled, ${retired} duplicates retired`
+          ? `Riders reconciled â€” ${linked} linked, ${created} enrolled, ${retired} duplicates retired`
           : `${unlinked} rider record(s) are not linked to a staff account`,
       );
       invalidate(qc);
@@ -2019,7 +2032,7 @@ export function useReconcileRiders() {
  * A rider taking an order that dispatch has not yet assigned.
  *
  * The browser only names the order: the database decides whether this rider
- * may have it — same property, still unclaimed, within their carry limit and,
+ * may have it â€” same property, still unclaimed, within their carry limit and,
  * for a cash order, cleared to handle cash.
  */
 export function useClaimWaitingOrder() {
@@ -2045,7 +2058,7 @@ export function useClaimWaitingOrder() {
       toast.success(
         result["collected"] === true
           ? `${label} is picked up and on its way`
-          : `${label} is yours — collect it from the kitchen`,
+          : `${label} is yours â€” collect it from the kitchen`,
       );
       invalidate(qc);
     },
@@ -2080,7 +2093,7 @@ export function useBillDeliveryOrder() {
       toast.success(
         result["already_billed"]
           ? `Already billed on ${String(result["invoice_number"])}`
-          : `Invoice ${String(result["invoice_number"])} raised · journal ${String(result["journal_number"])}`,
+          : `Invoice ${String(result["invoice_number"])} raised Â· journal ${String(result["journal_number"])}`,
       );
       invalidate(qc);
       void qc.invalidateQueries({ queryKey: ["finance"] });
@@ -2103,13 +2116,14 @@ export function useRecordDeliveryPayment() {
       amount: number;
       method: string;
       entryType: "deposit" | "payment";
+      idempotencyKey: string;
       reference?: string;
       reason?: string;
       /** Which of the hotel's accounts received the money. */
       destinationAccountId?: string | null;
     }) => {
       guardPreview();
-      const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment", {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment_v2", {
         _order: input.orderId,
         _amount: input.amount,
         _method: input.method,
@@ -2117,6 +2131,7 @@ export function useRecordDeliveryPayment() {
         _reference: input.reference?.trim() ? input.reference.trim() : null,
         _reason: input.reason?.trim() ? input.reason.trim() : null,
         _account: input.destinationAccountId ?? null,
+        _attempt: input.idempotencyKey,
       } as never);
       if (error) throw new Error(error.message);
       const result = (data ?? {}) as Record<string, unknown>;
@@ -2129,7 +2144,7 @@ export function useRecordDeliveryPayment() {
       toast.success(
         result["already_recorded"]
           ? "That entry was already recorded."
-          : `Receipt ${String(result["receipt_number"])} · journal ${String(result["journal_number"])}`,
+          : `Receipt ${String(result["receipt_number"])} Â· journal ${String(result["journal_number"])}`,
       );
       invalidate(qc);
       void qc.invalidateQueries({ queryKey: ["finance"] });
@@ -2157,3 +2172,5 @@ export function useDeliveryStageRealtime(enabled = true) {
     enabled,
   );
 }
+
+

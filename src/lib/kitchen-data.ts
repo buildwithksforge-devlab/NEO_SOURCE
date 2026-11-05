@@ -195,7 +195,7 @@ export function useSavePreparationTarget() {
 }
 
 /* ------------------------------------------------------------------ *
- * Live queue — reuses Phase 7 station_tickets / station_ticket_items
+ * Live queue â€” reuses Phase 7 station_tickets / station_ticket_items
  * ------------------------------------------------------------------ */
 
 const TICKET_SELECT = sel(
@@ -239,7 +239,7 @@ export function useTicketHistory(ticketId?: string) {
   });
 }
 
-/** Server-enforced item transition — the database validates the move and rolls the ticket up. */
+/** Server-enforced item transition â€” the database validates the move and rolls the ticket up. */
 export function useItemTransition() {
   const qc = useQueryClient();
   return useMutation({
@@ -493,7 +493,7 @@ export function useApproveRecipe() {
         .eq("id", recipeId);
       if (error) throw error;
       // Approval is the moment the recipe becomes the menu item's way of
-      // consuming stock — the item is bound here, never by a separate step.
+      // consuming stock â€” the item is bound here, never by a separate step.
       const { data: recipe } = await supabase
         .from("recipes")
         .select("recipe_type, output_stock_item_id")
@@ -714,7 +714,7 @@ export function usePostProductionBatch() {
       toast.success(
         result.reason === "already_posted"
           ? "This production batch was already recorded."
-          : `Posted to stock — ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
+          : `Posted to stock â€” ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
       void qc.invalidateQueries({ queryKey: ["inventory"] });
@@ -950,7 +950,7 @@ export function useReviewWaste() {
 
 /**
  * Take an approved waste record off stock. The database decides the store, the
- * cost and whether it has already been posted — posting twice is refused there,
+ * cost and whether it has already been posted â€” posting twice is refused there,
  * not here, so a double click cannot double-deduct.
  */
 export function usePostWasteToStock() {
@@ -970,7 +970,7 @@ export function usePostWasteToStock() {
       toast.success(
         (result as { reason?: string }).reason === "already_posted"
           ? "This waste was already taken off stock."
-          : "Waste posted — stock reduced.",
+          : "Waste posted â€” stock reduced.",
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
       void qc.invalidateQueries({ queryKey: ["inventory"] });
@@ -1391,7 +1391,7 @@ export function useRoutingCoverage() {
  *
  * A sold dish only deducts stock when its station resolves to a stock
  * location. Without that binding the recipe engine returns "no-location"
- * and the sale leaves the store untouched — which is why a ticket could
+ * and the sale leaves the store untouched â€” which is why a ticket could
  * post a zero-value consumption line. These read and write the binding
  * itself; nothing is guessed on the workspace's behalf.
  * ------------------------------------------------------------------ */
@@ -1411,8 +1411,8 @@ export type StationStoreRow = {
 };
 
 /**
- * Every outlet that prepares something — grill, hot kitchen, coffee station,
- * bar — needs its own supply store for the selected property. This reads the
+ * Every outlet that prepares something â€” grill, hot kitchen, coffee station,
+ * bar â€” needs its own supply store for the selected property. This reads the
  * same resolver the consumption service uses, so the screen and the deduction
  * can never disagree.
  */
@@ -1471,27 +1471,25 @@ export function useConsumptionStores() {
  */
 export function useAssignStationStore() {
   const qc = useQueryClient();
-  const { organizationId } = useCtx();
   return useMutation({
     mutationFn: async ({
       stationId,
       locationId,
-      branchId,
     }: {
       stationId: string;
       locationId: string;
       branchId?: string | null;
     }) => {
-      const { error } = await supabase.from("station_consumption_stores").upsert(
+      const { error } = await guardedRpc(
+        supabase as never,
+        "neo_station_store_set",
         {
-          organization_id: organizationId,
-          station_id: stationId,
-          location_id: locationId,
-          branch_id: branchId ?? null,
-        } as never,
-        { onConflict: "station_id" },
+          _station: stationId,
+          _location: locationId,
+          _reason: "Assigned from Kitchen settings",
+        },
       );
-      if (error) throw error;
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Supply store set for this station.");

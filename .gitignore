@@ -37,3 +37,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+**/__pycache__/
+*.pyc
+
+/neo-print-agent.json

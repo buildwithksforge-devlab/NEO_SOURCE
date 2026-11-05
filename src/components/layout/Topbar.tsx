@@ -40,6 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { reportQueryError } from "@/lib/query-telemetry";
 import { useAuth } from "@/lib/auth";
 import { useNeoSwitchAccount } from "@/lib/session-exit";
+import { isStaffPinSession } from "@/lib/staff-pin-login";
 import { useNotificationInbox } from "@/lib/notifications-inbox";
 import { useBranding } from "@/lib/branding";
 import { Avatar } from "@/components/common/AvatarDisplay";
@@ -82,6 +83,7 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
   const { theme, toggleTheme } = useBranding();
   const { profile, organizationId, roleNames, signOut, isAdmin } = useAuth();
   const switchAccount = useNeoSwitchAccount();
+  const pinSession = isStaffPinSession();
   const { activeBranch, canManage } = useBranchScope();
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { tenant } = useTenant();
@@ -372,11 +374,13 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => void switchAccount()}>
-                  <UserRound className="size-4" /> Switch account
+                  <UserRound className="size-4" />{" "}
+                  {pinSession ? "Use account sign-in" : "Switch account"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void signOut()}>
-                  <LogOut className="size-4" /> Sign out
+                  <LogOut className="size-4" />{" "}
+                  {pinSession ? "Lock / Switch Staff" : "Sign out"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <div className="px-2 py-1.5">

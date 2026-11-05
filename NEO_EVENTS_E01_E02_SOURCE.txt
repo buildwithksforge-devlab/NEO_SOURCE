@@ -1,0 +1,463 @@
+NEO EVENTS E01/E02 SOURCE EVIDENCE
+Git commit: cf2d953
+
+
+==========================================================================================
+FILE: supabase/migrations/20260908144825_5241d467-3839-43b4-951d-f94abf762497.sql
+==========================================================================================
+    1: 
+    2: CREATE OR REPLACE FUNCTION public.neo_event_beo_ensure(_booking uuid)
+    3: RETURNS uuid
+    4: LANGUAGE plpgsql
+    5: SECURITY DEFINER
+    6: SET search_path = public
+    7: AS $fn$
+    8: DECLARE
+    9:   b public.event_bookings;
+   10:   existing uuid;
+   11:   new_id uuid;
+   12: BEGIN
+   13:   SELECT * INTO b FROM public.event_bookings WHERE id = _booking;
+   14:   IF b.id IS NULL THEN RAISE EXCEPTION 'Event booking not found'; END IF;
+   15:   IF b.organization_id IS DISTINCT FROM public.current_org_id() THEN
+   16:     RAISE EXCEPTION 'This event belongs to another workspace';
+   17:   END IF;
+   18:   IF NOT public.has_permission('events','bookings','edit') THEN
+   19:     RAISE EXCEPTION 'You do not have permission to prepare banquet event orders';
+   20:   END IF;
+   21: 
+   22:   SELECT id INTO existing
+   23:     FROM public.banquet_event_orders
+   24:    WHERE booking_id = _booking AND status <> 'superseded'
+   25:    ORDER BY revision DESC LIMIT 1;
+   26:   IF existing IS NOT NULL THEN RETURN existing; END IF;
+   27: 
+   28:   INSERT INTO public.banquet_event_orders (
+   29:     organization_id, branch_id, booking_id, beo_number, revision, change_summary,
+   30:     setup_at, guest_arrival_at, start_at, end_at, breakdown_at,
+   31:     guaranteed_guests, seating_layout, dietary_requirements, allergies,
+   32:     decor, entertainment, transport, security, status, created_by
+   33:   ) VALUES (
+   34:     b.organization_id, b.branch_id, b.id,
+   35:     'BEO-' || b.event_reference,
+   36:     1, 'Initial banquet event order raised from the confirmed booking.',
+   37:     b.start_at - interval '3 hours', b.start_at, b.start_at, b.end_at, b.end_at + interval '2 hours',
+   38:     GREATEST(b.expected_guests, 0), coalesce(nullif(b.seating_layout,''),'banquet'),
+   39:     b.dietary_requirements, b.allergy_warnings, b.decor_plan, b.entertainment,
+   40:     b.transport_notes, b.security_notes, 'draft', auth.uid()
+   41:   )
+   42:   RETURNING id INTO new_id;
+   43: 
+   44:   RETURN new_id;
+   45: END;
+   46: $fn$;
+   47: 
+   48: CREATE OR REPLACE FUNCTION public.neo_event_beo_publish(_beo uuid)
+   49: RETURNS jsonb
+   50: LANGUAGE plpgsql
+   51: SECURITY DEFINER
+   52: SET search_path = public
+   53: AS $fn$
+   54: DECLARE
+   55:   o public.banquet_event_orders;
+   56:   b public.event_bookings;
+   57:   dept record;
+   58:   hk_dept uuid;
+   59:   hk_job uuid;
+   60:   created_reqs int := 0;
+   61:   created_acks int := 0;
+   62:   billing_items int := 0;
+   63: BEGIN
+   64:   SELECT * INTO o FROM public.banquet_event_orders WHERE id = _beo;
+   65:   IF o.id IS NULL THEN RAISE EXCEPTION 'Banquet event order not found'; END IF;
+   66:   IF o.organization_id IS DISTINCT FROM public.current_org_id() THEN
+   67:     RAISE EXCEPTION 'This banquet event order belongs to another workspace';
+   68:   END IF;
+   69:   IF NOT public.has_permission('events','bookings','edit') THEN
+   70:     RAISE EXCEPTION 'You do not have permission to publish banquet event orders';
+   71:   END IF;
+   72:   SELECT * INTO b FROM public.event_bookings WHERE id = o.booking_id;
+   73: 
+   74:   UPDATE public.banquet_event_orders
+   75:      SET status = 'published',
+   76:          published_at = coalesce(published_at, now()),
+   77:          locked = true,
+   78:          updated_by = auth.uid(),
+   79:          updated_at = now()
+   80:    WHERE id = _beo;
+   81: 
+   82:   -- Department handoffs: kitchen / food & beverage, housekeeping, front office.
+   83:   FOR dept IN
+   84:     SELECT * FROM (VALUES
+   85:       ('KITC', ARRAY['KITC','REST','FNB'], 'Production plan and service timing for ' || coalesce(nullif(b.event_name,''),'the event')),
+   86:       ('HOUS', ARRAY['HOUS'], 'Venue preparation, linen and cleanliness for ' || coalesce(nullif(b.event_name,''),'the event')),
+   87:       ('FRON', ARRAY['FRON'], 'Guest arrival, signage and directions for ' || coalesce(nullif(b.event_name,''),'the event'))
+   88:     ) AS t(key, codes, requirement)
+   89:   LOOP
+   90:     IF NOT EXISTS (
+   91:       SELECT 1 FROM public.event_department_requirements r
+   92:        WHERE r.booking_id = b.id AND upper(r.department_key) = dept.key
+   93:     ) THEN
+   94:       INSERT INTO public.event_department_requirements (
+   95:         organization_id, branch_id, booking_id, department_id, department_key,
+   96:         requirement, detail, required_by, readiness
+   97:       )
+   98:       VALUES (
+   99:         b.organization_id, b.branch_id, b.id,
+  100:         (SELECT d.id FROM public.departments d
+  101:           WHERE d.organization_id = b.organization_id
+  102:             AND upper(coalesce(d.code,'')) = ANY (dept.codes)
+  103:             AND (d.branch_id = b.branch_id OR d.branch_id IS NULL)
+  104:           ORDER BY (d.branch_id = b.branch_id) DESC LIMIT 1),
+  105:         dept.key, dept.requirement,
+  106:         'Guests: ' || coalesce(o.guaranteed_guests,0) || '. Setup from ' || to_char(o.setup_at, 'DD Mon HH24:MI') || '.',
+  107:         o.start_at, 'not-started'
+  108:       );
+  109:       created_reqs := created_reqs + 1;
+  110:     END IF;
+  111: 
+  112:     IF NOT EXISTS (
+  113:       SELECT 1 FROM public.beo_department_acknowledgments a
+  114:        JOIN public.departments d ON d.id = a.department_id
+  115:        WHERE a.beo_id = _beo AND upper(coalesce(d.code,'')) = ANY (dept.codes)
+  116:     ) THEN
+  117:       INSERT INTO public.beo_department_acknowledgments (organization_id, beo_id, department_id, notes)
+  118:       SELECT b.organization_id, _beo, d.id, dept.requirement
+  119:         FROM public.departments d
+  120:        WHERE d.organization_id = b.organization_id
+  121:          AND upper(coalesce(d.code,'')) = ANY (dept.codes)
+  122:          AND (d.branch_id = b.branch_id OR d.branch_id IS NULL)
+  123:        ORDER BY (d.branch_id = b.branch_id) DESC LIMIT 1;
+  124:       created_acks := created_acks + coalesce((SELECT 1), 0);
+  125:     END IF;
+  126:   END LOOP;
+  127: 
+  128:   -- Housekeeping job for the venue turnaround.
+  129:   SELECT d.id INTO hk_dept FROM public.departments d
+  130:    WHERE d.organization_id = b.organization_id AND upper(coalesce(d.code,'')) = 'HOUS'
+  131:      AND (d.branch_id = b.branch_id OR d.branch_id IS NULL)
+  132:    ORDER BY (d.branch_id = b.branch_id) DESC LIMIT 1;
+  133: 
+  134:   SELECT id INTO hk_job FROM public.housekeeping_jobs
+  135:    WHERE organization_id = b.organization_id AND idempotency_key = 'beo:' || _beo::text;
+  136:   IF hk_job IS NULL THEN
+  137:     INSERT INTO public.housekeeping_jobs (
+  138:       organization_id, branch_id, job_type, location_label, department_id,
+  139:       priority, status, due_at, inspection_required, inspection_status,
+  140:       notes, source, source_record_id, idempotency_key, created_by
+  141:     ) VALUES (
+  142:       b.organization_id, b.branch_id, 'event-preparation',
+  143:       coalesce(nullif(b.event_name,''), b.event_reference), hk_dept,
+  144:       'high', 'pending', o.setup_at, true, 'pending',
+  145:       'Prepare the venue for ' || coalesce(nullif(b.event_name,''), b.event_reference)
+  146:         || ' (' || coalesce(o.guaranteed_guests,0) || ' guests, ' || o.beo_number || ').',
+  147:       'events', b.id, 'beo:' || _beo::text, auth.uid()
+  148:     )
+  149:     RETURNING id INTO hk_job;
+  150:   END IF;
+  151: 
+  152:   -- Billing handoff.
+  153:   BEGIN
+  154:     PERFORM public.neo_event_billing_build(b.id);
+  155:   EXCEPTION WHEN OTHERS THEN
+  156:     NULL;
+  157:   END;
+  158:   SELECT count(*) INTO billing_items FROM public.event_billing_items WHERE booking_id = b.id;
+  159: 
+  160:   PERFORM public.neo_notify_event(
+  161:     b.organization_id, auth.uid(), b.branch_id, 'events.beo.published', b.id,
+  162:     jsonb_build_object('event', b.event_name, 'reference', b.event_reference, 'beo', o.beo_number),
+  163:     'beo-published:' || _beo::text
+  164:   );
+  165: 
+  166:   RETURN jsonb_build_object(
+  167:     'beo_id', _beo,
+  168:     'booking_id', b.id,
+  169:     'requirements_created', created_reqs,
+  170:     'acknowledgements_created', created_acks,
+  171:     'housekeeping_job_id', hk_job,
+  172:     'billing_items', billing_items
+  173:   );
+  174: END;
+  175: $fn$;
+  176: 
+
+==========================================================================================
+FILE: supabase/migrations/20260824170132_0d667a7a-4d64-48c7-9c38-a8e9e1931eb5.sql
+==========================================================================================
+    1: CREATE TABLE IF NOT EXISTS public.department_stock_needs (
+    2:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    3:   organization_id uuid NOT NULL,
+    4:   branch_id uuid,
+    5:   department_id uuid,
+    6:   module text NOT NULL DEFAULT 'front-office',
+    7:   item text NOT NULL,
+    8:   quantity numeric NOT NULL DEFAULT 1,
+    9:   unit text NOT NULL DEFAULT 'unit',
+   10:   priority text NOT NULL DEFAULT 'normal',
+   11:   notes text,
+   12:   status text NOT NULL DEFAULT 'pending',
+   13:   requested_by uuid,
+   14:   reviewed_by uuid,
+   15:   reviewed_at timestamptz,
+   16:   review_notes text,
+   17:   requisition_id uuid,
+   18:   created_at timestamptz NOT NULL DEFAULT now(),
+   19:   updated_at timestamptz NOT NULL DEFAULT now()
+   20: );
+   21: 
+   22: CREATE INDEX IF NOT EXISTS department_stock_needs_org_idx
+   23:   ON public.department_stock_needs (organization_id, branch_id, status, created_at DESC);
+   24: 
+   25: GRANT SELECT, INSERT, UPDATE ON public.department_stock_needs TO authenticated;
+   26: GRANT ALL ON public.department_stock_needs TO service_role;
+   27: 
+   28: ALTER TABLE public.department_stock_needs ENABLE ROW LEVEL SECURITY;
+   29: 
+   30: DROP POLICY IF EXISTS "stock_needs_read_own_org" ON public.department_stock_needs;
+   31: CREATE POLICY "stock_needs_read_own_org" ON public.department_stock_needs
+   32:   FOR SELECT TO authenticated
+   33:   USING (organization_id = public.current_org_id() AND public.is_active_staff());
+   34: 
+   35: DROP POLICY IF EXISTS "stock_needs_insert_own_org" ON public.department_stock_needs;
+   36: CREATE POLICY "stock_needs_insert_own_org" ON public.department_stock_needs
+   37:   FOR INSERT TO authenticated
+   38:   WITH CHECK (
+   39:     organization_id = public.current_org_id()
+   40:     AND public.is_active_staff()
+   41:     AND requested_by = auth.uid()
+   42:   );
+   43: 
+   44: DROP POLICY IF EXISTS "stock_needs_review_with_permission" ON public.department_stock_needs;
+   45: CREATE POLICY "stock_needs_review_with_permission" ON public.department_stock_needs
+   46:   FOR UPDATE TO authenticated
+   47:   USING (
+   48:     organization_id = public.current_org_id()
+   49:     AND public.has_permission(module, 'requisitions', 'create')
+   50:   )
+   51:   WITH CHECK (organization_id = public.current_org_id());
+   52: 
+   53: DROP TRIGGER IF EXISTS department_stock_needs_touch ON public.department_stock_needs;
+   54: CREATE TRIGGER department_stock_needs_touch
+   55:   BEFORE UPDATE ON public.department_stock_needs
+   56:   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+   57: 
+   58: CREATE OR REPLACE FUNCTION public.neo_department_stock_need_create(
+   59:   _item text,
+   60:   _quantity numeric DEFAULT 1,
+   61:   _unit text DEFAULT 'unit',
+   62:   _priority text DEFAULT 'normal',
+   63:   _notes text DEFAULT NULL,
+   64:   _module text DEFAULT 'front-office',
+   65:   _department uuid DEFAULT NULL,
+   66:   _branch uuid DEFAULT NULL
+   67: ) RETURNS uuid
+   68: LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public AS $$
+   69: DECLARE _org uuid := public.current_org_id(); _id uuid; _branch_final uuid; _dept uuid;
+   70: BEGIN
+   71:   IF _org IS NULL OR NOT public.is_active_staff() THEN
+   72:     RAISE EXCEPTION 'Only active staff can report a stock need';
+   73:   END IF;
+   74:   IF coalesce(btrim(_item), '') = '' THEN RAISE EXCEPTION 'Describe the item you need'; END IF;
+   75:   IF coalesce(_quantity, 0) <= 0 THEN RAISE EXCEPTION 'Quantity must be greater than zero'; END IF;
+   76: 
+   77:   SELECT coalesce(_branch, p.branch_id) INTO _branch_final
+   78:   FROM public.profiles p WHERE p.id = auth.uid();
+   79: 
+   80:   SELECT coalesce(_department, p.department_id) INTO _dept
+   81:   FROM public.profiles p WHERE p.id = auth.uid();
+   82: 
+   83:   INSERT INTO public.department_stock_needs (
+   84:     organization_id, branch_id, department_id, module, item, quantity, unit, priority, notes, requested_by
+   85:   ) VALUES (
+   86:     _org, _branch_final, _dept, coalesce(_module, 'front-office'), btrim(_item), _quantity,
+   87:     coalesce(nullif(btrim(_unit), ''), 'unit'), coalesce(nullif(btrim(_priority), ''), 'normal'),
+   88:     nullif(btrim(_notes), ''), auth.uid()
+   89:   ) RETURNING id INTO _id;
+   90: 
+   91:   INSERT INTO public.notifications (organization_id, branch_id, category, title, body, link)
+   92:   VALUES (_org, _branch_final, 'operations', 'Stock need reported',
+   93:     btrim(_item) || ' â€” ' || _quantity::text || ' ' || coalesce(_unit, 'unit'),
+   94:     '/pms/requisitions');
+   95: 
+   96:   RETURN _id;
+   97: END;
+   98: $$;
+   99: 
+  100: REVOKE ALL ON FUNCTION public.neo_department_stock_need_create(text, numeric, text, text, text, text, uuid, uuid) FROM PUBLIC;
+  101: GRANT EXECUTE ON FUNCTION public.neo_department_stock_need_create(text, numeric, text, text, text, text, uuid, uuid) TO authenticated;
+  102: 
+  103: CREATE OR REPLACE FUNCTION public.neo_department_stock_need_review(
+  104:   _need uuid,
+  105:   _decision text,
+  106:   _notes text DEFAULT NULL,
+  107:   _requisition uuid DEFAULT NULL
+  108: ) RETURNS jsonb
+  109: LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public AS $$
+  110: DECLARE _org uuid := public.current_org_id(); _row public.department_stock_needs; _status text;
+  111: BEGIN
+  112:   SELECT * INTO _row FROM public.department_stock_needs
+  113:    WHERE id = _need AND organization_id = _org FOR UPDATE;
+  114:   IF _row.id IS NULL THEN RAISE EXCEPTION 'Stock need not found'; END IF;
+  115: 
+  116:   IF NOT public.has_permission(_row.module, 'requisitions', 'create') THEN
+  117:     RAISE EXCEPTION 'Not permitted to review stock needs for this department';
+  118:   END IF;
+  119: 
+  120:   _status := CASE lower(coalesce(_decision, ''))
+  121:     WHEN 'acknowledge' THEN 'acknowledged'
+  122:     WHEN 'acknowledged' THEN 'acknowledged'
+  123:     WHEN 'requisition' THEN 'requisitioned'
+  124:     WHEN 'requisitioned' THEN 'requisitioned'
+  125:     WHEN 'decline' THEN 'declined'
+  126:     WHEN 'declined' THEN 'declined'
+  127:     WHEN 'close' THEN 'closed'
+  128:     ELSE NULL END;
+  129:   IF _status IS NULL THEN RAISE EXCEPTION 'Unknown decision %', _decision; END IF;
+  130: 
+  131:   UPDATE public.department_stock_needs
+  132:      SET status = _status,
+  133:          reviewed_by = auth.uid(),
+  134:          reviewed_at = now(),
+  135:          review_notes = coalesce(nullif(btrim(_notes), ''), review_notes),
+  136:          requisition_id = coalesce(_requisition, requisition_id),
+  137:          updated_at = now()
+  138:    WHERE id = _need;
+  139: 
+  140:   INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)
+  141:   VALUES (_org, auth.uid(), '', 'stock_need.' || _status, _row.module, _need::text,
+  142:           jsonb_build_object('item', _row.item, 'status', _status), _notes);
+  143: 
+  144:   RETURN jsonb_build_object('id', _need, 'status', _status);
+  145: END;
+  146: $$;
+  147: 
+  148: REVOKE ALL ON FUNCTION public.neo_department_stock_need_review(uuid, text, text, uuid) FROM PUBLIC;
+  149: GRANT EXECUTE ON FUNCTION public.neo_department_stock_need_review(uuid, text, text, uuid) TO authenticated;
+  150: 
+
+==========================================================================================
+FILE: supabase/migrations/20260924154500_department_requisition_family_guards.sql
+==========================================================================================
+    1: -- NEÃ˜ certification hardening: department requisition wrappers.
+    2: -- Fixes UUID aggregation, mixed-scope selection, and domain authority handoff to Stores.
+    3: 
+    4: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+    5:   _branch uuid,
+    6:   _lines jsonb,
+    7:   _department uuid DEFAULT NULL,
+    8:   _required_date date DEFAULT NULL,
+    9:   _priority text DEFAULT 'normal',
+   10:   _reason text DEFAULT NULL,
+   11:   _destination uuid DEFAULT NULL
+   12: ) RETURNS jsonb
+   13: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+   14: DECLARE
+   15:   v_org uuid := current_org_id(); v_req uuid; v_line jsonb; v_count int := 0;
+   16:   v_number text; v_status text; v_dest uuid := _destination;
+   17:   v_self boolean := public.neo_requisition_supervisor_authority();
+   18: BEGIN
+   19:   IF v_org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;
+   20:   IF NOT (
+   21:     has_permission('restaurant','requisitions.create') OR has_permission('restaurant','create') OR
+   22:     has_permission('stores','create') OR
+   23:     has_permission('pms','requisitions.create') OR has_permission('front-office','requisitions','create') OR
+   24:     has_permission('kitchen','requisition','create') OR has_permission('kitchen','requisitions','create') OR
+   25:     has_permission('kitchen','pastry-requisition','create') OR
+   26:     has_permission('security','requisition','create') OR
+   27:     is_org_admin()
+   28:   ) THEN RAISE EXCEPTION 'Not permitted to raise a requisition'; END IF;
+   29:   IF _branch IS NULL OR NOT (_branch = ANY(current_branch_ids())) THEN
+   30:     RAISE EXCEPTION 'Requisitions may only be raised for your own property';
+   31:   END IF;
+   32:   IF _lines IS NULL OR jsonb_array_length(_lines)=0 THEN RAISE EXCEPTION 'Add at least one item'; END IF;
+   33: 
+   34:   IF v_dest IS NOT NULL THEN
+   35:     IF NOT EXISTS (SELECT 1 FROM public.stock_locations sl WHERE sl.id=v_dest AND sl.organization_id=v_org AND (sl.branch_id IS NULL OR sl.branch_id=_branch)) THEN
+   36:       RAISE EXCEPTION 'The receiving store must belong to this property';
+   37:     END IF;
+   38:   ELSIF _department IS NOT NULL THEN
+   39:     SELECT sl.id INTO v_dest FROM public.stock_locations sl
+   40:      WHERE sl.organization_id=v_org AND sl.department_id=_department AND sl.is_mini_store AND sl.active
+   41:        AND (sl.branch_id IS NULL OR sl.branch_id=_branch)
+   42:      ORDER BY sl.created_at LIMIT 1;
+   43:   END IF;
+   44: 
+   45:   v_number := 'REQ-'||to_char(now(),'YYMMDD')||'-'||upper(substr(replace(gen_random_uuid()::text,'-',''),1,5));
+   46:   v_status := CASE WHEN v_self THEN 'awaiting-stores' ELSE 'pending-supervisor' END;
+   47:   INSERT INTO public.internal_requisitions(
+   48:     organization_id,branch_id,request_number,department_id,destination_location_id,fulfilment_model,
+   49:     requested_by,request_date,required_date,priority,reason,status,supervisor_approved_by,supervisor_approved_at)
+   50:   VALUES(v_org,_branch,v_number,_department,v_dest,'stores-issue',auth.uid(),current_date,_required_date,
+   51:     coalesce(_priority,'normal'),_reason,v_status,
+   52:     CASE WHEN v_self THEN auth.uid() END,CASE WHEN v_self THEN now() END)
+   53:   RETURNING id INTO v_req;
+   54: 
+   55:   FOR v_line IN SELECT * FROM jsonb_array_elements(_lines) LOOP
+   56:     IF coalesce((v_line->>'quantity_requested')::numeric,0)<=0 THEN CONTINUE; END IF;
+   57:     INSERT INTO public.internal_requisition_lines(organization_id,requisition_id,stock_item_id,description,unit,quantity_requested,notes)
+   58:     VALUES(v_org,v_req,nullif(v_line->>'stock_item_id','')::uuid,nullif(v_line->>'description',''),nullif(v_line->>'unit',''),
+   59:       (v_line->>'quantity_requested')::numeric,nullif(v_line->>'notes',''));
+   60:     v_count := v_count+1;
+   61:   END LOOP;
+   62:   IF v_count=0 THEN RAISE EXCEPTION 'Add at least one item with a quantity'; END IF;
+   63: 
+   64:   PERFORM public.neo_notify(v_org,NULL,_branch,'operational-alert',
+   65:     CASE WHEN v_self THEN 'Requisition awaiting Stores â€” '||v_number ELSE 'Requisition awaiting departmental approval â€” '||v_number END,
+   66:     coalesce(_reason,'A department has requested stock from Stores.'),'/inventory/requisitions',coalesce(_priority,'normal'),true,
+   67:     'stores',v_req,'stores.requisition_raised','req:'||v_req::text||':raised');
+   68:   RETURN jsonb_build_object('ok',true,'requisition_id',v_req,'request_number',v_number,'lines',v_count,
+   69:     'destination_location_id',v_dest,'status',v_status);
+   70: END; $$;
+   71: 
+   72: CREATE OR REPLACE FUNCTION public.neo_department_requisition_lines_from_needs(
+   73:   _needs uuid[], _module text, _allowed_statuses text[]
+   74: ) RETURNS TABLE(lines jsonb, branch_id uuid, department_id uuid)
+   75: LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+   76: DECLARE v_branches int; v_departments int;
+   77: BEGIN
+   78:   IF _needs IS NULL OR array_length(_needs,1) IS NULL THEN RAISE EXCEPTION 'Select at least one reported need'; END IF;
+   79:   SELECT count(DISTINCT n.branch_id), count(DISTINCT n.department_id)
+   80:     INTO v_branches,v_departments
+   81:   FROM public.department_stock_needs n
+   82:   WHERE n.id=ANY(_needs) AND n.organization_id=current_org_id() AND n.module=_module AND n.status=ANY(_allowed_statuses);
+   83:   IF v_branches=0 THEN RAISE EXCEPTION 'No open % needs match that selection',_module; END IF;
+   84:   IF v_branches>1 THEN RAISE EXCEPTION 'Selected needs must belong to one property'; END IF;
+   85:   IF v_departments>1 THEN RAISE EXCEPTION 'Selected needs must belong to one department'; END IF;
+   86:   RETURN QUERY
+   87:   SELECT jsonb_agg(jsonb_build_object('description',n.item,'quantity_requested',n.quantity,'unit',n.unit,'notes',n.notes) ORDER BY n.created_at),
+   88:          (array_agg(n.branch_id ORDER BY n.created_at))[1],
+   89:          (array_agg(n.department_id ORDER BY n.created_at))[1]
+   90:   FROM public.department_stock_needs n
+   91:   WHERE n.id=ANY(_needs) AND n.organization_id=current_org_id() AND n.module=_module AND n.status=ANY(_allowed_statuses);
+   92: END; $$;
+   93: 
+   94: CREATE OR REPLACE FUNCTION public.neo_pastry_requisition_from_needs(_needs uuid[],_required_date date DEFAULT NULL,_priority text DEFAULT 'normal',_reason text DEFAULT NULL)
+   95: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+
+==========================================================================================
+REQUISITION SCHEMA REFERENCES
+==========================================================================================
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813140649_0ebfde60-9b8a-40a1-a294-925d19eae371.sql:659: CREATE TABLE public.internal_requisitions (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813140649_0ebfde60-9b8a-40a1-a294-925d19eae371.sql:697: ALTER TABLE public.internal_requisitions ENABLE ROW LEVEL SECURITY;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813140649_0ebfde60-9b8a-40a1-a294-925d19eae371.sql:699: CREATE TABLE public.internal_requisition_lines (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824161352_a34dd2f2-6950-4dff-87d3-b1b2e3458357.sql:100: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824161352_a34dd2f2-6950-4dff-87d3-b1b2e3458357.sql:304: REVOKE ALL ON FUNCTION public.neo_department_requisition_create(uuid, jsonb, uuid, date, text, text, uuid) FROM PUBLIC;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824161352_a34dd2f2-6950-4dff-87d3-b1b2e3458357.sql:308: GRANT EXECUTE ON FUNCTION public.neo_department_requisition_create(uuid, jsonb, uuid, date, text, text, uuid) TO authenticated;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824162146_43a8c37c-61d6-42e0-b1f2-fdd47b55bd07.sql:1: REVOKE ALL ON FUNCTION public.neo_department_requisition_create(uuid, jsonb, uuid, date, text, text, uuid) FROM anon;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825050643_d3642075-e644-44ed-af0d-145dda01993e.sql:408: v_req := to_jsonb(public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825052023_8e3133ca-c3e8-4657-8ed7-5c4b06cab2b5.sql:601: v_req := to_jsonb(public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825053321_9f4d3e94-5359-44a3-9bd2-1efecb0fe70a.sql:42: -- `neo_department_requisition_create` expects `description`,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825053321_9f4d3e94-5359-44a3-9bd2-1efecb0fe70a.sql:76: v_req := public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825053321_9f4d3e94-5359-44a3-9bd2-1efecb0fe70a.sql:123: v_req := public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825053825_921abea5-f29b-4a8e-944c-02986293582f.sql:893: v_req := public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825123408_e8e11d12-c155-4222-bb8d-67e8ffcdf715.sql:19: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831093101_a22a484a-d298-4fa0-b73a-ddae3f611f0e.sql:55: v_req := public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260915033524_dfbf20db-c5c5-4db5-b52b-e95742930e29.sql:149: CREATE TRIGGER trg_neo_requisition_shortage_to_purchase
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260915092528_483bf8fa-e6a9-4c09-885b-cce7422424ad.sql:3: keep_auth text[] := ARRAY['apply_recommended_permissions','audit_trail','bi_data_quality_scan','bi_kpis','bi_occupancy_series','bi_revenue_breakdown','bi_revenue_series','bi_risk_scan','bootstrap_tenant_for','can_approve_restricted','can_manage_staff_photos','can_manage_workforce','can_read_general_ledger','can_read_guest_ledger','can_read_journals','can_read_stock','can_view_role_directory','canonical_permission','current_access_scope','current_branch_ids','current_department_ids','current_org_id','current_organisation_id','current_staff_id','current_station_ids','current_user_role_ids','customer_owns_delivery','customer_profile_in_my_org','customer_register_self','dashboard_metrics','delivery_confirm_delivery','delivery_metrics','delivery_place_order','delivery_quote_cart','delivery_rider_advance','department_workload','events_confirm_booking','events_department_readiness','events_metrics','fin_metrics','fin_post_journal','fin_reverse_journal','fin_seed_finance_defaults','fin_trial_balance','folio_close','has_explicit_permission','has_permission','hk_assign_job','hk_complete_job','hk_raise_cleaning_task','hk_reconcile_stale_jobs','hk_record_inspection','hk_resolve_stale_job','hk_stale_job_candidates','hk_start_job','hr_is_self','hr_is_team_member','hr_my_department_id','hr_my_employee_id','in_my_branch_scope','in_my_config_scope','in_my_module_scope','in_my_scope','inventory_apply_movement','inventory_menu_profitability','inventory_metrics','inventory_open_container','inventory_post_adjustment','inventory_post_receipt','inventory_post_stock_take','inventory_post_transfer','inventory_record_usage','inventory_reorder_suggestions','is_active_staff','is_my_customer','is_org_admin','is_org_admin_for','is_platform_admin','is_shared_with_me','is_staff','kitchen_item_transition','kitchen_metrics','log_audit_event','marketing_metrics','mkt_can_send','my_account_type','my_customer_id','my_customer_org_id','my_dashboards','my_effective_access','my_permission_version','my_profile_account_status','my_profile_org','my_rider_branch_id','my_rider_id','neo_ai_provider_get','neo_ai_provider_record_check','neo_ai_provider_save','neo_ap_journal_register','neo_ap_match_lines','neo_apply_feature_templates','neo_apply_role_templates','neo_approval_decide','neo_approval_retry_execution','neo_approval_seed_authority','neo_approve_role_migration','neo_ar_record_customer_payment','neo_assign_owner_role','neo_audit_completeness','neo_bank_auto_match','neo_bank_mark_line_reconciled','neo_bank_mark_transfer_reconciled','neo_bank_match_transfer','neo_bank_reconciliation_overview','neo_bank_statement_import','neo_bank_transfer_queue','neo_bank_unmatch_transfer','neo_bar_accept_ticket','neo_bar_advance_ticket','neo_bar_menu','neo_bar_metrics','neo_bar_open_orders','neo_bar_overview','neo_bar_queue','neo_bar_reassign_ticket','neo_beo_set_timings','neo_beo_stamp','neo_branch_in_scope','neo_can_assign_kitchen_work','neo_canonical_state_register','neo_canonical_transaction_set','neo_cash_cancel_request','neo_cash_confirm_receipt','neo_cash_payment_trace','neo_cash_refund_decide','neo_cash_refund_request','neo_cash_refund_settle','neo_cash_refunds','neo_cash_request_payment','neo_cash_request_pos_payment','neo_cash_shift_reconciliation','neo_cash_till_context','neo_cash_transfer_cancel','neo_cash_transfer_confirm','neo_cash_transfer_send','neo_cash_transfers','neo_checkin_deposit_override','neo_checkin_reconciliation','neo_commitments','neo_configuration_health','neo_customer_360','neo_customer_digital_summary','neo_customer_invite_guest','neo_customer_merge','neo_customer_resolve','neo_decide_migration_item','neo_delivery_assign','neo_delivery_bill','neo_delivery_claim','neo_delivery_department_metrics','neo_delivery_dispatch_board','neo_delivery_dispatch_candidates','neo_delivery_dispatch_mark_sent','neo_delivery_dispatch_open','neo_delivery_guest_mpesa_start','neo_delivery_maintenance_request','neo_delivery_maintenance_requests','neo_delivery_notification_audit','neo_delivery_pin_board','neo_delivery_pin_for_customer','neo_delivery_pin_override','neo_delivery_pin_regenerate','neo_delivery_pin_resend','neo_delivery_pin_reveal','neo_delivery_pin_status','neo_delivery_record_payment','neo_delivery_remit_reconcile','neo_delivery_rider_audit','neo_delivery_rider_availability','neo_delivery_rider_candidates','neo_delivery_rider_directory','neo_delivery_rider_enrol','neo_delivery_rider_notifications','neo_delivery_rider_performance','neo_delivery_rider_performance_distance','neo_delivery_rider_reconcile','neo_delivery_rider_remit','neo_delivery_rider_retire','neo_delivery_rider_roster','neo_delivery_rider_routes','neo_delivery_route_log','neo_delivery_shift_cancel','neo_delivery_shift_schedule','neo_delivery_staff_place_order','neo_delivery_supply_request_create','neo_delivery_supply_request_review','neo_department_requisition_create','neo_department_stock_need_create','neo_department_stock_need_review','neo_deposit_post','neo_deposit_reconciliation','neo_document_payload','neo_eligibility_drilldown','neo_etims_queue_document','neo_etims_record_check','neo_etims_settings_get','neo_etims_settings_save','neo_event_assign_staff','neo_event_beo_ensure','neo_event_beo_publish','neo_event_billing','neo_event_billing_build','neo_event_billing_finalise','neo_event_billing_record_payment','neo_event_billing_reopen','neo_event_billing_statement','neo_event_booking_create','neo_event_booking_transfer','neo_event_chain_status','neo_event_close_out','neo_event_convert_enquiry','neo_event_convert_quotation','neo_event_issue_report','neo_event_issue_resolve','neo_event_reports','neo_event_scope_booking','neo_event_scope_enquiry','neo_event_scope_menu','neo_event_scope_package','neo_event_scope_quotation','neo_event_scope_resource','neo_event_task_advance','neo_event_task_create','neo_event_workspace','neo_fact_reconciliation','neo_fact_supplement','neo_facts','neo_finance_backfill','neo_finance_ensure_accounts','neo_finance_exception_register','neo_finance_post_eligible','neo_finance_post_family','neo_finance_posting_queue','neo_finance_readiness','neo_financial_lifecycle_register','neo_financial_state_register','neo_floor_areas','neo_front_office_facts','neo_general_ledger','neo_gl_reclassify_settlement','neo_gl_settlement_review','neo_go_live_readiness','neo_grn_reverse','neo_grounds_task_advance','neo_grounds_task_assign','neo_grounds_task_create','neo_guest_active_stay','neo_guest_cart_add_item','neo_guest_claim_invitation','neo_guest_create_booking','neo_guest_create_request','neo_guest_deposit_pay','neo_guest_folio_projection','neo_guest_order_tracking','neo_guest_place_room_service','neo_guest_record_event','neo_guest_request_transport','neo_guest_reservation_position','neo_guest_room_offers','neo_guest_update_profile','neo_hr_case_open','neo_hr_case_review','neo_hr_document_record','neo_hr_employee_movement','neo_hr_leave_apply','neo_hr_leave_decide','neo_hr_leave_sync_entitlements','neo_hr_offboard_employee','neo_hr_payroll_compute','neo_hr_payroll_post','neo_hr_reconcile_staff','neo_hr_set_staff_identity','neo_hr_set_staff_photo','neo_integration_record_test','neo_intelligence','neo_inventory_weekly_report','neo_journal_register','neo_kitchen_assign_chef','neo_kitchen_backfill_tickets','neo_kitchen_breakage_record','neo_kitchen_breakage_review','neo_kitchen_bulk_item_transition','neo_kitchen_bulk_ticket_transition','neo_kitchen_hygiene_submit','neo_kitchen_item_transition','neo_kitchen_my_work','neo_kitchen_ops_metrics','neo_kitchen_queue','neo_kitchen_raise_alerts','neo_kitchen_reconcile_stations','neo_kitchen_reconcile_stations_run','neo_kitchen_reconciliation_status','neo_kitchen_requisition_from_needs','neo_kitchen_routing_health','neo_kitchen_task_advance','neo_kitchen_task_create','neo_kitchen_ticket_audit','neo_kitchen_ticket_delay','neo_kitchen_ticket_transition','neo_kitchen_visible_station_ids','neo_kitchen_waste_post','neo_landscaping_generate_due','neo_landscaping_schedule_save','neo_laundry_batch_advance','neo_laundry_batch_assign','neo_laundry_batch_create','neo_laundry_batch_return','neo_laundry_retry_posting','neo_lifecycle_audit','neo_lifecycle_finalise','neo_lifecycle_repairs','neo_linen_incident_report','neo_linen_incident_review','neo_log_guard_violation','neo_maint_job_advance','neo_maint_record_parts','neo_maintenance_work_order_create','neo_marketing_content_publish','neo_marketing_content_review','neo_marketing_content_schedule','neo_marketing_content_submit','neo_matching_policy','neo_menu_assign_station','neo_menu_catalogue','neo_menu_delete','neo_menu_departments','neo_menu_import_batches','neo_menu_save','neo_menu_save_item','neo_menu_set_status','neo_menu_stations','neo_menu_validation_states','neo_minibar_post','neo_mpesa_can_collect','neo_mpesa_collection_status','neo_mpesa_record_check','neo_mpesa_retry_callback','neo_mpesa_settings_get','neo_mpesa_settings_save','neo_mpesa_txn_start','neo_notification_integrity','neo_operational_facts','neo_outbox_failures','neo_outbox_health','neo_outbox_replay','neo_outbox_replay_batch','neo_pastry_custom_order_advance','neo_pastry_custom_order_assign','neo_pastry_custom_order_create','neo_pastry_item_advance','neo_pastry_item_assign','neo_pastry_item_record_sales','neo_pastry_my_production','neo_pastry_plan_item_add','neo_pastry_plan_upsert','neo_pastry_requisition_from_needs','neo_pastry_waste_record','neo_pastry_waste_review','neo_payment_attempt_verify','neo_payment_intent_mark_sent','neo_payment_intent_open','neo_payment_intent_set_provider_payload','neo_payment_intent_status','neo_payment_readiness','neo_payment_register','neo_payment_schedule_release','neo_pos_kds_reconciliation','neo_pos_order_diagnostics','neo_pos_refund_decide','neo_pos_route_missing_tickets','neo_pos_send_to_kitchen','neo_posting_plan','neo_posting_receipt_action','neo_posting_receipts','neo_procurement_order_approve','neo_procurement_order_close','neo_procurement_order_from_request','neo_procurement_reconciliation','neo_procurement_request_decide','neo_procurement_request_price_line','neo_procurement_request_submit','neo_production_batch_post','neo_provision_worker','neo_public_menu','neo_public_menu_modifiers','neo_purchase_request_from_reorder','neo_reactivate_role','neo_recipe_location_readiness','neo_reconcile_workspace','neo_reconciliation_export','neo_reconciliation_meta','neo_reconciliation_status','neo_register_workspace_attempt','neo_remove_owner_role','neo_report_defect','neo_reporting_candidates','neo_reservation_create','neo_reservation_deposit_position','neo_reservation_deposit_record','neo_revenue_reconciliation','neo_review_guard_violation','neo_rider_me','neo_rider_transport_advance','neo_rider_transport_jobs','neo_role_reporting_meta','neo_rpc_execute_privileges','neo_run_integrity_checks_now','neo_scoped_departments','neo_scoped_stations','neo_scoped_workers','neo_security_assign_post','neo_security_handover_acknowledge','neo_security_handover_submit','neo_security_incident_create','neo_security_incident_review','neo_security_my_work','neo_security_patrol_assign','neo_security_patrol_checkpoint','neo_security_patrol_complete','neo_security_patrol_create','neo_security_post_upsert','neo_security_requisition_from_needs','neo_security_task_advance','neo_security_task_create','neo_security_visitor_checkout','neo_security_visitor_record','neo_settings_presence','neo_simulate_access','neo_source_integrity','neo_stock_confirm_group_mapping','neo_stock_live_board','neo_stock_propose_group_mapping','neo_stock_recalculate_levels','neo_stock_seed_item_groups','neo_stores_adjustment_decide','neo_stores_count_reconcile','neo_stores_count_submit_variance','neo_stores_issue','neo_stores_low_stock_scan','neo_stores_receive_goods','neo_stores_requisition_reject','neo_stores_shortage_to_pr','neo_structure_scan','neo_supplier_invoice_accept','neo_supplier_invoice_capture','neo_supplier_payment_advance','neo_transport_rider_candidates','neo_transport_set_status','neo_unmatched_facts','neo_validate_role_assignment','neo_waste_record','neo_waste_review','neo_workforce_people','neo_workforce_summary','neo_workspace_link_status','next_document_number','notify_recipients','ops_metrics','ops_room_availability','ops_room_state','ops_room_state_reconciliation','ops_set_room_status','pkg_allocate_folio_line','pkg_allocation_report','pkg_reallocate_folio_line','pkg_reverse_allocations','pm_generate_due','pms_assign_room','pms_available_rooms','pms_check_in','pms_check_out','pms_front_office_metrics','pms_post_accommodation','pms_post_room_charge','pms_quote_rate','pms_record_payment','pms_revert_check_in','pms_transfer_room','pos_confirm_manual_payment','pos_import_menu_drafts','pos_open_folio_for_stay','pos_post_room_charge','pos_reconcile_order_settlement','pos_record_payment_attempt','proc_document_trail','proc_lpo_action','proc_three_way_match','provision_catalogue_roles','publish_menu_items','recommended_role_diff','req_approve','req_confirm_receipt','req_issue','req_record_consumption','req_submit','rider_owns_delivery','set_role_permissions','station_workload','supervises_user','tasks_trend','wo_set_block']::text[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260918145443_dfa2ec44-31b6-4324-a61a-1559b4597c84.sql:70: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924153000_front_office_connected_guards.sql:436: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924154500_department_requisition_family_guards.sql:4: CREATE OR REPLACE FUNCTION public.neo_department_requisition_create(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924154500_department_requisition_family_guards.sql:101: v_req := public.neo_department_requisition_create(v_branch,v_lines,v_dept,_required_date,coalesce(nullif(btrim(_priority),''),'normal'),coalesce(nullif(btrim(_reason),''),'Pastry & Bakery consolidated requisition'),NULL);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924154500_department_requisition_family_guards.sql:115: v_req := public.neo_department_requisition_create(v_branch,v_lines,v_dept,_required_date,coalesce(nullif(btrim(_priority),''),'normal'),coalesce(nullif(btrim(_reason),''),'Main Kitchen consolidated requisition'),NULL);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924154500_department_requisition_family_guards.sql:129: v_req := public.neo_department_requisition_create(v_branch,v_lines,v_dept,_required_date,coalesce(nullif(btrim(_priority),''),'normal'),coalesce(nullif(btrim(_reason),''),'Security consolidated requisition'),NULL);

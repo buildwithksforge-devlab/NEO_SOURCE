@@ -267,6 +267,7 @@ function OrderTerminal() {
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
+                  branchId={data.branch_id}
                   label="Send to receipt printer"
                 />
               ) : !receiptPrintState.isLoading &&
@@ -277,6 +278,7 @@ function OrderTerminal() {
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
+                  branchId={data.branch_id}
                   label="Reprint receipt"
                 />
               ) : null}

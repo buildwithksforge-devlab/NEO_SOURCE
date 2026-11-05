@@ -117,8 +117,12 @@ export function useSettleCollection() {
         return callRpc("neo_event_billing_record_payment", {
           _booking: input.source_id,
           _amount: input.amount,
+          _entry_type: "payment",
           _method: input.method,
           _reference: input.reference || null,
+          _reason: null,
+          _account: null,
+          _intent_key: intent,
         });
       }
       throw new Error("Delivery orders are settled by the rider on delivery or by the payment provider.");

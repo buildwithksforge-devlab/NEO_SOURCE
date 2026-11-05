@@ -9,6 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { awaitAuthenticatedUser, provisionWorkspace } from "@/lib/workspace-provisioning";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { StaffPinSignIn } from "@/components/auth/StaffPinSignIn";
+import { clearStaffPinSession } from "@/lib/staff-pin-login";
+import { readSharedDisplayToken } from "@/lib/shared-production-display";
 import {
   CreateWorkspaceWizard,
   PENDING_WORKSPACE_KEY,
@@ -22,7 +25,12 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): AuthSearch => ({
     redirect: typeof search["redirect"] === "string" ? search["redirect"] : undefined,
-    mode: search["mode"] === "create" ? "create" : undefined,
+    mode:
+      search["mode"] === "create"
+        ? "create"
+        : search["mode"] === "pin"
+          ? "pin"
+          : undefined,
   }),
   head: () => ({
     meta: [
@@ -67,9 +75,29 @@ function readLock() {
 
 function AuthPage() {
   const search = useSearch({ from: "/auth" });
-  const [tab, setTab] = useState<"signin" | "create">(
-    search.mode === "create" ? "create" : "signin",
+  const [tab, setTab] = useState<
+    "signin" | "pin" | "create"
+  >(
+    search.mode === "create"
+      ? "create"
+      : search.mode === "pin"
+        ? "pin"
+        : "signin",
   );
+
+  const title =
+    tab === "signin"
+      ? "Welcome back"
+      : tab === "pin"
+        ? "Staff PIN sign-in"
+        : "Create your workspace";
+
+  const subtitle =
+    tab === "signin"
+      ? "Sign in to your NEØ workspace."
+      : tab === "pin"
+        ? "Use your personal PIN on an authorised property device."
+        : "For a new hotel, restaurant, lodge, resort or hospitality business joining NEØ.";
 
   return (
     <AuthLayout
@@ -78,11 +106,12 @@ function AuthPage() {
         <div
           role="tablist"
           aria-label="Authentication options"
-          className="mb-7 flex gap-6 border-b border-neo-mist"
+          className="mb-7 flex gap-5 overflow-x-auto border-b border-neo-mist"
         >
           {(
             [
-              ["signin", "Sign In"],
+              ["signin", "Account"],
+              ["pin", "Staff PIN"],
               ["create", "Create Workspace"],
             ] as const
           ).map(([key, label]) => (
@@ -93,7 +122,7 @@ function AuthPage() {
               aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={cn(
-                "-mb-px border-b-2 px-1 pb-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neo-turquoise",
+                "-mb-px shrink-0 border-b-2 px-1 pb-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neo-turquoise",
                 tab === key
                   ? "border-neo-turquoise text-neo-midnight"
                   : "border-transparent text-neo-steel hover:text-neo-midnight",
@@ -104,12 +133,8 @@ function AuthPage() {
           ))}
         </div>
       }
-      title={tab === "signin" ? "Welcome back" : "Create your workspace"}
-      subtitle={
-        tab === "signin"
-          ? "Sign in to your NEØ workspace."
-          : "For a new hotel, restaurant, lodge, resort or hospitality business joining NEØ."
-      }
+      title={title}
+      subtitle={subtitle}
       footer={
         tab === "signin" ? (
           <p>
@@ -121,12 +146,19 @@ function AuthPage() {
             >
               Create a workspace
             </button>
-            . Employees are added or invited by an authorised workspace administrator.
+            . Employees are added or invited by an authorised
+            workspace administrator.
           </p>
         ) : null
       }
     >
-      {tab === "signin" ? <SignInForm redirect={search.redirect} /> : <CreateWorkspaceWizard />}
+      {tab === "signin" ? (
+        <SignInForm redirect={search.redirect} />
+      ) : tab === "pin" ? (
+        <StaffPinSignIn />
+      ) : (
+        <CreateWorkspaceWizard />
+      )}
     </AuthLayout>
   );
 }
@@ -140,6 +172,9 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pairedDisplayToken] = useState(() =>
+    readSharedDisplayToken(),
+  );
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -152,6 +187,7 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
       toast.error(msg);
       return;
     }
+    clearStaffPinSession();
     setBusy(true);
     const { error, data } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
@@ -300,6 +336,28 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
           "Sign In"
         )}
       </Button>
+      {pairedDisplayToken ? (
+        <div
+          data-neo-station-display-entry
+          className="mt-5 space-y-3 border-t border-neo-mist pt-5"
+        >
+          <p className="text-center text-sm font-medium text-neo-midnight">
+            Paired production display
+          </p>
+
+          <Link
+            to="/station-screen"
+            className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
+          >
+            Resume Paired Production Display
+          </Link>
+
+          <p className="text-center text-xs text-neo-steel">
+            This option appears only because this browser already holds a
+            restricted production-display credential.
+          </p>
+        </div>
+      ) : null}
     </form>
   );
 }

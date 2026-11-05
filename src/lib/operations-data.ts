@@ -1550,6 +1550,7 @@ export function useRequisitionAction() {
   return useMutation({
     mutationFn: async (input: {
       action: "submit" | "approve" | "issue" | "receive";
+      attemptId?: string;
       id: string;
       lines?: Row[];
       stage?: "supervisor" | "stores";
@@ -1569,7 +1570,10 @@ export function useRequisitionAction() {
         return "Requisition approved";
       }
       if (input.action === "issue") {
-        const { error } = await guardedRpc(db, "req_issue", { _requisition: input.id, _lines: input.lines ?? [] });
+        if (!input.attemptId) {
+          throw new Error("Issue attempt ID is required");
+        }
+        const { error } = await guardedRpc(db, "neo_req_issue_safe", { _requisition: input.id, _lines: input.lines ?? [], _attempt: input.attemptId });
         if (error) throw error;
         return "Stock issued and posted to the ledger";
       }

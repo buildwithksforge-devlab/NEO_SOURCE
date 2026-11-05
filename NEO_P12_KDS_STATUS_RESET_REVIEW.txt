@@ -1,0 +1,49 @@
+﻿NEO P1.2 - KDS STATUS RESET REVIEW
+Generated from existing source. No changes made.
+
+20260812190514_e81da8a2-74d2-425f-a798-b720a4ae5799.sql:663: INSERT INTO public.station_tickets (
+20260812190514_e81da8a2-74d2-425f-a798-b720a4ae5799.sql:777: UPDATE public.station_tickets SET
+20260822154014_fc1d4f4c-654a-435b-bf0f-f121478ef999.sql:208: UPDATE public.station_tickets SET
+20260822154014_fc1d4f4c-654a-435b-bf0f-f121478ef999.sql:243: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+20260822154014_fc1d4f4c-654a-435b-bf0f-f121478ef999.sql:322: UPDATE public.station_tickets SET delay_reason = _reason WHERE id = _ticket;
+20260822154940_19bfe8c8-e010-46c9-928d-4bbdcf04cab0.sql:3: CREATE OR REPLACE FUNCTION public.neo_kitchen_aggregate_ticket(_ticket uuid)
+20260822154940_19bfe8c8-e010-46c9-928d-4bbdcf04cab0.sql:39: UPDATE public.station_tickets SET
+20260822154940_19bfe8c8-e010-46c9-928d-4bbdcf04cab0.sql:181: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql:111: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations(_org uuid DEFAULT NULL, _branch uuid DEFAULT NULL)
+20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql:159: UPDATE public.station_tickets SET
+20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql:176: INSERT INTO public.station_tickets (
+20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql:218: UPDATE public.station_tickets SET status = _state, updated_at = now()
+20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql:237: UPDATE public.station_tickets SET status = _state, updated_at = now()
+20260822162358_dcf6d9ce-9390-4b37-a3a7-7c90b473f07d.sql:119: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations_run(_branch uuid DEFAULT NULL)
+20260823120254_5fd22c1a-2703-4b42-9045-0378b8eab52c.sql:82: INSERT INTO public.station_tickets (
+20260823145328_daa414aa-abb1-4a1d-8fce-c713fd04040b.sql:86: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+20260823145553_ed1a07bc-8db7-49a1-9305-a98b52263ded.sql:79: INSERT INTO public.station_tickets (
+20260823150632_03d2466c-01b9-42fc-a2a5-cba42b60844e.sql:122: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+20260824095554_c176e87a-63cc-434e-b00e-59a8eb693ff7.sql:235: INSERT INTO public.station_tickets (
+20260824101603_d8174584-95e3-41bc-9891-68ca60fca8e4.sql:48: INSERT INTO public.station_tickets (
+20260824162925_893dfad4-0878-45c3-8c63-41e2f0066e49.sql:208: UPDATE public.station_tickets
+20260824162925_893dfad4-0878-45c3-8c63-41e2f0066e49.sql:276: UPDATE public.station_tickets
+20260825050643_d3642075-e644-44ed-af0d-145dda01993e.sql:167: UPDATE public.station_tickets SET assigned_chef_id = _chef, updated_at = now()
+20260827130313_7cd797d9-1f05-45d9-858b-82d5b3a08388.sql:46: INSERT INTO public.station_tickets (
+20260829010400_1e572c0e-d722-4de1-ad01-9bffce950d2b.sql:51: UPDATE public.station_tickets SET assigned_chef_id = _chef, updated_at = now()
+20260829010400_1e572c0e-d722-4de1-ad01-9bffce950d2b.sql:99: UPDATE public.station_tickets
+20260829010400_1e572c0e-d722-4de1-ad01-9bffce950d2b.sql:140: UPDATE public.station_tickets
+20260831094819_c42b6897-416c-4c53-ba81-900d5bd30390.sql:51: INSERT INTO public.station_tickets (
+20260908110301_e5a13218-fef9-4b8f-a351-4bffe2b178a5.sql:1: CREATE OR REPLACE FUNCTION public.neo_kitchen_aggregate_ticket(_ticket uuid)
+20260908110301_e5a13218-fef9-4b8f-a351-4bffe2b178a5.sql:37: UPDATE public.station_tickets SET
+20260908140652_1de79a88-4c92-4b14-b507-01cf3ef51b89.sql:140: CREATE OR REPLACE FUNCTION public.neo_kitchen_aggregate_ticket(_ticket uuid)
+20260908140652_1de79a88-4c92-4b14-b507-01cf3ef51b89.sql:179: UPDATE public.station_tickets SET
+20260908151959_524b3475-54bc-4fab-802e-4991c711bf6a.sql:54: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations_guard()
+20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql:1: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations(_org uuid DEFAULT NULL::uuid, _branch uuid DEFAULT NULL::uuid)
+20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql:56: UPDATE public.station_tickets SET
+20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql:73: INSERT INTO public.station_tickets (
+20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql:115: UPDATE public.station_tickets SET status = _state, updated_at = now()
+20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql:134: UPDATE public.station_tickets SET status = _state, updated_at = now()
+20260914140728_045374f9-9660-4fa2-af65-29ec4f4f4f5e.sql:129: INSERT INTO public.station_tickets (
+20260914140901_65fe3b42-042e-4806-b7a9-d2e99a82c826.sql:162: INSERT INTO public.station_tickets (
+20260921120613_aba93d13-4769-4f67-acbb-ce4be195a9dd.sql:69: INSERT INTO public.station_tickets (
+20260923060604_01075328-bccb-4cb9-89b2-20115b551872.sql:28: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+20260924150000_cross_entry_guest_rider_guards.sql:185: UPDATE public.station_tickets
+20261004213000_harden_bar_reassignment_scope.sql:61: UPDATE public.station_tickets
+20261021110000_shared_production_displays.sql:350: UPDATE public.station_tickets SET delay_reason=btrim(_reason),updated_at=now() WHERE id=t.id;
+20261026140000_p12_kds_transition_lock.sql:6: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)

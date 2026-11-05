@@ -192,7 +192,7 @@ export const useSupplierPayments = () =>
  * The supplier payment conveyor.
  *
  * Scheduling a payment is not paying it. A payment travels
- * Scheduled → Awaiting approval → Approved → Released → Paid, and only the
+ * Scheduled â†’ Awaiting approval â†’ Approved â†’ Released â†’ Paid, and only the
  * settle step writes the journal that reduces what is owed and reduces the
  * bank. The database owns the rulebook, the self-approval bar and the posting
  * identity, so a double-click cannot pay a supplier twice.
@@ -225,7 +225,7 @@ export function useAdvanceSupplierPayment() {
       if (r.ok === false) toast.error(r.detail ?? "The payment could not be settled.");
       else if (r.idempotent) toast.info(`Already ${r.status}.`);
       else if (r.status === "paid")
-        toast.success(r.journal_id ? "Paid and posted to the ledger" : "Paid — posting is pending");
+        toast.success(r.journal_id ? "Paid and posted to the ledger" : "Paid â€” posting is pending");
       else toast.success(`Payment ${r.status}`);
       invalidate();
     },
@@ -372,10 +372,15 @@ export function useFinanceInsert(table: string, action: string, options?: { bran
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async (values: Row) => {
+      if (table === "payment_schedules" && !ctx.userId) {
+        throw new Error("An authenticated staff account is required to schedule a payment.");
+      }
+
       const payload: Row = {
         ...values,
         organization_id: ctx.organizationId,
         ...(options?.branchScoped !== false && ctx.branchId ? { branch_id: values["branch_id"] ?? ctx.branchId } : {}),
+        ...(table === "payment_schedules" ? { created_by: ctx.userId } : {}),
       };
       const { data, error } = await db.from(table).insert(payload).select().single();
       if (error) throw error;
@@ -595,7 +600,7 @@ export function useRequestFinanceApproval() {
 }
 
 /**
- * Finance workspace readiness — chart of accounts, tax codes, financial year,
+ * Finance workspace readiness â€” chart of accounts, tax codes, financial year,
  * accounting periods and payment methods must all exist before finance is
  * treated as operational.
  */
@@ -617,7 +622,7 @@ export function useFinanceReadiness() {
 /**
  * The full journal register. Read through `neo_journal_register` rather than
  * the table so every row carries its period, source document, property,
- * preparer, poster, balance verdict and reversal relationship — the columns a
+ * preparer, poster, balance verdict and reversal relationship â€” the columns a
  * Finance reviewer needs to trust the ledger.
  */
 export type JournalRegisterRow = {
@@ -777,7 +782,7 @@ export function useGeneralLedger(from: string, to: string, accountId: string | n
  * The database owns the rulebook: only a finance user with receipt-allocation
  * authority may collect, never more than the outstanding balance, one
  * collection intent means one receipt, and the money is posted the moment it
- * is taken — cash, bank, mobile money or card up, customer debt down. The
+ * is taken â€” cash, bank, mobile money or card up, customer debt down. The
  * receipt therefore appears in the cashbook and in reconciliation without any
  * second, manual entry.
  */
@@ -819,7 +824,7 @@ export function useRecordCustomerReceipt() {
     onSuccess: (r) => {
       if (r.duplicate_prevented) toast.info("That receipt was already recorded.");
       else if (r.invoice_status === "paid")
-        toast.success(`Receipt ${r.receipt_number ?? ""} recorded — invoice settled in full`.trim());
+        toast.success(`Receipt ${r.receipt_number ?? ""} recorded â€” invoice settled in full`.trim());
       else toast.success(`Receipt ${r.receipt_number ?? ""} recorded`.trim());
       invalidate();
     },
