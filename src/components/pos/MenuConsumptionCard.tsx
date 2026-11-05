@@ -1,8 +1,8 @@
 /**
  * How one menu item consumes stock.
  *
- * The mode lives on the menu item itself, so every channel — restaurant,
- * delivery, pickup, room service, minibar, events, complimentary — sells by
+ * The mode lives on the menu item itself, so every channel â€” restaurant,
+ * delivery, pickup, room service, minibar, events, complimentary â€” sells by
  * menu item and the fulfilment engine decides what to deduct. A recipe is
  * never required merely to sell something.
  */
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { useStockItems, useStockLocations } from "@/lib/inventory-data";
+import { useStockItems } from "@/lib/inventory-data";
 import {
   CONSUMPTION_MODES,
   consumptionModeLabel,
@@ -51,7 +51,6 @@ export function MenuConsumptionCard({
 }) {
   const save = useSaveRecord("menu_items");
   const items = useStockItems();
-  const locations = useStockLocations();
   const [search, setSearch] = useState("");
 
   const mode: ConsumptionMode = (item.consumption_mode as ConsumptionMode) ?? "none";
@@ -59,7 +58,6 @@ export function MenuConsumptionCard({
   const channels = item.consumption_channels ?? [];
 
   const stockRows = (items.data ?? []) as Row[];
-  const locationRows = (locations.data ?? []) as Row[];
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -83,9 +81,8 @@ export function MenuConsumptionCard({
         <p className="font-medium">{consumptionModeLabel(mode)}</p>
         {needsStock ? (
           <p className="text-muted-foreground">
-            {item.direct_stock_item_name ?? "No stock item chosen"} · 1 sale ={" "}
+            {item.direct_stock_item_name ?? "No stock item chosen"} Â· 1 sale ={" "}
             {Number(item.direct_stock_quantity ?? 1)} {item.direct_stock_unit ?? "unit"}
-            {item.issuing_location_name ? ` · from ${item.issuing_location_name}` : ""}
           </p>
         ) : null}
         <p className="text-muted-foreground">
@@ -105,7 +102,6 @@ export function MenuConsumptionCard({
             const next: Record<string, unknown> = { consumption_mode: v };
             if (v !== "direct_stock" && v !== "batch") {
               next["stock_item_id"] = null;
-              next["issuing_location_id"] = null;
             }
             write(next);
           }}
@@ -154,7 +150,7 @@ export function MenuConsumptionCard({
                 {filtered.map((r) => (
                   <SelectItem key={String(r["id"])} value={String(r["id"])}>
                     {String(r["name"])}
-                    {r["sku"] ? ` · ${String(r["sku"])}` : ""}
+                    {r["sku"] ? ` Â· ${String(r["sku"])}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -163,7 +159,7 @@ export function MenuConsumptionCard({
               <p className="text-xs text-muted-foreground">
                 Base unit {String(selected["base_unit"] ?? "unit")}
                 {selected["container_volume_ml"]
-                  ? ` · container ${Number(selected["container_volume_ml"])} ml`
+                  ? ` Â· container ${Number(selected["container_volume_ml"])} ml`
                   : ""}
               </p>
             ) : (
@@ -204,25 +200,7 @@ export function MenuConsumptionCard({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Stock / container location</Label>
-            <Select
-              value={item.issuing_location_id ?? "auto"}
-              onValueChange={(v) => write({ issuing_location_id: v === "auto" ? null : v })}
-            >
-              <SelectTrigger aria-label={`Issuing store for ${item.name}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Use the station&apos;s stock location</SelectItem>
-                {locationRows.map((l) => (
-                  <SelectItem key={String(l["id"])} value={String(l["id"])}>
-                    {String(l["name"])}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <p className="text-xs text-muted-foreground">             Stock is deducted from the departmental store mapped to this item&apos;s             production station in Kitchen Settings. Menu items cannot override that             property-controlled store.           </p>
         </div>
       ) : null}
 
