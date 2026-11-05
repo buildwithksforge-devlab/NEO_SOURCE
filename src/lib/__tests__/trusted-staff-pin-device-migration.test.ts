@@ -37,6 +37,7 @@ describe("trusted staff PIN devices", () => {
       /c\.organization_id\s*=\s*v_device\.organization_id[\s\S]*c\.enabled\s*=\s*true[\s\S]*crypt\(_pin,\s*c\.pin_hash\)/,
     );
     expect(sql).toMatch(/v_matches\s*<>\s*1/);
+    expect(sql).toContain("extensions.crypt(_pin, c.pin_hash)");
   });
 
   it("checks the employee under their own identity and restores server identity", () => {

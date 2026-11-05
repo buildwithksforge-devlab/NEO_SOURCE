@@ -1,16 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { trustedRpc } from "@/lib/rpc-guard";
 
 const DEVICE_TOKEN = /^neowd_[0-9a-f]{64}$/;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type ResolveResult = {
-  ok?: boolean;
-  reason?: string;
-  message?: string;
-  user_id?: string;
+type EdgeResponse = {
+  token_hash?: string;
   branch_id?: string;
+  error?: string;
+  message?: string;
 };
 
 function response(body: unknown, status = 200) {
@@ -23,15 +21,20 @@ function response(body: unknown, status = 200) {
   });
 }
 
-async function sha256Hex(value: string) {
-  const buffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
+function safeText(
+  value: unknown,
+  fallback: string,
+  maximum = 250,
+) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
 
-  return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  const cleaned = value.trim();
+
+  return cleaned.length > 0
+    ? cleaned.slice(0, maximum)
+    : fallback;
 }
 
 export const Route = createFileRoute(
@@ -43,9 +46,10 @@ export const Route = createFileRoute(
         const authorization =
           request.headers.get("authorization") ?? "";
 
-        const deviceToken = authorization.startsWith("Bearer ")
-          ? authorization.slice(7).trim()
-          : "";
+        const deviceToken =
+          authorization.startsWith("Bearer ")
+            ? authorization.slice(7).trim()
+            : "";
 
         if (!DEVICE_TOKEN.test(deviceToken)) {
           return response(
@@ -61,7 +65,8 @@ export const Route = createFileRoute(
         let body: Record<string, unknown>;
 
         try {
-          const raw = await request.text();
+          const raw =
+            await request.text();
 
           if (raw.length > 256) {
             return response(
@@ -73,7 +78,10 @@ export const Route = createFileRoute(
             );
           }
 
-          body = raw ? JSON.parse(raw) : {};
+          body =
+            raw.length > 0
+              ? JSON.parse(raw)
+              : {};
 
           if (
             !body ||
@@ -98,7 +106,8 @@ export const Route = createFileRoute(
           );
         }
 
-        const pin = String(body["pin"] ?? "");
+        const pin =
+          String(body["pin"] ?? "");
 
         if (!/^[0-9]{6}$/.test(pin)) {
           return response(
@@ -110,117 +119,151 @@ export const Route = createFileRoute(
           );
         }
 
-        const tokenHash = await sha256Hex(deviceToken);
+        const supabaseUrl =
+          process.env["SUPABASE_URL"]
+            ?.trim()
+            .replace(/\/+$/, "");
 
-        const { supabaseAdmin } = await import(
-          "@/integrations/supabase/client.server"
-        );
+        const publishableKey =
+          process.env["SUPABASE_PUBLISHABLE_KEY"]
+            ?.trim();
 
-        const database = supabaseAdmin as unknown as {
-          rpc: (
-            name: string,
-            args: Record<string, unknown>,
-          ) => Promise<{
-            data: unknown;
-            error: { message: string } | null;
-          }>;
-        };
+        if (!supabaseUrl || !publishableKey) {
+          console.error(
+            "[staff-pin-login] edge_configuration_missing",
+          );
 
-        const { data, error } = await trustedRpc<ResolveResult>(
-          database,
-          "neo_staff_login_device_resolve",
-          {
-            _token_hash: tokenHash,
-            _pin: pin,
-          },
-        );
-
-        if (error) {
           return response(
             {
               error: "server_error",
               message:
                 "Staff PIN sign-in is temporarily unavailable.",
             },
-            500,
+            503,
           );
         }
 
-        const resolved = (data ?? {}) as ResolveResult;
+        const controller =
+          new AbortController();
 
-        if (!resolved.ok) {
-          const reason = resolved.reason ?? "credentials";
-          const status =
-            reason === "locked"
-              ? 429
-              : reason === "scope"
-                ? 403
-                : 401;
+        const timeout =
+          setTimeout(
+            () => controller.abort(),
+            15_000,
+          );
 
-          return response(
+        let upstream: Response;
+
+        try {
+          upstream = await fetch(
+            `${supabaseUrl}/functions/v1/neo-staff-pin-login`,
             {
-              error: reason,
-              message:
-                resolved.message ??
-                "PIN not accepted. Check your PIN or ask your supervisor.",
+              method: "POST",
+              headers: {
+                apikey: publishableKey,
+                "Content-Type": "application/json",
+                "x-neo-device-token": deviceToken,
+              },
+              body: JSON.stringify({ pin }),
+              signal: controller.signal,
             },
-            status,
           );
-        }
+        } catch (error) {
+          console.error(
+            "[staff-pin-login] edge_request_failed",
+            {
+              name:
+                error instanceof Error
+                  ? error.name.slice(0, 80)
+                  : "unknown",
+            },
+          );
 
-        const userId = String(resolved.user_id ?? "");
-        const branchId = String(resolved.branch_id ?? "");
-
-        if (!UUID.test(userId) || !UUID.test(branchId)) {
           return response(
             {
               error: "server_error",
               message:
                 "Staff PIN sign-in is temporarily unavailable.",
             },
-            500,
+            502,
           );
+        } finally {
+          clearTimeout(timeout);
         }
 
-        const userResult =
-          await supabaseAdmin.auth.admin.getUserById(userId);
+        let payload: EdgeResponse;
 
-        const email = userResult.data.user?.email;
+        try {
+          const raw =
+            await upstream.text();
 
-        if (userResult.error || !email) {
+          if (raw.length > 4096) {
+            throw new Error("Oversized Edge Function response");
+          }
+
+          payload =
+            raw.length > 0
+              ? JSON.parse(raw)
+              : {};
+        } catch {
+          console.error(
+            "[staff-pin-login] edge_response_invalid",
+            {
+              status: upstream.status,
+            },
+          );
+
           return response(
             {
-              error: "account",
+              error: "server_error",
               message:
-                "Your staff sign-in account is unavailable. Ask your supervisor for help.",
+                "Staff PIN sign-in is temporarily unavailable.",
             },
-            403,
+            502,
           );
         }
 
-        const linkResult =
-          await supabaseAdmin.auth.admin.generateLink({
-            type: "magiclink",
-            email,
-          });
+        if (!upstream.ok) {
+          return response(
+            {
+              error: safeText(
+                payload.error,
+                "server_error",
+                80,
+              ),
+              message: safeText(
+                payload.message,
+                "Staff PIN sign-in is temporarily unavailable.",
+              ),
+            },
+            upstream.status,
+          );
+        }
 
         const loginToken =
-          linkResult.data.properties?.hashed_token;
+          String(payload.token_hash ?? "");
 
-        if (linkResult.error || !loginToken) {
+        const branchId =
+          String(payload.branch_id ?? "");
+
+        if (
+          loginToken.length === 0 ||
+          !UUID.test(branchId)
+        ) {
+          console.error(
+            "[staff-pin-login] edge_contract_incomplete",
+          );
+
           return response(
             {
               error: "server_error",
               message:
                 "Staff PIN sign-in is temporarily unavailable.",
             },
-            500,
+            502,
           );
         }
 
-        // The employee identity and email stay server-side. The browser receives
-        // only a single-use Supabase verification token and the trusted
-        // property's ID.
         return response({
           token_hash: loginToken,
           branch_id: branchId,
