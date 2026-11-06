@@ -15,16 +15,28 @@ export type FontKey =
   | "manrope"
   | "dm-sans"
   | "playfair"
-  | "instrument-serif";
+  | "instrument-serif"
+  | "noto-sans"
+  | "source-sans"
+  | "lora";
 
 /** Only fonts the platform already loads may be chosen. */
 export const fontCatalogue: Record<FontKey, { label: string; stack: string }> = {
-  "plus-jakarta": { label: "Plus Jakarta Sans", stack: '"Plus Jakarta Sans", ui-sans-serif, sans-serif' },
+  "plus-jakarta": {
+    label: "Plus Jakarta Sans",
+    stack: '"Plus Jakarta Sans", ui-sans-serif, sans-serif',
+  },
   inter: { label: "Inter", stack: '"Inter", ui-sans-serif, sans-serif' },
   manrope: { label: "Manrope", stack: '"Manrope", ui-sans-serif, sans-serif' },
   "dm-sans": { label: "DM Sans", stack: '"DM Sans", ui-sans-serif, sans-serif' },
   playfair: { label: "Playfair Display", stack: '"Playfair Display", ui-serif, Georgia, serif' },
-  "instrument-serif": { label: "Instrument Serif", stack: '"Instrument Serif", ui-serif, Georgia, serif' },
+  "instrument-serif": {
+    label: "Instrument Serif",
+    stack: '"Instrument Serif", ui-serif, Georgia, serif',
+  },
+  "noto-sans": { label: "Noto Sans", stack: '"Noto Sans", ui-sans-serif, sans-serif' },
+  "source-sans": { label: "Source Sans 3", stack: '"Source Sans 3", ui-sans-serif, sans-serif' },
+  lora: { label: "Lora", stack: '"Lora", ui-serif, Georgia, serif' },
 };
 
 export const personalities: Record<
@@ -117,9 +129,11 @@ function colour(value: unknown, fallback: string) {
 
 export function resolveBrand(brand: ExperienceBrand | null | undefined): ResolvedBrand {
   const b = brand ?? {};
-  const personality = (b.personality && personalities[b.personality] ? b.personality : brandDefaults.personality);
+  const personality =
+    b.personality && personalities[b.personality] ? b.personality : brandDefaults.personality;
   const preset = personalities[personality];
-  const displayKey = b.display_font && fontCatalogue[b.display_font] ? b.display_font : preset.display;
+  const displayKey =
+    b.display_font && fontCatalogue[b.display_font] ? b.display_font : preset.display;
   const bodyKey = b.body_font && fontCatalogue[b.body_font] ? b.body_font : preset.body;
   return {
     personality,
@@ -129,7 +143,8 @@ export function resolveBrand(brand: ExperienceBrand | null | undefined): Resolve
     ink: colour(b.ink, brandDefaults.ink),
     displayFont: fontCatalogue[displayKey].stack,
     bodyFont: fontCatalogue[bodyKey].stack,
-    radius: typeof b.radius === "number" && b.radius >= 0 && b.radius <= 40 ? b.radius : preset.radius,
+    radius:
+      typeof b.radius === "number" && b.radius >= 0 && b.radius <= 40 ? b.radius : preset.radius,
     configured: Boolean(b && Object.keys(b).length),
   };
 }
@@ -161,7 +176,15 @@ const serviceAliases: Record<string, string[]> = {
   hotel_information: ["hotel_information", "about", "information"],
   rooms: ["rooms", "booking", "bookings", "accommodation"],
   booking: ["booking", "bookings"],
-  menu: ["menu", "digital_menu", "food_ordering", "restaurant", "restaurant_pickup", "room_service", "delivery"],
+  menu: [
+    "menu",
+    "digital_menu",
+    "food_ordering",
+    "restaurant",
+    "restaurant_pickup",
+    "room_service",
+    "delivery",
+  ],
   food_ordering: ["food_ordering", "restaurant_pickup", "pickup", "delivery", "room_service"],
   pickup: ["pickup", "restaurant_pickup", "collection"],
   delivery: ["delivery"],

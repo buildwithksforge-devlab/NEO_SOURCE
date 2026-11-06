@@ -1,0 +1,97 @@
+﻿NEØ F05 — PROCUREMENT & ACCOUNTS PAYABLE
+Commit: 3af3453
+
+=== FRONTEND RPC CONNECTIONS ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:49270 neo_ap_journal_register: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:49311 neo_ap_match_lines: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53564 neo_payment_schedule_release: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53721 neo_procurement_order_approve: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53729 neo_procurement_order_from_request: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53748 neo_procurement_request_decide: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53756 neo_procurement_request_submit: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:55028 neo_stores_receive_goods: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:55080 neo_supplier_invoice_accept: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:55084 neo_supplier_invoice_capture: { Args: { _payload: Json }; Returns: Json }
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:55085 neo_supplier_payment_advance: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:55726 proc_three_way_match: { Args: { _invoice: string }; Returns: Json }
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ap-matching.ts:4 * The database is the authority: `neo_ap_journal_register` returns each payable
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ap-matching.ts:6 * `neo_ap_match_lines` returns the line-level agreement between the purchase
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ap-matching.ts:81 const { data, error } = await guardedRpc(db, "neo_ap_journal_register", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\ap-matching.ts:127 const { data, error } = await guardedRpc(db, "neo_ap_match_lines", { _invoice: invoiceId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:210 const { data, error } = await guardedRpc(supabase, "neo_supplier_payment_advance", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\finance-data.ts:256 const { data, error } = await guardedRpc(supabase, "neo_payment_schedule_release", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\procurement-data.ts:130 const { data, error } = await guardedRpc(db, "proc_three_way_match", { _invoice: invoiceId });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\procurement-data.ts:344 const { data, error } = await guardedRpc(db, "neo_supplier_invoice_capture", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\procurement-data.ts:397 const { data, error } = await guardedRpc(db, "neo_supplier_invoice_accept", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:222 neo_ap_match_lines: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:223 neo_ap_journal_register: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:265 neo_procurement_request_submit: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:266 neo_procurement_request_decide: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:267 neo_procurement_order_from_request: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:269 neo_procurement_order_approve: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:270 neo_stores_receive_goods: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:491 proc_three_way_match: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:492 neo_supplier_invoice_capture: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:493 neo_supplier_payment_advance: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:494 neo_payment_schedule_release: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:496 neo_supplier_invoice_accept: "authenticated",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-lifecycle.ts:64 const { data, error } = await guardedRpc(db, "neo_procurement_request_submit", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-lifecycle.ts:91 const { data, error } = await guardedRpc(db, "neo_procurement_request_decide", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-lifecycle.ts:117 const { data, error } = await guardedRpc(db, "neo_procurement_order_from_request", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-lifecycle.ts:139 const { data, error } = await guardedRpc(db, "neo_procurement_order_approve", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\stores-lifecycle.ts:192 const { data, error } = await guardedRpc(db, "neo_stores_receive_goods", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:432 await expectOk(procurement, "neo_procurement_request_submit", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:451 const { error } = await rpc(c, "neo_procurement_request_decide", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:461 const created = (await expectOk(procurement, "neo_procurement_order_from_request", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:478 const { error } = await rpc(c, "neo_procurement_order_approve", { _order: orderId, _reason: "System test" });
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:498 await expectOk(storekeeper, "neo_stores_receive_goods", {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1194 permitted(c.rpc("neo_procurement_order_approve" as never, { _order: ctx.state["purchaseOrderId"], _reason: "RBAC probe" } as never) as never),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts:1273 permitted(c.rpc("neo_procurement_order_approve" as never, { _order: ctx.state["purchaseOrderId"], _reason: "RBAC probe" } as never) as never),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\ap-deposit-policy.test.ts:30 "neo_ap_match_lines",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\ap-deposit-policy.test.ts:31 "neo_ap_journal_register",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\delivery-notify-grn.test.ts:24 const receive = fn("neo_stores_receive_goods");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\grn-payables-lifecycle.test.ts:13 "neo_supplier_invoice_capture",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\grn-payables-lifecycle.test.ts:14 "neo_supplier_invoice_accept",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\grn-payables-lifecycle.test.ts:17 "proc_three_way_match",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\live-security.test.ts:53 "neo_stores_receive_goods",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\live-security.test.ts:222 'neo_delivery_rider_notify','neo_stores_receive_goods',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:26 const submit = fn("neo_procurement_request_submit");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:27 const decide = fn("neo_procurement_request_decide");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:28 const convert = fn("neo_procurement_order_from_request");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:29 const approveOrder = fn("neo_procurement_order_approve");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:30 const receive = fn("neo_stores_receive_goods");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:148 "neo_procurement_request_submit",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:149 "neo_procurement_request_decide",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:150 "neo_procurement_order_from_request",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:151 "neo_procurement_order_approve",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\stores-procurement-contract.test.ts:152 "neo_stores_receive_goods",
+
+=== RELEVANT DEPARTMENT ROUTES ===
+admin.procurement-policy.tsx
+admin.suppliers.tsx
+_shell.finance.payables.tsx
+_shell.inventory.receiving.tsx
+_shell.inventory.receiving.tsx.BEFORE_A10_4_20261011-145305
+_shell.inventory.receiving.tsx.BEFORE_A10_4_FINAL_20261011-145846
+_shell.inventory.receiving.tsx.BEFORE_A10_4_REPAIR_20261011-145516
+_shell.inventory.receiving.tsx.BEFORE_A9_20261011-144322
+_shell.inventory.receiving.tsx.BEFORE_EXPIRY_CONFIRM_20261012-173425
+_shell.kitchen.stores.tsx
+_shell.kitchen.stores.tsx.recovery-backup-20261011-114113
+_shell.kitchen.stores.tsx.retry-form-backup-20261011-113101
+_shell.procurement.branch.tsx
+_shell.procurement.dashboard.tsx
+_shell.procurement.index.tsx
+_shell.procurement.orders.tsx
+_shell.procurement.quotations.tsx
+_shell.procurement.reconciliation.tsx
+_shell.procurement.reconciliation.tsx.BEFORE_A11_4_20261012-091455
+_shell.procurement.reconciliation.tsx.BEFORE_A11_4_REPLACEMENT_20261012-092502
+_shell.procurement.reconciliation.tsx.BEFORE_A11_4_RETRY_20261012-091604
+_shell.procurement.reconciliation.tsx.BEFORE_A11_4_SAFE_20261012-092223
+_shell.procurement.reconciliation.tsx.BEFORE_A12_5_20261012-095452
+_shell.procurement.requests.tsx
+_shell.procurement.supplier-portal.tsx
+_shell.procurement.supplies.tsx
+_shell.procurement.tasks.tsx
+_shell.procurement.tsx

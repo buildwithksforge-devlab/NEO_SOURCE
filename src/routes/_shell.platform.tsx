@@ -42,7 +42,7 @@ const TABS: readonly SectionTab[] = [
   { to: "/platform/integrations", label: "Integration Centre", icon: Plug },
   { to: "/platform/environments", label: "Environments & Flags", icon: Flag },
   { to: "/platform/subscription", label: "Subscription", icon: CreditCard },
-  { to: "/platform/printers", label: "Printers", icon: Plug },
+
   { to: "/platform/migration", label: "Data Migration", icon: Database },
   { to: "/platform/data-lifecycle", label: "History & Tenant Migration", icon: Database },
   { to: "/platform/recovery", label: "Recovery Centre", icon: ShieldCheck },

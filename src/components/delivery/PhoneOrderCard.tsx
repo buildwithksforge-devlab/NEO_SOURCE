@@ -46,6 +46,8 @@ export function PhoneOrderCard({ branchId }: { branchId?: string | null }) {
   const { can } = useAuth();
   const mayCreate = can("delivery", "orders.create-assisted");
   const [open, setOpen] = useState(false);
+  // Preserve the identity after a rejected request or lost response.
+  const [intakeKey, setIntakeKey] = useState(() => crypto.randomUUID());
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [fulfilment, setFulfilment] = useState<"delivery" | "pickup">("delivery");
@@ -123,6 +125,7 @@ export function PhoneOrderCard({ branchId }: { branchId?: string | null }) {
       : false;
 
   function reset() {
+    setIntakeKey(crypto.randomUUID());
     setName("");
     setPhone("");
     setFulfilment("delivery");
@@ -148,6 +151,7 @@ export function PhoneOrderCard({ branchId }: { branchId?: string | null }) {
         special_instructions: l.note.trim() || undefined,
       }));
     await place.mutateAsync({
+      idempotencyKey: intakeKey,
       branchId,
       contactName: name.trim(),
       contactPhone: phone.trim(),

@@ -1,5 +1,5 @@
 import { guardedRpc } from "@/lib/rpc-guard";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { parseAvailabilitySearch } from "@/lib/availability-search";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -88,6 +88,7 @@ function ReservationWizard() {
   const { branchId: activeBranchId } = useActivePropertyFilter();
   const handoff = useSearch({ from: "/_shell/pms/reservations/new" });
   const [step, setStep] = useState(0);
+  const reservationIntentKey = useRef(crypto.randomUUID());
 
   const [arrival, setArrival] = useState(handoff.arrival ?? today());
   const [departure, setDeparture] = useState(handoff.departure ?? addDays(today(), 1));
@@ -119,7 +120,8 @@ function ReservationWizard() {
   const [specialRequests, setSpecialRequests] = useState("");
 
   const [guarantee, setGuarantee] = useState<string>("none");
-  const [depositRequired, setDepositRequired] = useState(0);
+  const [depositMode, setDepositMode] = useState<"percentage" | "fixed">("percentage");
+  const [depositValue, setDepositValue] = useState(0);
   const [status, setStatus] = useState("tentative");
 
   const nights = nightsBetween(arrival, departure);
@@ -183,9 +185,29 @@ function ReservationWizard() {
     [nightlyRate, nights, taxAmount, serviceCharge],
   );
 
+  const depositRequired = useMemo(() => {
+    const value = Math.max(0, Number(depositValue) || 0);
+    const calculated = depositMode === "percentage"
+      ? (total * value) / 100
+      : value;
+
+    return Math.round(Math.max(0, calculated) * 100) / 100;
+  }, [depositMode, depositValue, total]);
+
+  const balanceAfterRequiredDeposit =
+    Math.round(Math.max(0, total - depositRequired) * 100) / 100;
   const create = useMutation({
     mutationFn: async () => {
       if (!organizationId) throw new Error("No organisation context");
+      if (!Number.isFinite(depositValue) || depositValue < 0) {
+        throw new Error("Enter a valid deposit amount.");
+      }
+      if (depositMode === "percentage" && depositValue > 100) {
+        throw new Error("Deposit percentage cannot exceed 100%.");
+      }
+      if (depositMode === "fixed" && depositValue > total) {
+        throw new Error("Deposit cannot exceed the reservation total.");
+      }
       if (nights < 1) throw new Error("Departure must be after arrival");
       if (!ratePlanId) throw new Error("Select a rate plan so the nightly rate can be derived");
       if (nightlyRate <= 0)
@@ -242,6 +264,8 @@ function ReservationWizard() {
           rate_source: overrideOn && canOverrideRate ? "override" : "rate-plan",
           rate_override_reason: overrideOn && canOverrideRate ? overrideReason.trim() : null,
           rate_quoted_amount: derivedRate,
+          deposit_basis: depositMode,
+          deposit_value: depositValue,
           deposit_required: depositRequired,
           balance: total,
           guarantee_method: guarantee,
@@ -249,7 +273,7 @@ function ReservationWizard() {
           is_vip: isVip,
           status,
         },
-        _idempotency_key: crypto.randomUUID(),
+        _idempotency_key: reservationIntentKey.current,
       });
       if (error) throw error;
       const result = data as { ok?: boolean; id?: string; confirmation_number?: string } | null;
@@ -709,14 +733,47 @@ function ReservationWizard() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Deposit required</Label>
+              <div className="space-y-3">
+                <Label>Deposit type</Label>
+
+                <Select
+                  value={depositMode}
+                  onValueChange={(value) =>
+                    setDepositMode(value as "percentage" | "fixed")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed">Fixed amount (KES)</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Label>
+                  {depositMode === "percentage"
+                    ? "Deposit percentage"
+                    : "Deposit amount (KES)"}
+                </Label>
+
                 <Input
                   type="number"
                   min={0}
-                  value={depositRequired}
-                  onChange={(e) => setDepositRequired(Number(e.target.value))}
+                  max={depositMode === "percentage" ? 100 : total}
+                  step="0.01"
+                  value={depositValue}
+                  onChange={(e) => setDepositValue(Number(e.target.value))}
                 />
+
+                <p className="text-sm font-medium">
+                  Required deposit: {money(depositRequired)}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Balance after receiving the required deposit:{" "}
+                  {money(balanceAfterRequiredDeposit)}
+                </p>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Reservation status</Label>
@@ -800,8 +857,8 @@ function ReservationWizard() {
             <Detail label="Accommodation total" value={money(total)} />
             <Detail label="Deposit required" value={money(depositRequired)} />
             <Detail
-              label="Balance on arrival"
-              value={money(Math.max(total - depositRequired, 0))}
+              label="Balance after required deposit"
+              value={money(balanceAfterRequiredDeposit)}
             />
           </dl>
           {isVip ? <Badge className="mt-4">VIP arrival</Badge> : null}

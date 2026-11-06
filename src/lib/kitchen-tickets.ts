@@ -106,7 +106,9 @@ export const TICKET_ACTION_LABELS: Record<string, string> = {
 };
 
 /** Actions are derived from the transition contract, never hardcoded per page. */
-export function ticketActions(status: string): { to: string; label: string; needsReason: boolean }[] {
+export function ticketActions(
+  status: string,
+): { to: string; label: string; needsReason: boolean }[] {
   return (TICKET_TRANSITIONS[status] ?? []).map((to) => ({
     to,
     label: TICKET_ACTION_LABELS[to] ?? to,
@@ -175,7 +177,6 @@ export function isTerminalItem(status: string) {
   return (TERMINAL_ITEM_STATUSES as readonly string[]).includes(status);
 }
 
-
 /** Normalises historic/legacy status spellings onto the canonical contract. */
 export function canonicalTicketStatus(status: string | null | undefined): string {
   const s = (status ?? "").toLowerCase();
@@ -207,7 +208,9 @@ export const STATION_ROUTING_PRECEDENCE = [
 export type StationRoutingSource = (typeof STATION_ROUTING_PRECEDENCE)[number];
 
 /** A ticket only carries a routing exception when the canonical station is absent. */
-export function ticketRoutingException(ticket: Pick<KitchenTicket, "station_id" | "station_missing">) {
+export function ticketRoutingException(
+  ticket: Pick<KitchenTicket, "station_id" | "station_missing">,
+) {
   return ticket.station_id == null || ticket.station_missing;
 }
 
@@ -285,10 +288,12 @@ function patchCachedTickets(
   qc: ReturnType<typeof useQueryClient>,
   apply: (ticket: KitchenTicket) => KitchenTicket,
 ) {
-  return qc.getQueriesData<CachedQueue>({ queryKey: KITCHEN_TICKETS_QUERY_KEY }).map(([key, data]) => {
-    if (Array.isArray(data)) qc.setQueryData(key, data.map(apply));
-    return [key, data] as const;
-  });
+  return qc
+    .getQueriesData<CachedQueue>({ queryKey: KITCHEN_TICKETS_QUERY_KEY })
+    .map(([key, data]) => {
+      if (Array.isArray(data)) qc.setQueryData(key, data.map(apply));
+      return [key, data] as const;
+    });
 }
 
 function restoreCachedTickets(
@@ -310,7 +315,15 @@ async function settleTicketQueries(qc: ReturnType<typeof useQueryClient>) {
 export function useKitchenTicketTransition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ ticketId, to, reason }: { ticketId: string; to: string; reason?: string }) => {
+    mutationFn: async ({
+      ticketId,
+      to,
+      reason,
+    }: {
+      ticketId: string;
+      to: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(supabase, "neo_kitchen_ticket_transition", {
         _ticket: ticketId,
         _to: to,
@@ -370,7 +383,10 @@ export function useKitchenTicketDelay() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ ticketId, reason }: { ticketId: string; reason: string }) => {
-      const { error } = await guardedRpc(supabase, "neo_kitchen_ticket_delay", { _ticket: ticketId, _reason: reason });
+      const { error } = await guardedRpc(supabase, "neo_kitchen_ticket_delay", {
+        _ticket: ticketId,
+        _reason: reason,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -402,7 +418,15 @@ export function eligibleTickets(tickets: KitchenTicket[], to: string) {
 export function useKitchenBulkTicketTransition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ ticketIds, to, reason }: { ticketIds: string[]; to: string; reason?: string }) => {
+    mutationFn: async ({
+      ticketIds,
+      to,
+      reason,
+    }: {
+      ticketIds: string[];
+      to: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(supabase, "neo_kitchen_bulk_ticket_transition", {
         _tickets: ticketIds,
         _to: to,
@@ -424,7 +448,15 @@ export function useKitchenBulkTicketTransition() {
 export function useKitchenBulkItemTransition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ itemIds, to, reason }: { itemIds: string[]; to: string; reason?: string }) => {
+    mutationFn: async ({
+      itemIds,
+      to,
+      reason,
+    }: {
+      itemIds: string[];
+      to: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(supabase, "neo_kitchen_bulk_item_transition", {
         _items: itemIds,
         _to: to,
@@ -473,7 +505,11 @@ export function useKitchenOpsMetrics() {
     enabled: Boolean(organizationId),
     refetchInterval: 30_000,
     queryFn: async (): Promise<KitchenOpsMetrics> => {
-      const { data, error } = await guardedRpc(supabase, "neo_kitchen_ops_metrics", branchId ? { _branch: branchId } : {});
+      const { data, error } = await guardedRpc(
+        supabase,
+        "neo_kitchen_ops_metrics",
+        branchId ? { _branch: branchId } : {},
+      );
       if (error) throw error;
       const m = (data ?? {}) as unknown as Partial<KitchenOpsMetrics>;
       return {
@@ -503,7 +539,9 @@ export function useKitchenTicketAudit(ticketId: string | null) {
     queryKey: ["kitchen", "ticket-audit", ticketId],
     enabled: Boolean(ticketId),
     queryFn: async (): Promise<TicketAuditEvent[]> => {
-      const { data, error } = await guardedRpc(supabase, "neo_kitchen_ticket_audit", { _ticket: ticketId as string });
+      const { data, error } = await guardedRpc(supabase, "neo_kitchen_ticket_audit", {
+        _ticket: ticketId as string,
+      });
       if (error) throw error;
       return (data ?? []) as unknown as TicketAuditEvent[];
     },
@@ -516,12 +554,18 @@ export function useKitchenTicketBackfill() {
   const { branchId } = useActivePropertyFilter();
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await guardedRpc(supabase, "neo_kitchen_backfill_tickets", branchId ? { _branch: branchId } : {});
+      const { data, error } = await guardedRpc(
+        supabase,
+        "neo_kitchen_backfill_tickets",
+        branchId ? { _branch: branchId } : {},
+      );
       if (error) throw error;
       return data as { orders_processed?: number; items_routed?: number } | null;
     },
     onSuccess: (res) => {
-      toast.success(`Reconciled ${res?.orders_processed ?? 0} order(s), ${res?.items_routed ?? 0} item(s) routed.`);
+      toast.success(
+        `Reconciled ${res?.orders_processed ?? 0} order(s), ${res?.items_routed ?? 0} item(s) routed.`,
+      );
       void qc.invalidateQueries({ queryKey: KITCHEN_TICKETS_QUERY_KEY });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -562,10 +606,11 @@ export function useKitchenStationReconcile() {
  * ------------------------------------------------------------------ */
 
 export type ScopedStations = {
-  stations: { id: string; name: string }[];
+  stations: { id: string; name: string; code?: string | null; station_type?: string | null }[];
   /** False for station-scoped users: they may not select "All stations". */
   allowAll: boolean;
   isLoading: boolean;
+  error: Error | null;
 };
 
 export function useScopedStations(): ScopedStations {
@@ -583,12 +628,13 @@ export function useScopedStations(): ScopedStations {
   });
 
   const stations = useQuery({
-    queryKey: ["kitchen", "scoped-stations", organizationId, branchId ?? "all"],
+    queryKey: ["kitchen", "scoped-stations", organizationId, user?.id, branchId ?? "all"],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = supabase
         .from("operational_stations")
-        .select("id, name, branch_id")
+        .select("id, name, branch_id, code, station_type")
+        .eq("organization_id", organizationId as string)
         .eq("active", true)
         .order("sort_order")
         .order("name");
@@ -612,15 +658,27 @@ export function useScopedStations(): ScopedStations {
     },
   });
 
+  const visible = useQuery({
+    queryKey: ["kitchen", "visible-station-ids", organizationId, user?.id, branchId],
+    enabled: Boolean(organizationId && user?.id),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc<string[]>(supabase, "neo_kitchen_visible_station_ids");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const loaded = Boolean(organizationId && scope.isSuccess && stations.isSuccess && mine.isSuccess && visible.isSuccess);
   const stationScoped = scope.data === "station";
   const list = stationScoped
     ? (stations.data ?? []).filter((s) => (mine.data ?? []).includes(s.id))
     : (stations.data ?? []);
 
   return {
-    stations: list,
-    allowAll: !stationScoped,
-    isLoading: scope.isLoading || stations.isLoading || mine.isLoading,
+    stations: loaded ? list.filter((station) => visible.data?.includes(station.id)) : [],
+    allowAll: loaded && !stationScoped,
+    isLoading: scope.isLoading || stations.isLoading || mine.isLoading || visible.isLoading,
+    error: (scope.error || stations.error || mine.error || visible.error) as Error | null,
   };
 }
 

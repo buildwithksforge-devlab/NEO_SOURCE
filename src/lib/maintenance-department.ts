@@ -1,3 +1,4 @@
+import { requireSavedRecord } from "@/lib/durable-command-result";
 /**
  * Maintenance & Landscaping department layer.
  *
@@ -84,7 +85,13 @@ export const MAINTENANCE_MATERIALS = [
   "Safety gloves",
 ] as const;
 
-export const JOB_STAGES = ["accepted", "in-progress", "waiting-parts", "waiting-supplier", "completed"] as const;
+export const JOB_STAGES = [
+  "accepted",
+  "in-progress",
+  "waiting-parts",
+  "waiting-supplier",
+  "completed",
+] as const;
 
 export function maintStr(value: unknown, fallback = "—"): string {
   const s = value === null || value === undefined ? "" : String(value);
@@ -475,7 +482,14 @@ export function useAdvanceMaintenanceJob() {
         _diagnosis: input.diagnosis ?? "",
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as MaintRow;
+      const saved = requireSavedRecord(
+        data,
+        ["id", "status"],
+        "No saved maintenance status was returned.",
+      );
+      if (saved["id"] !== input.workOrderId || saved["status"] !== input.status)
+        throw new Error("The requested maintenance transition was not saved.");
+      return saved as MaintRow;
     },
     onSuccess: (data) => {
       invalidate();
@@ -530,9 +544,7 @@ export function useMaintenanceMaterialNeeds() {
         .order("created_at", { ascending: false })
         .limit(200);
       if (branchId) {
-        q = q.or(
-          `branch_id.eq.${branchId},branch_id.is.null`,
-        );
+        q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
       }
       const { data, error } = await q;
       if (error) throw new Error(error.message);

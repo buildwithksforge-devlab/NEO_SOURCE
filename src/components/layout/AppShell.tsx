@@ -1,5 +1,8 @@
+import { isWorkspaceEntrance } from "@/lib/workspace-entrance";
+import { AppInstallButton } from "@/components/app/AppInstallation";
+import { BackNavigation } from "@/components/common/BackNavigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { MobileSidebar, SidebarContent } from "./Sidebar";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
@@ -23,10 +26,41 @@ import { hydrateDensity, scopeDensityToUser, setDensityRoleHint } from "@/lib/de
 const COLLAPSE_KEY = "neo.sidebar.collapsed";
 
 export function AppShell() {
+  const href = useRouterState({
+    select: (state) => state.location.href,
+  });
+  const entranceMode = isWorkspaceEntrance(href);
+
   return (
     <WorkspaceBootGate>
-      <WorkspaceLayout />
+      {entranceMode ? <WorkspaceEntranceLayout /> : <WorkspaceLayout />}
     </WorkspaceBootGate>
+  );
+}
+
+function WorkspaceEntranceLayout() {
+  return (
+    <div
+      data-neo-workspace-entrance-frame
+      className="neo-page-canvas flex min-h-dvh flex-col bg-background"
+    >
+      <div className="neo-page-gutter shrink-0 border-b border-border py-1">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <BackNavigation />
+          <AppInstallButton />
+        </div>
+      </div>
+      <main className="flex-1 overflow-y-auto">
+        <Outlet />
+      </main>
+
+      <footer className="neo-safe-b neo-page-gutter shrink-0 border-t border-border bg-background/95 py-3">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <PoweredByNeoSignature />
+          <CreatorCredit className="text-[0.7rem] opacity-70" />
+        </div>
+      </footer>
+    </div>
   );
 }
 
@@ -35,10 +69,12 @@ function WorkspaceLayout() {
   // The header and inbox share this query. A worker should see new assignments
   // as soon as the database commits them while NEØ is open, with reconnect
   // resync handled by the shared realtime hook.
-  useScopedRealtime("staff-notifications", [{
-    table: "notifications",
-    onChange: () => void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] }),
-  }]);
+  useScopedRealtime("staff-notifications", [
+    {
+      table: "notifications",
+      onChange: () => void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] }),
+    },
+  ]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -56,7 +92,6 @@ function WorkspaceLayout() {
   useEffect(() => {
     setDensityRoleHint(roleNames);
   }, [roleNames]);
-
 
   useEffect(() => {
     try {
@@ -137,20 +172,28 @@ function WorkspaceLayout() {
 
       <div data-shell-main className="neo-shell-main flex min-h-0 flex-1 flex-col overflow-hidden">
         <Topbar onOpenSidebar={() => setMobileOpen(true)} />
+        <div className="neo-page-gutter shrink-0 border-b border-border bg-background py-1">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <BackNavigation />
+            <AppInstallButton />
+          </div>
+        </div>
         {/* One gutter for the whole staff app: content never touches the
             screen edge on a phone, and the inset grows with the viewport.
             Data-heavy staff pages use the full shell width — no narrow
             website column — while the gutter keeps them off the edge. */}
         <div data-shell-scroll className="neo-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <PullToRefresh scrollTarget={() => document.querySelector<HTMLElement>("[data-shell-scroll]")}>
-          <main className="neo-content-shell flex-1">
-          <div className="neo-shell-bleed">
-            <ConfigurationContextBar />
-            <RouteAccessGate>
-              <Outlet />
-            </RouteAccessGate>
-          </div>
-          </main>
+          <PullToRefresh
+            scrollTarget={() => document.querySelector<HTMLElement>("[data-shell-scroll]")}
+          >
+            <main className="neo-content-shell flex-1">
+              <div className="neo-shell-bleed">
+                <ConfigurationContextBar />
+                <RouteAccessGate>
+                  <Outlet />
+                </RouteAccessGate>
+              </div>
+            </main>
           </PullToRefresh>
         </div>
 

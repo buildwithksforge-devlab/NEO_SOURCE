@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useStockLocations } from "@/lib/inventory-data";
+import { useStockLocations, useStockItems } from "@/lib/inventory-data";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { useAuth } from "@/lib/auth";
@@ -32,8 +32,12 @@ import {
   num,
   str,
   useAllDepartmentStockNeeds,
+  useAssignRequisitionStockItem,
+  useReleaseRequisitionToStores,
+  useApproveRequisitionAtStores,
   useIssueRequisition,
   useSetIssuingStore,
+  useSetReceivingStore,
   useRaiseReplenishment,
   useRejectRequisition,
   useStoresAvailability,
@@ -99,15 +103,22 @@ function StoresRequisitionsPage() {
   const availabilityQuery = useStoresAvailability();
   const needs = useAllDepartmentStockNeeds("pending");
 
+  const assignStockItem = useAssignRequisitionStockItem();
+  const stockItemsQuery = useStockItems();
+  const releaseToStores = useReleaseRequisitionToStores();
+  const approveAtStores = useApproveRequisitionAtStores();
   const issue = useIssueRequisition();
+  const [approvalDrafts, setApprovalDrafts] = useState<Record<string, string>>({});
   const reject = useRejectRequisition();
   const replenish = useRaiseReplenishment();
   const setStore = useSetIssuingStore();
+  const setReceivingStore = useSetReceivingStore();
   const locationsQuery = useStockLocations();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
+  const [issueAttemptId, setIssueAttemptId] = useState(() => crypto.randomUUID());
 
   const availability = useMemo(
     () => availabilityQuery.data ?? new Map<string, number>(),
@@ -179,9 +190,56 @@ function StoresRequisitionsPage() {
     const lines = (requisition["internal_requisition_lines"] ?? []) as StoresRow[];
     const status = str(requisition["status"], "awaiting-stores");
     const awaitingApproval = status === "pending-supervisor";
-    const canIssue = mayIssue && !awaitingApproval;
+    function validateApprovedQuantities() {
+      const approvedLines = lines.map((line) => {
+        const lineId = String(line["id"]);
+        const requested = Number(line["quantity_requested"]);
+        const raw = approvalDrafts[`${id}:${lineId}`] ??
+          String(line["quantity_approved"] ?? line["quantity_requested"] ?? "");
+
+        if (raw.trim() === "") {
+          throw new Error("Enter an approved quantity for every item.");
+        }
+
+        const quantity = Number(raw);
+
+        if (
+          !Number.isFinite(quantity) ||
+          !Number.isFinite(requested) ||
+          requested <= 0 ||
+          quantity < 0 ||
+          quantity > requested
+        ) {
+          throw new Error(
+            `Invalid approved quantity for ${String(line["description"] ?? "item")}. Enter a value between 0 and ${requested}.`
+          );
+        }
+
+        return {
+          id: lineId,
+          quantity_approved: quantity,
+        };
+      });
+
+      if (approvedLines.length === 0) {
+        throw new Error("This requisition has no items to approve.");
+      }
+
+      if (!approvedLines.some((line) => line.quantity_approved > 0)) {
+        throw new Error("Approve at least one item above zero. Return the requisition if nothing can be supplied.");
+      }
+
+      return approvedLines;
+    }
+    const approvedForIssue = [
+      "ready-for-issue",
+      "partially-approved",
+      "partially-issued",
+    ].includes(status);
+    const canIssue = mayIssue && approvedForIssue;
     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
     const sourceStoreId = str(requisition["source_location_id"], "");
+    const destinationStoreId = str(requisition["destination_location_id"], "");
     const sourceStoreName = str(
       (requisition["source_store"] as StoresRow | null)?.["name"],
       "Not chosen yet",
@@ -195,7 +253,7 @@ function StoresRequisitionsPage() {
 
     const shortage = lines.some((line) => {
       const itemId = str(line["stock_item_id"], "");
-      const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+      const onHand = itemId ? ((sourceStoreId ? availability.get(`${sourceStoreId}:${itemId}`) ?? 0 : 0)) : 0;
       return outstandingOf(line) > onHand;
     });
 
@@ -211,7 +269,7 @@ function StoresRequisitionsPage() {
     const lineRows: RequisitionLineRow[] = lines.map((line) => {
       const lineId = String(line["id"]);
       const itemId = str(line["stock_item_id"], "");
-      const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+      const onHand = itemId ? ((sourceStoreId ? availability.get(`${sourceStoreId}:${itemId}`) ?? 0 : 0)) : 0;
       const outstanding = outstandingOf(line);
       const short = outstanding > onHand;
       return {
@@ -268,6 +326,62 @@ function StoresRequisitionsPage() {
               {str(requisition["reason"], "No reason given")}
             </p>
           </InspectorSection>
+          {mayIssue && ["pending-supervisor", "awaiting-stores"].includes(status) ? (
+            <InspectorSection title="Match requested items to inventory">
+              <div className="space-y-4">
+                {lines.map((line) => {
+                  const lineId = String(line["id"]);
+                  const currentItemId = str(line["stock_item_id"], "");
+
+                  return (
+                    <div key={lineId} className="space-y-2 rounded-lg border p-3">
+                      <p className="text-sm font-medium">
+                        {str(line["description"], "Requested item")}
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Requested: {num(line["quantity_requested"])} {str(line["unit"], "units")}
+                      </p>
+
+                      <Select
+                        value={currentItemId}
+                        disabled={assignStockItem.isPending}
+                        onValueChange={(stockItemId) =>
+                          assignStockItem.mutate({
+                            requisitionId: id,
+                            lineId,
+                            stockItemId,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select actual inventory item" />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {((stockItemsQuery.data ?? []) as StoresRow[]).map((item) => (
+                            <SelectItem key={String(item["id"])} value={String(item["id"])}>
+                              {str(item["name"], "Inventory item")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {currentItemId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Inventory item linked
+                        </p>
+                      ) : (
+                        <p className="text-xs text-warning">
+                          Match this request to an inventory item before issuing.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </InspectorSection>
+          ) : null}
 
           <InspectorSection title="Line items & availability">
             <RequisitionLineItems lines={lineRows} />
@@ -329,6 +443,56 @@ function StoresRequisitionsPage() {
 
 
           {canIssue ? (
+            <InspectorSection title="Receiving departmental store">
+              <p className="mb-2 text-sm text-muted-foreground">
+                Choose where the department will receive the stock.
+              </p>
+
+              <Select
+                value={destinationStoreId}
+                onValueChange={(value) => {
+                  if (value === sourceStoreId) {
+                    window.alert(
+                      "Issuing and receiving stores must be different."
+                    );
+                    return;
+                  }
+
+                  setReceivingStore.mutate({
+                    requisitionId: id,
+                    locationId: value,
+                  });
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select receiving store" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {storeOptions
+                    .filter(
+                      (location) =>
+                        String(location["id"]) !== sourceStoreId
+                    )
+                    .map((location) => (
+                      <SelectItem
+                        key={String(location["id"])}
+                        value={String(location["id"])}
+                      >
+                        {str(location["name"], "Store")}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              {!destinationStoreId ? (
+                <p className="mt-2 text-xs text-warning">
+                  Select a receiving departmental store before issuing stock.
+                </p>
+              ) : null}
+            </InspectorSection>
+          ) : null}
+          {canIssue ? (
             <InspectorSection title="Reason">
               <Textarea
                 rows={2}
@@ -342,11 +506,98 @@ function StoresRequisitionsPage() {
       ),
       footer: (
         <>
-          {canIssue ? (
+          {status === "pending-supervisor" && mayRelease ? (
+  <Button
+    size="sm"
+    disabled={releaseToStores.isPending}
+    onClick={() => releaseToStores.mutate({ requisitionId: id })}
+  >
+    Approve & Send to Stores
+  </Button>
+) : null}
+
+{status === "awaiting-stores" && can("stores", "approve") ? (
+  <div className="w-full space-y-2">
+    <p className="text-sm font-medium">Approve quantities</p>
+    {lines.map((line) => (
+      <div key={String(line["id"])} className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm">
+          {String(line["description"] ?? line["item_name"] ?? "Item")}
+        </span>
+        <Input
+          type="number"
+          min="0"
+          max={Number(line["quantity_requested"] ?? 0)}
+          step="any"
+          className="h-9 w-24"
+          value={
+            approvalDrafts[`${id}:${String(line["id"])}`] ??
+            String(line["quantity_approved"] ?? line["quantity_requested"] ?? 0)
+          }
+          onChange={(event) =>
+            setApprovalDrafts((previous) => ({
+              ...previous,
+              [`${id}:${String(line["id"])}`]: event.target.value,
+            }))
+          }
+        />
+      </div>
+    ))}
+  </div>
+) : null}
+{status === "awaiting-stores" && can("stores", "approve") ? (
+  <Button
+    size="sm"
+    disabled={approveAtStores.isPending || releaseToStores.isPending}
+    onClick={() => {
+      try {
+        const reviewedLines = validateApprovedQuantities();
+
+        approveAtStores.mutate({
+          requisitionId: id,
+          lines: reviewedLines,
+        });
+      } catch (error) {
+        window.alert(
+          error instanceof Error
+            ? error.message
+            : "Please check the approved quantities."
+        );
+      }
+    }}
+  >
+    Approve Quantities
+  </Button>
+) : null}
+{canIssue ? (
             <>
               <Button
-                disabled={issue.isPending || issueLines.length === 0 || !sourceStoreId}
-                onClick={() => issue.mutate({ requisitionId: id, lines: issueLines })}
+                disabled={
+                  issue.isPending ||
+                  issueLines.length === 0 ||
+                  !sourceStoreId ||
+                  !destinationStoreId ||
+                  sourceStoreId === destinationStoreId ||
+                  issueLines.some((entry) =>
+                    !lines.some(
+                      (line) =>
+                        String(line["id"]) === entry.id &&
+                        Boolean(line["stock_item_id"]),
+                    ),
+                  )
+                }
+                onClick={() =>
+                  issue.mutate(
+                    {
+                      requisitionId: id,
+                      lines: issueLines,
+                      attemptId: issueAttemptId,
+                    },
+                    {
+                      onSuccess: () => setIssueAttemptId(crypto.randomUUID()),
+                    },
+                  )
+                }
               >
                 {sourceStoreId
                   ? `Issue ${issueLines.length} line${issueLines.length === 1 ? "" : "s"}`

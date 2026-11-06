@@ -1,0 +1,109 @@
+--- a/src/routes/auth.tsx
++++ b/src/routes/auth.tsx
+@@ -312,12 +312,13 @@
+           to="/station-screen"
+           className="flex min-h-12 w-full items-center justify-center rounded-xl border border-neo-turquoise bg-white px-4 text-center text-sm font-semibold text-neo-midnight transition-colors hover:bg-neo-mist"
+         >
+-          Open Station Display - Staff Code + PIN
++          Open Paired Production Display
+         </Link>
+ 
+         <p className="text-center text-xs text-neo-steel">
+-          A supervisor must pair this display first. Your personal PIN
+-          authorizes production actions, not full-workspace login.
++          Paired Kitchen, Coffee, Bar and Pastry screens show incoming work without
++          a staff workspace login. Each action requires only your personal PIN.
++          Supervisors pair screens from Production Displays inside NEØ.
+         </p>
+       </div>
+     </form>
+--- a/src/routes/station-screen.tsx
++++ b/src/routes/station-screen.tsx
+@@ -45,7 +45,9 @@
+     enabled: Boolean(token),
+     retry: false,
+     gcTime: 0,
+-    refetchInterval: (q) => (q.state.error ? false : 5000),
++    // Keep retrying after transient network/server failures. Stopping polling on
++    // the first error stranded an otherwise active station until manual refresh.
++    refetchInterval: 5000,
+     refetchOnWindowFocus: true,
+   });
+   useEffect(() => {
+--- a/src/routes/_shell.production-displays.tsx
++++ b/src/routes/_shell.production-displays.tsx
+@@ -49,8 +49,19 @@
+     <div className="space-y-5">
+       <PageHeader
+         title="Shared display controls"
+-        description="Open a department display to pair its stations. Pairing signs this browser out and creates restricted screen access for 12 hours."
++        description="Open a department display to pair its stations. To pair a screen, choose a department and station, then select Pair this station. This device signs out and opens the independent screen for 12 hours."
+       />
++      <div className="rounded-lg border border-neo-mist bg-white p-4 text-sm">
++        <p className="font-semibold">Independent station screen</p>
++        <p className="mt-1 text-neo-steel">
++          A paired device receives new POS tickets without an employee signing into the full
++          operating system. Staff approve Accept, Preparing and Ready with their personal PIN.
++          Pairing or renewal requires an authorized production supervisor.
++        </p>
++        <Link to="/station-screen" className="mt-2 inline-flex font-medium text-neo-aqua underline">
++          Open this device&apos;s station screen
++        </Link>
++      </div>
+       <nav aria-label="Production display entrances" className="flex flex-wrap gap-3">
+         {Object.entries(DISPLAY_ROUTES)
+           .filter(([, path]) => pathPermitted(can, path))
+--- a/src/routes/_shell.staff-display-code.tsx
++++ b/src/routes/_shell.staff-display-code.tsx
+@@ -47,10 +47,10 @@
+     <div className="mx-auto max-w-xl space-y-5">
+       <PageHeader
+         eyebrow="My staff account"
+-        title="My display code & PIN"
+-        description="Use your staff code and personal PIN when accepting or preparing work on a shared station display."
++        title="My personal staff PIN"
++        description="Set your unique six-digit PIN. On a paired station screen, enter only this PIN to authorize work. NEØ identifies you and checks your assigned station permissions."
+       />
+-      {state.isLoading ? <p>Loading your display code…</p> : null}
++      {state.isLoading ? <p>Loading your personal PIN status…</p> : null}
+       {state.error ? (
+         <p role="alert" className="text-destructive">
+           {state.error.message}
+@@ -59,14 +59,10 @@
+       {state.data ? (
+         <>
+           <div className="rounded-lg border p-4">
+-            <p>
+-              Staff code:{" "}
+-              <strong>{state.data.staff_code ?? "Assigned when you first save your PIN"}</strong>
+-            </p>
+             <p className="text-sm">
+               {state.data.pin_set
+-                ? "Your display PIN is active."
+-                : "You have no active display PIN."}
++                ? "Your personal PIN is active."
++                : "You have no active personal PIN."}
+             </p>
+           </div>
+           <form
+@@ -110,7 +106,7 @@
+           </form>
+           {state.data.pin_set ? (
+             <Button variant="outline" disabled={save.isPending} onClick={() => save.mutate(true)}>
+-              Disable my display PIN
++              Disable my personal PIN
+             </Button>
+           ) : null}
+         </>
+--- a/supabase/migrations/20261030180000_neo_pin_only_display.sql.disabled
++++ b/supabase/migrations/20261030180000_neo_pin_only_display.sql.disabled
+@@ -66,6 +66,9 @@
+   SELECT * INTO c FROM public.neo_production_staff_codes WHERE organization_id=v_org AND user_id=auth.uid();
+   RETURN jsonb_build_object('ok',true,'staff_code',c.staff_code,'pin_set',coalesce(c.enabled,false));
+ END $$;
++-- Keep this enrollment RPC available only to authenticated staff accounts.
++REVOKE ALL ON FUNCTION public.neo_production_staff_pin(text,boolean) FROM PUBLIC, anon;
++GRANT EXECUTE ON FUNCTION public.neo_production_staff_pin(text,boolean) TO authenticated;
+ 
+ -- Identify an employee from a personal six-digit PIN.
+ -- A restricted, supervisor-paired display token supplies organization scope.

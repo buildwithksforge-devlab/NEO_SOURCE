@@ -1,0 +1,437 @@
+﻿
+========================================
+FILE: supabase/migrations/20260908140652_1de79a88-4c92-4b14-b507-01cf3ef51b89.sql
+========================================
+   1: 
+   2: CREATE OR REPLACE FUNCTION public.neo_notify_event(
+   3:   _org uuid, _user uuid, _branch uuid, _event text, _record uuid DEFAULT NULL::uuid,
+   4:   _vars jsonb DEFAULT '{}'::jsonb, _idem text DEFAULT NULL::text)
+   5: RETURNS uuid
+   6: LANGUAGE plpgsql
+   7: SECURITY DEFINER
+   8: SET search_path = public
+   9: AS $fn$
+  10: DECLARE _t public.notification_templates; _title text; _body text; _link text; _k text; _missing text[]; _status text;
+  11: BEGIN
+  12:   IF _org IS NULL OR _event IS NULL THEN RETURN NULL; END IF;
+  13:   IF auth.uid() IS NOT NULL AND _org IS DISTINCT FROM public.current_org_id() THEN
+  14:     RAISE EXCEPTION 'Not allowed for another workspace' USING ERRCODE = '42501';
+  15:   END IF;
+  16:   SELECT * INTO _t FROM public.notification_templates
+  17:    WHERE event_type = _event AND active
+  18:      AND (organization_id = _org OR organization_id IS NULL)
+  19:    ORDER BY organization_id NULLS LAST LIMIT 1;
+  20:   IF _t.id IS NULL THEN RETURN NULL; END IF;
+  21: 
+  22:   _title := _t.title_template; _body := _t.body_template; _link := _t.link_template;
+  23:   _vars := coalesce(_vars,'{}'::jsonb) || jsonb_build_object('record', coalesce(_record::text,''));
+  24:   _status := coalesce(_vars->>'status', '');
+  25:   FOR _k IN SELECT jsonb_object_keys(_vars) LOOP
+  26:     _title := replace(_title, '{{'||_k||'}}', coalesce(_vars->>_k,''));
+  27:     _body  := replace(_body,  '{{'||_k||'}}', coalesce(_vars->>_k,''));
+  28:     _link  := replace(coalesce(_link,''), '{{'||_k||'}}', coalesce(_vars->>_k,''));
+  29:   END LOOP;
+  30: 
+  31:   SELECT array_agg(DISTINCT m[1]) INTO _missing
+  32:     FROM regexp_matches(coalesce(_title,'')||' '||coalesce(_body,'')||' '||coalesce(_link,''),
+  33:                         '\{\{([a-zA-Z0-9_.]+)\}\}', 'g') AS m;
+  34: 
+  35:   IF _missing IS NOT NULL AND array_length(_missing,1) > 0 THEN
+  36:     INSERT INTO public.notification_render_failures
+  37:       (organization_id, branch_id, event_type, record_id, missing_variables, rendered_title, rendered_body, variables)
+  38:     VALUES (_org, _branch, _event, _record, _missing, _title, _body, _vars);
+  39:     RETURN NULL;
+  40:   END IF;
+  41: 
+  42:   RETURN public.neo_notify(_org, _user, _branch, _t.category, _title, _body,
+  43:     nullif(_link,''), _t.priority, _t.action_required, _t.source_module, _record, _event,
+  44:     coalesce(_idem, _event || ':' || coalesce(_record::text,'') || ':' || _status || ':' || coalesce(_user::text,'all')));
+  45: END
+  46: $fn$;
+  47: 
+  48: CREATE OR REPLACE FUNCTION public.neo_apply_feature_templates(_org uuid)
+  49: RETURNS jsonb
+  50: LANGUAGE plpgsql
+  51: SECURITY DEFINER
+  52: SET search_path = public
+  53: AS $fn$
+  54: DECLARE
+  55:   _removed integer := 0;
+  56:   _added integer := 0;
+  57:   _scoped integer := 0;
+  58: BEGIN
+  59:   IF auth.uid() IS NOT NULL
+  60:      AND (_org IS DISTINCT FROM public.current_org_id() OR NOT public.is_org_admin_for(_org)) THEN
+  61:     RAISE EXCEPTION 'Only a workspace administrator can apply role templates' USING ERRCODE = '42501';
+  62:   END IF;
+  63: 
+  64:   CREATE TEMP TABLE _targets ON COMMIT DROP AS
+  65:     SELECT r.id AS role_id,
+  66:            public.neo_resolve_role_template_key(r.normalized_role_key, r.name) AS role_key
+  67:     FROM public.roles r
+  68:     WHERE r.organization_id = _org
+  69:       AND coalesce(r.active, true);
+  70:   DELETE FROM _targets WHERE role_key IS NULL;
+  71: 
+  72:   WITH scoped AS (
+  73:     UPDATE public.roles r
+  74:        SET access_scope = a.access_scope
+  75:       FROM _targets t
+  76:       JOIN public.role_template_aliases a ON a.template_key = t.role_key
+  77:      WHERE r.id = t.role_id
+  78:        AND r.access_scope IS NULL
+  79:        AND a.access_scope IS NOT NULL
+  80:        AND lower(coalesce(r.normalized_role_key, '')) = a.role_key
+  81:     RETURNING 1
+  82:   )
+  83:   SELECT count(*) INTO _scoped FROM scoped;
+  84: 
+  85:   WITH doomed AS (
+  86:     SELECT rp.id, t.role_id, t.role_key, p.id AS permission_id, p.module, p.feature, p.action
+  87:     FROM _targets t
+  88:     JOIN public.role_permissions rp ON rp.role_id = t.role_id
+  89:     JOIN public.permissions p ON p.id = rp.permission_id
+  90:     WHERE rp.source <> 'custom'
+  91:       AND NOT EXISTS (
+  92:         SELECT 1 FROM public.role_feature_templates ft
+  93:         WHERE ft.role_key = t.role_key
+  94:           AND ft.module = p.module AND ft.feature = p.feature AND ft.action = p.action
+  95:       )
+  96:   ),
+  97:   logged AS (
+  98:     INSERT INTO public.role_grant_migration_log
+  99:       (organization_id, role_id, role_key, permission_id, module, feature, action, operation, reason)
+ 100:     SELECT _org, d.role_id, d.role_key, d.permission_id, d.module, d.feature, d.action, 'revoked',
+ 101:            'legacy grant retired: no feature-level capability in the compiled catalogue template'
+ 102:     FROM doomed d RETURNING 1
+ 103:   ),
+ 104:   deleted AS (
+ 105:     DELETE FROM public.role_permissions rp USING doomed d WHERE rp.id = d.id RETURNING 1
+ 106:   )
+ 107:   SELECT count(*) INTO _removed FROM deleted;
+ 108: 
+ 109:   WITH wanted AS (
+ 110:     SELECT t.role_id, t.role_key, p.id AS permission_id, p.module, p.feature, p.action
+ 111:     FROM _targets t
+ 112:     JOIN public.role_feature_templates ft ON ft.role_key = t.role_key
+ 113:     JOIN public.permissions p
+ 114:       ON p.module = ft.module AND p.feature = ft.feature AND p.action = ft.action
+ 115:     WHERE NOT EXISTS (
+ 116:       SELECT 1 FROM public.role_permissions rp
+ 117:       WHERE rp.role_id = t.role_id AND rp.permission_id = p.id
+ 118:     )
+ 119:   ),
+ 120:   inserted AS (
+ 121:     INSERT INTO public.role_permissions (organization_id, role_id, permission_id, source)
+ 122:     SELECT _org, w.role_id, w.permission_id, 'template' FROM wanted w RETURNING 1
+ 123:   ),
+ 124:   logged2 AS (
+ 125:     INSERT INTO public.role_grant_migration_log
+ 126:       (organization_id, role_id, role_key, permission_id, module, feature, action, operation, reason)
+ 127:     SELECT _org, w.role_id, w.role_key, w.permission_id, w.module, w.feature, w.action, 'granted',
+ 128:            'feature-level capability compiled from the modern role catalogue'
+ 129:     FROM wanted w RETURNING 1
+ 130:   )
+ 131:   SELECT count(*) INTO _added FROM inserted;
+ 132: 
+ 133:   DROP TABLE IF EXISTS _targets;
+ 134: 
+ 135:   RETURN jsonb_build_object('organization_id', _org, 'revoked', _removed,
+ 136:                             'granted', _added, 'scopes_filled', _scoped);
+ 137: END;
+ 138: $fn$;
+ 139: 
+ 140: CREATE OR REPLACE FUNCTION public.neo_kitchen_aggregate_ticket(_ticket uuid)
+ 141: RETURNS text
+ 142: LANGUAGE plpgsql
+ 143: SECURITY DEFINER
+ 144: SET search_path = public
+ 145: AS $fn$
+ 146: DECLARE
+ 147:   _t record; _now timestamptz := now();
+ 148:   _active int; _new int; _accepted int; _preparing int; _ready_plus int; _served_plus int; _completed int;
+ 149:   _state text;
+ 150: BEGIN
+ 151:   SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket;
+ 152:   IF _t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+ 153:   IF auth.uid() IS NOT NULL AND _t.organization_id IS DISTINCT FROM public.current_org_id() THEN
+ 154:     RAISE EXCEPTION 'Not allowed for another workspace' USING ERRCODE = '42501';
+ 155:   END IF;
+ 156: 
+ 157:   SELECT
+ 158:     count(*) FILTER (WHERE status <> 'cancelled'),
+ 159:     count(*) FILTER (WHERE status = 'new'),
+ 160:     count(*) FILTER (WHERE status IN ('accepted','cancel-pending')),
+ 161:     count(*) FILTER (WHERE status IN ('preparing','remaking','remake-requested')),
+ 162:     count(*) FILTER (WHERE status IN ('ready','collected','served','completed')),
+ 163:     count(*) FILTER (WHERE status IN ('served','completed')),
+ 164:     count(*) FILTER (WHERE status = 'completed')
+ 165:   INTO _active, _new, _accepted, _preparing, _ready_plus, _served_plus, _completed
+ 166:   FROM public.station_ticket_items WHERE ticket_id = _ticket;
+ 167: 
+ 168:   _state := CASE
+ 169:     WHEN _active = 0 THEN 'cancelled'
+ 170:     WHEN _completed = _active THEN 'completed'
+ 171:     WHEN _served_plus = _active THEN 'served'
+ 172:     WHEN _ready_plus = _active THEN 'ready'
+ 173:     WHEN _ready_plus > 0 THEN 'partially-ready'
+ 174:     WHEN _preparing > 0 THEN 'preparing'
+ 175:     WHEN _accepted > 0 THEN 'accepted'
+ 176:     ELSE 'new'
+ 177:   END;
+ 178: 
+ 179:   UPDATE public.station_tickets SET
+ 180:     status = _state,
+ 181:     accepted_at = CASE WHEN _state = 'new' THEN NULL ELSE COALESCE(accepted_at, _now) END,
+ 182:     started_at = CASE WHEN _state IN ('preparing','partially-ready','ready','served','completed')
+ 183:                       THEN COALESCE(started_at, _now) ELSE started_at END,
+ 184:     ready_at = CASE WHEN _state IN ('ready','served','completed') THEN COALESCE(ready_at, _now) ELSE NULL END,
+ 185:     completed_at = CASE WHEN _state = 'completed' THEN COALESCE(completed_at, _now) ELSE NULL END,
+ 186:     cancelled_at = CASE WHEN _state = 'cancelled' THEN COALESCE(cancelled_at, _now) ELSE NULL END
+ 187:   WHERE id = _ticket;
+ 188: 
+ 189:   IF _state = 'ready' THEN
+ 190:     PERFORM public.emit_domain_event(_t.organization_id, _t.branch_id, 'kitchen.order.ready', 'kitchen', _ticket,
+ 191:       jsonb_build_object('order_id', _t.order_id, 'station_id', _t.station_id),
+ 192:       'kitchen-ticket-ready-' || _ticket::text, NULL);
+ 193:     INSERT INTO public.notifications (organization_id, user_id, branch_id, department_id, station_id, category,
+ 194:                                       title, body, link, priority, source_module, source_record_id,
+ 195:                                       event_type, idempotency_key)
+ 196:     SELECT _t.organization_id, o.waiter_id, _t.branch_id, _t.department_id, _t.station_id, 'kitchen',
+ 197:            'Order ' || o.order_number || ' is ready',
+ 198:            'All items on ticket ' || _t.ticket_number || ' are ready for collection.',
+ 199:            '/pos/orders/' || o.id::text, 'high', 'kitchen', _ticket,
+ 200:            'kitchen.order.ready',
+ 201:            'kitchen.order.ready:' || _ticket::text || ':' || o.waiter_id::text
+ 202:     FROM public.pos_orders o
+ 203:     WHERE o.id = _t.order_id AND o.waiter_id IS NOT NULL
+ 204:     ON CONFLICT DO NOTHING;
+ 205:   END IF;
+ 206: 
+ 207:   RETURN _state;
+ 208: END
+ 209: $fn$;
+
+========================================
+FILE: supabase/migrations/20260908151959_524b3475-54bc-4fab-802e-4991c711bf6a.sql
+========================================
+   1: -- 1. Internal-only routines: no direct call path from the browser.
+   2: REVOKE EXECUTE ON FUNCTION public.notify_recipients(text, text, text, text, text, uuid, uuid, text[], text) FROM anon, authenticated, PUBLIC;
+   3: REVOKE EXECUTE ON FUNCTION public.void_document_number(text, text, text) FROM anon, authenticated, PUBLIC;
+   4: REVOKE EXECUTE ON FUNCTION public.hk_reconcile_room_conditions() FROM anon, authenticated, PUBLIC;
+   5: REVOKE EXECUTE ON FUNCTION public.neo_approval_ensure_types() FROM anon, authenticated, PUBLIC;
+   6: 
+   7: GRANT EXECUTE ON FUNCTION public.notify_recipients(text, text, text, text, text, uuid, uuid, text[], text) TO service_role;
+   8: GRANT EXECUTE ON FUNCTION public.void_document_number(text, text, text) TO service_role;
+   9: GRANT EXECUTE ON FUNCTION public.hk_reconcile_room_conditions() TO service_role;
+  10: GRANT EXECUTE ON FUNCTION public.neo_approval_ensure_types() TO service_role;
+  11: 
+  12: -- 2. Waitlist: front-office capability required, in addition to the org scope.
+  13: CREATE OR REPLACE FUNCTION public.pms_waitlist_offer(_entry uuid, _rate numeric, _expires timestamp with time zone)
+  14:  RETURNS jsonb
+  15:  LANGUAGE plpgsql
+  16:  SECURITY DEFINER
+  17:  SET search_path TO 'public'
+  18: AS $function$
+  19: DECLARE w public.waitlist_entries;
+  20: BEGIN
+  21:   IF NOT (public.has_permission('pms','reservations.edit') OR public.has_permission('pms','write')) THEN
+  22:     RAISE EXCEPTION 'Not permitted to manage the waitlist';
+  23:   END IF;
+  24:   SELECT * INTO w FROM public.waitlist_entries WHERE id=_entry AND organization_id=public.current_org_id();
+  25:   IF w.id IS NULL THEN RAISE EXCEPTION 'Waitlist entry not found'; END IF;
+  26:   IF w.status NOT IN ('waiting','offered') THEN RAISE EXCEPTION 'Entry is % and cannot be offered', w.status; END IF;
+  27:   UPDATE public.waitlist_entries
+  28:      SET status='offered', quoted_rate=COALESCE(_rate, quoted_rate), offered_at=now(),
+  29:          offer_expires_at=COALESCE(_expires, now() + interval '24 hours'), updated_at=now()
+  30:    WHERE id=_entry;
+  31:   RETURN jsonb_build_object('ok', true);
+  32: END; $function$;
+  33: 
+  34: CREATE OR REPLACE FUNCTION public.pms_waitlist_close(_entry uuid, _status text, _reason text)
+  35:  RETURNS jsonb
+  36:  LANGUAGE plpgsql
+  37:  SECURITY DEFINER
+  38:  SET search_path TO 'public'
+  39: AS $function$
+  40: BEGIN
+  41:   IF NOT (public.has_permission('pms','reservations.edit') OR public.has_permission('pms','write')) THEN
+  42:     RAISE EXCEPTION 'Not permitted to manage the waitlist';
+  43:   END IF;
+  44:   IF _status NOT IN ('cancelled','expired','declined') THEN RAISE EXCEPTION 'Unsupported close status %', _status; END IF;
+  45:   IF COALESCE(btrim(_reason),'') = '' THEN RAISE EXCEPTION 'A reason is required to close a waitlist entry'; END IF;
+  46:   UPDATE public.waitlist_entries
+  47:      SET status=_status, closed_reason=_reason, updated_at=now()
+  48:    WHERE id=_entry AND organization_id=public.current_org_id() AND status IN ('waiting','offered');
+  49:   IF NOT FOUND THEN RAISE EXCEPTION 'Entry not found or already closed'; END IF;
+  50:   RETURN jsonb_build_object('ok', true);
+  51: END; $function$;
+  52: 
+  53: -- 3. Kitchen reconciliation: kitchen capability required in front of the existing org guard.
+  54: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations_guard()
+  55:  RETURNS void
+  56:  LANGUAGE plpgsql
+  57:  SECURITY DEFINER
+  58:  SET search_path TO 'public'
+  59: AS $function$
+  60: BEGIN
+  61:   IF NOT (public.has_permission('kitchen','queue.manage')
+  62:           OR public.has_permission('kitchen','all_stations')
+  63:           OR public.has_permission('kitchen','access')) THEN
+  64:     RAISE EXCEPTION 'Not permitted to reconcile kitchen stations';
+  65:   END IF;
+  66: END; $function$;
+  67: 
+  68: REVOKE EXECUTE ON FUNCTION public.neo_kitchen_reconcile_stations_guard() FROM anon, authenticated, PUBLIC;
+
+========================================
+FILE: supabase/migrations/20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_kitchen_reconcile_stations(_org uuid DEFAULT NULL::uuid, _branch uuid DEFAULT NULL::uuid)
+   2:  RETURNS jsonb
+   3:  LANGUAGE plpgsql
+   4:  SECURITY DEFINER
+   5:  SET search_path TO 'public'
+   6: AS $function$
+   7: DECLARE
+   8:   _caller_org uuid := public.current_org_id();
+   9:   _target uuid := COALESCE(_org, public.current_org_id());
+  10:   _t record; _p record; _target_ticket uuid; _state text; _rows int;
+  11:   _assigned int := 0; _split int := 0; _moved int := 0; _unresolved int := 0;
+  12: BEGIN
+  13:   IF NOT (public.has_permission('kitchen','queue.manage')
+  14:           OR public.has_permission('kitchen','all_stations')
+  15:           OR public.has_permission('kitchen','access')) THEN
+  16:     RAISE EXCEPTION 'Not permitted to reconcile kitchen stations';
+  17:   END IF;
+  18:   IF _target IS NULL THEN RAISE EXCEPTION 'No active organization'; END IF;
+  19:   IF _caller_org IS NOT NULL AND _target <> _caller_org THEN
+  20:     RAISE EXCEPTION 'Cross-organisation reconciliation is not permitted';
+  21:   END IF;
+  22: 
+  23:   FOR _t IN
+  24:     SELECT t.* FROM public.station_tickets t
+  25:     WHERE t.organization_id = _target
+  26:       AND (_branch IS NULL OR t.branch_id = _branch)
+  27:       AND EXISTS (
+  28:         SELECT 1 FROM public.station_ticket_items i
+  29:         JOIN public.pos_order_items oi ON oi.id = i.order_item_id
+  30:         WHERE i.ticket_id = t.id
+  31:           AND (t.station_id IS NULL OR oi.station_id IS DISTINCT FROM t.station_id)
+  32:       )
+  33:     ORDER BY t.created_at
+  34:   LOOP
+  35:     CREATE TEMP TABLE _reconcile_items AS
+  36:       SELECT i.id AS link_id,
+  37:              nullif(public.neo_kitchen_route_order_item(i.order_item_id)->>'station_id','')::uuid AS station_id
+  38:       FROM public.station_ticket_items i
+  39:       WHERE i.ticket_id = _t.id;
+  40: 
+  41:     _unresolved := _unresolved + (SELECT count(*) FROM _reconcile_items WHERE station_id IS NULL)::int;
+  42: 
+  43:     FOR _p IN
+  44:       SELECT station_id, count(*) AS items
+  45:       FROM _reconcile_items
+  46:       WHERE station_id IS NOT NULL
+  47:       GROUP BY station_id
+  48:       ORDER BY count(*) DESC, station_id::text
+  49:     LOOP
+  50:       _target_ticket := NULL;
+  51: 
+  52:       IF _t.station_id IS NULL AND NOT EXISTS (
+  53:            SELECT 1 FROM public.station_tickets k
+  54:            WHERE k.order_id = _t.order_id AND k.course = _t.course AND k.station_id = _p.station_id
+  55:          ) THEN
+  56:         UPDATE public.station_tickets SET
+  57:           station_id = _p.station_id,
+  58:           department_id = COALESCE(department_id,
+  59:             (SELECT s.department_id FROM public.operational_stations s WHERE s.id = _p.station_id)),
+  60:           routing_note = COALESCE(routing_note, '') ||
+  61:             CASE WHEN COALESCE(routing_note,'') = '' THEN '' ELSE ' | ' END ||
+  62:             'Station reconciled from resolved item routing',
+  63:           updated_at = now()
+  64:         WHERE id = _t.id;
+  65:         _target_ticket := _t.id;
+  66:         _assigned := _assigned + 1;
+  67:         _t.station_id := _p.station_id;
+  68:       ELSE
+  69:         SELECT k.id INTO _target_ticket FROM public.station_tickets k
+  70:         WHERE k.order_id = _t.order_id AND k.course = _t.course AND k.station_id = _p.station_id;
+  71: 
+  72:         IF _target_ticket IS NULL THEN
+  73:           INSERT INTO public.station_tickets (
+  74:             organization_id, branch_id, department_id, order_id, station_id, ticket_number, course,
+  75:             priority, priority_reason, status, target_minutes, delay_reason, received_at,
+  76:             accepted_at, started_at, ready_at, completed_at, cancelled_at, assigned_chef_id,
+  77:             created_by, routing_note, created_at)
+  78:           VALUES (
+  79:             _t.organization_id, _t.branch_id,
+  80:             (SELECT s.department_id FROM public.operational_stations s WHERE s.id = _p.station_id),
+  81:             _t.order_id, _p.station_id,
+  82:             _t.ticket_number || '-' || upper(substr(md5(_p.station_id::text), 1, 4)),
+  83:             _t.course, _t.priority, _t.priority_reason, _t.status, _t.target_minutes, _t.delay_reason,
+  84:             _t.received_at, _t.accepted_at, _t.started_at, _t.ready_at, _t.completed_at, _t.cancelled_at,
+  85:             _t.assigned_chef_id, _t.created_by,
+  86:             'Station partition of ' || _t.ticket_number || ' (reconciled item routing)', _t.created_at)
+  87:           RETURNING id INTO _target_ticket;
+  88:           _split := _split + 1;
+  89:         END IF;
+  90: 
+  91:         UPDATE public.station_ticket_items i SET ticket_id = _target_ticket
+  92:         WHERE i.ticket_id = _t.id
+  93:           AND i.id IN (SELECT link_id FROM _reconcile_items WHERE station_id = _p.station_id)
+  94:           AND NOT EXISTS (
+  95:             SELECT 1 FROM public.station_ticket_items d
+  96:             WHERE d.ticket_id = _target_ticket AND d.order_item_id = i.order_item_id);
+  97:         GET DIAGNOSTICS _rows = ROW_COUNT;
+  98:         _moved := _moved + _rows;
+  99:       END IF;
+ 100: 
+ 101:       SELECT CASE
+ 102:         WHEN count(*) = 0 THEN NULL
+ 103:         WHEN count(*) FILTER (WHERE status <> 'cancelled') = 0 THEN 'cancelled'
+ 104:         WHEN count(*) FILTER (WHERE status = 'completed') = count(*) FILTER (WHERE status <> 'cancelled') THEN 'completed'
+ 105:         WHEN count(*) FILTER (WHERE status IN ('served','completed')) = count(*) FILTER (WHERE status <> 'cancelled') THEN 'served'
+ 106:         WHEN count(*) FILTER (WHERE status IN ('ready','collected','served','completed')) = count(*) FILTER (WHERE status <> 'cancelled') THEN 'ready'
+ 107:         WHEN count(*) FILTER (WHERE status IN ('ready','collected','served','completed')) > 0 THEN 'partially-ready'
+ 108:         WHEN count(*) FILTER (WHERE status IN ('preparing','remaking','remake-requested')) > 0 THEN 'preparing'
+ 109:         WHEN count(*) FILTER (WHERE status IN ('accepted','cancel-pending')) > 0 THEN 'accepted'
+ 110:         ELSE 'new'
+ 111:       END INTO _state
+ 112:       FROM public.station_ticket_items WHERE ticket_id = _target_ticket;
+ 113: 
+ 114:       IF _state IS NOT NULL THEN
+ 115:         UPDATE public.station_tickets SET status = _state, updated_at = now()
+ 116:         WHERE id = _target_ticket AND status IS DISTINCT FROM _state;
+ 117:       END IF;
+ 118:     END LOOP;
+ 119: 
+ 120:     SELECT CASE
+ 121:       WHEN count(*) = 0 THEN NULL
+ 122:       WHEN count(*) FILTER (WHERE status <> 'cancelled') = 0 THEN 'cancelled'
+ 123:       WHEN count(*) FILTER (WHERE status = 'completed') = count(*) FILTER (WHERE status <> 'cancelled') THEN 'completed'
+ 124:       WHEN count(*) FILTER (WHERE status IN ('served','completed')) = count(*) FILTER (WHERE status <> 'cancelled') THEN 'served'
+ 125:       WHEN count(*) FILTER (WHERE status IN ('ready','collected','served','completed')) = count(*) FILTER (WHERE status <> 'cancelled') THEN 'ready'
+ 126:       WHEN count(*) FILTER (WHERE status IN ('ready','collected','served','completed')) > 0 THEN 'partially-ready'
+ 127:       WHEN count(*) FILTER (WHERE status IN ('preparing','remaking','remake-requested')) > 0 THEN 'preparing'
+ 128:       WHEN count(*) FILTER (WHERE status IN ('accepted','cancel-pending')) > 0 THEN 'accepted'
+ 129:       ELSE 'new'
+ 130:     END INTO _state
+ 131:     FROM public.station_ticket_items WHERE ticket_id = _t.id;
+ 132: 
+ 133:     IF _state IS NOT NULL THEN
+ 134:       UPDATE public.station_tickets SET status = _state, updated_at = now()
+ 135:       WHERE id = _t.id AND status IS DISTINCT FROM _state;
+ 136:     END IF;
+ 137: 
+ 138:     DROP TABLE _reconcile_items;
+ 139:   END LOOP;
+ 140: 
+ 141:   RETURN jsonb_build_object(
+ 142:     'tickets_assigned', _assigned,
+ 143:     'partitions_created', _split,
+ 144:     'items_moved', _moved,
+ 145:     'items_without_routing', _unresolved);
+ 146: END $function$;
+ 147: 
+ 148: DROP FUNCTION IF EXISTS public.neo_kitchen_reconcile_stations_guard();

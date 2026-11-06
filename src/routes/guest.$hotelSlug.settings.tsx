@@ -69,6 +69,7 @@ function SettingsPage() {
   const update = useUpdateGuestProfile(ws.organization_id);
   useGuestScreenView(ws.organization_id, "settings", Boolean(customer));
 
+  const [resettingPassword, setResettingPassword] = useState(false);
   const [prefs, setPrefs] = useState<DevicePrefs>(defaultPrefs);
   useEffect(() => setPrefs(readPrefs()), []);
 
@@ -125,16 +126,29 @@ function SettingsPage() {
             >
               <BrandButton
                 variant="outline"
-                onClick={() => {
+                disabled={resettingPassword}
+                onClick={async () => {
+                  if (resettingPassword) return;
                   const email = String(customer?.["email"] ?? user?.email ?? "");
-                  if (!email) return;
-                  void supabase.auth
-                    .resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` })
-                    .then(() => toast.success("Password reset link sent"))
-                    .catch(() => toast.error("Could not send the reset link"));
+                  if (!email) {
+                    toast.error("Your account has no reset email. Ask the property for help.");
+                    return;
+                  }
+                  setResettingPassword(true);
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/auth/reset-password`,
+                    });
+                    if (error) throw error;
+                    toast.success("If this email is registered, a reset link is on its way.");
+                  } catch {
+                    toast.error("Could not send the reset link. Please try again.");
+                  } finally {
+                    setResettingPassword(false);
+                  }
                 }}
               >
-                Send reset link
+                {resettingPassword ? "Sending…" : "Send reset link"}
               </BrandButton>
             </Row>
             <Row title="Sign out" description="Ends this session on this device only.">

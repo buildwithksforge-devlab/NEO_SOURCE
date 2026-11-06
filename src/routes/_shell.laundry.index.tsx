@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { laundryCatalogueRate } from "@/lib/laundry-intake";
+import { ErrorState } from "@/components/common/StateSystem";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shirt } from "lucide-react";
 import { PageHeader, SectionCard, StatCard, TableScroll } from "@/components/common/DataDisplay";
@@ -106,9 +108,10 @@ function Page() {
   const [newRoom, setNewRoom] = useState("");
   const [newService, setNewService] = useState("wash-iron");
   const [newExpress, setNewExpress] = useState(false);
-  const [lines, setLines] = useState<
-    { description: string; quantity: number; unit_price: number; tax_rate: number }[]
-  >([{ description: "", quantity: 1, unit_price: 0, tax_rate: 0 }]);
+  const [intakeKey, setIntakeKey] = useState(() => crypto.randomUUID());
+  const [lines, setLines] = useState<{ price_item_id: string; quantity: number }[]>([
+    { price_item_id: "", quantity: 1 },
+  ]);
 
   const scoped = useMemo(() => {
     return (orders.data ?? []).filter((o) => !branchId || String(o["branch_id"]) === branchId);
@@ -131,8 +134,26 @@ function Page() {
     (o) => o["posting_status"] !== "posted" && o["status"] !== "cancelled",
   ).length;
 
-  const priceFor = (service: string) =>
-    prices.data?.find((p) => p["service_type"] === service) ?? null;
+  const activePrices = (prices.data ?? []).filter((p) => p["active"] === true);
+  const validIntake =
+    Boolean(newRoom) &&
+    !prices.isLoading &&
+    !prices.isError &&
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.price_item_id &&
+        Number.isFinite(line.quantity) &&
+        line.quantity > 0 &&
+        activePrices.some((item) => item["id"] === line.price_item_id),
+    ) &&
+    lines.some(
+      (line) =>
+        laundryCatalogueRate(
+          activePrices.find((item) => item["id"] === line.price_item_id),
+          newExpress,
+        ) > 0,
+    );
 
   return (
     <OpsGuard module="laundry" action="guest.view">
@@ -195,20 +216,57 @@ function Page() {
                   </div>
                   <div>
                     <Label>Items</Label>
+                    {prices.isError ? (
+                      <ErrorState error={prices.error} onRetry={() => void prices.refetch()} />
+                    ) : null}
+                    {!prices.isLoading && !prices.isError && activePrices.length === 0 ? (
+                      <EmptyState
+                        title="No laundry prices configured"
+                        description="Configure this property's garment prices before creating an order."
+                      />
+                    ) : null}
                     <div className="space-y-2">
                       {lines.map((line, idx) => (
-                        <div key={idx} className="grid grid-cols-[1fr_80px_100px_32px] gap-2">
-                          <Input
-                            value={line.description}
-                            placeholder="Description (e.g. Shirt)"
-                            onChange={(e) =>
-                              setLines((ls) =>
-                                ls.map((l, i) =>
-                                  i === idx ? { ...l, description: e.target.value } : l,
+                        <div
+                          key={idx}
+                          className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_6rem_2rem]"
+                        >
+                          <Select
+                            value={line.price_item_id}
+                            onValueChange={(value) =>
+                              setLines((current) =>
+                                current.map((item, index) =>
+                                  index === idx ? { ...item, price_item_id: value } : item,
                                 ),
                               )
                             }
-                          />
+                          >
+                            <SelectTrigger
+                              aria-label={`Laundry item ${idx + 1}`}
+                              className="min-w-0"
+                            >
+                              <SelectValue placeholder="Select priced garment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activePrices
+                                .filter(
+                                  (item) =>
+                                    item["service_type"] === newService ||
+                                    item["id"] === line.price_item_id,
+                                )
+                                .map((item) => (
+                                  <SelectItem key={String(item["id"])} value={String(item["id"])}>
+                                    {String(item["name"])}
+                                  </SelectItem>
+                                ))}
+                              {line.price_item_id &&
+                              !activePrices.some((item) => item["id"] === line.price_item_id) ? (
+                                <SelectItem value={line.price_item_id} disabled>
+                                  Selected item is unavailable
+                                </SelectItem>
+                              ) : null}
+                            </SelectContent>
+                          </Select>
                           <Input
                             type="number"
                             min={1}
@@ -222,17 +280,12 @@ function Page() {
                             }
                           />
                           <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={line.unit_price}
-                            onChange={(e) =>
-                              setLines((ls) =>
-                                ls.map((l, i) =>
-                                  i === idx ? { ...l, unit_price: Number(e.target.value) } : l,
-                                ),
-                              )
-                            }
+                            aria-label={`Configured price for laundry item ${idx + 1}`}
+                            readOnly
+                            value={laundryCatalogueRate(
+                              activePrices.find((item) => item["id"] === line.price_item_id),
+                              newExpress,
+                            ).toFixed(2)}
                           />
                           <Button
                             variant="ghost"
@@ -250,18 +303,9 @@ function Page() {
                       variant="outline"
                       size="sm"
                       className="mt-2"
-                      onClick={() => {
-                        const service = priceFor(newService);
-                        setLines((ls) => [
-                          ...ls,
-                          {
-                            description: "",
-                            quantity: 1,
-                            unit_price: Number(service?.["unit_price"] ?? 0),
-                            tax_rate: Number(service?.["tax_rate"] ?? 0),
-                          },
-                        ]);
-                      }}
+                      onClick={() =>
+                        setLines((current) => [...current, { price_item_id: "", quantity: 1 }])
+                      }
                     >
                       Add line
                     </Button>
@@ -269,31 +313,23 @@ function Page() {
                 </div>
                 <DialogFooter>
                   <Button
-                    disabled={!newRoom || createOrder.isPending}
+                    disabled={!validIntake || createOrder.isPending}
                     onClick={() =>
                       createOrder.mutate(
                         {
-                          order: {
-                            room_id: newRoom,
-                            service_type: newService,
-                            express: newExpress,
-                          },
-                          items: lines
-                            .filter((l) => l.description.trim() && l.quantity > 0)
-                            .map((l) => ({
-                              description: l.description,
-                              quantity: l.quantity,
-                              unit_price: l.unit_price,
-                              tax_rate: l.tax_rate,
-                              service_type: newService,
-                            })),
+                          roomId: newRoom,
+                          express: newExpress,
+                          intentKey: intakeKey,
+                          items: lines.map((line) => ({
+                            price_item_id: line.price_item_id,
+                            quantity: line.quantity,
+                          })),
                         },
                         {
                           onSuccess: () => {
                             setOpen(false);
-                            setLines([
-                              { description: "", quantity: 1, unit_price: 0, tax_rate: 0 },
-                            ]);
+                            setLines([{ price_item_id: "", quantity: 1 }]);
+                            setIntakeKey(crypto.randomUUID());
                             setNewRoom("");
                           },
                         },
@@ -426,7 +462,9 @@ function Page() {
                               ))}
                             </SelectContent>
                           </Select>
-                        ) : !["delivered", "completed", "cancelled"].includes(String(o["status"])) ? (
+                        ) : !["delivered", "completed", "cancelled"].includes(
+                            String(o["status"]),
+                          ) ? (
                           <Button size="sm" variant="outline" asChild>
                             <Link to="/laundry/batches">Continue in batches</Link>
                           </Button>

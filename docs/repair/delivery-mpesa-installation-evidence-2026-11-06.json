@@ -1,0 +1,21 @@
+{
+  "source": "User-supplied SQL Editor success screenshot and installation postcheck JSON",
+  "recordedAtUtc": "2026-11-06T19:22:47.7802245Z",
+  "version": "20261106230000",
+  "installation_verified": true,
+  "read_only_postcheck": "on",
+  "checks": {
+    "payment_uniqueness_index_ok": true,
+    "table_access_ok": true,
+    "function_contracts_ok": true,
+    "required_constraints_ok": true,
+    "existing_functions_unchanged": true
+  },
+  "newFunctionMatches": 4,
+  "unchangedPrerequisites": 14,
+  "submittedSqlMatchesAfterHeaderEncodingDifference": true,
+  "migrationHistoryReconciled": "Unverified",
+  "liveClaimWorkflow": "Unverified",
+  "stkPush": "Unverified",
+  "operationalTransactionsTriggeredByAgent": false
+}

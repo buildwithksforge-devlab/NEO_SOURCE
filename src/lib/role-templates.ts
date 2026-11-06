@@ -719,8 +719,13 @@ export const ROLE_EXACT_GRANTS: Record<string, CompiledGrant[]> = {
  * property, department, station, ownership and sensitive-data permissions).
  */
 export const ROLE_SPECIAL_CAPABILITIES: Record<string, CompiledGrant[]> = {
+  "it-system-administrator": [{ module: "administration", feature: "devices", action: "manage" }],
   // Operations Manager may execute a configured POS discount and approve it
   // only within the server-enforced <=15% ceiling. Above 15% remains Owner-only.
+  owner: [
+    { module: "kitchen", feature: "production", action: "manage" },
+    { module: "administration", feature: "devices", action: "manage" },
+  ],
   "operations-manager": [
     { module: "pos", feature: "*", action: "discount.execute" },
     { module: "pos", feature: "*", action: "discount.approve" },

@@ -7,12 +7,12 @@
  * states plainly which required steps are still outstanding. The same rule is
  * enforced again in the database, so this is guidance, not the gate.
  */
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type ChecklistLine = {
   itemId: string | null;
@@ -40,9 +40,7 @@ export function parseChecklistSnapshot(value: unknown): ChecklistLine[] {
         label: String(raw["label"] ?? "").trim(),
         instructions: raw["instructions"] ? String(raw["instructions"]) : null,
         appliesTo: (scope === "inspection" || scope === "both" ? scope : "cleaning") as
-          | "cleaning"
-          | "inspection"
-          | "both",
+          "cleaning" | "inspection" | "both",
         mandatory: Boolean(raw["mandatory"]),
         requiresComment: Boolean(raw["requires_comment"]),
         requiresPhoto: Boolean(raw["requires_photo"]),
@@ -99,13 +97,7 @@ export function checklistResultRows(
     }));
 }
 
-const OPTIONS: { value: string; label: string }[] = [
-  { value: "done", label: "Done" },
-  { value: "issue", label: "Issue" },
-  { value: "not-applicable", label: "N/A" },
-];
-
-/** The attendant's execution list for one room. */
+/** The attendant's execution list; saved result values and validation stay canonical. */
 export function CleaningChecklistForm({
   lines,
   entries,
@@ -117,68 +109,114 @@ export function CleaningChecklistForm({
   onChange: (label: string, entry: ChecklistEntry) => void;
   emptyState?: ReactNode;
 }) {
+  const formId = useId();
   const steps = cleaningLines(lines);
   if (steps.length === 0) return <>{emptyState ?? null}</>;
-
+  const recorded = steps.filter((line) => entries[line.label]?.result).length;
   return (
-    <ul className="divide-y divide-border">
-      {steps.map((line) => {
-        const entry = entries[line.label] ?? { result: null, comment: "" };
-        const needsComment =
-          Boolean(entry.result && ["not-applicable", "issue"].includes(entry.result)) ||
-          line.requiresComment;
-        return (
-          <li key={line.label} className="py-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {line.label}
-                  {line.mandatory ? <span className="ml-1 text-destructive">*</span> : null}
-                </p>
-                {line.instructions ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{line.instructions}</p>
-                ) : null}
-              </div>
-              <div data-action-cluster className="flex shrink-0 gap-1">
-                {OPTIONS.map((option) => (
-                  <Button
-                    key={option.value}
-                    type="button"
-                    size="sm"
-                    variant={entry.result === option.value ? "default" : "outline"}
-                    className={cn("min-w-[4.25rem]")}
-                    onClick={() =>
+    <div className="min-w-0 space-y-2">
+      <p className="text-xs text-muted-foreground" aria-live="polite">
+        {recorded} of {steps.length} steps recorded
+      </p>
+      <div
+        role="region"
+        aria-label="Cleaning checklist steps"
+        tabIndex={0}
+        className="min-h-0 max-h-[50dvh] overflow-y-auto overscroll-contain rounded-md border px-3 [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ul className="min-w-0 divide-y divide-border">
+          {steps.map((line, index) => {
+            const entry = entries[line.label] ?? { result: null, comment: "" };
+            const itemId = `${formId}-${index}`;
+            const needsComment =
+              Boolean(entry.result && ["not-applicable", "issue"].includes(entry.result)) ||
+              line.requiresComment;
+            return (
+              <li key={line.label} className="min-w-0 space-y-2 py-3">
+                <label
+                  htmlFor={itemId}
+                  className="flex min-h-11 min-w-0 cursor-pointer items-start gap-3 rounded-md py-1"
+                >
+                  <Checkbox
+                    id={itemId}
+                    checked={entry.result === "done"}
+                    className="mt-0.5 size-6 shrink-0"
+                    onCheckedChange={(checked) =>
                       onChange(line.label, {
-                        result: entry.result === option.value ? null : option.value,
+                        result: checked === true ? "done" : null,
                         comment: entry.comment,
                       })
                     }
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            {needsComment ? (
-              <div className="mt-2 space-y-1">
-                <Label htmlFor={`note-${line.label}`} className="text-xs">
-                  {entry.result === "not-applicable"
-                    ? "Why is this step not applicable?"
-                    : entry.result === "issue"
-                      ? "What is the issue?"
-                      : "Note"}
-                </Label>
-                <Textarea
-                  id={`note-${line.label}`}
-                  rows={2}
-                  value={entry.comment}
-                  onChange={(e) => onChange(line.label, { result: entry.result, comment: e.target.value })}
-                />
-              </div>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
+                  />
+                  <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+                    <span className="text-sm font-medium">
+                      {line.label}
+                      {line.mandatory ? (
+                        <span className="ml-1 text-destructive" aria-label="required">
+                          *
+                        </span>
+                      ) : null}
+                    </span>
+                    {line.instructions ? (
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {line.instructions}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+                <div
+                  className="flex min-w-0 flex-wrap gap-2 pl-9"
+                  role="group"
+                  aria-label={`Exceptions for ${line.label}`}
+                >
+                  {[
+                    { value: "issue", label: "Issue" },
+                    { value: "not-applicable", label: "N/A" },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      size="sm"
+                      className="min-h-11"
+                      aria-label={`${option.label}: ${line.label}`}
+                      aria-pressed={entry.result === option.value}
+                      variant={entry.result === option.value ? "default" : "outline"}
+                      onClick={() =>
+                        onChange(line.label, {
+                          result: entry.result === option.value ? null : option.value,
+                          comment: entry.comment,
+                        })
+                      }
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                {needsComment ? (
+                  <div className="min-w-0 space-y-1 pl-9">
+                    <Label htmlFor={`${itemId}-note`} className="text-xs">
+                      {entry.result === "not-applicable"
+                        ? "Why is this step not applicable?"
+                        : entry.result === "issue"
+                          ? "What is the issue?"
+                          : "Note"}
+                    </Label>
+                    <Textarea
+                      id={`${itemId}-note`}
+                      rows={2}
+                      className="min-w-0"
+                      value={entry.comment}
+                      onChange={(event) =>
+                        onChange(line.label, { result: entry.result, comment: event.target.value })
+                      }
+                    />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
