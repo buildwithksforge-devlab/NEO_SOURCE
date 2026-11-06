@@ -1,3 +1,6 @@
+import { SharedDisplayTools } from "@/components/kitchen/SharedDisplayTools";
+import { clearSharedDisplayToken } from "@/lib/shared-production-display";
+import { useNeoSignOut } from "@/lib/session-exit";
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,6 +33,25 @@ export const Route = createFileRoute("/station-screen")({
 });
 function SharedScreen() {
   const qc = useQueryClient();
+  const signOut = useNeoSignOut();
+  const [compact, setCompact] = useState(() => {
+    try {
+      return localStorage.getItem("neo.display.compact.v1") === "1";
+    } catch {
+      return false;
+    }
+  });
+  function changeCompact(value: boolean) {
+    setCompact(value);
+    try {
+      localStorage.setItem("neo.display.compact.v1", value ? "1" : "0");
+    } catch {}
+  }
+  function logoutDisplay() {
+    if (action.isPending) return;
+    clearSharedDisplayToken();
+    void signOut({ to: "/auth", scope: "local" });
+  }
   const [token] = useState(() => readSharedDisplayToken());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [selected, setSelected] = useState<SharedDisplayAction | null>(null);
@@ -117,16 +139,14 @@ function SharedScreen() {
   return (
     <main
       ref={panel}
-      className="min-h-screen space-y-5 bg-background p-4 text-foreground fullscreen:overflow-auto"
+      className={`min-h-screen bg-background text-foreground fullscreen:overflow-auto ${compact ? "space-y-3 p-2" : "space-y-5 p-4"}`}
     >
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">{data?.property ?? "Production"}</p>
           <h1 className="text-2xl font-semibold">{data?.label ?? "Shared production display"}</h1>
           <p className="text-sm">
-            {data?.read_only
-              ? "View only"
-              : "Enter your personal PIN for every production action."}
+            {data?.read_only ? "View only" : "Enter your personal PIN for every production action."}
           </p>
           {data ? (
             <p className="text-xs text-muted-foreground">
@@ -155,13 +175,17 @@ function SharedScreen() {
           >
             Toggle fullscreen
           </Button>
-          <Link
-            to="/auth"
-            search={{ redirect: "/production-displays" }}
-            className="rounded-md border px-4 py-2 text-sm"
-          >
-            Supervisor controls
-          </Link>
+          <SharedDisplayTools
+            stations={data?.stations ?? []}
+            station={station}
+            onStationChange={(id) => {
+              if (id === "all" || data?.stations.some((item) => item.id === id)) setStation(id);
+            }}
+            compact={compact}
+            onCompactChange={changeCompact}
+            onLogout={logoutDisplay}
+            busy={action.isPending}
+          />
         </div>
       </header>
       {!online ? (
@@ -199,7 +223,7 @@ function SharedScreen() {
               No live tickets. New orders appear here automatically.
             </p>
           ) : null}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className={`grid md:grid-cols-2 xl:grid-cols-3 ${compact ? "gap-2" : "gap-4"}`}>
             {data.tickets
               .filter((t) => station === "all" || t.station_id === station)
               .map((t) => (
@@ -264,7 +288,8 @@ function SharedScreen() {
                 : titleCase(selected?.to ?? "Staff action")}
             </DialogTitle>
             <DialogDescription>
-              Enter your unique six-digit PIN. NEØ identifies you and checks your station permissions.
+              Enter your unique six-digit PIN. NEØ identifies you and checks your station
+              permissions.
             </DialogDescription>
           </DialogHeader>
           <form

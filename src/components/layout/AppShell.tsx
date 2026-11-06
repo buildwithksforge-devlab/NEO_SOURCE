@@ -1,3 +1,4 @@
+import { isWorkspaceEntrance } from "@/lib/workspace-entrance";
 import { AppInstallButton } from "@/components/app/AppInstallation";
 import { BackNavigation } from "@/components/common/BackNavigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -28,8 +29,7 @@ export function AppShell() {
   const href = useRouterState({
     select: (state) => state.location.href,
   });
-  const [path, search = ""] = href.split("?");
-  const entranceMode = path === "/workspace" && new URLSearchParams(search).get("home") === "1";
+  const entranceMode = isWorkspaceEntrance(href);
 
   return (
     <WorkspaceBootGate>

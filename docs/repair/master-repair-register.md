@@ -2,7 +2,7 @@
 
 ## Fixed working lane
 
-Work in the existing local source checkout through PowerShell. Keep the current Supabase database, authentication and storage, existing GitHub repository and existing Wrangler/Cloudflare deployment method. There is no infrastructure migration or second operational database in this scope. No operational SQL, push or deployment has been performed by this repair work.
+Work in the existing local source checkout through PowerShell. Keep the current Supabase database, authentication and storage, existing GitHub repository and existing Wrangler/Cloudflare deployment method. There is no infrastructure migration or second operational database in this scope. Checkpoint 44389e1 has been pushed and deployed through the existing neo-preview Wrangler script; the later display-entry batch is still local. No operational SQL has been applied by these repair runs. Recovered prior chat history reports the original staff/device migration succeeded before this batch; do not replay it.
 
 All original 88 failures, the additional partial/unproven outcomes and the original 30 passed workflows remain in scope. The incomplete screenshots report 87 failed / 28 partial / 30 passed and do not supply the full original register. No original failed outcome is certified closed on the deployed application by offline source tests alone.
 
@@ -47,7 +47,7 @@ Money must reconcile in minor units. The illustrative 120 / 1.18 calculation has
 - Database changes, if needed, remain versioned SQL Editor repair scripts for the same current project, with read-only preflight and postchecks. Do not rewrite historical transactions automatically.
 - Deployment stays behind backend parity and the existing protected Wrangler checks. Native/store packages and all 88 live outcomes remain uncertified.
 
-Detailed wave state: wave-status-2026-11-06.md. Local dependencies/page-action findings: local-fonts-and-api-dependencies.md. SQL run order: ../../supabase/repair/2026-11-06/README_RUN_ORDER.md.
+Detailed wave state: NEO-WAVE-STATUS-2026-11-06.md. Local dependencies/page-action findings: LOCAL-FONTS-AND-API-DEPENDENCIES.md. SQL run order: sql-editor/README_RUN_ORDER.md.
 
 ## Additional inspected finance connections
 
@@ -58,3 +58,10 @@ Existing company regional settings already expose pricesIncludeTax and default i
 ## Completed UI/font/local-summary source gate
 
 Final patched-source gate: 3642 passed, 0 failed, 155 skipped; all 3,637 preceding passes retained, including the 3,598 maintenance-baseline passes and all 3631 first-UI-batch passes. Typecheck, isolated device catalogue, 14 local print-agent checks and production build/smoke passed. Built / and /auth documents also passed private/no-store, source-identity and local-font checks. No operational SQL, push or deployment was performed. Live wave exits, original 30 workflow reruns and real-device installation remain unverified.
+## Current display-entry batch and recovered staff history
+
+The original staff/device migration was reported successful in the earlier Open Local Vite Test chat after correcting the audit logger correlation argument to text. Commit 896fb78 deliberately connected staff PIN through the deployed broker. Preserve that working connection; the direct Edge Function 404 is not proof it is broken. Do not rerun the old staff migration or blanket-push historical migrations.
+
+Local changes now separate property/mode entry from the OS dashboard frame, fix the chooser-to-dashboard hook transition, open display tools without logout, add a separate local display logout, restrict station choices to paired scope, support compact spacing and persist installation/device acknowledgement. No SQL is needed for this batch. Original business-wave exits, finance/receipt work and the original 30 live regressions remain outstanding. F10 is source-repaired, not live-certified.
+
+The new offline gate passed 3,667 tests with zero failures and 155 skips, preserving all 3,642 prior passing assertions. The isolated device catalogue and 14 printer-agent checks passed. Synthetic Chrome checks at 360 and 1440 pixels passed. Production build verification is recorded in the separate PIN-HISTORY-AND-DISPLAY-FLOW-2026-11-06.md report.

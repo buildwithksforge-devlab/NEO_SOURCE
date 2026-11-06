@@ -28,7 +28,7 @@ Authorised metric summaries now use deterministic local formatting unless a work
 | Configured card/courier gateways and their connection tests | Property-configured endpoints and credentials | Retained as explicit adapters; endpoint/provider proof remains required. Test simulators do not prove real payment or delivery. |
 | PDF brand logos | Stored branding image URLs fetched by the server | Separate review still required for allowed hosts, redirects, size limits and timeout behavior. |
 | Staff PIN edge-function import | Build/runtime dependency import from esm.sh | Still present; packaging/vendor review remains open. |
-| Staff PIN sign-in relay | Hard-coded horizon-prime-os.lovable.app broker; forwards the PIN and authorised-device token | OPEN release issue. Replace with the owned Supabase edge function or owned server authentication only after deployment/configuration and ordinary-role device/PIN evidence. Removing the current path without that prerequisite would break staff access. |
+| Staff PIN sign-in relay | Hard-coded horizon-prime-os.lovable.app broker; forwards the PIN and authorised-device token | Recovered history confirms this broker was deliberately connected on 5 November and the device/PIN migration subsequently succeeded. Preserve the working endpoint. Optional future ownership review must not interrupt staff access; no cutover is part of this repair. |
 | Public canonical URL fallback | Old Lovable-hosted public origin in route-visibility.ts | OPEN identity cleanup. Align fallback and deployment environment with the chosen Cloudflare origin and rerun metadata/callback checks. |
 | Lovable editor auth bridge | Host/frame restricted preview integration | Does not activate on the selected Cloudflare workers.dev host. Preserve the host restrictions. |
 
@@ -50,7 +50,7 @@ None of this closes all original 88 failed outcomes. See `NEO-WAVE-STATUS-2026-1
 
 ## Infrastructure constraint confirmed
 
-The current Supabase database, Auth and Storage stay in place. Self-hosting, a second operational database and data/storage migration are out of scope for this repair. Preserve the existing local PowerShell, GitHub and Wrangler/Cloudflare workflow. The owned PIN endpoint probe returned 404 (function not found); replacing the old relay requires deploying the existing function to this same project before app cutover. No authentication endpoint was switched and no function was deployed by this audit.
+The current Supabase database, Auth and Storage stay in place. Self-hosting, a second operational database and data/storage migration are out of scope for this repair. Preserve the existing local PowerShell, GitHub and Wrangler/Cloudflare workflow. The direct PIN Edge Function probe returned 404, but the recovered history confirms that the working PIN route intentionally uses the deployed broker. That probe alone does not show a broken staff login or require a function deployment. No authentication endpoint was switched and no function was deployed by this audit.
 
 
 

@@ -1,3 +1,10 @@
+import {
+  INSTALL_ACK_KEY,
+  INSTALL_DISMISSED_KEY,
+  readInstallPreference,
+  saveInstallPreference,
+  hasConfiguredDisplayOrStaffDevice,
+} from "@/lib/install-preferences";
 import { buildInfo, buildLabel } from "@/lib/build-info";
 import {
   createContext,
@@ -21,13 +28,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
-import { installInstructions, installPlatform, isInstallEntrance, type InstallPlatform } from "@/lib/app-install";
+import {
+  installInstructions,
+  installPlatform,
+  isInstallEntrance,
+  type InstallPlatform,
+} from "@/lib/app-install";
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
-type InstallContextValue = { installed: boolean; open: () => void };
+type InstallContextValue = { installed: boolean; acknowledged: boolean; open: () => void };
 const InstallContext = createContext<InstallContextValue | null>(null);
 const DISMISSED = "neo.install.dismissed.v1";
 const EARLY_CAPTURE = `window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__neoInstallPrompt=e;});`;
@@ -39,7 +51,7 @@ declare global {
 }
 export function AppInstallButton() {
   const install = useContext(InstallContext);
-  if (!install || install.installed) return null;
+  if (!install || install.installed || install.acknowledged) return null;
   return (
     <Button type="button" variant="ghost" className="min-h-11 gap-2" onClick={install.open}>
       <Download className="size-4" aria-hidden="true" />
@@ -50,7 +62,7 @@ export function AppInstallButton() {
 export function AppInstallationProvider({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
   const routerStatus = useRouterState({ select: (state) => state.status });
-  const pathname=useRouterState({select:state=>state.location.pathname});
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [installed, setInstalled] = useState(false),
     [open, setOpen] = useState(false),
     [prompt, setPrompt] = useState<InstallEvent | null>(null),
@@ -58,12 +70,21 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const offered = useRef(false);
+  const [acknowledged, setAcknowledged] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(display-mode: standalone)");
-    const refresh = () =>
-      setInstalled(
-        media.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true,
-      );
+    const configuredDevice = hasConfiguredDisplayOrStaffDevice();
+    if (configuredDevice) saveInstallPreference(INSTALL_DISMISSED_KEY);
+    setAcknowledged(readInstallPreference(INSTALL_ACK_KEY) || configuredDevice);
+    const refresh = () => {
+      const standalone =
+        media.matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      setInstalled(standalone);
+      if (standalone) {
+        saveInstallPreference(INSTALL_ACK_KEY);
+        setAcknowledged(true);
+      }
+    };
     refresh();
     media.addEventListener("change", refresh);
     setPlatform(installPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints));
@@ -75,6 +96,9 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
       setPrompt(install);
     };
     const complete = () => {
+      saveInstallPreference(INSTALL_ACK_KEY);
+      saveInstallPreference(INSTALL_DISMISSED_KEY);
+      setAcknowledged(true);
       setInstalled(true);
       setOpen(false);
       setPrompt(null);
@@ -122,12 +146,13 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
       routerStatus !== "idle" ||
       !isInstallEntrance(pathname) ||
       installed ||
+      acknowledged ||
       offered.current ||
       window.top !== window.self
     )
       return;
     try {
-      if (sessionStorage.getItem(DISMISSED)) return;
+      if (readInstallPreference(INSTALL_DISMISSED_KEY) || sessionStorage.getItem(DISMISSED)) return;
     } catch {
       /* Storage may be restricted; keep the prompt usable. */
     }
@@ -142,12 +167,13 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
       setOpen(true);
     }, 2200);
     return () => window.clearTimeout(timer);
-  }, [loading, routerStatus, pathname, installed]);
+  }, [loading, routerStatus, pathname, installed, acknowledged]);
   const close = useCallback(() => {
     setOpen(false);
     offered.current = true;
     try {
       sessionStorage.setItem(DISMISSED, "1");
+      saveInstallPreference(INSTALL_DISMISSED_KEY);
     } catch {}
   }, []);
   async function requestInstall() {
@@ -179,6 +205,7 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
     <InstallContext.Provider
       value={{
         installed,
+        acknowledged,
         open: () => {
           setMessage("");
           setOpen(true);
@@ -221,6 +248,17 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
             ) : null}
           </DialogBody>
           <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                saveInstallPreference(INSTALL_ACK_KEY);
+                setAcknowledged(true);
+                close();
+              }}
+            >
+              Already installed
+            </Button>
             <Button type="button" variant="outline" onClick={close}>
               Continue in browser
             </Button>

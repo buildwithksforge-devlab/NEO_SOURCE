@@ -32,6 +32,8 @@ import { useScopedStations } from "@/lib/kitchen-tickets";
 import { pairSharedDisplay } from "@/lib/shared-production-display";
 import {
   isStaffPinSession,
+  readTrustedStaffDevice,
+  type TrustedStaffDevice,
   pairTrustedStaffDevice,
   revokeTrustedStaffDevice,
 } from "@/lib/staff-pin-login";
@@ -89,17 +91,8 @@ export const Route = createFileRoute("/_shell/workspace")({
 export { greetingFor } from "@/lib/greeting";
 
 function Dashboard() {
-  const {
-    profile,
-    organizationId,
-    user,
-    access,
-    canModule,
-    can,
-    canExact,
-    phase,
-    isAdmin,
-  } = useAuth();
+  const { profile, organizationId, user, access, canModule, can, canExact, phase, isAdmin } =
+    useAuth();
   const {
     branches,
     activeBranchId,
@@ -111,6 +104,7 @@ function Dashboard() {
   const askedForHome = search.home === "1";
   const requestedProperty = search.property ?? null;
   const [authorizingDevice, setAuthorizingDevice] = useState(false);
+  const [trustedDevice] = useState(readTrustedStaffDevice);
 
   const canAuthorizeDevice =
     isAdmin ||
@@ -127,7 +121,7 @@ function Dashboard() {
   const requestedBranch = useMemo(
     () =>
       requestedProperty
-        ? branches.find((branch) => branch.id === requestedProperty) ?? null
+        ? (branches.find((branch) => branch.id === requestedProperty) ?? null)
         : null,
     [branches, requestedProperty],
   );
@@ -143,13 +137,7 @@ function Dashboard() {
     }
 
     setActiveBranchId(requestedBranch.id);
-  }, [
-    activeBranchId,
-    askedForHome,
-    branchesLoading,
-    requestedBranch,
-    setActiveBranchId,
-  ]);
+  }, [activeBranchId, askedForHome, branchesLoading, requestedBranch, setActiveBranchId]);
 
   const activeBranch = useMemo(() => {
     if (requestedBranch) return requestedBranch;
@@ -185,6 +173,7 @@ function Dashboard() {
   const pinHomeTarget =
     askedForHome &&
     isStaffPinSession() &&
+    !canPairDisplay &&
     phase === "ready" &&
     !branchesLoading &&
     !applyingRequestedProperty &&
@@ -203,9 +192,8 @@ function Dashboard() {
     void navigate({ href: target, replace: true });
   }
 
-
   async function authorizeThisDevice() {
-    if (!activeBranch || authorizingDevice) return;
+    if (!activeBranch || authorizingDevice || trustedDevice?.branchId === activeBranch.id) return;
 
     const confirmed = window.confirm(
       `Authorise this browser for staff PIN sign-in at ${activeBranch.name}? ` +
@@ -217,10 +205,7 @@ function Dashboard() {
     setAuthorizingDevice(true);
 
     try {
-      await pairTrustedStaffDevice(
-        activeBranch.id,
-        `${activeBranch.name} shared staff device`,
-      );
+      await pairTrustedStaffDevice(activeBranch.id, `${activeBranch.name} shared staff device`);
 
       const { error } = await supabase.auth.signOut({
         scope: "local",
@@ -233,11 +218,7 @@ function Dashboard() {
 
       window.location.replace("/auth?mode=pin");
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "This device could not be authorised.",
-      );
+      toast.error(error instanceof Error ? error.message : "This device could not be authorised.");
       setAuthorizingDevice(false);
     }
   }
@@ -281,10 +262,16 @@ function Dashboard() {
         canAuthorizeDevice={canAuthorizeDevice}
         authorizingDevice={authorizingDevice}
         onAuthorizeDevice={authorizeThisDevice}
+        trustedDevice={trustedDevice}
       />
     );
   }
 
+  return <OperationsDashboard />;
+}
+
+function OperationsDashboard() {
+  const { organizationId, user, profile } = useAuth();
   const dashboards = useMyDashboards(Boolean(organizationId));
   useDashboardRealtime(Boolean(organizationId));
 
@@ -327,6 +314,7 @@ function WorkspaceEntrance({
   canAuthorizeDevice,
   authorizingDevice,
   onAuthorizeDevice,
+  trustedDevice,
 }: {
   propertyId: string;
   propertyName: string;
@@ -335,23 +323,18 @@ function WorkspaceEntrance({
   canAuthorizeDevice: boolean;
   authorizingDevice: boolean;
   onAuthorizeDevice: () => void;
+  trustedDevice: TrustedStaffDevice | null;
 }) {
   const stationScope = useScopedStations();
-  const [selectedDisplay, setSelectedDisplay] =
-    useState<DisplayChoice | null>(null);
-  const [selectedStationIds, setSelectedStationIds] =
-    useState<string[]>([]);
+  const alreadyAuthorized = trustedDevice?.branchId === propertyId;
+  const [selectedDisplay, setSelectedDisplay] = useState<DisplayChoice | null>(null);
+  const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
   const [displayLabel, setDisplayLabel] = useState("");
   const [pairingDisplay, setPairingDisplay] = useState(false);
 
   const availableStations = useMemo(
     () =>
-      selectedDisplay
-        ? displayStations(
-            stationScope.stations,
-            selectedDisplay.department,
-          )
-        : [],
+      selectedDisplay ? displayStations(stationScope.stations, selectedDisplay.department) : [],
     [selectedDisplay, stationScope.stations],
   );
 
@@ -366,10 +349,7 @@ function WorkspaceEntrance({
       return;
     }
 
-    const stations = displayStations(
-      stationScope.stations,
-      display.department,
-    );
+    const stations = displayStations(stationScope.stations, display.department);
 
     if (!stations.length) {
       toast.error(
@@ -379,9 +359,7 @@ function WorkspaceEntrance({
     }
 
     setSelectedDisplay(display);
-    setSelectedStationIds(
-      stations.length === 1 && stations[0] ? [stations[0].id] : [],
-    );
+    setSelectedStationIds(stations.length === 1 && stations[0] ? [stations[0].id] : []);
     setDisplayLabel(`${propertyName} · ${display.label}`);
   }
 
@@ -401,23 +379,13 @@ function WorkspaceEntrance({
   }
 
   async function pairDisplayDevice() {
-    if (
-      !selectedDisplay ||
-      !selectedStationIds.length ||
-      pairingDisplay
-    ) {
+    if (!selectedDisplay || !selectedStationIds.length || pairingDisplay) {
       return;
     }
 
-    const permittedIds = new Set(
-      availableStations.map((station) => station.id),
-    );
+    const permittedIds = new Set(availableStations.map((station) => station.id));
 
-    if (
-      selectedStationIds.some(
-        (stationId) => !permittedIds.has(stationId),
-      )
-    ) {
+    if (selectedStationIds.some((stationId) => !permittedIds.has(stationId))) {
       toast.error("Choose stations from the selected display department.");
       return;
     }
@@ -432,26 +400,16 @@ function WorkspaceEntrance({
     setPairingDisplay(true);
 
     try {
-      await pairSharedDisplay(
-        propertyId,
-        selectedStationIds,
-        label,
-        false,
-      );
+      await pairSharedDisplay(propertyId, selectedStationIds, label, false);
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "This production display could not be paired.",
+        error instanceof Error ? error.message : "This production display could not be paired.",
       );
       setPairingDisplay(false);
     }
   }
   return (
-    <main
-      data-neo-workspace-entry
-      className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6"
-    >
+    <main data-neo-workspace-entry className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={propertyName}
         title="Choose how you want to work"
@@ -470,9 +428,7 @@ function WorkspaceEntrance({
           <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
             <LayoutDashboard className="size-5" aria-hidden />
           </span>
-          <span className="mt-5 text-lg font-semibold text-foreground">
-            Enter NEØ System
-          </span>
+          <span className="mt-5 text-lg font-semibold text-foreground">Enter NEØ System</span>
           <span className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Open your normal role-based workspace, tasks and permitted modules.
           </span>
@@ -493,8 +449,8 @@ function WorkspaceEntrance({
               Set up {display.label}
             </span>
             <span className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Select the relevant stations and pair this computer as an
-              independent 12-hour production screen.
+              Select the relevant stations and pair this computer as an independent 12-hour
+              production screen.
             </span>
           </button>
         ))}
@@ -513,15 +469,13 @@ function WorkspaceEntrance({
               Configure {selectedDisplay.label}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              This device will be restricted to the selected property and
-              stations. The supervisor account signs out when pairing succeeds.
+              This device will be restricted to the selected property and stations. The supervisor
+              account signs out when pairing succeeds.
             </p>
           </div>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-foreground">
-              Device name
-            </span>
+            <span className="text-sm font-medium text-foreground">Device name</span>
             <input
               value={displayLabel}
               maxLength={80}
@@ -531,9 +485,7 @@ function WorkspaceEntrance({
           </label>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">
-              Stations shown on this display
-            </p>
+            <p className="text-sm font-medium text-foreground">Stations shown on this display</p>
 
             <div className="grid gap-2 sm:grid-cols-2">
               {availableStations.map((station) => {
@@ -575,16 +527,12 @@ function WorkspaceEntrance({
             <button
               type="button"
               disabled={
-                pairingDisplay ||
-                !selectedStationIds.length ||
-                displayLabel.trim().length < 2
+                pairingDisplay || !selectedStationIds.length || displayLabel.trim().length < 2
               }
               onClick={() => void pairDisplayDevice()}
               className="min-h-11 rounded-xl bg-neo-turquoise px-5 text-sm font-semibold text-neo-midnight disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {pairingDisplay
-                ? "Pairing display…"
-                : "Pair and open display"}
+              {pairingDisplay ? "Pairing display…" : "Pair and open display"}
             </button>
           </div>
         </section>
@@ -602,25 +550,26 @@ function WorkspaceEntrance({
               </span>
 
               <div>
-                <h2 className="font-semibold text-foreground">
-                  Staff PIN sign-in for this device
-                </h2>
+                <h2 className="font-semibold text-foreground">Staff PIN sign-in for this device</h2>
                 <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  Authorise this browser for {propertyName}. When setup succeeds,
-                  your administrator account signs out and the PIN login opens.
+                  {alreadyAuthorized
+                    ? `This browser already recognises its staff PIN authorisation for ${propertyName}. Manage or revoke it through Device Authorisation.`
+                    : `Authorise this browser for ${propertyName}. When setup succeeds, your administrator account signs out and the PIN login opens.`}
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              disabled={authorizingDevice}
+              disabled={authorizingDevice || alreadyAuthorized}
               onClick={onAuthorizeDevice}
               className="min-h-11 shrink-0 rounded-xl bg-neo-turquoise px-5 text-sm font-semibold text-neo-midnight transition hover:bg-neo-aqua hover:text-neo-white disabled:cursor-wait disabled:opacity-60"
             >
-              {authorizingDevice
-                ? "Authorising…"
-                : "Authorise this device"}
+              {alreadyAuthorized
+                ? "Device authorised"
+                : authorizingDevice
+                  ? "Authorising…"
+                  : "Authorise this device"}
             </button>
           </div>
         </section>

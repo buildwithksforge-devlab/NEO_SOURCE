@@ -1,31 +1,182 @@
 // @vitest-environment jsdom
-import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-import {act,cleanup,fireEvent,render,screen,within} from '@testing-library/react';
-import {AppInstallationProvider,AppInstallButton,APP_INSTALL_CAPTURE_SCRIPT} from '@/components/app/AppInstallation';
-import {installPlatform,installInstructions,isInstallEntrance} from '@/lib/app-install';
-vi.mock('@/lib/auth',()=>({useAuth:()=>({loading:false})}));
-const route=vi.hoisted(()=>({pathname:'/auth'}));
-vi.mock('@tanstack/react-router',()=>({useRouterState:(options:{select:(state:{status:string;location:{pathname:string}})=>unknown})=>options.select({status:'idle',location:{pathname:route.pathname}})}));
-let standalone=false;
-beforeEach(()=>{vi.useFakeTimers();route.pathname="/auth";standalone=false;window.sessionStorage.clear();delete window.__neoInstallPrompt;Object.defineProperty(window,'matchMedia',{configurable:true,value:vi.fn(()=>({matches:standalone,addEventListener:vi.fn(),removeEventListener:vi.fn()}))});Object.defineProperty(navigator,'standalone',{configurable:true,value:false});Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:undefined});});
-afterEach(()=>{cleanup();vi.useRealTimers();delete window.__neoInstallPrompt;});
-function show(){render(<AppInstallationProvider><p>Actual app screen</p><AppInstallButton/></AppInstallationProvider>);}
-function native(outcome:'accepted'|'dismissed'='accepted'){
- const event=Object.assign(new Event('beforeinstallprompt',{cancelable:true}),{prompt:vi.fn().mockResolvedValue(undefined),userChoice:Promise.resolve({outcome})});
- act(()=>{window.dispatchEvent(event);});return event;
-}
-describe('browser installation experience',()=>{
- it('offers installation after a stable app entrance and allows continuing normally',()=>{show();expect(screen.queryByRole('dialog')).toBeNull();act(()=>vi.advanceTimersByTime(2200));expect(screen.getByRole('dialog')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Continue in browser'}));expect(screen.queryByRole('dialog')).toBeNull();expect(sessionStorage.getItem('neo.install.dismissed.v1')).toBe('1');expect(screen.getByText('Actual app screen')).toBeTruthy();});
- it('does not repeatedly auto-open after dismissal but retains manual install access',()=>{sessionStorage.setItem('neo.install.dismissed.v1','1');show();act(()=>vi.advanceTimersByTime(5000));expect(screen.queryByRole('dialog')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Install app'}));expect(screen.getByRole('dialog')).toBeTruthy();});
- it('invokes the actual deferred browser prompt and waits for real installation confirmation',async()=>{show();const event=native();fireEvent.click(screen.getByRole('button',{name:'Install app'}));await act(async()=>{fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Install app'}));});expect(event.prompt).toHaveBeenCalledOnce();expect(screen.getByRole('status').textContent).toContain('Installation requested');expect(screen.getByRole('dialog')).toBeTruthy();act(()=>{window.dispatchEvent(new Event('appinstalled'));});expect(screen.queryByRole('dialog')).toBeNull();expect(screen.queryByRole('button',{name:'Install app'})).toBeNull();});
- it('keeps cancellation distinct from installation',async()=>{show();native('dismissed');fireEvent.click(screen.getByRole('button',{name:'Install app'}));await act(async()=>{fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Install app'}));});expect(screen.getByRole('status').textContent).toContain('cancelled');expect(screen.getByRole('dialog')).toBeTruthy();});
- it('does not cover an operator who already started typing',()=>{render(<AppInstallationProvider><input aria-label="Work field"/></AppInstallationProvider>);screen.getByLabelText('Work field').focus();act(()=>vi.advanceTimersByTime(2200));expect(screen.queryByRole('dialog')).toBeNull();});
- it('does not offer installation when already running standalone',()=>{standalone=true;show();act(()=>vi.advanceTimersByTime(5000));expect(screen.queryByRole('dialog')).toBeNull();expect(screen.queryByRole('button',{name:'Install app'})).toBeNull();});
- it('keeps an early browser event available until the React UI mounts',()=>{const listeners:Record<string,(event:Event)=>void>={};const fake={addEventListener:(name:string,handler:(event:Event)=>void)=>{listeners[name]=handler;},__neoInstallPrompt:undefined as unknown};new Function('window',APP_INSTALL_CAPTURE_SCRIPT)(fake);const event=new Event('beforeinstallprompt',{cancelable:true});listeners['beforeinstallprompt']!(event);expect(event.defaultPrevented).toBe(true);expect(fake.__neoInstallPrompt).toBe(event);});
- it('updates only the existing same-origin owned push worker',async()=>{const owned=vi.fn().mockResolvedValue(undefined),foreign=vi.fn(),other=vi.fn();Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{getRegistrations:vi.fn().mockResolvedValue([{active:{scriptURL:`${window.location.origin}/worker-push-sw.js`},update:owned},{active:{scriptURL:'https://other.test/worker-push-sw.js'},update:foreign},{active:{scriptURL:`${window.location.origin}/other-worker.js`},update:other}])}});await act(async()=>show());expect(owned).toHaveBeenCalledOnce();expect(foreign).not.toHaveBeenCalled();expect(other).not.toHaveBeenCalled();});
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  AppInstallationProvider,
+  AppInstallButton,
+  APP_INSTALL_CAPTURE_SCRIPT,
+} from "@/components/app/AppInstallation";
+import { installPlatform, installInstructions, isInstallEntrance } from "@/lib/app-install";
+vi.mock("@/lib/auth", () => ({ useAuth: () => ({ loading: false }) }));
+const route = vi.hoisted(() => ({ pathname: "/auth" }));
+vi.mock("@tanstack/react-router", () => ({
+  useRouterState: (options: {
+    select: (state: { status: string; location: { pathname: string } }) => unknown;
+  }) => options.select({ status: "idle", location: { pathname: route.pathname } }),
+}));
+let standalone = false;
+beforeEach(() => {
+  vi.useFakeTimers();
+  route.pathname = "/auth";
+  standalone = false;
+  window.sessionStorage.clear();
+  window.localStorage.clear();
+  delete window.__neoInstallPrompt;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: standalone,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  });
+  Object.defineProperty(navigator, "standalone", { configurable: true, value: false });
+  Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: undefined });
 });
-describe('actual platform install instructions',()=>{
- it('never automatically interrupts payment, checkout or active work screens',()=>{for(const path of ['/guest/demo/checkout','/delivery/demo/checkout','/pms/folios/id','/rider/active','/housekeeping/my-work'])expect(isInstallEntrance(path)).toBe(false);for(const path of ['/','/auth','/workspace','/guest/demo','/delivery/demo','/rider'])expect(isInstallEntrance(path)).toBe(true);});
- it('recognises iPhone and desktop-mode iPad without pretending a native prompt exists',()=>{expect(installPlatform('iPhone','iPhone',5)).toBe('ios');expect(installPlatform('Desktop Safari','MacIntel',5)).toBe('ios');expect(installInstructions('ios').join(' ')).toContain('Add to Home Screen');});
- it('separates Android, macOS and desktop installation paths',()=>{expect(installPlatform('Android','Linux',1)).toBe('android');expect(installPlatform('Safari','MacIntel',0)).toBe('mac');expect(installPlatform('Windows','Win32',0)).toBe('desktop');});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  delete window.__neoInstallPrompt;
+});
+function show() {
+  render(
+    <AppInstallationProvider>
+      <p>Actual app screen</p>
+      <AppInstallButton />
+    </AppInstallationProvider>,
+  );
+}
+function native(outcome: "accepted" | "dismissed" = "accepted") {
+  const event = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), {
+    prompt: vi.fn().mockResolvedValue(undefined),
+    userChoice: Promise.resolve({ outcome }),
+  });
+  act(() => {
+    window.dispatchEvent(event);
+  });
+  return event;
+}
+describe("browser installation experience", () => {
+  it("offers installation after a stable app entrance and allows continuing normally", () => {
+    show();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(2200));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue in browser" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(sessionStorage.getItem("neo.install.dismissed.v1")).toBe("1");
+    expect(screen.getByText("Actual app screen")).toBeTruthy();
+  });
+  it("does not repeatedly auto-open after dismissal but retains manual install access", () => {
+    sessionStorage.setItem("neo.install.dismissed.v1", "1");
+    show();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+  it("invokes the actual deferred browser prompt and waits for real installation confirmation", async () => {
+    show();
+    const event = native();
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", { name: "Install app" }),
+      );
+    });
+    expect(event.prompt).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status").textContent).toContain("Installation requested");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new Event("appinstalled"));
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Install app" })).toBeNull();
+  });
+  it("keeps cancellation distinct from installation", async () => {
+    show();
+    native("dismissed");
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", { name: "Install app" }),
+      );
+    });
+    expect(screen.getByRole("status").textContent).toContain("cancelled");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+  it("does not cover an operator who already started typing", () => {
+    render(
+      <AppInstallationProvider>
+        <input aria-label="Work field" />
+      </AppInstallationProvider>,
+    );
+    screen.getByLabelText("Work field").focus();
+    act(() => vi.advanceTimersByTime(2200));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("does not offer installation when already running standalone", () => {
+    standalone = true;
+    show();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Install app" })).toBeNull();
+  });
+  it("keeps an early browser event available until the React UI mounts", () => {
+    const listeners: Record<string, (event: Event) => void> = {};
+    const fake = {
+      addEventListener: (name: string, handler: (event: Event) => void) => {
+        listeners[name] = handler;
+      },
+      __neoInstallPrompt: undefined as unknown,
+    };
+    new Function("window", APP_INSTALL_CAPTURE_SCRIPT)(fake);
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    listeners["beforeinstallprompt"]!(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(fake.__neoInstallPrompt).toBe(event);
+  });
+  it("updates only the existing same-origin owned push worker", async () => {
+    const owned = vi.fn().mockResolvedValue(undefined),
+      foreign = vi.fn(),
+      other = vi.fn();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        getRegistrations: vi.fn().mockResolvedValue([
+          { active: { scriptURL: `${window.location.origin}/worker-push-sw.js` }, update: owned },
+          { active: { scriptURL: "https://other.test/worker-push-sw.js" }, update: foreign },
+          { active: { scriptURL: `${window.location.origin}/other-worker.js` }, update: other },
+        ]),
+      },
+    });
+    await act(async () => show());
+    expect(owned).toHaveBeenCalledOnce();
+    expect(foreign).not.toHaveBeenCalled();
+    expect(other).not.toHaveBeenCalled();
+  });
+});
+describe("actual platform install instructions", () => {
+  it("never automatically interrupts payment, checkout or active work screens", () => {
+    for (const path of [
+      "/guest/demo/checkout",
+      "/delivery/demo/checkout",
+      "/pms/folios/id",
+      "/rider/active",
+      "/housekeeping/my-work",
+    ])
+      expect(isInstallEntrance(path)).toBe(false);
+    for (const path of ["/", "/auth", "/workspace", "/guest/demo", "/delivery/demo", "/rider"])
+      expect(isInstallEntrance(path)).toBe(true);
+  });
+  it("recognises iPhone and desktop-mode iPad without pretending a native prompt exists", () => {
+    expect(installPlatform("iPhone", "iPhone", 5)).toBe("ios");
+    expect(installPlatform("Desktop Safari", "MacIntel", 5)).toBe("ios");
+    expect(installInstructions("ios").join(" ")).toContain("Add to Home Screen");
+  });
+  it("separates Android, macOS and desktop installation paths", () => {
+    expect(installPlatform("Android", "Linux", 1)).toBe("android");
+    expect(installPlatform("Safari", "MacIntel", 0)).toBe("mac");
+    expect(installPlatform("Windows", "Win32", 0)).toBe("desktop");
+  });
 });

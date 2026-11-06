@@ -22,16 +22,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { forgetContext } from "@/lib/continue-context";
-import {
-  clearStaffPinSession,
-  isStaffPinSession,
-} from "@/lib/staff-pin-login";
+import { clearStaffPinSession, isStaffPinSession } from "@/lib/staff-pin-login";
 
 export type SessionExitOptions = {
   /** Where the person lands afterwards. Public surfaces only. */
   to?: string;
   /** Switching identity rather than leaving: land on sign-in. */
   reauthenticate?: boolean;
+  /** A shared terminal exits only this browser, preserving sessions on other devices. */
+  scope?: "local";
 };
 
 /** Tear the session down completely, then navigate to a public surface. */
@@ -41,12 +40,7 @@ export async function neoSignOut(
 ): Promise<void> {
   const pinSession = isStaffPinSession();
   const destination =
-    options.to ??
-    (options.reauthenticate
-      ? "/auth"
-      : pinSession
-        ? "/auth?mode=pin"
-        : "/");
+    options.to ?? (options.reauthenticate ? "/auth" : pinSession ? "/auth?mode=pin" : "/");
 
   if (queryClient) {
     await queryClient.cancelQueries().catch(() => undefined);
@@ -56,7 +50,8 @@ export async function neoSignOut(
   clearStaffPinSession();
 
   try {
-    await supabase.auth.signOut();
+    if (options.scope === "local") await supabase.auth.signOut({ scope: "local" });
+    else await supabase.auth.signOut();
   } catch {
     /* A failed network sign-out must still clear this device. */
   }

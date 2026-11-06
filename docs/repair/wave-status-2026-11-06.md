@@ -1,6 +1,6 @@
 # NEØ wave status — 6 November 2026
 
-The local repairs are real source changes in `C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE`, branch `repair/neo-waves-20261106`. They remain uncommitted. No operational SQL, push or deployment has been performed.
+The local repairs are real source changes in `C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE`, branch `repair/neo-waves-20261106`. Checkpoint 44389e1 was committed, pushed and deployed to the existing neo-preview worker (version 7633318b-b83f-49ed-a377-01c6ba7cb4ea). The subsequent display-entry/tools/install-acknowledgement batch remains local and uncommitted. No operational SQL was applied by these repair runs.
 
 There is no defensible "X of 88 closed" count yet. The original register is incomplete, the screenshots report 87 failed plus 28 partial against the earlier 88-failure baseline, and no original failed outcome has been promoted using live evidence. This means **zero of the 88 are certified closed on the deployed application**, while several underlying source defects have been repaired and tested. It does not mean no repair work has happened.
 
@@ -51,3 +51,10 @@ The interim gate passed 3,631 checks with zero failures and preserved all previo
 ## Completed UI/font/local-summary source gate
 
 Final patched-source gate: 3642 passed, 0 failed, 155 skipped; all 3,637 preceding passes retained, including the 3,598 maintenance-baseline passes and all 3631 first-UI-batch passes. Typecheck, isolated device catalogue, 14 local print-agent checks and production build/smoke passed. Built / and /auth documents also passed private/no-store, source-identity and local-font checks. No operational SQL, push or deployment was performed. Live wave exits, original 30 workflow reruns and real-device installation remain unverified.
+## Current display-entry batch and recovered staff history
+
+The original staff/device migration was reported successful in the earlier Open Local Vite Test chat after correcting the audit logger correlation argument to text. Commit 896fb78 deliberately connected staff PIN through the deployed broker. Preserve that working connection; the direct Edge Function 404 is not proof it is broken. Do not rerun the old staff migration or blanket-push historical migrations.
+
+Local changes now separate property/mode entry from the OS dashboard frame, fix the chooser-to-dashboard hook transition, open display tools without logout, add a separate local display logout, restrict station choices to paired scope, support compact spacing and persist installation/device acknowledgement. No SQL is needed for this batch. Original business-wave exits, finance/receipt work and the original 30 live regressions remain outstanding. F10 is source-repaired, not live-certified.
+
+The new offline gate passed 3,667 tests with zero failures and 155 skips, preserving all 3,642 prior passing assertions. The isolated device catalogue and 14 printer-agent checks passed. Synthetic Chrome checks at 360 and 1440 pixels passed. Production build verification is recorded in the separate PIN-HISTORY-AND-DISPLAY-FLOW-2026-11-06.md report.
