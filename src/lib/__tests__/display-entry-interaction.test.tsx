@@ -17,10 +17,14 @@ describe("property work entrance layout", () => {
     "/workspace/?home=1",
     "https://neo-preview.neo-hospitality.workers.dev/workspace?home=1",
     "/workspace?home=1#choice",
+    "/workspace?home=%221%22&property=property-a",
+    'https://neo-preview.neo-hospitality.workers.dev/workspace/?home="1"',
   ])("keeps %s outside dashboard chrome", (href) => expect(isWorkspaceEntrance(href)).toBe(true));
   it.each([
     "/workspace",
     "/workspace?home=0",
+    "/workspace?home=%220%22",
+    "/workspace?home=%22true%22",
     "/workspace-other?home=1",
     "/kitchen/display?home=1",
   ])("keeps %s in its appropriate route frame", (href) =>

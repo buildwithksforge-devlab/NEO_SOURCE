@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { parseTillVerifiedAmount } from "@/lib/delivery-till-amount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -179,13 +180,9 @@ export function DeliveryTillVerification() {
         );
       }
 
-      const verifiedAmount = Number(amount);
+      const verifiedAmount = parseTillVerifiedAmount(amount);
 
-      if (
-        !Number.isFinite(verifiedAmount) ||
-        verifiedAmount <= 0 ||
-        !Number.isInteger(verifiedAmount * 100)
-      ) {
+      if (verifiedAmount === null) {
         throw new Error("Enter a valid verified amount.");
       }
 

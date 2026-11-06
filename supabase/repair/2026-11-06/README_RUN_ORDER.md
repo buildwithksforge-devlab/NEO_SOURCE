@@ -8,7 +8,7 @@ Cloudflare target retained by the existing protected script: `neo-preview` at `h
 ## Current evidence
 
 - Local typecheck passed.
-- Full offline suite: 3642 passed, 0 failed, 155 skipped.
+- Latest full offline suite: 3667 passed, 0 failed, 155 skipped; all 3642 passes preceding the display batch retained.
 - All 3,637 assertions passing before the final UI/password-reset batch remained passed by file and full test identity.
 - Production build and built-server smoke checks passed for `/` and `/auth` (HTTP 200).
 - 32 isolated PostgreSQL checks cover housekeeping/GRN and delivery retry boundaries; these use minimal fixtures and stub dependencies, not a full live Supabase workflow.
@@ -16,7 +16,7 @@ Cloudflare target retained by the existing protected script: `neo-preview` at `h
 - Guest laundry: 23 isolated PostgreSQL tests plus 19 actual-hook/display tests passed. The exact combined laundry SQL transaction and read-only queries also passed in the fixture; repeated application was refused by its drift guard.
 - Printing: 22 real API/PostgreSQL fixture checks, 14 local-agent/native-adapter checks and the discovery UI/durable-mutation checks passed. Native inventory found two virtual queues and no candidate physical queues on this computer; no physical paper is certified.
 - Device catalogue seed test passed: exactly the two approved role templates, repeat-safe inserts, existing assignments preserved.
-- No operational SQL, GitHub push or Cloudflare deployment has been performed.
+- Checkpoint 44389e1 was pushed and deployed to the existing neo-preview worker. Display-entry repairs are now committed/pushed as d12f7e2; their live deployment has not been independently confirmed in this review. No operational SQL has been applied by these repair runs.
 
 These results do not mark the 88 original failures, the additional partial outcomes, or the 30 live workflows as passed. The supplied board shows 30 passed / 28 partial / 87 failed; only 71 complete tiles, including 23 passed tiles, were visible. That discrepancy and the cropped lower board remain open.
 
@@ -168,3 +168,28 @@ For local startup without deploying, use `Start-NEO.ps1` in the parent outputs f
 45_READ_ONLY_FINANCE_RECEIPT_PREFLIGHT.sql inspects current deployed pricing/totals, discount, settlement and receipt definitions, column schemas, triggers and policies in this SAME project. It does not read financial rows or change data. It executed successfully in an isolated PGlite read-only transaction. This is an inventory for the new tax-inclusive VAT/CTL, discounts, historical KES/USD equivalents, payment instructions and receipt/accounting acceptance requirements; it is not an apply script or a claim those requirements are fixed. See NEO-MASTER-REPAIR-REGISTER.md in the output package.
 
 The local-font, install, Back and password-reset source fixes need no additional operational SQL. Existing SQL repair prerequisites and live UAT gates still apply before deployment. The existing Wrangler deployment script was not changed.
+## Read-only departmental review follow-up
+
+The supplied cloud-browser report is prior evidence from build 44389e19, not a fresh certification. Current departmental scope and remaining handoffs are recorded in docs/repair/department-readiness-2026-11-06.md. Its 251 individual UAT steps are a different denominator from the original 87/88 failed workflows.
+
+For the reported delivery M-PESA Till queue error, run 46_READ_ONLY_DELIVERY_MPESA_PREFLIGHT.sql in the same existing project SQL Editor. It reads catalogue/schema/grant information, not operational payment rows, and never approves a claim or initiates STK Push. Save all result sets privately for review. No corresponding apply script is authorised by the browser error alone: distinguish an absent function, different signature, grants and API exposure/cache before selecting a minimal repair. Do not replay 20261026163000 or run a blanket db push.
+
+The zero-argument UI call matches the historical zero-argument queue definition in this checkout. Both missing and present function/grant branches of this diagnostic passed isolated PGlite checks. This establishes diagnostic validity, not live parity. Existing operational data rules remain in force: no synthetic bookings/payments/stock writes merely because an older conversation called Savanna Crown a test property.
+### SQL Editor export correction
+
+The 22:02:28 CSV export contains only the final policy result: five delivery_orders policies. It contains no queue signature, function definition or API-role execute evidence. Do not infer absence of the queue function or claims table from that export. Use 47_READ_ONLY_DELIVERY_MPESA_SINGLE_RESULT.sql instead of 46 when exporting from this editor: all diagnostic sections are packaged into one JSON result row. Missing/present function and grant branches were fixture-tested without an operational connection. Save and share that complete row privately; no migration/grant/application change follows from the five policy rows alone.
+### Confirmed missing delivery claim installation
+
+The supplied single-row diagnostic confirms that the claims table and submit/queue/approve functions are absent. The organisation/ownership/permission helpers and delivery_orders are present. A cache refresh cannot install the missing feature. Do not replay the historical drafts: guest organisation resolution and approval retry response contracts require correction. See docs/repair/delivery-mpesa-confirmed-gap-2026-11-06.md.
+
+Run 48_READ_ONLY_DELIVERY_ACCOUNTING_SINGLE_RESULT.sql next and export its one JSON row. This collects only catalogue/schema information for the existing delivery payment and journal paths, which the previous check did not cover. It changes no operational rows. A scoped apply transaction and postcheck remain to be prepared against that deployed contract; no claims/payment repair has been applied yet. Staff/PIN and current database/storage/deployment infrastructure remain unchanged.
+### Delivery accounting definitions received — scoped installation ready
+
+The supplied accounting catalogue confirms the canonical payment routine is present with existing retry/till changes. A new guarded installation is now prepared: 60_APPLY_DELIVERY_MPESA_CLAIMS.sql, followed by 98_READ_ONLY_DELIVERY_MPESA_POSTCHECK.sql. Run each complete file once in that order in the same SQL Editor; do not also run the equivalent version 20261106230000 or old claim drafts. The apply file creates new claim objects only, with no historical money/staff changes or replacement accounting routine. It refuses changed prerequisites or pre-existing claim objects. The postcheck is read-only and returns one JSON row; require installation_verified=true.
+
+32 isolated source fixture checks passed, including real supplied accounting definitions, scope denial, safe retries and atomic rollback on late evidence failure. Full operational trigger parity, merchant evidence, separate STK and live end-to-end outcomes remain unverified. Detailed behavior/limits: docs/repair/delivery-mpesa-confirmed-gap-2026-11-06.md. No SQL has been applied by the agent. After actual commit/postcheck only, optional existing linked-project bookkeeping is: npx supabase migration repair 20261106230000 --status applied --linked. Never use blanket db push for this checkout.
+## USER-CONFIRMED INSTALLATION — postcheck received
+
+The user supplied the SQL Editor Query succeeded screenshot and delivery-mpesa-install-postcheck-v1 result with installation_verified=true. All five checks passed: exact new function contracts, unchanged existing functions, payment uniqueness index, evidence constraints and table access. Four new functions match their expected fingerprints; all 14 supplied prerequisites remain unchanged. Anonymous execution is denied; authenticated execution is limited to the three intended RPCs, with the evidence checker private. The submitted SQL matches the prepared file after excluding the first comment line's text-encoding difference.
+
+Status: SQL INSTALLED AND POSTCHECKED, based on user-provided evidence. Do not run 60_APPLY_DELIVERY_MPESA_CLAIMS.sql or its equivalent migration again. The earlier missing/ready sections describe the preceding diagnosis and preparation, not the present installation state. Migration-history bookkeeping has not been confirmed. The live authenticated queue/API read, guest submission, independent merchant approval and payment/receipt/invoice/journal end-to-end workflow remain unverified; STK Push remains separate. No synthetic operational transaction is authorised by this installation confirmation.

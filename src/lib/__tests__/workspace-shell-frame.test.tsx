@@ -2,11 +2,12 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+const route = vi.hoisted(() => ({href: "https://neo-preview.neo-hospitality.workers.dev/workspace/?home=1&property=property-a"}));
 vi.mock("@tanstack/react-router", () => ({
   useRouterState: (options: any) =>
     options.select({
       location: {
-        href: "https://neo-preview.neo-hospitality.workers.dev/workspace/?home=1&property=property-a",
+        href: route.href,
       },
     }),
   Outlet: () => <div>Property work choices</div>,
@@ -39,5 +40,13 @@ describe("actual property entrance frame", () => {
     expect(screen.getByText("Property work choices")).toBeTruthy();
     expect(screen.queryByText("OS sidebar")).toBeNull();
     expect(screen.queryByText("OS topbar")).toBeNull();
+  });
+  it("renders the observed JSON-quoted entrance outside dashboard chrome", () => {
+    route.href = "https://neo-preview.neo-hospitality.workers.dev/workspace?home=%221%22&property=property-a";
+    const view = render(<AppShell />);
+    expect(view.container.querySelector("[data-neo-workspace-entrance-frame]")).toBeTruthy();
+    expect(screen.queryByText("OS sidebar")).toBeNull();
+    expect(screen.queryByText("OS topbar")).toBeNull();
+    route.href = "https://neo-preview.neo-hospitality.workers.dev/workspace/?home=1&property=property-a";
   });
 });
