@@ -1,3 +1,7 @@
+// This worker handles notifications only. It never caches documents, APIs or records.
+// Taking control does not reload open pages or discard unsaved work.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
 /* NEØ worker alerts. No private guest, financial, or staff information is sent to a lock screen. */
 self.addEventListener("push", (event) => {
   let notificationId = "";

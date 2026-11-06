@@ -30,6 +30,7 @@ import { Route as ShellComplimentaryRouteImport } from './routes/_shell.complime
 import { Route as ShellCreditAccountsRouteImport } from './routes/_shell.credit-accounts'
 import { Route as ShellCrmRouteImport } from './routes/_shell.crm'
 import { Route as ShellDepartmentsRouteImport } from './routes/_shell.departments'
+import { Route as ShellDeviceAuthorisationRouteImport } from './routes/_shell.device-authorisation'
 import { Route as ShellEventsRouteImport } from './routes/_shell.events'
 import { Route as ShellFinanceRouteImport } from './routes/_shell.finance'
 import { Route as ShellFrontOfficeRouteImport } from './routes/_shell.front-office'
@@ -101,6 +102,7 @@ import { Route as AdminPartnerAccessRouteImport } from './routes/admin.partner-a
 import { Route as AdminPartnerBillingRouteImport } from './routes/admin.partner-billing'
 import { Route as AdminPartnerMessagesRouteImport } from './routes/admin.partner-messages'
 import { Route as AdminPaymentsMpesaRouteImport } from './routes/admin.payments-mpesa'
+import { Route as AdminPrintersRouteImport } from './routes/admin.printers'
 import { Route as AdminProcurementPolicyRouteImport } from './routes/admin.procurement-policy'
 import { Route as AdminPublicExperienceRouteImport } from './routes/admin.public-experience'
 import { Route as AdminRegionalRouteImport } from './routes/admin.regional'
@@ -519,6 +521,12 @@ const ShellDepartmentsRoute = ShellDepartmentsRouteImport.update({
   path: '/departments',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellDeviceAuthorisationRoute =
+  ShellDeviceAuthorisationRouteImport.update({
+    id: '/device-authorisation',
+    path: '/device-authorisation',
+    getParentRoute: () => ShellRoute,
+  } as any)
 const ShellEventsRoute = ShellEventsRouteImport.update({
   id: '/events',
   path: '/events',
@@ -875,6 +883,11 @@ const AdminPartnerMessagesRoute = AdminPartnerMessagesRouteImport.update({
 const AdminPaymentsMpesaRoute = AdminPaymentsMpesaRouteImport.update({
   id: '/payments-mpesa',
   path: '/payments-mpesa',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPrintersRoute = AdminPrintersRouteImport.update({
+  id: '/printers',
+  path: '/printers',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProcurementPolicyRoute = AdminProcurementPolicyRouteImport.update({
@@ -2519,6 +2532,7 @@ export interface FileRoutesByFullPath {
   '/credit-accounts': typeof ShellCreditAccountsRoute
   '/crm': typeof ShellCrmRouteWithChildren
   '/departments': typeof ShellDepartmentsRoute
+  '/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/events': typeof ShellEventsRouteWithChildren
   '/finance': typeof ShellFinanceRouteWithChildren
   '/front-office': typeof ShellFrontOfficeRoute
@@ -2590,6 +2604,7 @@ export interface FileRoutesByFullPath {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -2922,6 +2937,7 @@ export interface FileRoutesByTo {
   '/complimentary': typeof ShellComplimentaryRoute
   '/credit-accounts': typeof ShellCreditAccountsRoute
   '/departments': typeof ShellDepartmentsRoute
+  '/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/front-office': typeof ShellFrontOfficeRoute
   '/guests': typeof ShellGuestsRoute
   '/my-engagement': typeof ShellMyEngagementRoute
@@ -2979,6 +2995,7 @@ export interface FileRoutesByTo {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -3314,6 +3331,7 @@ export interface FileRoutesById {
   '/_shell/credit-accounts': typeof ShellCreditAccountsRoute
   '/_shell/crm': typeof ShellCrmRouteWithChildren
   '/_shell/departments': typeof ShellDepartmentsRoute
+  '/_shell/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/_shell/events': typeof ShellEventsRouteWithChildren
   '/_shell/finance': typeof ShellFinanceRouteWithChildren
   '/_shell/front-office': typeof ShellFrontOfficeRoute
@@ -3385,6 +3403,7 @@ export interface FileRoutesById {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -3722,6 +3741,7 @@ export interface FileRouteTypes {
     | '/credit-accounts'
     | '/crm'
     | '/departments'
+    | '/device-authorisation'
     | '/events'
     | '/finance'
     | '/front-office'
@@ -3793,6 +3813,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -4125,6 +4146,7 @@ export interface FileRouteTypes {
     | '/complimentary'
     | '/credit-accounts'
     | '/departments'
+    | '/device-authorisation'
     | '/front-office'
     | '/guests'
     | '/my-engagement'
@@ -4182,6 +4204,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -4516,6 +4539,7 @@ export interface FileRouteTypes {
     | '/_shell/credit-accounts'
     | '/_shell/crm'
     | '/_shell/departments'
+    | '/_shell/device-authorisation'
     | '/_shell/events'
     | '/_shell/finance'
     | '/_shell/front-office'
@@ -4587,6 +4611,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -5084,6 +5109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellDepartmentsRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/device-authorisation': {
+      id: '/_shell/device-authorisation'
+      path: '/device-authorisation'
+      fullPath: '/device-authorisation'
+      preLoaderRoute: typeof ShellDeviceAuthorisationRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/events': {
       id: '/_shell/events'
       path: '/events'
@@ -5579,6 +5611,13 @@ declare module '@tanstack/react-router' {
       path: '/payments-mpesa'
       fullPath: '/admin/payments-mpesa'
       preLoaderRoute: typeof AdminPaymentsMpesaRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/printers': {
+      id: '/admin/printers'
+      path: '/printers'
+      fullPath: '/admin/printers'
+      preLoaderRoute: typeof AdminPrintersRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/procurement-policy': {
@@ -8386,6 +8425,7 @@ interface ShellRouteChildren {
   ShellCreditAccountsRoute: typeof ShellCreditAccountsRoute
   ShellCrmRoute: typeof ShellCrmRouteWithChildren
   ShellDepartmentsRoute: typeof ShellDepartmentsRoute
+  ShellDeviceAuthorisationRoute: typeof ShellDeviceAuthorisationRoute
   ShellEventsRoute: typeof ShellEventsRouteWithChildren
   ShellFinanceRoute: typeof ShellFinanceRouteWithChildren
   ShellFrontOfficeRoute: typeof ShellFrontOfficeRoute
@@ -8473,6 +8513,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellCreditAccountsRoute: ShellCreditAccountsRoute,
   ShellCrmRoute: ShellCrmRouteWithChildren,
   ShellDepartmentsRoute: ShellDepartmentsRoute,
+  ShellDeviceAuthorisationRoute: ShellDeviceAuthorisationRoute,
   ShellEventsRoute: ShellEventsRouteWithChildren,
   ShellFinanceRoute: ShellFinanceRouteWithChildren,
   ShellFrontOfficeRoute: ShellFrontOfficeRoute,
@@ -8587,6 +8628,7 @@ interface AdminRouteChildren {
   AdminPartnerBillingRoute: typeof AdminPartnerBillingRoute
   AdminPartnerMessagesRoute: typeof AdminPartnerMessagesRoute
   AdminPaymentsMpesaRoute: typeof AdminPaymentsMpesaRoute
+  AdminPrintersRoute: typeof AdminPrintersRoute
   AdminProcurementPolicyRoute: typeof AdminProcurementPolicyRoute
   AdminPublicExperienceRoute: typeof AdminPublicExperienceRoute
   AdminRegionalRoute: typeof AdminRegionalRoute
@@ -8636,6 +8678,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPartnerBillingRoute: AdminPartnerBillingRoute,
   AdminPartnerMessagesRoute: AdminPartnerMessagesRoute,
   AdminPaymentsMpesaRoute: AdminPaymentsMpesaRoute,
+  AdminPrintersRoute: AdminPrintersRoute,
   AdminProcurementPolicyRoute: AdminProcurementPolicyRoute,
   AdminPublicExperienceRoute: AdminPublicExperienceRoute,
   AdminRegionalRoute: AdminRegionalRoute,

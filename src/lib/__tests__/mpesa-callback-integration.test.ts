@@ -9,6 +9,7 @@
  * payment was actually applied to its folio/order transaction.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Route } from "@/routes/api/public/mpesa.callback.$token";
 
 type Insert = Record<string, unknown>;
 
@@ -83,7 +84,6 @@ const payload = (resultCode: number) => ({
 });
 
 async function post(token: string, body: unknown) {
-  const { Route } = await import("@/routes/api/public/mpesa.callback.$token");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handler = (Route.options as any).server.handlers.POST;
   return (await handler({

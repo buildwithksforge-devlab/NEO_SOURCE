@@ -1,4 +1,5 @@
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireAccrualResult } from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -434,7 +435,7 @@ export function useRetryReceiptAccrual() {
         _receipt: receiptId,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Row;
+      return requireAccrualResult(data) as Row;
     },
     onSuccess: async (data, vars) => {
       await logAudit({
@@ -449,7 +450,11 @@ export function useRetryReceiptAccrual() {
       });
       invalidate();
       void qc.invalidateQueries({ queryKey: ["finance"] });
-      toast.success("Delivery posted to the ledger");
+      if (data["skipped"] === "zero_value") {
+        toast.message("No accrual required — this receipt has no accepted value.");
+      } else {
+        toast.success(`Delivery posted to the ledger — journal ${data["journal_id"]}`);
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });

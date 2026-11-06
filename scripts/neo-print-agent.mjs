@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+import { discoverPrinters } from './neo-printer-discovery.mjs';
 
 import {
   readFile,
@@ -568,7 +568,7 @@ async function deliver(job) {
   );
 }
 
-async function finish(
+export async function finish(
   config,
   job,
   outcome,
@@ -582,7 +582,7 @@ async function finish(
   });
 }
 
-async function processPrinter(
+export async function processPrinter(
   config,
   printer,
 ) {
@@ -694,6 +694,8 @@ async function main() {
 
   let printers = [];
   let refreshAt = 0;
+  let discoverAt = 0;
+  let discoveryWarningAt = 0;
 
   while (true) {
     try {
@@ -711,6 +713,23 @@ async function main() {
         );
       }
 
+      // Discovery is an independent owned-local operation. An older backend
+      // without this optional migration must not stop ordinary printing.
+      if (Date.now() >= discoverAt) {
+        discoverAt = Date.now() + config.pollMilliseconds;
+        try {
+          const { request } = await callApi(config, "discovery");
+          if (request) {
+            const result = await discoverPrinters(request.kind);
+            await callApi(config, "discovered", {request_id: request.request_id, result});
+          }
+        } catch (error) {
+          if (Date.now() >= discoveryWarningAt) {
+            console.warn(`Printer discovery unavailable: ${error.message}`);
+            discoveryWarningAt = Date.now() + 60000;
+          }
+        }
+      }
       let processed = false;
 
       for (const printer of printers) {
@@ -746,7 +765,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });

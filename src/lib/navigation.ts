@@ -92,6 +92,7 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Dashboard", to: "/workspace", icon: LayoutDashboard, roles: ALL },
       { label: "My Personal PIN", to: "/staff-display-code", icon: ShieldCheck, roles: ALL },
+      { label: "Device Authorisation", to: "/device-authorisation", icon: ShieldCheck, roles: ["owner"] },
       {
         label: "Staff Board",
         to: "/staff-board",
@@ -1211,12 +1212,7 @@ export const navigation: NavGroup[] = [
         roles: ["owner", "manager"],
       },
       { label: "Integration Centre", to: "/platform/integrations", icon: Plug, roles: ["owner"] },
-      {
-        label: "Printers & Print Queue",
-        to: "/platform/printers",
-        icon: Plug,
-        roles: ["owner", "manager"],
-      },
+
       {
         label: "History & Tenant Migration",
         to: "/platform/data-lifecycle",

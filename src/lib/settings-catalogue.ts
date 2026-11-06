@@ -835,6 +835,14 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     icon: Plug,
     entries: [
       {
+        label: "Printers & Print Queue",
+        description: "Discover local printers, assign operating stations and verify print delivery.",
+        icon: Plug,
+        scope: "Property",
+        to: "/admin/printers",
+        keywords: ["printer", "printing", "bluetooth", "usb", "wifi", "receipt", "kitchen"],
+      },
+      {
         label: "Providers",
         description: "Messaging and payment provider connections and status.",
         icon: Plug,

@@ -795,3 +795,12 @@ Generated from scripts/ux-audit.ts. Source classification only; this does not ce
 | `_shell.production-overview.tsx` | B | Composed specialist or administration route |
 | `_shell.staff-display-code.tsx` | B | Composed specialist or administration route |
 | `station-screen.tsx` | D | Specialist operational surface |
+
+
+## Local repair addition — 6 November 2026
+
+| Route | Class | Verification |
+| --- | --- | --- |
+| _shell.device-authorisation.tsx | A | Shared PageHeader, SectionCard and loading/empty/error states; server permission checks retained. |
+
+| admin.printers.tsx | B | Configuration Centre wrapper around the existing physical-printer surface; legacy bookmark redirects retained. |

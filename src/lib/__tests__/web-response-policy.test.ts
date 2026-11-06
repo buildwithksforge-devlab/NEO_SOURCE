@@ -1,0 +1,6 @@
+import {describe,expect,it} from 'vitest';
+import {protectDynamicResponse} from '@/lib/web-response-policy';
+describe('deployed dynamic response cache/privacy boundary',()=>{
+ it.each([200,401,403,500])('prevents shared/stale caching for status %s without dropping content',async status=>{const response=protectDynamicResponse(new Response('private or current document',{status,headers:{'Content-Type':'text/html','Cache-Control':'public,max-age=3600'}}));expect(response.status).toBe(status);expect(response.headers.get('Cache-Control')).toBe('private, no-store');expect(response.headers.get('CDN-Cache-Control')).toBe('no-store');expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');expect(await response.text()).toBe('private or current document');});
+ it('preserves redirect, authentication and cookie headers',()=>{const headers=new Headers({'Location':'/auth','WWW-Authenticate':'Bearer'});headers.append('Set-Cookie','one=1; HttpOnly');headers.append('Set-Cookie','two=2; HttpOnly');const response=protectDynamicResponse(new Response(null,{status:302,headers}));expect(response.headers.get('Location')).toBe('/auth');expect(response.headers.get('WWW-Authenticate')).toBe('Bearer');expect(response.headers.getSetCookie()).toHaveLength(2);});
+});

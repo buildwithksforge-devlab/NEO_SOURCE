@@ -11,7 +11,8 @@ export type Timestamps = {
   updatedAt: string;
 };
 
-export type BusinessType = "hotel" | "lodge" | "resort" | "restaurant" | "conference-centre" | "other";
+export type BusinessType =
+  "hotel" | "lodge" | "resort" | "restaurant" | "conference-centre" | "other";
 
 export const businessTypeLabels: Record<BusinessType, string> = {
   hotel: "Hotel",
@@ -72,14 +73,53 @@ export type BrandSettings = Timestamps & {
   logoText: string;
 };
 
-export type FontKey = "jakarta" | "inter" | "manrope" | "dm-sans" | "playfair";
+export type FontKey =
+  "jakarta" | "inter" | "manrope" | "dm-sans" | "playfair" | "noto-sans" | "source-sans" | "lora";
 
 export const fontOptions: { key: FontKey; label: string; stack: string; note: string }[] = [
-  { key: "jakarta", label: "Plus Jakarta Sans", stack: "'Plus Jakarta Sans', system-ui, sans-serif", note: "Warm geometric — default" },
-  { key: "inter", label: "Inter", stack: "'Inter', system-ui, sans-serif", note: "Neutral and dense" },
-  { key: "manrope", label: "Manrope", stack: "'Manrope', system-ui, sans-serif", note: "Rounded and modern" },
-  { key: "dm-sans", label: "DM Sans", stack: "'DM Sans', system-ui, sans-serif", note: "Friendly and compact" },
-  { key: "playfair", label: "Playfair Display", stack: "'Playfair Display', Georgia, serif", note: "Editorial luxury" },
+  {
+    key: "jakarta",
+    label: "Plus Jakarta Sans",
+    stack: "'Plus Jakarta Sans', system-ui, sans-serif",
+    note: "Warm geometric — default",
+  },
+  {
+    key: "inter",
+    label: "Inter",
+    stack: "'Inter', system-ui, sans-serif",
+    note: "Neutral and dense",
+  },
+  {
+    key: "manrope",
+    label: "Manrope",
+    stack: "'Manrope', system-ui, sans-serif",
+    note: "Rounded and modern",
+  },
+  {
+    key: "dm-sans",
+    label: "DM Sans",
+    stack: "'DM Sans', system-ui, sans-serif",
+    note: "Friendly and compact",
+  },
+  {
+    key: "playfair",
+    label: "Playfair Display",
+    stack: "'Playfair Display', Georgia, serif",
+    note: "Editorial luxury",
+  },
+  {
+    key: "noto-sans",
+    label: "Noto Sans",
+    stack: "'Noto Sans', system-ui, sans-serif",
+    note: "Clear everyday reading",
+  },
+  {
+    key: "source-sans",
+    label: "Source Sans 3",
+    stack: "'Source Sans 3', system-ui, sans-serif",
+    note: "Readable operational screens",
+  },
+  { key: "lora", label: "Lora", stack: "'Lora', Georgia, serif", note: "Warm serif headings" },
 ];
 
 export type RegionalSettings = Timestamps & {

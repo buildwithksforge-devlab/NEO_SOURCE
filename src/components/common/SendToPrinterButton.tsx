@@ -173,7 +173,7 @@ export function SendToPrinterButton({
             <p className="text-sm text-muted-foreground">
               No active printer matches this property and printer role. Configure
               the printer's property, role, station and connection in
-              Administration → Printers.
+              Configuration Centre → Integrations → Printers & Print Queue.
             </p>
           ) : (
             <div className="space-y-2">

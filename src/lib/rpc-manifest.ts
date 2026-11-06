@@ -14,6 +14,9 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_device_admin_list: "authenticated",
+  neo_device_activation_issue: "authenticated",
+  neo_staff_pin_admin: "authenticated",
   neo_delivery_mpesa_till_claim_submit: "authenticated",
   // Staff operations use authenticated sessions.
   neo_delivery_record_payment_v2: "authenticated",
@@ -25,6 +28,10 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_print_agent_claim: "service_role",
   neo_print_agent_finish: "service_role",
   neo_print_agent_printers: "service_role",
+  neo_print_agent_discovery_poll: "service_role",
+  neo_print_agent_discovery_report: "service_role",
+  neo_print_discovery_request: "authenticated",
+  neo_print_discovery_status: "authenticated",
 
   // Authenticated printer administrators pair and revoke property agents.
   neo_print_agent_register: "authenticated",
@@ -354,6 +361,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_laundry_retry_posting: "authenticated",
   neo_laundry_order_advance: "authenticated",
   neo_laundry_batch_create: "authenticated",
+  neo_laundry_order_create: "authenticated",
   neo_laundry_batch_assign: "authenticated",
   neo_laundry_batch_advance: "authenticated",
   neo_laundry_batch_return: "authenticated",
@@ -708,6 +716,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_delivery_rider_routes: "authenticated",
   neo_delivery_route_log: "authenticated",
   neo_delivery_staff_place_order: "authenticated",
+  neo_delivery_staff_place_order_once: "authenticated",
   neo_event_close_out: "authenticated",
   neo_gl_reclassify_settlement: "authenticated",
   neo_gl_settlement_review: "authenticated",

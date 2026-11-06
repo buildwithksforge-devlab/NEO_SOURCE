@@ -43,6 +43,7 @@ type Entry = { prefix: string; module: string; feature: string; action?: string 
  * feature while `/pos/orders/42` resolves to the orders feature.
  */
 export const ROUTE_CAPABILITIES: Entry[] = [
+  { prefix: "/device-authorisation", module: "administration", feature: "devices", action: "manage" },
 
   { prefix: "/production-displays", module: "kitchen", feature: "production", action: "manage" },
   // ---------- Front Office ----------
@@ -548,6 +549,7 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/platform/integrations", module: "integrations", feature: "centre" },
   { prefix: "/platform/migration", module: "migration", feature: "overview" },
   { prefix: "/platform/printers", module: "integrations", feature: "centre" },
+  { prefix: "/admin/printers", module: "integrations", feature: "centre" },
   {
     prefix: "/platform/data-lifecycle",
     module: "administration",

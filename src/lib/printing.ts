@@ -11,6 +11,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
+import {
+  rejectBusinessFailure,
+  requirePrintJobId,
+  requirePrintResult,
+  requireSavedRecord,
+} from "@/lib/durable-command-result";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>;
@@ -74,16 +80,14 @@ export type PosReceiptPrintState = {
   } | null;
 };
 
-async function rpc<T = unknown>(
-  name: string,
-  args?: Record<string, unknown>,
-): Promise<T> {
+async function rpc<T = unknown>(name: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await guardedRpc(sb, name, args ?? {});
 
   if (error) {
     throw new Error(error.message);
   }
 
+  rejectBusinessFailure(data, `${name} did not complete.`);
   return data as T;
 }
 
@@ -100,18 +104,13 @@ function useInvalidate() {
 /**
  * All configured printers visible to the current organisation.
  */
-export function usePrinters(
-  organizationId: string | null | undefined,
-) {
+export function usePrinters(organizationId: string | null | undefined) {
   return useQuery({
     queryKey: [KEY, "printers", organizationId ?? null],
     enabled: Boolean(organizationId),
 
     queryFn: async () => {
-      const { data, error } = await sb
-        .from("printer_profiles")
-        .select("*")
-        .order("name");
+      const { data, error } = await sb.from("printer_profiles").select("*").order("name");
 
       if (error) {
         throw new Error(error.message);
@@ -129,9 +128,7 @@ export function usePrinters(
  * POS order pages should use usePosReceiptPrintState() instead of loading the
  * organisation-wide print history.
  */
-export function usePrintJobs(
-  organizationId: string | null | undefined,
-) {
+export function usePrintJobs(organizationId: string | null | undefined) {
   return useQuery({
     queryKey: [KEY, "jobs", organizationId ?? null],
     enabled: Boolean(organizationId),
@@ -166,15 +163,9 @@ export function usePrintJobs(
  * This hook is only for presenting the correct action in the UI. It must not
  * be treated as the security boundary.
  */
-export function usePosReceiptPrintState(
-  orderId: string | null | undefined,
-) {
+export function usePosReceiptPrintState(orderId: string | null | undefined) {
   return useQuery<PosReceiptPrintState>({
-    queryKey: [
-      KEY,
-      "pos-receipt-state",
-      orderId ?? null,
-    ],
+    queryKey: [KEY, "pos-receipt-state", orderId ?? null],
 
     enabled: Boolean(orderId),
 
@@ -188,9 +179,7 @@ export function usePosReceiptPrintState(
 
       const { data, error } = await sb
         .from("print_jobs")
-        .select(
-          "id, status, is_duplicate, completed_at",
-        )
+        .select("id, status, is_duplicate, completed_at")
         .eq("order_id", orderId)
         .eq("document_type", "pos_receipt")
         .eq("status", "completed")
@@ -212,17 +201,14 @@ export function usePosReceiptPrintState(
             status: String(row.status),
             is_duplicate: Boolean(row.is_duplicate),
             completed_at:
-              row.completed_at === null ||
-              row.completed_at === undefined
+              row.completed_at === null || row.completed_at === undefined
                 ? null
                 : String(row.completed_at),
           }
         : null;
 
       return {
-        hasCompletedPrint: Boolean(
-          latest?.completed_at,
-        ),
+        hasCompletedPrint: Boolean(latest?.completed_at),
         latest,
       };
     },
@@ -240,21 +226,20 @@ export function useSavePrinter() {
       const { id, ...values } = input;
 
       const query = id
-        ? sb
-            .from("printer_profiles")
-            .update(values)
-            .eq("id", id)
-        : sb
-            .from("printer_profiles")
-            .insert(values);
+        ? sb.from("printer_profiles").update(values).eq("id", id)
+        : sb.from("printer_profiles").insert(values);
 
-      const { error } = await query;
+      const { data, error } = await query.select("id").maybeSingle();
 
       if (error) {
         throw new Error(error.message);
       }
 
-      return id ?? null;
+      return requireSavedRecord(
+        data,
+        ["id"],
+        "The printer profile was not saved — no persisted ID was returned.",
+      )["id"];
     },
 
     onSuccess: () => {
@@ -279,36 +264,23 @@ export function useQueuePrint() {
   const invalidate = useInvalidate();
 
   return useMutation({
-    mutationFn: (input: {
-      printer: string;
-      documentType: string;
-      title?: string;
-      payload?: Row;
-    }) =>
+    mutationFn: (input: { printer: string; documentType: string; title?: string; payload?: Row }) =>
       rpc<string>("neo_print_enqueue", {
         _printer: input.printer,
         _document_type: input.documentType,
         _title: input.title ?? null,
         _payload: input.payload ?? {},
-      }),
+      }).then(requirePrintJobId),
 
-    onSuccess: () => {
+    onSuccess: (jobId) => {
       invalidate();
 
-      toast.success(
-        "Queued — record the result once you know whether it printed",
-      );
+      toast.success(`Queued ${jobId} — record the result once you know whether it printed`);
     },
 
     onError: (e: Error) => {
-      if (
-        e.message.includes(
-          "receipt_reprint_permission_required",
-        )
-      ) {
-        toast.error(
-          "This receipt has already been printed. Reprint permission is required.",
-        );
+      if (e.message.includes("receipt_reprint_permission_required")) {
+        toast.error("This receipt has already been printed. Reprint permission is required.");
         return;
       }
 
@@ -327,58 +299,32 @@ export function useRecordPrintResult() {
   const invalidate = useInvalidate();
 
   return useMutation({
-    mutationFn: (input: {
-      job: string;
-      success: boolean;
-      error?: string;
-    }) =>
+    mutationFn: (input: { job: string; success: boolean; error?: string }) =>
       rpc<Row>("neo_print_record_result", {
         _job: input.job,
         _success: input.success,
         _error: input.error ?? null,
-      }),
+      }).then(requirePrintResult),
 
     onSuccess: (result) => {
       invalidate();
 
       if (result?.["failed_over"]) {
-        toast.warning(
-          "Retries exhausted — sent to the backup printer",
-        );
-      } else if (
-        result?.["status"] === "queued"
-      ) {
-        toast.message(
-          "Failed — queued for another attempt",
-        );
-      } else if (
-        result?.["status"] === "failed"
-      ) {
-        toast.error(
-          "Failed with no backup printer configured",
-        );
-      } else if (
-        result?.["is_duplicate"] === true
-      ) {
-        toast.success(
-          "Receipt reprint recorded as printed",
-        );
+        toast.warning("Retries exhausted — sent to the backup printer");
+      } else if (result?.["status"] === "queued") {
+        toast.message("Failed — queued for another attempt");
+      } else if (result?.["status"] === "failed") {
+        toast.error("Failed with no backup printer configured");
+      } else if (result?.["is_duplicate"] === true) {
+        toast.success("Receipt reprint recorded as printed");
       } else {
-        toast.success(
-          "Recorded as printed",
-        );
+        toast.success("Recorded as printed");
       }
     },
 
     onError: (e: Error) => {
-      if (
-        e.message.includes(
-          "receipt_reprint_permission_required",
-        )
-      ) {
-        toast.error(
-          "Reprint permission is required for this receipt.",
-        );
+      if (e.message.includes("receipt_reprint_permission_required")) {
+        toast.error("Reprint permission is required for this receipt.");
         return;
       }
 
@@ -400,7 +346,7 @@ export function useRetryPrintJob() {
     mutationFn: (job: string) =>
       rpc("neo_print_retry", {
         _job: job,
-      }),
+      }).then(requirePrintJobId),
 
     onSuccess: () => {
       invalidate();
@@ -408,14 +354,8 @@ export function useRetryPrintJob() {
     },
 
     onError: (e: Error) => {
-      if (
-        e.message.includes(
-          "receipt_reprint_permission_required",
-        )
-      ) {
-        toast.error(
-          "Reprint permission is required for this receipt.",
-        );
+      if (e.message.includes("receipt_reprint_permission_required")) {
+        toast.error("Reprint permission is required for this receipt.");
         return;
       }
 
@@ -449,24 +389,15 @@ export function usePrinterStations(
   _organizationId: string | null | undefined,
   branchId?: string | null,
 ) {
-  return useScopedStations(
-    null,
-    branchId,
-  );
+  return useScopedStations(null, branchId);
 }
 /**
  * Trusted property computers registered to run the local print agent.
  * Raw bearer tokens are never returned by the database.
  */
-export function usePrintAgents(
-  organizationId: string | null | undefined,
-) {
+export function usePrintAgents(organizationId: string | null | undefined) {
   return useQuery({
-    queryKey: [
-      KEY,
-      "agents",
-      organizationId ?? null,
-    ],
+    queryKey: [KEY, "agents", organizationId ?? null],
 
     enabled: Boolean(organizationId),
     refetchInterval: 15000,
@@ -474,9 +405,7 @@ export function usePrintAgents(
     queryFn: async () => {
       const { data, error } = await sb
         .from("neo_print_agents")
-        .select(
-          "id, organization_id, branch_id, name, active, last_seen_at, created_at",
-        )
+        .select("id, organization_id, branch_id, name, active, last_seen_at, created_at")
         .order("created_at", {
           ascending: false,
         });
@@ -498,22 +427,20 @@ export function useRegisterPrintAgent() {
   const invalidate = useInvalidate();
 
   return useMutation({
-    mutationFn: (input: {
-      branch: string;
-      name: string;
-      tokenHash: string;
-    }) =>
+    mutationFn: (input: { branch: string; name: string; tokenHash: string }) =>
       rpc<string>("neo_print_agent_register", {
         _branch: input.branch,
         _name: input.name,
         _token_hash: input.tokenHash,
+      }).then((value) => {
+        if (!value || typeof value !== "string")
+          throw new Error("The property agent was not saved.");
+        return value;
       }),
 
     onSuccess: () => {
       invalidate();
-      toast.success(
-        "Property print agent registered",
-      );
+      toast.success("Property print agent registered");
     },
 
     onError: (error: Error) => {
@@ -529,17 +456,66 @@ export function useRevokePrintAgent() {
     mutationFn: (agent: string) =>
       rpc<string>("neo_print_agent_revoke", {
         _agent: agent,
+      }).then((value) => {
+        if (value !== agent) throw new Error("The agent revocation was not confirmed.");
+        return value;
       }),
 
     onSuccess: () => {
       invalidate();
-      toast.success(
-        "Print-agent access revoked",
-      );
+      toast.success("Print-agent access revoked");
     },
 
     onError: (error: Error) => {
       toast.error(error.message);
     },
+  });
+}
+export type DiscoveredPrinter = {
+  name: string;
+  address: string;
+  connection_type: "windows" | "network" | "unsupported";
+  transport?: string;
+  source?: string;
+  note?: string;
+};
+export type PrinterDiscoveryStatus = {
+  agent_id: string;
+  branch_id: string;
+  last_seen_at: string | null;
+  request_id: string | null;
+  reported_request_id: string | null;
+  requested_at: string | null;
+  reported_at: string | null;
+  kind: string | null;
+  result: { printers: DiscoveredPrinter[]; notes: string[] } | null;
+};
+export function usePrinterDiscovery(agent: string | null) {
+  return useQuery({
+    queryKey: [KEY, "discovery", agent],
+    enabled: Boolean(agent),
+    queryFn: () => rpc<PrinterDiscoveryStatus>("neo_print_discovery_status", { _agent: agent }),
+    refetchInterval: 2500,
+  });
+}
+export function useRequestPrinterDiscovery() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (input: { agent: string; kind: string }) => {
+      const data = await rpc("neo_print_discovery_request", {
+        _agent: input.agent,
+        _kind: input.kind,
+      });
+      if (
+        !data ||
+        typeof data !== "object" ||
+        (data as Row)["ok"] !== true ||
+        !(data as Row)["request_id"]
+      )
+        throw new Error("The printer search was not saved.");
+      return data;
+    },
+    onSuccess: () => invalidate(),
+    onError: (error: Error) => toast.error(error.message),
   });
 }

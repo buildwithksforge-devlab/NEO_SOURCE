@@ -1,10 +1,11 @@
-﻿/**
+/**
  * Phase 14 â€” Delivery data layer.
  * Every write that affects money, status or ownership goes through a
  * SECURITY DEFINER database function so the browser can never dictate
  * prices, fees, order status, rider assignment or payment outcome.
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireSavedRecord } from "@/lib/durable-command-result";
 import { forgetFailedAction, rememberIfReauthNeeded } from "@/lib/retry-after-reauth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -389,6 +390,7 @@ export function useStaffPlaceDeliveryOrder() {
   return useMutation({
     mutationFn: async (input: {
       branchId: string;
+      idempotencyKey: string;
       contactName: string;
       contactPhone: string;
       fulfilment: "delivery" | "pickup";
@@ -398,7 +400,8 @@ export function useStaffPlaceDeliveryOrder() {
       paymentMethod: string;
       notes?: string | null;
     }) => {
-      const { data, error } = await guardedRpc(sb, "neo_delivery_staff_place_order", {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_staff_place_order_once", {
+        _idempotency_key: input.idempotencyKey,
         _branch: input.branchId,
         _contact_name: input.contactName,
         _contact_phone: input.contactPhone,
@@ -410,10 +413,11 @@ export function useStaffPlaceDeliveryOrder() {
         _notes: input.notes ?? null,
       });
       if (error) throw new Error(error.message);
-      return data as {
+      return requireSavedRecord(data, ["delivery_order_id", "order_number"],
+        "The delivery order was not saved — no persisted order reference was returned.") as {
         delivery_order_id: string;
         order_number: string;
-        pin: string;
+        pin_issued: boolean;
         delivery_fee: number;
         grand_total: number;
         eta_minutes: number;
@@ -423,7 +427,7 @@ export function useStaffPlaceDeliveryOrder() {
     onSuccess: async (res) => {
       // The PIN is never shown to staff â€” it goes to the customer directly and
       // appears on their order tracking screen.
-      toast.success(`Order ${res.order_number} created â€” collection PIN sent to the customer`);
+      toast.success(`Order ${res.order_number} created — collection PIN issued`);
       await audit("delivery.order.create-assisted", "delivery_orders", res.delivery_order_id, {
         order_number: res.order_number,
         grand_total: res.grand_total,

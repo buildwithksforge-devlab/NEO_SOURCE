@@ -18,7 +18,9 @@ function walk(dir: string, out: string[] = []): string[] {
 
 function callSites(): Map<string, string[]> {
   const found = new Map<string, string[]>();
-  for (const file of walk(SRC)) {
+  // The staff-PIN broker moved to an Edge Function; retain its service-role manifest check.
+  const files = [...walk(SRC), ...walk(join(process.cwd(), "supabase/functions/neo-staff-pin-login"))];
+  for (const file of files) {
     const source = readFileSync(file, "utf8");
     // Client calls go through `guardedRpc(client, "name")` or the `callRpc`
     // helper; token-authenticated server routes use `trustedRpc`. All
