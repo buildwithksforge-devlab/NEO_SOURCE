@@ -1,0 +1,18 @@
+[
+  {
+    "signature": "neo_cash_till_context(uuid)",
+    "md5": "0056bf3ebc240af86eec6901d53680c2"
+  },
+  {
+    "signature": "neo_cash_request_payment(uuid,numeric,text,text,text)",
+    "md5": "33a7c2397ac3e245cb9d883f0990ebda"
+  },
+  {
+    "signature": "neo_cash_request_pos_payment(uuid,numeric,text,text,text)",
+    "md5": "ca4a6bcb4641691751f5de1c70761206"
+  },
+  {
+    "signature": "neo_cash_settle_request(uuid)",
+    "md5": "8536b8f2fb47d499c37bb423cc5373b2"
+  }
+]

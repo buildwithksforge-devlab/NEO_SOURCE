@@ -84,6 +84,13 @@ export function PrinterDiscoveryPanel({
         require an installed Windows queue; direct output here is for compatible ESC/POS thermal
         printers.
       </p>
+      {!agents.some(item => item.active && item.branch_id) ? (
+        <p role="status" className="mt-2 text-sm">
+          No property computer is paired. Pair a computer in the print-agent section, download its
+          private configuration and start the NEØ print agent on that computer before searching.
+          Saving a printer name alone does not connect a printer.
+        </p>
+      ) : null}
       {status.isError ? (
         <ErrorState error={status.error} onRetry={() => void status.refetch()} />
       ) : null}

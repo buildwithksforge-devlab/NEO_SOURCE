@@ -369,7 +369,7 @@ function IntelligencePage() {
             reason={data.reason === "no_organisation" ? "setup" : "denied"}
             subject="NEØ Intelligence"
           />
-        ) : myWork.isLoading ? (
+        ) : myWork.isPending ? (
           <LoadingState variant="cards" rows={3} />
         ) : myWork.error ? (
           <ErrorState error={myWork.error} title="My work unavailable" />
@@ -509,10 +509,12 @@ function IntelligencePage() {
           ) : null}
 
           {mode === "my-work" ? (
-            myWork.isLoading ? (
+            myWork.isPending ? (
               <LoadingState variant="cards" rows={3} />
             ) : myWork.error ? (
               <ErrorState error={myWork.error} title="My work unavailable" />
+            ) : myWork.data?.authorised !== true ? (
+              <AccessDeniedPanel reason="denied" subject="My work" />
             ) : (
               <MyWorkBoard
                 items={myWork.data?.items ?? []}

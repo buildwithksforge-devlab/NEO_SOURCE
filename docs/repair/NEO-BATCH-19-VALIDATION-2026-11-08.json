@@ -1,0 +1,80 @@
+{
+  "date": "2026-11-08",
+  "batch": 19,
+  "passed": 4065,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousUniquePasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "priorApplication",
+      "previousUniquePasses": 4034,
+      "retained": 4034,
+      "regressions": []
+    }
+  ],
+  "typecheck": "passed",
+  "productionBuild": "passed",
+  "productionServerSmoke": "passed",
+  "freshIsolatedSqlChecks": 88,
+  "freshIsolatedByArea": {
+    "document": 12,
+    "liveLaundry": 22,
+    "liveConsumption": 54
+  },
+  "newTaskChecksIncludedInFullSuite": 21,
+  "initialBroadRun": {
+    "passed": 4064,
+    "failed": 1,
+    "skipped": 155,
+    "issue": "Filesystem-wide audit contract exceeded normal runtime under concurrent build/typecheck load; unchanged focused retest passed in 1133ms. Fresh full suite with 30s test limit passed all checks."
+  },
+  "operationalFinancialWrites": false,
+  "catalogMetadataWrites": "Two exact QA menu records unpublished/disabled, with audit entries",
+  "deployedSqlFunctionDefinitions": 19,
+  "webRelease": {
+    "passed": true,
+    "origin": "https://neo-preview.neo-hospitality.workers.dev",
+    "sourceId": "fc9e4adcd8389bde",
+    "cloudflareVersion": "97d6c983-a57c-4c64-8d6c-39067a103527",
+    "rows": [
+      {
+        "path": "/",
+        "status": 200,
+        "location": null,
+        "cacheControl": "private, no-store",
+        "buildId": "fc9e4adcd8389bde"
+      },
+      {
+        "path": "/auth",
+        "status": 200,
+        "location": null,
+        "cacheControl": "private, no-store",
+        "buildId": "fc9e4adcd8389bde"
+      },
+      {
+        "path": "/pos/orders",
+        "status": 200,
+        "location": null,
+        "cacheControl": "private, no-store",
+        "buildId": "fc9e4adcd8389bde",
+        "clientGuardVerifiedDestination": "/auth?redirect=%2Fpos%2Forders",
+        "routeSsr": false
+      }
+    ],
+    "browser": {
+      "authFormRendered": true,
+      "emailInputs": 1,
+      "passwordInputs": 1,
+      "consoleErrors": 0,
+      "horizontalOverflow": false,
+      "sourceId": "fc9e4adcd8389bde"
+    },
+    "scope": "Public HTTP and isolated sign-in browser retest only; no login, password reset, order, payment or operational workflow was submitted."
+  }
+}

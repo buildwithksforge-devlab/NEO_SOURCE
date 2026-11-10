@@ -1,3 +1,4 @@
+import {invalidatePaymentViews} from "@/lib/payment-view-refresh";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActivePropertyFilter, useWriteBranchId } from "@/lib/branch-filter";
 import { toast } from "sonner";
@@ -11,7 +12,10 @@ import { useScopedDepartments, useScopedWorkerOptions } from "@/lib/scoped-optio
 
 function useInvalidate(keys: string[]) {
   const qc = useQueryClient();
-  return () => keys.forEach((k) => void qc.invalidateQueries({ queryKey: [k] }));
+  return () => {
+    if (keys.some(key=>key === 'pms' || key === 'credit')) void invalidatePaymentViews(qc);
+    else keys.forEach(key=>void qc.invalidateQueries({queryKey:[key]}));
+  };
 }
 
 // The generated RPC union is large enough to blow the type instantiation

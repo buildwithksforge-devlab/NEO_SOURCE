@@ -1,3 +1,4 @@
+import { roomQuoteBreakdown } from '@/lib/guest-presentation';
 import { useMemo, useState } from "react";
 import { NeoDatePicker } from "@/components/common/DatePicker";
 import { canonicalLink, canonicalUrl, robotsDirective } from "@/lib/route-visibility";
@@ -64,7 +65,7 @@ function BookPage() {
   const [children, setChildren] = useState(0);
   const [requests, setRequests] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<{ reference: string; total: number } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ reference: string; total: number; quote: RoomOffer } | null>(null);
   // One intent per search, so a double tap or a refresh returns the same stay.
   const intentKey = useMemo(
     () => `${arrival}:${departure}:${adults}:${children}:${selected ?? ""}`,
@@ -88,6 +89,8 @@ function BookPage() {
   const primary = ws.primary_color || brandFallback.primary;
   const chosen = (offers.data ?? []).find((o) => o.room_type_id === selected) ?? null;
 
+  const breakdown = chosen ? roomQuoteBreakdown(chosen) : null;
+
   async function confirm(offer: RoomOffer) {
     if (!ws.branch_id) return;
     try {
@@ -101,7 +104,7 @@ function BookPage() {
         specialRequests: requests,
         intentKey: `${intentKey}:${offer.room_type_id}`,
       });
-      setConfirmed({ reference: result.confirmation_number, total: Number(result.total_amount ?? 0) });
+      setConfirmed({ reference: result.confirmation_number, total: result.total_amount, quote: { ...offer, total_amount: result.total_amount } });
       toast.success(`Stay confirmed — ${result.confirmation_number}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not confirm your stay");
@@ -143,9 +146,13 @@ function BookPage() {
               {children ? ` · ${children} child${children === 1 ? "" : "ren"}` : ""}
             </p>
             <p className="mt-2 text-base font-semibold" style={{ color: primary }}>
-              {money(confirmed.total, chosen?.currency ?? "KES")}
+              {money(confirmed.total, confirmed.quote.currency)}
             </p>
           </div>
+          {(() => { const summary = roomQuoteBreakdown(confirmed.quote); return summary ? <dl className="mt-3 space-y-1 text-sm">
+            <div className="flex justify-between gap-3"><dt>Room rate × {confirmed.quote.nights} nights</dt><dd>{money(summary.base, confirmed.quote.currency)}</dd></div>
+            {summary.adjustment !== 0 ? <div className="flex justify-between gap-3"><dt>{summary.adjustment > 0 ? "Other quoted charges" : "Quoted adjustments"}</dt><dd>{money(summary.adjustment, confirmed.quote.currency)}</dd></div> : null}
+          </dl> : null; })()}
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/guest/$hotelSlug/trips" params={{ hotelSlug }}>
               <BrandButton>View my trips</BrandButton>
@@ -285,6 +292,11 @@ function BookPage() {
 
       {chosen ? (
         <GuestSection title="Confirm your stay" description="We will hold this room for your arrival.">
+          {breakdown ? <dl className="mb-4 space-y-2 rounded-xl border p-4 text-sm">
+            <div className="flex justify-between gap-3"><dt>Room rate × {chosen.nights} night{chosen.nights === 1 ? "" : "s"}</dt><dd>{money(breakdown.base, chosen.currency)}</dd></div>
+            {breakdown.adjustment !== 0 ? <div className="flex justify-between gap-3"><dt>{breakdown.adjustment > 0 ? "Other quoted charges" : "Quoted adjustments"}</dt><dd>{money(breakdown.adjustment, chosen.currency)}</dd></div> : null}
+            <div className="flex justify-between gap-3 font-semibold"><dt>Total for your stay</dt><dd>{money(breakdown.total, chosen.currency)}</dd></div>
+          </dl> : null}
           <Label htmlFor="requests">Anything we should know?</Label>
           <Textarea
             id="requests"

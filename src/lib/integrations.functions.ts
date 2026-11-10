@@ -16,14 +16,8 @@ type Rpc = {
   from: (t: string) => any;
 };
 
-export type ProviderTestResult = {
-  provider: string;
-  status: "passed" | "failed" | "not_configured" | "unsupported";
-  detail: string;
-  environment: string;
-  durationMs: number;
-  recorded: boolean;
-};
+import type { ProviderTestResult } from "@/lib/integration-test-evidence";
+export type { ProviderTestResult } from "@/lib/integration-test-evidence";
 
 async function requestOrigin(): Promise<string> {
   try {
@@ -35,9 +29,24 @@ async function requestOrigin(): Promise<string> {
   }
 }
 
-async function organisationOf(client: Rpc, userId: string): Promise<string | null> {
-  const profile = await client.from("profiles").select("organization_id").eq("id", userId).maybeSingle();
-  return (profile?.data?.organization_id as string | undefined) ?? null;
+/** Match the installed test-recording authority before loading credentials or probing. */
+async function assertIntegrationTestAuthority(client: Rpc): Promise<string> {
+  const org = await client.rpc("current_org_id");
+  if (org.error || typeof org.data !== "string" || !org.data.trim()) throw new Error("No active organisation is available for this integration test.");
+  const admin = await client.rpc("is_org_admin");
+  if (!admin.error && admin.data === true) return org.data;
+  const permissions = await Promise.all([
+    client.rpc("has_permission", { _module: "integrations", _feature: "providers", _action: "edit" }),
+    client.rpc("has_permission", { _module: "administration", _feature: "workspace", _action: "edit" }),
+  ]);
+  if (!permissions.some((r) => !r.error && r.data === true)) throw new Error("You do not have permission to test integrations.");
+  return org.data;
+}
+
+async function recordTest(client: Rpc, args: Record<string, unknown>) {
+  const { data, error } = await client.rpc("neo_integration_record_test", args);
+  if (error) throw new Error("The integration test ran, but its evidence could not be saved. " + error.message);
+  if (data?.["recorded"] !== true || data?.["status"] !== args["_status"]) throw new Error("The integration test evidence was not confirmed by the database. Refresh before trying again.");
 }
 
 /** Present-or-absent only; the value itself never leaves the server. */
@@ -47,32 +56,34 @@ function secretPresent(name: string): boolean {
 
 export const runProviderTest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { providerCode: string; testType?: string | null }) => ({
-    providerCode: String(input?.providerCode ?? "").trim(),
-    testType: input?.testType ? String(input.testType).trim() : null,
-  }))
+  .inputValidator((input: { providerCode: string; testType?: string | null }) => {
+    const providerCode = String(input?.providerCode ?? "").trim();
+    if (!["daraja", "resend", "africas_talking", "lovable_ai", "card_terminal", "qr_payments"].includes(providerCode)) throw new Error("Choose a supported integration provider.");
+    const testType = input?.testType ? String(input.testType).trim() : null;
+    if (testType && !["connection", "authentication"].includes(testType)) throw new Error("This provider check cannot certify the requested test type.");
+    return { providerCode, testType };
+  })
   .handler(async ({ data, context }): Promise<ProviderTestResult> => {
     const client = context.supabase as unknown as Rpc;
     const started = Date.now();
+    const organizationId = await assertIntegrationTestAuthority(client);
     const provider = data.providerCode;
 
     let status: ProviderTestResult["status"] = "unsupported";
     let detail = "No safe automated test exists for this provider yet.";
     let environment = "sandbox";
-    let testType = data.testType ?? "connection";
+    let testType = "configuration";
 
+    try {
     if (provider === "daraja") {
-      const organizationId = await organisationOf(client, context.userId);
-      const { loadMpesaCredentials, darajaToken } = organizationId
-        ? await import("@/lib/mpesa.server")
-        : { loadMpesaCredentials: null as never, darajaToken: null as never };
-      const creds = organizationId ? await loadMpesaCredentials(organizationId) : null;
+      const { loadMpesaCredentials, darajaToken } = await import("@/lib/mpesa.server");
+      const creds = await loadMpesaCredentials(organizationId);
       if (!creds) {
         status = "not_configured";
         detail = "Paybill/till number, consumer key, consumer secret and passkey must all be saved first.";
       } else {
         environment = creds.environment;
-        testType = data.testType ?? "authentication";
+        testType = "authentication";
         const token = await darajaToken(creds);
         status = token.ok ? "passed" : "failed";
         detail = token.ok ? "Safaricom Daraja issued an access token." : token.detail;
@@ -89,14 +100,19 @@ export const runProviderTest = createServerFn({ method: "POST" })
         ? "Credentials present. Sending a real SMS is the only true test, so it is not run automatically."
         : "The Africa's Talking username and API key are not present on the server.";
     } else if (provider === "lovable_ai") {
-      status = secretPresent("LOVABLE_API_KEY") ? "passed" : "not_configured";
-      detail = status === "passed" ? "AI gateway key is present." : "No AI gateway key is present.";
+      status = secretPresent("LOVABLE_API_KEY") ? "unsupported" : "not_configured";
+      detail = status === "unsupported" ? "AI gateway key is present, but no provider response has been verified. Configuration presence is not a connection test." : "No AI gateway key is present.";
     } else if (provider === "card_terminal" || provider === "qr_payments") {
       status = "not_configured";
       detail = "No processor or terminal is connected, so nothing can be tested. This is an external dependency.";
     }
 
-    const { data: recorded } = await client.rpc("neo_integration_record_test", {
+    } catch {
+      status = "failed";
+      detail = "Provider verification could not be completed. Check the server/provider configuration and try again.";
+    }
+
+    await recordTest(client, {
       _provider: provider,
       _environment: environment,
       _test_type: testType,
@@ -111,7 +127,7 @@ export const runProviderTest = createServerFn({ method: "POST" })
       detail,
       environment,
       durationMs: Date.now() - started,
-      recorded: Boolean(recorded?.["recorded"]),
+      recorded: true,
     };
   });
 
@@ -124,6 +140,7 @@ export const testMpesaCallbackEndpoint = createServerFn({ method: "POST" })
   .handler(async ({ context }): Promise<ProviderTestResult> => {
     const client = context.supabase as unknown as Rpc;
     const started = Date.now();
+    const organizationId = await assertIntegrationTestAuthority(client);
     const configured = (process.env["PUBLIC_SITE_URL"] ?? process.env["SITE_URL"] ?? "").trim();
     const base = (configured || (await requestOrigin())).replace(/\/+$/, "");
 
@@ -134,25 +151,28 @@ export const testMpesaCallbackEndpoint = createServerFn({ method: "POST" })
       status = "not_configured";
       detail = "This workspace has no public address, so Safaricom would have nowhere to call.";
     } else {
-      const probe = `${base}/api/public/mpesa/callback/neo-endpoint-probe-invalid-token`;
+      const probe = `${base}/api/public/mpesa/callback/neo-endpoint-probe-${crypto.randomUUID()}`;
       try {
         const res = await fetch(probe, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ probe: true }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(10_000),
         });
-        if (res.status === 401) {
+        const responseBody = await res.text();
+        if (res.status === 401 && responseBody.trim() === "Invalid callback token") {
           status = "passed";
           detail = "The callback endpoint is live and refused an unknown token, exactly as it should.";
         } else {
-          detail = `The callback endpoint answered ${res.status} to an unknown token; it should refuse with 401.`;
+          detail = `The callback endpoint answered ${res.status}, but its expected invalid-token rejection was not verified.`;
         }
       } catch (error) {
         detail = `The callback endpoint could not be reached: ${(error as Error).message}`;
       }
     }
 
-    const { data: recorded } = await client.rpc("neo_integration_record_test", {
+    await recordTest(client, {
       _provider: "daraja",
       _environment: "sandbox",
       _test_type: "webhook_callback",
@@ -167,6 +187,6 @@ export const testMpesaCallbackEndpoint = createServerFn({ method: "POST" })
       detail,
       environment: "sandbox",
       durationMs: Date.now() - started,
-      recorded: Boolean(recorded?.["recorded"]),
+      recorded: true,
     };
   });

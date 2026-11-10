@@ -1,3 +1,5 @@
+import {propertyDateTimeToIso} from '@/lib/property-clock';
+import {recordFieldsError} from '@/lib/record-field-validation';
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +50,7 @@ export function RecordDialog({
   extraInvalid,
   onOpenChange,
   contentClassName,
+  timeZone,
 }: {
   title: string;
   description?: string;
@@ -62,8 +65,11 @@ export function RecordDialog({
   extraInvalid?: boolean;
   onOpenChange?: (open: boolean) => void;
   contentClassName?: string;
+  timeZone?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [values, setValues] = useState<Values>(() => initialValues(fields));
 
   useEffect(() => {
@@ -71,6 +77,7 @@ export function RecordDialog({
   }, [open, fields]);
 
   const change = (next: boolean) => {
+    setProblem(null);
     setOpen(next);
     onOpenChange?.(next);
   };
@@ -80,7 +87,10 @@ export function RecordDialog({
   const missing = fields.filter((f) => f.required && !values[f.name]?.trim());
 
   async function submit() {
-    if (missing.length > 0) return;
+    if (missing.length > 0 || pending || submitting) return;
+    const message = recordFieldsError(fields, values);
+    if (message) { setProblem(message); return; }
+    try {
     const payload: Record<string, unknown> = {};
     for (const f of fields) {
       const raw = values[f.name]?.trim() ?? "";
@@ -88,10 +98,13 @@ export function RecordDialog({
         payload[f.name] = null;
         continue;
       }
-      payload[f.name] = f.type === "number" ? Number(raw) : raw;
+      payload[f.name] = f.type === "number" ? Number(raw) : f.type === "datetime-local" && timeZone !== undefined ? propertyDateTimeToIso(raw, timeZone) : raw;
     }
+    setSubmitting(true);
     await onSubmit(payload);
     change(false);
+    } catch (error) { setProblem(error instanceof Error ? error.message : "The record could not be saved."); }
+    finally { setSubmitting(false); }
   }
 
   return (
@@ -143,11 +156,13 @@ export function RecordDialog({
           ))}
         </div>
         {extra ? <div className="mt-4">{extra}</div> : null}
+        {timeZone !== undefined ? <p className="text-xs text-muted-foreground">{timeZone ? `Times are in ${timeZone}.` : "Choose a property and wait for its timezone before saving."}</p> : null}
+        {problem ? <p role="alert" className="text-sm text-destructive">{problem}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => change(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={pending || missing.length > 0 || Boolean(extraInvalid)}>
+          <Button onClick={() => void submit()} disabled={pending || submitting || missing.length > 0 || Boolean(extraInvalid)}>
             {submitLabel}
           </Button>
         </DialogFooter>

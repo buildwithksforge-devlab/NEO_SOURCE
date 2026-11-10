@@ -1,0 +1,17 @@
+{
+  "validationMode": "Full suite plus focused rerun after test-only correction; application code unchanged between runs",
+  "initialFullRun": {
+    "passed": 3704,
+    "failed": 1,
+    "skipped": 155
+  },
+  "focusedRerun": true,
+  "baselinePassed": 3667,
+  "currentPassed": 3705,
+  "currentFailed": 0,
+  "currentSkipped": 155,
+  "previousPassedIdentities": 3667,
+  "retainedPreviousPasses": 3667,
+  "regressions": [],
+  "success": true
+}

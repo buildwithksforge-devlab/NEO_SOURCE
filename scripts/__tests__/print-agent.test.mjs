@@ -246,6 +246,38 @@ test("discovery merges installed queues with network results without inventing p
   assert.equal(result.printers.length, 2);
   assert.deepEqual(result.notes, ["installed only", "advertised only"]);
 });
+
+test("network discovery resolves a PTR-only printer reply through separate SRV and address replies", async () => {
+  const name = value => Buffer.concat([...value.split('.').map(label => Buffer.concat([Buffer.from([label.length]), Buffer.from(label)])), Buffer.from([0])]);
+  const packet = (owner, type, data) => {
+    const header = Buffer.alloc(12); header.writeUInt16BE(0x8400, 2); header.writeUInt16BE(1, 6);
+    const rr = Buffer.alloc(10); rr.writeUInt16BE(type); rr.writeUInt16BE(1, 2); rr.writeUInt32BE(120, 4); rr.writeUInt16BE(data.length, 8);
+    return Buffer.concat([header, name(owner), rr, data]);
+  };
+  let sends = 0;
+  class Socket extends EventEmitter {
+    bind(_port, callback) { callback(); }
+    close() {}
+    send(bytes, port, host, callback) {
+      assert.equal(port, 5353); assert.equal(host, '224.0.0.251'); sends++;
+      if (sends === 1) this.emit('message', packet('_pdl-datastream._tcp.local', 12, name('Thermal._pdl-datastream._tcp.local')));
+      else if (sends === 2) {
+        assert.equal(bytes.readUInt16BE(bytes.length - 4), 33);
+        const srv = Buffer.alloc(6); srv.writeUInt16BE(9100, 4);
+        this.emit('message', packet('Thermal._pdl-datastream._tcp.local', 33, Buffer.concat([srv, name('thermal.local')])));
+      } else if (sends === 3) {
+        assert.equal(bytes.readUInt16BE(bytes.length - 4), 1);
+        const response = packet('thermal.local', 1, Buffer.from([192,168,1,52]));
+        this.emit('message', response); this.emit('message', response);
+      } else assert.fail('Repeated replies must not cause a query loop');
+      callback();
+    }
+  }
+  const result = await discoverNetwork({duration: 10, socketFactory: () => new Socket()});
+  assert.equal(sends, 3);
+  assert.equal(result.printers.length, 1);
+  assert.equal(result.printers[0].address, '192.168.1.52:9100');
+});
 test("Bluetooth queue search calls the native inventory adapter and does not pretend to pair devices", async () => {
   let searched;
   const result = await discoverPrinters("bluetooth", {

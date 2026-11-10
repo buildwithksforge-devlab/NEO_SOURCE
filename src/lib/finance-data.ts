@@ -1,3 +1,4 @@
+import {invalidatePaymentViews} from "@/lib/payment-view-refresh";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -363,7 +364,7 @@ export const useFinanceFolios = () =>
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return () => void qc.invalidateQueries({ queryKey: ["finance"] });
+  return () => invalidatePaymentViews(qc);
 }
 
 /** Generic org-scoped insert with audit logging. */

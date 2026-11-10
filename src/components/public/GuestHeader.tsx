@@ -1,3 +1,4 @@
+import { guestDisplayName } from '@/lib/guest-presentation';
 /**
  * The Guest app header and footer.
  *
@@ -118,8 +119,7 @@ export function GuestHeader({
   const unread = unreadCount(notifications.data);
   const primary = ws.primary_color || brandFallback.primary;
   const name = ws.hotel_name || ws.app_name;
-  const displayName =
-    (user?.user_metadata?.["full_name"] as string | undefined) || user?.email || "Guest";
+  const displayName = guestDisplayName(profile.data, user?.user_metadata) || user?.email || "Guest";
 
   const stayLabel = stay.data
     ? stay.data.room_number

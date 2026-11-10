@@ -1,3 +1,4 @@
+import { publishedNightlyRate } from '@/lib/guest-presentation';
 /**
  * NEØ ROOT — the public front door.
  *
@@ -65,8 +66,8 @@ function placeOf(p: DirectoryProperty): string | null {
  * has actually configured an active rate plan — never estimated.
  */
 function fromRate(p: DirectoryProperty): string | null {
-  if (p.from_rate == null || !Number.isFinite(Number(p.from_rate))) return null;
-  const amount = Number(p.from_rate);
+  const amount = publishedNightlyRate(p.from_rate);
+  if (amount === null) return null;
   const currency = p.currency ?? "";
   return `From ${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} / night`.trim();
 }

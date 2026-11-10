@@ -1,3 +1,4 @@
+import {clearChangedAccessViews} from "@/lib/view-access-cache";
 import { guardedRpc } from "@/lib/rpc-guard";
 import {
   createContext,
@@ -269,6 +270,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Applies one effective-access contract to the workspace state machine. */
   const applyAccess = useCallback((a: EffectiveAccess) => {
+    // A changed access contract invalidates answers computed under the old one.
+    // Clear before publishing the new grants so reused unscoped keys cannot keep them.
+    const nextVersion = a.access_version ?? null;
+    clearChangedAccessViews(queryClient, permissionVersion.current, nextVersion);
     const set = new Set<string>();
     for (const row of a.permissions ?? []) addGrant(set, row.module, row.feature, row.action);
     setPermissions(set);
@@ -329,7 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPhaseDetail(null);
     }
     perfMark("access:applied");
-  }, []);
+  }, [queryClient]);
 
   /**
    * Effective access always comes from the same resolver the database uses for

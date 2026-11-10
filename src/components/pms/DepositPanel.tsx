@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { useBranchScope } from "@/lib/branches";
+import {usePropertyClock} from "@/lib/use-property-clock";
+import {propertyToday} from "@/lib/availability-search";
 import { money } from "@/lib/pms";
 import { PAYMENT_METHOD_CATALOGUE } from "@/lib/payment-methods";
 import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
@@ -39,9 +40,9 @@ const METHODS = ["cash", "card", "mpesa", "bank-transfer", "voucher"].flatMap((v
   PAYMENT_METHOD_CATALOGUE.filter((m) => m.value === v),
 );
 
-export function DepositPanel({ reservationId }: { reservationId: string }) {
+export function DepositPanel({ reservationId, branchId }: { reservationId: string; branchId: string | null }) {
   const { can } = useAuth();
-  const { activeBranchId } = useBranchScope();
+  const {timeZone} = usePropertyClock(branchId);
   const position = useDepositPosition(reservationId);
   const record = useRecordDeposit();
   const override = useDepositOverride();
@@ -128,8 +129,9 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
                 />
               </div>
               <Button
-                disabled={!amount || Number(amount) <= 0 || record.isPending}
+                disabled={!branchId || !timeZone || !amount || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || record.isPending}
                 onClick={() => {
+                  if (!branchId || !timeZone) return;
                   record.mutate(
                     {
                       reservationId,
@@ -138,7 +140,8 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
                       ...(reference ? { reference } : {}),
                       idempotencyKey: depositIdempotencyKey({
                         reservationId,
-                        propertyId: activeBranchId === "all" ? null : (activeBranchId ?? null),
+                        propertyId: branchId,
+                        businessDate: propertyToday(timeZone),
                         amount: Number(amount),
                         method,
                         ...(reference ? { reference } : {}),

@@ -13,6 +13,7 @@ afterEach(() => {
 });
 
 describe("query telemetry", () => {
+  it.each(["PGRST202", "PGRST203", "42883"])("recognises missing or ambiguous routine contracts by code %s", code => { expect(isSchemaMismatch({ code, message: "routine contract mismatch" })).toBe(true); });
   it("classifies broken PostgREST selects as schema mismatches", () => {
     expect(isSchemaMismatch({ code: "42703", message: 'column stock_items.unit does not exist' })).toBe(true);
     expect(isSchemaMismatch({ code: "PGRST204", message: "Could not find the 'unit' column" })).toBe(true);

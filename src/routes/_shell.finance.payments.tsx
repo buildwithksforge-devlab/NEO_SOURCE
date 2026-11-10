@@ -1,3 +1,4 @@
+import {canVerifyRegisterRow,isDepositRegisterRow,paymentEvidenceLabel} from '@/lib/payment-register-contract';
 ﻿/**
  * The payment register â€” every collection, whatever module took it.
  *
@@ -8,7 +9,7 @@
  * read as money received.
  */
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/common/DataDisplay";
 import { SummaryStrip, type SummaryFigure } from "@/components/common/SummaryStrip";
@@ -59,6 +60,7 @@ export const Route = createFileRoute("/_shell/finance/payments")({
 
 const MODULE_LABEL: Record<string, string> = {
   pms: "Rooms & folios",
+  deposit: "Reservation deposits",
   pos: "Restaurant & bar",
   events: "Events",
   mpesa: "M-Pesa",
@@ -152,7 +154,7 @@ function PaymentsPage() {
         description="One record per act of collection, from the request through to the ledger. A payment is never treated as received until the provider or the cashier says so."
       />
 
-      <SummaryStrip lead={lead} figures={figures} />
+      {register.data && lifecycle.data && !register.error && !lifecycle.error ? <SummaryStrip lead={lead} figures={figures} /> : null}
 
       {mayVerify ? <DeliveryTillVerification /> : null}
 
@@ -257,11 +259,7 @@ function Row({
       </td>
       <td className="py-2 pr-4">
         {titleCase(row.method.replace(/-/g, " "))}
-        {row.manual_tender ? (
-          <span className="block text-xs text-muted-foreground">Recorded by hand</span>
-        ) : (
-          <span className="block text-xs text-muted-foreground">Provider confirmed</span>
-        )}
+        <span className="block text-xs text-muted-foreground">{paymentEvidenceLabel(row)}</span>
       </td>
       <td className="py-2 pr-4">
         <FinStatus value={ledger?.stageLabel ?? PAYMENT_STATE_LABEL[row.state]} />
@@ -289,7 +287,8 @@ function Row({
         )}
       </td>
       <td className="py-2">
-        {needsVerification && mayVerify ? (
+        {isDepositRegisterRow(row) && row.source_record_id ? <Link to="/pms/reservations/$id" params={{id:row.source_record_id}} className="text-sm underline">View reservation</Link> : null}
+        {canVerifyRegisterRow(row) && mayVerify ? (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => onVerify(row.id)}>
             Verify
           </Button>

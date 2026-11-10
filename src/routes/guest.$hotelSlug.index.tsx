@@ -1,3 +1,4 @@
+import { guestDisplayName } from '@/lib/guest-presentation';
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -98,10 +99,7 @@ function GuestHome() {
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   /** The guest's own name, as this hotel holds it — never a made-up greeting. */
-  const guestName =
-    (customer.data?.["full_name"] as string | undefined)?.trim() ||
-    (user?.user_metadata?.["full_name"] as string | undefined)?.trim() ||
-    "";
+  const guestName = guestDisplayName(customer.data, user?.user_metadata);
   const firstName = guestName ? guestName.split(" ")[0] : "";
 
   const active = (reservations.data ?? []).filter(

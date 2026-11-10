@@ -1,4 +1,4 @@
-import { LoadingState } from "@/components/common/StateSystem";
+import { ErrorState, LoadingState } from "@/components/common/StateSystem";
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw } from "lucide-react";
@@ -98,7 +98,7 @@ function GoLivePage() {
   const menu = useMenuValidationStates();
   const seedAuthority = useSeedApprovalAuthority();
 
-  const checks = readiness.data?.checks ?? [];
+  const checks = readiness.isError ? [] : readiness.data?.checks ?? [];
   const counts = useMemo(
     () => ({
       ready: checks.filter((c) => c.status === "ready").length,
@@ -108,7 +108,7 @@ function GoLivePage() {
     [checks],
   );
 
-  const menuRows = menu.data ?? [];
+  const menuRows = menu.isError ? [] : menu.data ?? [];
   const incomplete = menuRows.filter((row) => row.state !== "ready");
 
   return (
@@ -121,7 +121,7 @@ function GoLivePage() {
             <span className="text-xs text-muted-foreground">
               {readiness.isFetching
                 ? "Checking now…"
-                : readiness.data
+                : !readiness.isError && readiness.data
                   ? `Checks itself every 2 minutes · last checked ${new Date(readiness.data.generated_at).toLocaleTimeString()}`
                   : "Checks itself every 2 minutes"}
             </span>
@@ -142,7 +142,7 @@ function GoLivePage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Overall" value={readinessLabels[readiness.data?.status ?? "unknown"]} />
+        <StatCard label="Overall" value={readinessLabels[readiness.isError ? "unknown" : readiness.data?.status ?? "unknown"]} />
         <StatCard label="Ready" value={String(counts.ready)} />
         <StatCard label="Needs attention" value={String(counts.attention)} />
         <StatCard label="Blocked" value={String(counts.blocked)} />
@@ -159,7 +159,9 @@ function GoLivePage() {
             title="Operational readiness"
             description="POS → KDS, menu → recipe → station, employee → rider, event → billing → finance."
           >
-            {readiness.isLoading ? (
+            {readiness.isError ? (
+              <ErrorState title="Readiness could not be verified" error={readiness.error} onRetry={() => { void readiness.refetch(); }} />
+            ) : readiness.isPending ? (
               <LoadingState variant="rows" rows={3} />
             ) : checks.length === 0 ? (
               <p className="text-sm text-muted-foreground">No readiness signals available for this property yet.</p>
@@ -201,7 +203,9 @@ function GoLivePage() {
             title="Imported menu validation"
             description="Imported data may exist without being operationally complete. Every item below is graded against images, categories, stations, recipes and pricing."
           >
-            {menu.isLoading ? (
+            {menu.isError ? (
+              <ErrorState title="Menu readiness could not be verified" error={menu.error} onRetry={() => { void menu.refetch(); }} />
+            ) : menu.isPending ? (
               <LoadingState variant="rows" rows={3} />
             ) : menuRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">

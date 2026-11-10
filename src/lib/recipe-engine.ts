@@ -59,6 +59,7 @@ export class RecipeEngineError extends Error {
     | "missing-recipe"
     | "inactive-recipe"
     | "bad-yield"
+    | "bad-quantity"
     | "missing-conversion"
     | "unresolved-ingredient"
     | "too-deep";
@@ -109,15 +110,19 @@ const norm = (u: string | null | undefined): string => {
 
 /** Convert, or fail loudly. Never guesses across unit families. */
 export function convertStrict(qty: number, from: string, to: string): number {
+  if (!Number.isFinite(qty)) throw new RecipeEngineError("bad-quantity", "Recipe quantity must be finite");
   const f = norm(from);
   const t = norm(to);
-  if (!f || !t || f === t) return qty;
+  if (!f || !t) throw new RecipeEngineError("missing-conversion", "Both source and stock units are required");
+  if (f === t) return qty;
   const a = UNIT_BASE[f];
   const b = UNIT_BASE[t];
   if (!a || !b || a.base !== b.base || b.factor === 0) {
     throw new RecipeEngineError("missing-conversion", `No unit conversion from ${from} to ${to}`);
   }
-  return (qty * a.factor) / b.factor;
+  const result = (qty * a.factor) / b.factor;
+  if (!Number.isFinite(result)) throw new RecipeEngineError("bad-quantity", "Converted recipe quantity is too large");
+  return result;
 }
 
 export function canConvert(from: string, to: string): boolean {
@@ -139,6 +144,7 @@ export function expandRecipeToStock(
   batches: number,
   path: string[] = [],
 ): ExpandedComponent[] {
+  if (!Number.isFinite(batches) || batches < 0) throw new RecipeEngineError("bad-quantity", "Recipe batches must be finite and non-negative");
   if (path.includes(recipeId)) {
     throw new RecipeEngineError("cycle", `Recipe cycle detected at ${recipeId}`);
   }
@@ -149,20 +155,30 @@ export function expandRecipeToStock(
   if (recipe.status !== "active") {
     throw new RecipeEngineError("inactive-recipe", `Recipe ${recipe.name ?? recipeId} is not active`);
   }
-  if (!(recipe.yield_quantity > 0)) {
+  if (!Number.isFinite(recipe.yield_quantity) || !(recipe.yield_quantity > 0)) {
     throw new RecipeEngineError("bad-yield", `Recipe ${recipe.name ?? recipeId} has no usable yield quantity`);
   }
 
   const out: ExpandedComponent[] = [];
   for (const ing of recipe.ingredients) {
+    const quantity = Number(ing.quantity);
+    const allowance = Number(ing.waste_allowance ?? 0);
+    if (ing.quantity == null || !Number.isFinite(quantity) || quantity < 0
+      || !Number.isFinite(allowance) || allowance < 0) {
+      throw new RecipeEngineError("bad-quantity", "Ingredient quantity and waste allowance must be finite and non-negative");
+    }
+    if (!["stock_item", "sub_recipe"].includes(ing.component_type)) {
+      throw new RecipeEngineError("unresolved-ingredient", "Unsupported recipe component type");
+    }
     const use = Number(ing.quantity ?? 0) * batches;
     const waste = use * (Number(ing.waste_allowance ?? 0) / 100);
+    if (!Number.isFinite(use) || !Number.isFinite(waste)) throw new RecipeEngineError("bad-quantity", "Expanded recipe quantity is too large");
     if (!use && !waste) continue;
     if (ing.component_type === "sub_recipe") {
       const subId = ing.sub_recipe_id ?? "";
       const sub = recipes.get(subId);
       if (!sub) throw new RecipeEngineError("missing-recipe", `Sub-recipe ${subId || "(unset)"} not found`);
-      if (!(sub.yield_quantity > 0)) {
+      if (!Number.isFinite(sub.yield_quantity) || !(sub.yield_quantity > 0)) {
         throw new RecipeEngineError("bad-yield", `Sub-recipe ${sub.name ?? subId} has no usable yield quantity`);
       }
       const needed = convertStrict(use + waste, ing.unit || sub.yield_unit, sub.yield_unit);
@@ -207,8 +223,8 @@ export function isDiscreteUnit(unit: string | null | undefined): boolean {
  * Returns the sentence to show, or null when the row is acceptable.
  */
 export function wholeUnitIssue(quantity: number, unit: string | null | undefined): string | null {
+  if (!Number.isFinite(quantity) || quantity < 0) return "Enter a finite, non-negative ingredient quantity.";
   if (!isDiscreteUnit(unit)) return null;
-  if (!Number.isFinite(quantity)) return null;
   if (Number.isInteger(quantity)) return null;
   return `${unit} are counted whole — enter a whole number such as ${Math.max(1, Math.round(quantity))}.`;
 }
@@ -229,10 +245,13 @@ export function aggregateComponents(
 ): ExpandedComponent[] {
   const totals = new Map<string, number>();
   for (const c of components) {
+    if (c.quantity < 0) throw new RecipeEngineError("bad-quantity", "Consumption components cannot be negative");
     const base = baseUnitOf(c.stockItemId);
     const qty = convertStrict(c.quantity, c.unit, base);
     const key = `${c.kind}|${c.stockItemId}`;
-    totals.set(key, (totals.get(key) ?? 0) + qty);
+    const total = (totals.get(key) ?? 0) + qty;
+    if (!Number.isFinite(total)) throw new RecipeEngineError("bad-quantity", "Aggregated recipe quantity is too large");
+    totals.set(key, total);
   }
   return [...totals.entries()]
     .map(([key, quantity]) => {
@@ -256,9 +275,10 @@ export function consumptionForSale(
 ): ExpandedComponent[] {
   const recipe = recipes.get(recipeId);
   if (!recipe) throw new RecipeEngineError("missing-recipe", `Recipe ${recipeId} not found`);
-  if (!(recipe.yield_quantity > 0)) {
+  if (!Number.isFinite(recipe.yield_quantity) || !(recipe.yield_quantity > 0)) {
     throw new RecipeEngineError("bad-yield", `Recipe ${recipe.name ?? recipeId} has no usable yield quantity`);
   }
+  if (!Number.isFinite(soldQuantity) || soldQuantity < 0) throw new RecipeEngineError("bad-quantity", "Sold quantity must be finite and non-negative");
   const batches = soldQuantity / recipe.yield_quantity;
   return aggregateComponents(expandRecipeToStock(recipes, recipeId, batches), baseUnitOf);
 }

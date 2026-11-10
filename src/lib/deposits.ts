@@ -1,3 +1,4 @@
+import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
 /**
  * Pre-arrival deposits.
  *
@@ -60,7 +61,14 @@ export function depositGate(position: DepositPosition | undefined | null): {
       message: "An authorised override is on file for this arrival. It is used once.",
     };
   }
-  const outstanding = Number(position.outstanding ?? 0);
+  if (typeof position.required !== "number" || !Number.isFinite(position.required) || position.required < 0
+      || typeof position.outstanding !== "number" || !Number.isFinite(position.outstanding) || position.outstanding < 0) {
+    return { blocked: true, message: "Deposit amounts could not be verified. Refresh the reservation before checking in." };
+  }
+  if ([position.paid, position.held, position.applied].some(value => value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0))) {
+    return { blocked: true, message: "Deposit amounts could not be verified. Refresh the reservation before checking in." };
+  }
+  const outstanding = position.paid === undefined ? position.outstanding : Math.max(position.outstanding, position.required - position.paid, 0);
   if (outstanding > 0.009) {
     return {
       blocked: true,
@@ -88,8 +96,7 @@ export function useDepositPosition(reservationId: string | null | undefined, ena
 function useInvalidateDeposits() {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: ["pms"] });
-    void qc.invalidateQueries({ queryKey: ["finance"] });
+    invalidatePaymentViews(qc);
   };
 }
 
@@ -109,6 +116,8 @@ export function useRecordDeposit() {
       notes?: string;
       idempotencyKey: string;
     }) => {
+      if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("A deposit amount must be finite and greater than zero.");
+      if (!input.idempotencyKey.trim()) throw new Error("A deposit idempotency key is required.");
       const { data, error } = await rpc("neo_reservation_deposit_record", {
         _reservation: input.reservationId,
         _amount: input.amount,
@@ -124,8 +133,9 @@ export function useRecordDeposit() {
          position?: DepositPosition;
          finance?: { ok?: boolean; reason?: string; detail?: string };
        };
-       if (!result.deposit_id) throw new Error("The deposit was not persisted.");
-       return result;
+       const depositId = typeof result.deposit_id === "string" ? result.deposit_id.trim() : "";
+       if (!depositId || ["null", "undefined"].includes(depositId)) throw new Error("The deposit was not persisted.");
+       return { ...result, deposit_id: depositId };
     },
     onSuccess: (r) => {
       if (r.finance?.ok) {
@@ -186,4 +196,3 @@ export const depositIdempotencyKey = (input: {
     input.reference ?? "",
     input.businessDate ?? new Date().toISOString().slice(0, 10),
   ]);
-

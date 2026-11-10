@@ -1,0 +1,49 @@
+{
+  "scope": "Inspection of the exact stopped workflow bundle, without changing or executing it.",
+  "topLevelStatements": [
+    "BEGIN",
+    "DO $body$",
+    "CREATE TABLE public.neo_pos_draft_removals( order_id uuid PRIMARY KEY REFERENCES public.pos_orders(id) ON DELETE RESTRICT, organization_id uuid NOT NULL,branch_id uuid NOT NULL,removed_by uuid NOT NUL",
+    "ALTER TABLE public.neo_pos_draft_removals ENABLE ROW LEVEL SECURITY",
+    "REVOKE ALL ON TABLE public.neo_pos_draft_removals FROM PUBLIC,anon,authenticated,service_role",
+    "CREATE FUNCTION public.neo_pos_removed_draft_write_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $body$",
+    "REVOKE ALL ON FUNCTION public.neo_pos_removed_draft_write_guard() FROM PUBLIC,anon,authenticated,service_role",
+    "CREATE FUNCTION public.neo_pos_remove_draft(_order uuid,_reason text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $body$",
+    "REVOKE ALL ON FUNCTION public.neo_pos_remove_draft(uuid,text) FROM PUBLIC,anon,service_role",
+    "GRANT EXECUTE ON FUNCTION public.neo_pos_remove_draft(uuid,text) TO authenticated",
+    "CREATE TRIGGER neo_removed_draft_payment_guard BEFORE INSERT ON public.pos_payments FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "CREATE TRIGGER neo_removed_draft_cash_request_guard BEFORE INSERT ON public.cash_payment_requests FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "CREATE TRIGGER neo_removed_draft_item_guard BEFORE INSERT ON public.pos_order_items FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "CREATE TRIGGER neo_removed_draft_ticket_guard BEFORE INSERT ON public.station_tickets FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "CREATE TRIGGER neo_removed_draft_ticket_item_guard BEFORE INSERT ON public.station_ticket_items FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "CREATE TRIGGER neo_removed_draft_stock_guard BEFORE INSERT ON public.inventory_posting_events FOR EACH ROW EXECUTE FUNCTION public.neo_pos_removed_draft_write_guard()",
+    "NOTIFY pgrst,'literal'",
+    "DO $body$",
+    "CREATE FUNCTION public.neo_event_requirement_ownership_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $body$",
+    "REVOKE ALL ON FUNCTION public.neo_event_requirement_ownership_guard() FROM PUBLIC,anon,authenticated,service_role",
+    "CREATE TRIGGER neo_event_requirement_ownership BEFORE INSERT OR UPDATE OF organization_id,branch_id,booking_id,department_id,department_key,task_id ON public.event_department_requirements FOR EACH ROW",
+    "SET LOCAL search_path=public",
+    "DO $body$",
+    "CREATE OR REPLACE FUNCTION public.tg_folio_sync_reservation_payment_status() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'literal' AS $body$",
+    "DROP TRIGGER folio_sync_reservation_payment_status ON public.folios",
+    "CREATE TRIGGER folio_sync_reservation_payment_status AFTER UPDATE OF total_payments,balance,status,currency ON public.folios FOR EACH ROW EXECUTE FUNCTION public.tg_folio_sync_reservation_payment_stat",
+    "SET LOCAL search_path=public",
+    "DO $body$",
+    "CREATE OR REPLACE FUNCTION public.ops_room_state(_branch uuid DEFAULT NULL::uuid) RETURNS TABLE(room_id uuid, room_number text, room_type_id uuid, room_type_name text, organization_id uuid, property_i",
+    "CREATE OR REPLACE FUNCTION public.ops_room_availability(_branch uuid, _from date, _to date) RETURNS TABLE( room_id uuid, room_number text, room_type_id uuid, room_type_name text, housekeeping_state te",
+    "CREATE OR REPLACE FUNCTION public.pms_available_rooms( _branch uuid, _arrival date, _departure date, _room_type uuid DEFAULT NULL::uuid, _adults integer DEFAULT 1, _children integer DEFAULT 0, _for_gr",
+    "COMMIT",
+    "BEGIN READ ONLY",
+    "SELECT jsonb_build_object( 'literal','literal', 'literal',current_setting('literal'), 'literal',(WITH expected(signature, fingerprint) AS (VALUES ('literal', 'literal'), ('literal', 'literal') ), defi",
+    "COMMIT"
+  ],
+  "destructiveTopLevelStatements": [],
+  "guardBlocksContainOperationalCommands": false,
+  "deleteKeywordOccurrences": [
+    {
+      "line": 26,
+      "text": "order_id uuid PRIMARY KEY REFERENCES public.pos_orders(id) ON DELETE RESTRICT,"
+    }
+  ],
+  "operationalCommandsInvoked": false
+}

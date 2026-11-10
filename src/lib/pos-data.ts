@@ -1,3 +1,4 @@
+import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
 import { useScopedRealtime } from "@/lib/realtime-scope";
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -228,19 +229,7 @@ export type ModifierGroupWithOptions = {
  * Orders
  * ------------------------------------------------------------------ */
 
-const OPEN_STATUSES = [
-  "draft",
-  "held",
-  "confirmed",
-  "sent",
-  "accepted",
-  "in-preparation",
-  "partially-ready",
-  "ready",
-  "partially-served",
-  "served",
-  "awaiting-payment",
-];
+
 
 export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
   // Self scope means a waiter sees only their own bills: `applyScope` narrows by
@@ -254,7 +243,7 @@ export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
       let q = applyScope(supabase.from("pos_orders").select("*, restaurant_tables(code, name), customers(full_name), profiles!pos_orders_waiter_id_fkey(full_name)"), "pos_orders")
         .order("created_at", { ascending: false })
         .limit(200);
-      if (scope === "open") q = q.in("status", OPEN_STATUSES);
+      if (scope === "open") q = q.or(POS_OPEN_FILTER);
       if (scope === "closed") q = q.in("status", ["paid", "charged-to-room", "credit", "closed", "voided", "cancelled"]);
       const { data, error } = await q;
       if (error) throw error;
@@ -1181,6 +1170,29 @@ export function usePostRoomCharge() {
       void qc.invalidateQueries({ queryKey: ["pms"] });
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Remove an unused draft from active orders; the server retains its audit history. */
+export function useRemoveDraftOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; reason: string }) => {
+      const { data, error } = await guardedRpc(supabase, "neo_pos_remove_draft", {
+        _order: input.orderId, _reason: input.reason.trim(),
+      });
+      if (error) throw error;
+      const result = data as unknown as { ok?: boolean; removed?: boolean; order_id?: string; status?: string } | null;
+      if (!result?.ok || !result.removed || result.order_id !== input.orderId || result.status !== "cancelled") {
+        throw new Error("Order removal was not confirmed. Refresh before trying again.");
+      }
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Draft order removed from active orders. Audit history retained.");
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 }
 

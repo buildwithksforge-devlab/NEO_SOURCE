@@ -1,8 +1,9 @@
+import {cashTender} from '@/lib/pos-payment-display';
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BedDouble, Send, Trash2 } from "lucide-react";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
@@ -67,6 +68,7 @@ import {
   useRecordPayment,
   useReconcileSettlement,
   useRemoveDraftItem,
+  useRemoveDraftOrder,
   useRequestVoid,
   useSendOrder,
   useUpdateItemStatus,
@@ -99,9 +101,13 @@ export const Route = createFileRoute("/_shell/pos/orders/$id")({
 });
 
 function OrderTerminal() {
+  const navigate = useNavigate();
   const { id } = Route.useParams();
   const { can } = useAuth();
   const order = usePosOrder(id);
+  const removeDraftOrder = useRemoveDraftOrder();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeReason, setRemoveReason] = useState("");
   // The terminal sells only from the canonical catalogue: published, scoped
   // rows carrying the station the ticket will actually be routed to.
   const items = useMenuCatalogue(false, order.data?.branch_id ?? null);
@@ -210,6 +216,11 @@ function OrderTerminal() {
   const openItems = lines.filter(
     (l) => !["served", "cancelled", "voided"].includes(l.status),
   ).length;
+  const removableDraft = data?.status === "draft" && data.payment_status === "unpaid"
+    && Number(data.paid_total ?? 0) === 0 && !data.folio_id
+    && (data.pos_payments ?? []).length === 0
+    && lines.every(line => ["draft", "cancelled", "voided"].includes(line.status));
+  const mayRemoveDraft = can("restaurant", "orders.void") || can("restaurant", "approvals.approve");
 
   return (
     <div>
@@ -225,6 +236,11 @@ function OrderTerminal() {
           data ? (
             <>
               <OrderStatusBadge status={data.status} />
+              {removableDraft && mayRemoveDraft ? (
+                <Button variant="destructive" onClick={() => setRemoveOpen(true)}>
+                  <Trash2 className="mr-2 size-4" /> Delete draft order
+                </Button>
+              ) : null}
 
               <DocumentPrintButton
                 type="pos_receipt"
@@ -734,10 +750,35 @@ function OrderTerminal() {
 
       {data ? (
         <>
+          <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete draft order {data.order_number}?</DialogTitle>
+                <DialogDescription>
+                  Remove this unused draft from active orders. Its records and audit history are
+                  retained. Orders with payment, production or stock history require the controlled
+                  void or refund workflow.
+                </DialogDescription>
+              </DialogHeader>
+              <Label htmlFor="draft-removal-reason">Removal reason</Label>
+              <Textarea id="draft-removal-reason" value={removeReason} maxLength={500}
+                onChange={event => setRemoveReason(event.target.value)} />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRemoveOpen(false)}>Keep order</Button>
+                <Button variant="destructive" disabled={!removableDraft || !mayRemoveDraft || removeReason.trim().length < 3 || removeDraftOrder.isPending}
+                  onClick={() => removeDraftOrder.mutate({orderId: data.id, reason: removeReason}, {
+                    onSuccess: () => { setRemoveOpen(false); void navigate({to: "/pos/orders"}); },
+                  })}>
+                  Delete draft order
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <PaymentDialog
             open={payOpen}
             onOpenChange={setPayOpen}
             orderId={data.id}
+            branchId={data.branch_id}
             balance={balance}
             shiftId={shift.data?.id ?? null}
           />
@@ -841,12 +882,14 @@ function PaymentDialog({
   open,
   onOpenChange,
   orderId,
+  branchId,
   balance,
   shiftId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
+  branchId: string | null;
   balance: number;
   shiftId: string | null;
 }) {
@@ -855,7 +898,7 @@ function PaymentDialog({
   // request → cashier confirmation path as folio billing, so the notes are
   // always attributed to a named, open till.
   const routeCash = useRequestPosCashPayment();
-  const till = useTillContext();
+  const till = useTillContext(branchId);
   const { can } = useAuth();
   const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState(String(balance.toFixed(2)));
@@ -883,15 +926,18 @@ function PaymentDialog({
   const providerBacked = definition?.kind === "provider";
   const terminalMethod = method === "card-terminal" || method === "qr";
   const external = Boolean(EXTERNAL_METHODS[method]);
-  const canManualConfirm = can("pos", "orders.approve");
+  const canManualConfirm = can("pos", "payments", "manual-confirm");
   const amountValue = Number(amount);
   const overpaying = amountValue > balance + 0.005;
   const isCash = method === "cash";
+  const cash = cashTender(amountValue, tendered);
   const isManualCard = method === "card";
   const cardLast4Invalid = Boolean(cardLast4) && !/^[0-9]{4}$/.test(cardLast4);
   const selfService = Boolean(till.data?.self_service);
   const blocked =
+    !Number.isFinite(amountValue) ||
     !amountValue ||
+    (isCash && Boolean(cash.error)) ||
     amountValue <= 0 ||
     overpaying ||
     (isManualCard &&
@@ -899,7 +945,8 @@ function PaymentDialog({
         !cardNetwork ||
         !reference.trim() ||
         cardLast4Invalid)) ||
-    (manualConfirm && !note.trim()) ||
+    (manualConfirm && (!canManualConfirm || !note.trim())) ||
+    (isCash && (!branchId || till.isLoading || till.isError)) ||
     record.isPending ||
     routeCash.isPending;
 
@@ -947,6 +994,12 @@ function PaymentDialog({
           </div>
           {method === "cash" ? (
             <div className="grid gap-1.5">
+              {!branchId || till.isError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  Cash routing is unavailable. Check this order’s property and reload its till context
+                  before requesting payment.
+                </p>
+              ) : null}
               <Label htmlFor="pay-tendered">Cash tendered</Label>
               <Input
                 id="pay-tendered"
@@ -954,9 +1007,11 @@ function PaymentDialog({
                 onChange={(e) => setTendered(e.target.value)}
                 inputMode="decimal"
               />
-              {Number(tendered) > Number(amount) ? (
+              {cash.error ? <p role="alert" className="text-xs text-destructive">{cash.error}</p> : null}
+              {!tendered.trim() ? <p className="text-xs text-muted-foreground">Leave blank for exact cash.</p> : null}
+              {cash.change !== null && cash.change > 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Change due {money(Number(tendered) - Number(amount))}
+                  Change due {money(cash.change!)}
                 </p>
               ) : null}
               <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">

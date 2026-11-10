@@ -8,6 +8,7 @@
  * a second document or a second stock movement.
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import {requireSavedRecord} from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -226,6 +227,9 @@ export function useStoreIssue() {
       reason: string;
       direction: "issue" | "return";
     }) => {
+      if (!input.locationId?.trim() || !input.attemptKey?.trim() || !input.reason?.trim()) throw new Error("Choose a store, provide a reason and retain the submission reference.");
+      if (!["issue", "return"].includes(input.direction)) throw new Error("Choose issue or return.");
+      if (!input.lines.length || input.lines.some(line => !line.stock_item_id?.trim() || !Number.isFinite(line.quantity) || line.quantity <= 0)) throw new Error("Every stock line needs an item and finite positive quantity.");
       const { data, error } = await guardedRpc(db, "neo_stores_issue", {
         _location: input.locationId,
         _lines: input.lines,
@@ -235,7 +239,9 @@ export function useStoreIssue() {
         _direction: input.direction,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as LifecycleResult;
+      const saved=requireSavedRecord(data,["direction","location_id"],"The stock movement was not confirmed.");
+      if(saved["ok"]!==true||saved["direction"]!==input.direction||saved["location_id"]!==input.locationId||saved["lines"]!==input.lines.length||!Array.isArray(saved["movements"])||saved["movements"].length!==input.lines.length||saved["movements"].some(id=>typeof id!=="string"||!id.trim()||["null","undefined"].includes(id.trim().toLowerCase()))) throw new Error("The server did not confirm all requested stock movements.");
+      return saved;
     },
     onSuccess: (data) => {
       invalidate();

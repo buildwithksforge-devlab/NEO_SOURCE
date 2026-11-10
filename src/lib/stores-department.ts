@@ -1,3 +1,4 @@
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Inventory & Stores department layer.
  *
@@ -13,6 +14,7 @@
  * so stock balances and the audit trail stay owned by the database.
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import {requireSavedRecord} from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -517,15 +519,21 @@ export function validateCountedQuantity(counted: number, unit?: string | null): 
 
 export function useRecordCountedQuantity() {
   const invalidate = useStoresInvalidate();
+  const { organizationId }=useAuth();
   return useMutation({
     mutationFn: async (input: { lineId: string; counted: number; notes?: string; unit?: string | null }) => {
       const problem = validateCountedQuantity(input.counted, input.unit);
       if (problem) throw new Error(problem);
-      const { error } = await db
+      if(!organizationId)throw new Error("Choose a workspace before recording a count.");
+      const { data,error } = await db
         .from("stock_take_lines")
         .update({ counted_quantity: input.counted, notes: input.notes ?? null })
-        .eq("id", input.lineId);
+        .eq("id", input.lineId)
+        .eq("organization_id",organizationId)
+        .select("id,counted_quantity")
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if(!data||data.id!==input.lineId||data.counted_quantity==null||!Number.isFinite(Number(data.counted_quantity))||Number(data.counted_quantity)!==input.counted)throw new Error("The physical count was not saved. Refresh before retrying.");
     },
     onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
@@ -545,12 +553,14 @@ export function useSubmitCountVariance() {
         _notes: input.notes ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as StoresRow;
+      const saved=requireSavedRecord(data,["status"],"The count submission was not confirmed.");
+      if(!["closed","awaiting-approval"].includes(String(saved["status"])))throw new Error("The saved count is not closed or awaiting approval.");
+      return saved;
     },
     onSuccess: (data) => {
       invalidate();
       if (str(data["status"], "") === "closed") toast.success("Count closed — no variance found");
-      else toast.success(`${num(data["lines"])} variance line(s) sent for approval`);
+      else toast.success(data["lines"]==null?"Count is awaiting variance approval":`${num(data["lines"])} variance line(s) sent for approval`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -631,7 +641,7 @@ export function useCreateStoresTask() {
       // refused here rather than failing in the database.
       const description = input.description.trim();
       if (!description) throw new Error("Describe what the task involves before assigning it.");
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: department.data?.["id"] ?? null,
@@ -643,7 +653,7 @@ export function useCreateStoresTask() {
         priority: input.priority ?? "normal",
         status: "open",
       });
-      if (error) throw new Error(error.message);
+
     },
     onSuccess: () => {
       invalidate();
@@ -693,11 +703,14 @@ export function useReconcileCountAgainstLedger() {
             : "That count could not be reconciled.",
         );
       }
+      const fields=["lines","match","shortage","overage","not_counted"];
+      if(result["ok"]!==true||result["take_id"]!==takeId||fields.some(field=>!Number.isInteger(result[field])||Number(result[field])<0)||Number(result["lines"])!==Number(result["match"])+Number(result["shortage"])+Number(result["overage"])+Number(result["not_counted"]))throw new Error("The server did not confirm the stock reconciliation totals.");
       return result;
     },
     onSuccess: (result) => {
       invalidate();
       const flagged = num(result["shortage"]) + num(result["overage"]);
+      if(num(result["not_counted"])>0){toast.warning(`${num(result["not_counted"])} line(s) remain uncounted — this count is incomplete`);return;}
       toast.success(
         flagged > 0
           ? `${flagged} line(s) differ from the ledger — raise the correction for approval`
@@ -732,6 +745,9 @@ export function useDecideStockAdjustment() {
                 : "That correction could not be decided.",
         );
       }
+      if(result["ok"]!==true||result["adjustment"]!==input.adjustmentId||result["decision"]!==input.decision)throw new Error("The server did not confirm the requested stock correction decision.");
+      const posting=result["result"] as StoresRow|null;
+      if(!posting||!(input.decision==="approve"?["posted","already-posted"]:["rejected"]).includes(String(posting["status"])))throw new Error("The stock correction did not reach its confirmed final status.");
       return result;
     },
     onSuccess: (result) => {

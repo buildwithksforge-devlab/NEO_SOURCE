@@ -1,0 +1,15 @@
+# Batch 26 — payment retries, truthful refusals and station refresh
+
+Deployed build 03b7153eb8dcea0e, version 669f2229-7e69-4e04-bbf0-5ad9392b4e78. Rollback: 6968bac2-6e5c-40ca-839f-7649c6e6321e.
+
+SQL 145 is installed and user-verified. Its two guarded functions bind collection retries to the saved folio, amount, method, currency and receiving-account evidence where applicable. Cash and recorded payment paths share an intent lock/key boundary. A bank receipt cannot also become a cash collection under the same key. Installation changes no historical records; 79 isolated synthetic database checks pass, including two equal legitimate installments, changed details, pending bank payments and allocation/balance effects. Concurrent production processing is not certified by these single-database fixtures.
+
+The payment dialog now passes its stable key to cash routing and preserves that key after errors and closing/reopening. A verified saved collection rotates the key; the next opening uses the latest supplied balance. No-drawer and unverified responses stay open with an error. Non-cash wording explains confirmation rather than promising an immediate balance reduction.
+
+Folio closure now checks the actual server result before its success toast. Outstanding-balance or pending-payment refusals raise visible errors. Action dialogs retain failed actions rather than closing or leaving an unhandled rejection.
+
+Station stock refreshes every 15 seconds while visible. Cache boundaries now include worker/property for store/stock/movement reads; assignment and mapping reads explicitly filter organization. A selected station is used only while it remains in the current assignment list, preventing the old station from being queried after a property/assignment change. Unavailable totals show unknown instead of zero. Authenticated remote-stock refresh and all permission transitions remain operational acceptance gates.
+
+Validation: full offline regression 4,291 passed, zero failed, 155 skipped. All 4,264 unique prior-release passing cases remain after documenting one prior test-description rename; no failed cases removed. Final focused suite: 19 passed, including three actual dialog interaction tests added after the full run. Strict typecheck, production build, source identity and startup smoke pass. Live HTTP checks on /, /auth and /pos/orders confirm this build and private/no-store responses. No hydrated authenticated departmental workflow or live financial transaction was exercised.
+
+Still open: minimum-deposit satisfaction versus full-booking Paid labels; accurate future/current folio obligations and source-backed reconciliation; manual pending-payment confirmation and split-method headroom; laundry intake and express rollup; outbox invalidation; provider/automation connection behavior; remaining stale-view candidates and full business-day certification. The 36 reservation label/balance conflicts are review candidates, not authority to recollect or rewrite history. No whole issue is newly marked closed by this release.

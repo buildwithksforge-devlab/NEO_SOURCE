@@ -71,7 +71,7 @@ export function useGuestProfile(
 
   const linked = Boolean(query.data);
   useEffect(() => {
-    if (!userId || query.isLoading || linked || previewSuppressed()) return;
+    if (!userId || query.isLoading || query.isError || linked || previewSuppressed()) return;
     let cancelled = false;
     void (async () => {
       let claimed = false;
@@ -102,7 +102,7 @@ export function useGuestProfile(
     return () => {
       cancelled = true;
     };
-  }, [organizationId, branchId, userId, query.isLoading, linked, client]);
+  }, [organizationId, branchId, userId, query.isLoading, query.isError, linked, client]);
 
   return query;
 }

@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    10
+  ],
+  "isolatedConsumptionBoundaryChecks": 54,
+  "isolatedPassed": true,
+  "applicationSourceChanged": false,
+  "retainedApplicationValidation": {
+    "passed": 3890,
+    "failed": 0,
+    "skipped": 155,
+    "typecheck": "passed",
+    "productionBuildSmoke": "passed",
+    "fromBatches": [
+      8,
+      9
+    ]
+  },
+  "additionalFocusedRegression": {
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0
+  },
+  "operationalWrites": false,
+  "deployed": false,
+  "newlyStarted": [
+    "NEO-BKL-C01",
+    "NEO-BKL-C02",
+    "NEO-BKL-C03",
+    "NEO-BKL-C05",
+    "NEO-BKL-B09",
+    "NEO-BKL-A06",
+    "NEO-BKL-B10"
+  ],
+  "advancedExisting": [
+    "NEO-BKL-C07"
+  ],
+  "codeProgress": {
+    "queued": 37,
+    "activePartial": 20,
+    "awaitingDeploymentRetest": 21,
+    "awaitingWorkflowTest": 25,
+    "awaitingPrintAgentDeployment": 1,
+    "partiallyVerified": 1,
+    "fullyVerified": 1,
+    "note": "Source progress categories are distinct from final acceptance. 105 is the acceptance-open count, not the count untouched."
+  },
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 20,
+    "Awaiting deployment/retest": 21,
+    "Queued": 37,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "originalQueue": 106,
+  "acceptanceOpen": 105,
+  "evidence": {
+    "passed": true,
+    "checks": 54,
+    "originalHash": "11b414d3353411e1ad11a6eac276231f",
+    "installedHash": "0bd1ef265fdd364b1f942b4a1dc3b25b",
+    "scope": "Actual POS consumption core; movement, recipe expansion and batch dependencies modeled in isolated synthetic fixture. No operational data connection; concurrency lock placement tested, not a multi-session race certification."
+  },
+  "limits": [
+    "Actual core tested; recipe expansion, prepared batch and movement dependencies modeled in isolated PostgreSQL.",
+    "Per-item advisory lock placement checked; multi-session race not certified.",
+    "Installer/postcheck code-only; no historical stock, mapping or posting repairs."
+  ],
+  "approvalInterruption": "Initial automatic approval usage-limit failure resolved on retry; regression completed successfully.",
+  "repositoryDocumentsSynchronized": true
+}

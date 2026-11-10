@@ -5,7 +5,7 @@ export function rejectBusinessFailure(value: unknown, fallback: string): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) return;
   const result = value as CommandRecord;
   if (result["ok"] === false || result["success"] === false) {
-    const detail = result["message"] ?? result["error"];
+    const detail = result["detail"] ?? result["message"] ?? result["error"] ?? result["reason"];
     throw new Error(typeof detail === "string" && detail.trim() ? detail : fallback);
   }
 }
@@ -18,7 +18,7 @@ export function requireSavedRecord(
   rejectBusinessFailure(value, fallback);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(fallback);
   const result = value as CommandRecord;
-  if (fields.some((field) => typeof result[field] !== "string" || !String(result[field]).trim())) {
+  if (fields.some((field) => typeof result[field] !== "string" || !String(result[field]).trim() || ["null", "undefined"].includes(String(result[field]).trim().toLowerCase()))) {
     throw new Error(fallback);
   }
   return result;

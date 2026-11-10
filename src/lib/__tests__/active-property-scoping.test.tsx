@@ -178,7 +178,7 @@ describe("module adoption", () => {
 
   it.each(MODULES)("%s keys its property-dependent queries on the active property", (file) => {
     const src = readFileSync(file, "utf8");
-    const keys = [...src.matchAll(/(?:queryKey:|tenantQuery\()\s*\[([^\]]*)\]/g)].map((m) => m[1]!);
+    const keys = [...src.matchAll(/(?:queryKey:|(?:tenantQuery|useTenantQuery)\()\s*\[([^\]]*)\]/g)].map((m) => m[1]!);
     const scoped = keys.filter((k) => /filterKey|branchId|scope\.branchId|scopeKey/.test(k));
     expect(scoped.length).toBeGreaterThan(0);
   });

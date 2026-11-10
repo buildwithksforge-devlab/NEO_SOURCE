@@ -1,4 +1,6 @@
+import { invalidateStationReads as invalidate } from "@/lib/production-displays";
 import { useState } from "react";
+import {stationDepartmentOptions,assertStationPlacement,confirmStationWrite} from "@/lib/station-write";
 import { OpsGuard } from "@/components/operations/OpsShared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -126,11 +128,15 @@ function StationsPage() {
 
   const update = useMutation({
     mutationFn: async ({ station, patch }: { station: Station; patch: Partial<Station> }) => {
-      const { error } = await supabase
+      if (!organizationId) throw new Error("No active workspace");
+      const { data, error } = await supabase
         .from("operational_stations")
         .update(patch as never)
-        .eq("id", station.id);
-      if (error) throw error;
+        .eq("id", station.id)
+        .eq("organization_id", organizationId)
+        .select("id")
+        .single();
+      confirmStationWrite(data, error, station.id);
       await logAudit({
         organizationId,
         userId: user?.id ?? null,
@@ -147,9 +153,7 @@ function StationsPage() {
     },
     onSuccess: () => {
       toast.success("Station updated");
-      void qc.invalidateQueries({ queryKey: ["operational-stations"] });
-      void qc.invalidateQueries({ queryKey: ["pos", "stations"] });
-      void qc.invalidateQueries({ queryKey: ["kitchen", "stations"] });
+      void invalidate(qc);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -163,19 +167,20 @@ function StationsPage() {
       department_id: string;
     }) => {
       if (!organizationId) throw new Error("No active workspace");
+      assertStationPlacement(payload.name,payload.branch_id,payload.department_id,departments.data ?? []);
       const { data, error } = await supabase
         .from("operational_stations")
         .insert({ organization_id: organizationId, ...payload } as never)
         .select("id")
         .single();
-      if (error) throw error;
+      const savedId = confirmStationWrite(data, error);
       await logAudit({
         organizationId,
         userId: user?.id ?? null,
         userName: profile?.full_name,
         action: "station.created",
         module: "administration",
-        recordId: (data as { id: string }).id,
+        recordId: savedId,
         newValue: payload,
         branchId: payload.branch_id,
         departmentId: payload.department_id,
@@ -184,9 +189,7 @@ function StationsPage() {
     onSuccess: () => {
       toast.success("Station created");
       setAddOpen(false);
-      void qc.invalidateQueries({ queryKey: ["operational-stations"] });
-      void qc.invalidateQueries({ queryKey: ["pos", "stations"] });
-      void qc.invalidateQueries({ queryKey: ["kitchen", "stations"] });
+      void invalidate(qc);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -238,7 +241,7 @@ function StationsPage() {
           {visible.map((station) => {
             // Property first, then that property's departments — the same chain
             // the database now enforces on write.
-            const options = menuDepartmentsForBranch(departments.data ?? [], station.branch_id);
+            const options = stationDepartmentOptions(departments.data ?? [], station.branch_id);
             const chainBroken =
               !station.branch_id ||
               !station.department_id ||
@@ -268,7 +271,7 @@ function StationsPage() {
                       const branch_id = value === "org" ? null : value;
                       // A department that does not belong to the new property is
                       // dropped rather than silently kept.
-                      const stillValid = menuDepartmentsForBranch(
+                      const stillValid = stationDepartmentOptions(
                         departments.data ?? [],
                         branch_id,
                       ).some((d) => d.id === station.department_id);

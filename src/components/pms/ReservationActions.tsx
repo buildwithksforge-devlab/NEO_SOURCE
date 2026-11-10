@@ -78,8 +78,9 @@ function ActionDialog({
   open: boolean;
   setOpen: (v: boolean) => void;
 }) {
+  const [failure, setFailure] = useState<string | null>(null);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => { setFailure(null); setOpen(next); }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -87,6 +88,7 @@ function ActionDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">{children}</div>
+        {failure ? <p role="alert" className="text-sm text-destructive">{failure}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
@@ -94,8 +96,13 @@ function ActionDialog({
           <Button
             disabled={disabled}
             onClick={async () => {
-              await onConfirm();
-              setOpen(false);
+              setFailure(null);
+              try {
+                const result = await onConfirm();
+                if (result !== false) setOpen(false);
+              } catch (error) {
+                setFailure(error instanceof Error ? error.message : "The action could not be completed. Review its details before retrying.");
+              }
             }}
           >
             {confirmLabel}
@@ -290,7 +297,7 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
           if the guest needs to arrive earlier.
         </p>
       ) : null}
-      <DepositPanel reservationId={reservation.id} />
+      <DepositPanel reservationId={reservation.id} branchId={reservation.branch_id} />
       <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
         <div>
           <p className="text-sm font-medium">Identity document sighted</p>
@@ -442,9 +449,10 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
   const [account, setAccount] = useState<string>("");
   const pay = useRecordPayment();
   const accounts = useReceivingAccounts();
-  // One collection intent per opening of this dialog: retries settle the same
-  // receipt, while a genuine second payment of the same amount still goes through.
+  // Keep the same key after an uncertain result, including closing and reopening.
+  // Rotate only after the server returns evidence of a saved collection.
   const [intentKey, setIntentKey] = useState(() => crypto.randomUUID());
+  const [freshCollection, setFreshCollection] = useState(true);
   const myShift = useMyOpenShift();
   const openShift = useOpenCashShift();
   const { branchId } = useActivePropertyFilter();
@@ -468,7 +476,7 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
     <ActionDialog
       open={open}
       setOpen={(next) => {
-        if (next) setIntentKey(crypto.randomUUID());
+        if (next && freshCollection) setAmount(balance > 0 ? balance : 0);
         setOpen(next);
       }}
       trigger={<Button size="sm">Record payment</Button>}
@@ -478,23 +486,24 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
           ? selfService
             ? "Confirms cash physically received into your own till and produces a numbered receipt."
             : "Routes the cash to an authorised cashier, who confirms the money was physically received."
-          : "Produces a numbered receipt and reduces the folio balance."
+          : "Records a payment for confirmation. Only confirmed money reduces the folio balance."
       }
       confirmLabel={isCash ? (selfService ? "Confirm cash received" : "Send to cashier") : "Record payment"}
-      disabled={amount <= 0 || !selected || noTill || requestCash.isPending || pay.isPending}
-      onConfirm={() =>
-        isCash
-          ? requestCash.mutateAsync({ folio: folioId, amount, reference, notes })
-          : pay.mutateAsync({
-              folio: folioId,
-              amount,
-              method,
-              reference,
-              notes,
-              intentKey,
-              account: account || null,
-            })
-      }
+      disabled={!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001 || !selected || noTill || requestCash.isPending || pay.isPending}
+      onConfirm={async () => {
+        setFreshCollection(false);
+        const collectionKey = 'pms-collection:' + folioId + ':' + intentKey;
+        if (isCash) {
+          const result = await requestCash.mutateAsync({ folio: folioId, amount, reference, notes, idempotencyKey: collectionKey });
+          if (result.status !== 'pending' && result.status !== 'confirmed') throw new Error(result.message ?? 'The cash collection was not saved. Review the drawer before retrying.');
+          if (!result.request_id) throw new Error('The saved cash request could not be verified. Refresh before retrying.');
+        } else {
+          const saved = await pay.mutateAsync({ folio: folioId, amount, method, reference, notes, intentKey: collectionKey, account: account || null });
+          if (typeof saved !== 'string' || !saved) throw new Error('The saved payment could not be verified. Refresh before retrying.');
+        }
+        setIntentKey(crypto.randomUUID());
+        setFreshCollection(true);
+      }}
     >
       <div className="space-y-2">
         <Label>Amount</Label>

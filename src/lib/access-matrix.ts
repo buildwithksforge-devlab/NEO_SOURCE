@@ -1,3 +1,5 @@
+import {useAuth} from "@/lib/auth";
+import {readViewAccess} from "@/lib/view-freshness";
 /**
  * Live administrative Access Matrix (L.21).
  *
@@ -50,8 +52,13 @@ export type MatrixRow = {
 
 /** Saved grants for every role, expanded exactly as a live session expands them. */
 export function useAllRolePermissions() {
+  const auth=useAuth();
+  const {identity,ready}=readViewAccess(auth);
   return useQuery({
-    queryKey: ["access-matrix-role-permissions"],
+    queryKey: ["access-matrix-role-permissions", auth.organizationId, identity],
+    enabled: ready,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -75,14 +82,19 @@ export function useAllRolePermissions() {
 
 /** Per-user grants and denials layered on top of a role (individual override). */
 export function useIndividualOverrides() {
+  const auth=useAuth();
+  const {identity,ready}=readViewAccess(auth);
   return useQuery({
-    queryKey: ["access-matrix-individual-overrides"],
+    queryKey: ["access-matrix-individual-overrides", auth.organizationId, identity],
+    enabled: ready,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_permissions")
         .select("user_id, permission_id, effect");
-      if (error) return new Map<string, number>();
+      if (error) throw error;
       const counts = new Map<string, number>();
       for (const row of (data ?? []) as { user_id: string }[]) {
         counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
@@ -93,8 +105,13 @@ export function useIndividualOverrides() {
 }
 
 function useDepartmentNames() {
+  const auth=useAuth();
+  const {identity,ready}=readViewAccess(auth);
   return useQuery({
-    queryKey: ["access-matrix-departments"],
+    queryKey: ["access-matrix-departments", auth.organizationId, identity],
+    enabled: ready,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("departments").select("id, name");

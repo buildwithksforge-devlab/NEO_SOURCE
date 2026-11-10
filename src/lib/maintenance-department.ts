@@ -654,7 +654,8 @@ export function useConsumeStockPart() {
     }) => {
       if (!input.stockItemId) throw new Error("Choose the stock item used");
       if (!input.locationId) throw new Error("Choose the store it came from");
-      if (!(input.quantity > 0)) throw new Error("Enter how much was used");
+      if (!input.workOrderId?.trim()) throw new Error("Choose the saved work order");
+      if (!Number.isFinite(input.quantity) || !(input.quantity > 0)) throw new Error("Enter a finite positive quantity used");
       const { data, error } = await guardedRpc(db, "neo_maint_consume_part", {
         _work_order: input.workOrderId,
         _stock_item: input.stockItemId,
@@ -665,7 +666,9 @@ export function useConsumeStockPart() {
         _idempotency_key: input.idempotencyKey ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as MaintRow;
+      const saved = requireSavedRecord(data, ["part_id", "movement_id"], "The stock issue and work-order part were not confirmed.");
+      if (saved["ok"] !== true) throw new Error("The stock issue and work-order part were not confirmed.");
+      return saved;
     },
     onSuccess: (data) => {
       invalidate();
@@ -697,10 +700,12 @@ export type IssuableStock = {
  * refusal the technician cannot act on.
  */
 export function useIssuableStockForJob(workOrderId?: string | null) {
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["maintenance-dept", "issuable-stock", workOrderId ?? null],
-    enabled: Boolean(workOrderId),
+    queryKey: ["maintenance-dept", "issuable-stock", organizationId, workOrderId ?? null],
+    enabled: Boolean(organizationId && workOrderId),
     queryFn: async () => {
+      if (!organizationId || !workOrderId) throw new Error("Choose a workspace and work order.");
       const { data, error } = await guardedRpc(db, "neo_maint_issuable_stock", {
         _work_order: workOrderId,
       });
@@ -740,13 +745,16 @@ export function useMaintenanceEscalationScan() {
 
 /** Completed work kept against the canonical asset. */
 export function useAssetServiceHistory(assetId?: string | null) {
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["maintenance-dept", "asset-service", assetId ?? null],
-    enabled: Boolean(assetId),
+    queryKey: ["maintenance-dept", "asset-service", organizationId, assetId ?? null],
+    enabled: Boolean(organizationId && assetId),
     queryFn: async () => {
+      if (!organizationId || !assetId) throw new Error("Choose a workspace and asset.");
       const { data, error } = await db
         .from("asset_service_history")
         .select("*")
+        .eq("organization_id", organizationId)
         .eq("asset_id", assetId)
         .order("service_date", { ascending: false })
         .limit(200);

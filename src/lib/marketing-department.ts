@@ -1,3 +1,4 @@
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Marketing department layer.
  *
@@ -350,7 +351,7 @@ export function useCreateMarketingTask() {
     }) => {
       if (!organizationId) throw new Error("No organisation context");
       if (!input.title.trim()) throw new Error("Give the task a title");
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: department.data?.["id"] ? String(department.data["id"]) : null,
@@ -362,7 +363,7 @@ export function useCreateMarketingTask() {
         assignee_id: user?.id ?? null,
         created_by: user?.id ?? null,
       });
-      if (error) throw new Error(error.message);
+
     },
     onSuccess: () => {
       invalidate();

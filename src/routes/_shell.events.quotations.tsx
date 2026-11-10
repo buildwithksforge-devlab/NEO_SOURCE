@@ -1,3 +1,4 @@
+import { savedQuotation } from '@/lib/mutation-evidence';
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ function QuotationPricingEditor({
       } as never);
 
       if (error) throw error;
-      return data;
+      return savedQuotation(data, String(quotation["id"]), lines.length);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries();

@@ -1,3 +1,5 @@
+import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
+import {confirmedCashRpc as callRpc} from '@/lib/cash-command-result';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,10 +91,8 @@ export function useTillContext(branchId?: string | null) {
 function useInvalidateCash() {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: ["cash"] });
-    void qc.invalidateQueries({ queryKey: ["pms"] });
-    void qc.invalidateQueries({ queryKey: ["finance"] });
-    void qc.invalidateQueries({ queryKey: ["pos"] });
+    invalidatePaymentViews(qc);
+    void qc.invalidateQueries({queryKey:["pos"]});
   };
 }
 
@@ -107,7 +107,7 @@ export function useRequestCashPayment() {
       idempotencyKey?: string;
     }) =>
       unwrap(
-        guardedRpc<CashRequestResult>(client, "neo_cash_request_payment", {
+        callRpc<CashRequestResult>(client, "neo_cash_request_payment", {
           _folio: input.folio,
           _amount: input.amount,
           _reference: input.reference ?? null,
@@ -134,7 +134,7 @@ export function useConfirmCashReceipt() {
   return useMutation({
     mutationFn: (request: string) =>
       unwrap(
-        guardedRpc<CashRequestResult>(client, "neo_cash_confirm_receipt", { _request: request }),
+        callRpc<CashRequestResult>(client, "neo_cash_confirm_receipt", { _request: request }),
       ),
     onSuccess: (result) => {
       invalidate();
@@ -149,7 +149,7 @@ export function useCancelCashRequest() {
   return useMutation({
     mutationFn: (input: { request: string; reason: string }) =>
       unwrap(
-        guardedRpc<CashRequestResult>(client, "neo_cash_cancel_request", {
+        callRpc<CashRequestResult>(client, "neo_cash_cancel_request", {
           _request: input.request,
           _reason: input.reason,
         }),
@@ -172,6 +172,7 @@ export function useMyCashRequests() {
       const { data, error } = await client
         .from("cash_payment_requests")
         .select("*")
+        .eq("organization_id", organizationId)
         .eq("assigned_cashier_id", user!.id)
         .eq("status", "pending")
         .order("created_at", { ascending: true });
@@ -192,6 +193,7 @@ export function useFolioCashRequests(folioId: string | null) {
       const { data, error } = await client
         .from("cash_payment_requests")
         .select("*")
+        .eq("organization_id", organizationId)
         .eq("folio_id", folioId)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -213,14 +215,16 @@ export function useRequestPosCashPayment() {
     mutationFn: (input: {
       order: string;
       amount: number;
+      tendered?: number;
       reference?: string;
       notes?: string;
       idempotencyKey?: string;
     }) =>
       unwrap(
-        guardedRpc<CashRequestResult>(client, "neo_cash_request_pos_payment", {
+        callRpc<CashRequestResult>(client, "neo_cash_request_pos_payment", {
           _order: input.order,
           _amount: input.amount,
+          _tendered: input.tendered ?? input.amount,
           _reference: input.reference ?? null,
           _notes: input.notes ?? "",
           _idempotency_key: input.idempotencyKey ?? null,
@@ -287,7 +291,7 @@ export function useSendCashTransfer() {
       notes?: string;
     }) =>
       unwrap(
-        guardedRpc<{ transfer_number: string }>(client, "neo_cash_transfer_send", {
+        callRpc<{ transfer_number: string }>(client, "neo_cash_transfer_send", {
           _amount: input.amount,
           _to_shift: input.toShift ?? null,
           _destination: input.destination ?? "till",
@@ -306,12 +310,12 @@ export function useConfirmCashTransfer() {
   const invalidate = useInvalidateCash();
   return useMutation({
     mutationFn: (transfer: string) =>
-      unwrap(guardedRpc<{ transfer_number: string }>(client, "neo_cash_transfer_confirm", {
+      unwrap(callRpc<{ transfer_number: string }>(client, "neo_cash_transfer_confirm", {
         _transfer: transfer,
       })),
     onSuccess: (r) => {
       invalidate();
-      toast.success(`Transfer ${r.transfer_number} received into your till`);
+      toast.success(r.transfer_number ? `Transfer ${r.transfer_number} received into your till` : "Transfer already received into your till");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -321,7 +325,7 @@ export function useCancelCashTransfer() {
   const invalidate = useInvalidateCash();
   return useMutation({
     mutationFn: (input: { transfer: string; reason: string }) =>
-      unwrap(guardedRpc(client, "neo_cash_transfer_cancel", {
+      unwrap(callRpc(client, "neo_cash_transfer_cancel", {
         _transfer: input.transfer,
         _reason: input.reason,
       })),
@@ -376,7 +380,7 @@ export function useRequestCashRefund() {
   return useMutation({
     mutationFn: (input: { payment: string; amount: number; reason: string }) =>
       unwrap(
-        guardedRpc<{ status: string; threshold: number }>(client, "neo_cash_refund_request", {
+        callRpc<{ status: string; threshold: number }>(client, "neo_cash_refund_request", {
           _payment: input.payment,
           _amount: input.amount,
           _reason: input.reason,
@@ -387,7 +391,7 @@ export function useRequestCashRefund() {
       toast.success(
         r.status === "approved"
           ? "Refund authorised — pay it out from your till"
-          : `Refund above the ${r.threshold} approval threshold — sent for approval`,
+          : Number.isFinite(r.threshold) ? `Refund above the ${r.threshold} approval threshold — sent for approval` : "Refund sent for approval",
       );
     },
     onError: (error: Error) => toast.error(error.message),
@@ -399,7 +403,7 @@ export function useDecideCashRefund() {
   return useMutation({
     mutationFn: (input: { refund: string; approve: boolean; note?: string }) =>
       unwrap(
-        guardedRpc<{ status: string }>(client, "neo_cash_refund_decide", {
+        callRpc<{ status: string }>(client, "neo_cash_refund_decide", {
           _refund: input.refund,
           _approve: input.approve,
           _note: input.note ?? null,
@@ -418,7 +422,7 @@ export function useSettleCashRefund() {
   return useMutation({
     mutationFn: (refund: string) =>
       unwrap(
-        guardedRpc<{ refund_receipt_number: string }>(client, "neo_cash_refund_settle", {
+        callRpc<{ refund_receipt_number: string }>(client, "neo_cash_refund_settle", {
           _refund: refund,
         }),
       ),

@@ -1,3 +1,4 @@
+import { displayStationFromRow, type DisplayStation } from "@/lib/production-displays";
 /**
  * Canonical kitchen ticket contract.
  *
@@ -606,7 +607,7 @@ export function useKitchenStationReconcile() {
  * ------------------------------------------------------------------ */
 
 export type ScopedStations = {
-  stations: { id: string; name: string; code?: string | null; station_type?: string | null }[];
+  stations: DisplayStation[];
   /** False for station-scoped users: they may not select "All stations". */
   allowAll: boolean;
   isLoading: boolean;
@@ -633,7 +634,7 @@ export function useScopedStations(): ScopedStations {
     queryFn: async () => {
       let q = supabase
         .from("operational_stations")
-        .select("id, name, branch_id, code, station_type")
+        .select("id, name, branch_id, code, station_type, departments(catalogue_key)")
         .eq("organization_id", organizationId as string)
         .eq("active", true)
         .order("sort_order")
@@ -641,7 +642,7 @@ export function useScopedStations(): ScopedStations {
       if (branchId) q = q.eq("branch_id", branchId);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      return (data ?? []).map((station) => displayStationFromRow(station));
     },
   });
 

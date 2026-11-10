@@ -1,3 +1,4 @@
+import { savedRecord } from '@/lib/mutation-evidence';
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useCallback, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -420,7 +421,7 @@ export function useCustomersLite() {
 }
 
 export function useDepartmentsLite() {
-  return useList("departments-lite", "departments", "id, name", (q) => q.order("name"));
+  return useList("departments-lite", "departments", "id, name, organization_id, branch_id, active", (q) => q.order("name"));
 }
 
 export function useCorporateAccountsLite() {
@@ -491,7 +492,7 @@ export function useEventInsert(table: string, label: string) {
       }
       const { data, error } = await db.from(table).insert(payload).select("id").maybeSingle();
       if (error) throw error;
-      return data as Row;
+      return savedRecord(data) as Row;
     },
     onSuccess: (data, values) => {
       invalidate();
@@ -554,7 +555,7 @@ export function useCreateBooking() {
         _payload: { ...rest, branch_id: chosen, idempotency_key: idempotencyKey },
       });
       if (error) throw error;
-      return data as Row;
+      return savedRecord(data, "booking_id") as Row;
     },
     onSuccess: (data, values) => {
       invalidate();
@@ -634,7 +635,7 @@ export function useConvertEnquiry() {
         },
       });
       if (error) throw error;
-      return data as Row;
+      return savedRecord(data, "booking_id") as Row;
     },
     onSuccess: (data, vars) => {
       invalidate();
@@ -667,7 +668,7 @@ export function useConvertQuotation() {
         },
       });
       if (error) throw error;
-      return data as Row;
+      return savedRecord(data, "booking_id") as Row;
     },
     onSuccess: (data, vars) => {
       invalidate();
@@ -815,7 +816,7 @@ export function useConfirmBooking() {
         _override_reason: overrideReason ?? "",
       });
       if (error) throw error;
-      return data as Row;
+      return savedRecord(data, "booking_id", bookingId) as Row;
     },
     onSuccess: (data, vars) => {
       invalidate();
@@ -969,7 +970,7 @@ export function useEnsureBeo() {
     mutationFn: async (bookingId: string) => {
       const { data, error } = await guardedRpc(db, "neo_event_beo_ensure", { _booking: bookingId });
       if (error) throw error;
-      return String(data);
+      return String(savedRecord({ id: data })["id"]);
     },
     onSuccess: (id) => {
       invalidate();
@@ -999,7 +1000,7 @@ export function usePublishBeo() {
     mutationFn: async (beoId: string) => {
       const { data, error } = await guardedRpc(db, "neo_event_beo_publish", { _beo: beoId });
       if (error) throw error;
-      return (data ?? {}) as Record<string, unknown>;
+      return savedRecord(data, "beo_id", beoId);
     },
     onSuccess: (result) => {
       invalidate();

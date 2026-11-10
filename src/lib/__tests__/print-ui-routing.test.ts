@@ -30,9 +30,12 @@ describe("print UI routing", () => {
   });
 
   it("passes the POS order property to both receipt actions", () => {
-    expect(
-      order.match(/branchId=\{data\.branch_id\}/g),
-    ).toHaveLength(2);
+    const receiptActions = order.match(/<SendToPrinterButton\b[\s\S]*?\/>/g) ?? [];
+    expect(receiptActions).toHaveLength(2);
+    for (const action of receiptActions) {
+      expect(action).toContain('type="pos_receipt"');
+      expect(action).toContain('branchId={data.branch_id}');
+    }
   });
 
   it("does not allow the browser to confirm physical outcomes", () => {

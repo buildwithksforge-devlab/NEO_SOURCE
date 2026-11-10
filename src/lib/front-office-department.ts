@@ -1,3 +1,4 @@
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Front Office department layer.
  *
@@ -125,7 +126,7 @@ export function useCreateFrontOfficeTask() {
     }) => {
       if (!organizationId) throw new Error("No organisation context");
       const departmentId = department.data?.["id"] ? String(department.data["id"]) : null;
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: departmentId,
@@ -137,7 +138,7 @@ export function useCreateFrontOfficeTask() {
         priority: input.priority ?? "normal",
         status: "open",
       });
-      if (error) throw new Error(error.message);
+
     },
     onSuccess: () => {
       invalidate();

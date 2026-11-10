@@ -1,3 +1,4 @@
+import {readViewAccess, VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
 /**
  * The one canonical money projection.
  *
@@ -181,10 +182,13 @@ export const STAGE_LABEL: Record<PaymentLifecycleStage, string> = {
 /* -------------------------------- hooks -------------------------------- */
 
 export function useFolioProjection(folioId: string | null | undefined) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   return useQuery({
-    queryKey: ["folio-projection", organizationId, folioId ?? null],
-    enabled: Boolean(organizationId && folioId),
+    ...VISIBLE_VIEW_REFRESH,
+    queryKey: ["folio-projection", organizationId, identity, folioId ?? null],
+    enabled: ready && (Boolean(organizationId && folioId)),
     queryFn: async (): Promise<FolioProjection> => {
       const { data, error } = await guardedRpc(supabase, "neo_folio_projection", {
         _folio: folioId,
@@ -201,18 +205,22 @@ export function usePaymentLifecycle(scope: {
   to?: string | null;
   paymentId?: string | null;
 }) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   const branch = scope.branchId && scope.branchId !== "all" ? scope.branchId : null;
   return useQuery({
+    ...VISIBLE_VIEW_REFRESH,
     queryKey: [
       "payment-lifecycle",
       organizationId,
+      identity,
       branch,
       scope.from ?? null,
       scope.to ?? null,
       scope.paymentId ?? null,
     ],
-    enabled: Boolean(organizationId),
+    enabled: ready && (Boolean(organizationId)),
     queryFn: async (): Promise<PaymentLifecycleRow[]> => {
       const { data, error } = await guardedRpc(supabase, "neo_payment_lifecycle", {
         _branch: branch,
@@ -248,10 +256,13 @@ export type PaymentAuditTrail = {
 };
 
 export function usePaymentAuditTrail(paymentId: string | null | undefined) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   return useQuery({
-    queryKey: ["payment-audit-trail", organizationId, paymentId ?? null],
-    enabled: Boolean(organizationId && paymentId),
+    ...VISIBLE_VIEW_REFRESH,
+    queryKey: ["payment-audit-trail", organizationId, identity, paymentId ?? null],
+    enabled: ready && (Boolean(organizationId && paymentId)),
     queryFn: async (): Promise<PaymentAuditTrail> => {
       const { data, error } = await guardedRpc(supabase, "neo_payment_audit_trail", {
         _payment: paymentId,

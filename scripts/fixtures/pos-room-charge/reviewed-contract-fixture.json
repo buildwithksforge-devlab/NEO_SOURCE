@@ -1,0 +1,2410 @@
+{
+  "scope": {
+    "branch": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+    "org": "aa17d427-f816-49bc-b02e-1a89e44806a2"
+  },
+  "columns": [
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "'pending'::text",
+      "column_name": "operational_state",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "'pending'::text",
+      "column_name": "financial_state",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "0",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "actor_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "current_owner",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "next_action",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "blocking_reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "receipt_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "downstream_references",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 19,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "1",
+      "column_name": "version",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "occurred_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 21,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "canonical_transaction_states"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "code",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 3,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "account_group",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "parent_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "false",
+      "column_name": "is_header",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "true",
+      "column_name": "postable",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "true",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "default_tax_code_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "department_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "'{}'::text[]",
+      "column_name": "source_modules",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "'pending'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "0",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_line_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "detail",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "0",
+      "column_name": "attempts",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "last_error",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "requested_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "occurred_on",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 19,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "'revenue'::text",
+      "column_name": "posting_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": null,
+      "column_name": "reverses_receipt_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 22,
+      "table_name": "finance_posting_receipts"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "operational_status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "'pending'::text",
+      "column_name": "financial_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 9,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "0",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "accounting_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "period_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "receipt_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "0",
+      "column_name": "attempts",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "last_attempt_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "last_error",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "actor_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 20,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "reversed_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": null,
+      "column_name": "reverses_state_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 22,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "detail",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 24,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "financial_states"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "reservation_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 5,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "'charge'::text",
+      "column_name": "line_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "'accommodation'::text",
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "reference",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "'pms'::text",
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_record_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "posting_date",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 12,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "CURRENT_DATE",
+      "column_name": "operational_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "1",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "gross_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "discount_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "tax_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 19,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "net_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "reverses_line_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "'posted'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 23,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 24,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 26,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "'rooms'::text",
+      "column_name": "revenue_centre",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 27,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "service_charge_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 28,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_record_uuid",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 29,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "correlation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 30,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "actor_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 31,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "transferred_from_folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 32,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "transfer_reason",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 33,
+      "table_name": "folio_lines"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'general'::text",
+      "column_name": "journal_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "CURRENT_DATE",
+      "column_name": "accounting_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "period_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'manual'::text",
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "source_document_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_document_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "document_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "1",
+      "column_name": "exchange_rate",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "0",
+      "column_name": "total_debit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "0",
+      "column_name": "total_credit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'draft'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "approval_request_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "reverses_journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 20,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "reversed_by_journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 22,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 23,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 24,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 26,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 3,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "1",
+      "column_name": "line_number",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "account_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "debit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "credit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 9,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "department_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "cost_centre",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "revenue_centre",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "corporate_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "supplier_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "event_booking_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "payment_method",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "tax_code_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "order_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'dine-in'::text",
+      "column_name": "order_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'waiter-pos'::text",
+      "column_name": "order_source",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "station_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "department_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 8,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "table_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 9,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "stay_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "room_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "corporate_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "waiter_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "shift_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "1",
+      "column_name": "guest_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "guest_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "contact_phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'draft'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'unpaid'::text",
+      "column_name": "payment_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 21,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'not-posted'::text",
+      "column_name": "folio_post_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "subtotal",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "discount_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 24,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "tax_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "service_charge_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 26,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "grand_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 27,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "0",
+      "column_name": "paid_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 28,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 29,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "dietary_notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 30,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "allergy_alert",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 31,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 32,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "sent_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 33,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "served_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 34,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "closed_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 35,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 36,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 37,
+      "table_name": "pos_orders"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 38,
+      "table_name": "pos_orders"
+    }
+  ],
+  "functions": [
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.fin_post_journal(_journal uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE j public.journal_entries; p public.accounting_periods; d numeric; c numeric; bad int;\nBEGIN\n  SELECT * INTO j FROM public.journal_entries WHERE id = _journal;\n  IF j.id IS NULL THEN RAISE EXCEPTION 'Journal not found'; END IF;\n  IF j.organization_id <> current_org_id() THEN RAISE EXCEPTION 'Not permitted'; END IF;\n  IF NOT (public.neo_system_posting() OR has_permission('finance','approve') OR is_org_admin()) THEN\n    RAISE EXCEPTION 'You do not have permission to post journals';\n  END IF;\n  IF j.status = 'posted' THEN RETURN jsonb_build_object('ok', true, 'already_posted', true, 'journal_id', j.id); END IF;\n  IF j.status NOT IN ('draft','approved') THEN RAISE EXCEPTION 'Journal cannot be posted from status %', j.status; END IF;\n\n  SELECT COALESCE(sum(debit),0), COALESCE(sum(credit),0) INTO d, c\n    FROM public.journal_entry_lines WHERE journal_id = j.id;\n  IF d = 0 AND c = 0 THEN RAISE EXCEPTION 'Journal has no lines'; END IF;\n  IF d <> c THEN RAISE EXCEPTION 'Journal is not balanced (debit % vs credit %)', d, c; END IF;\n\n  SELECT count(*) INTO bad FROM public.journal_entry_lines l\n    JOIN public.chart_of_accounts a ON a.id = l.account_id\n    WHERE l.journal_id = j.id AND (a.active = false OR a.postable = false OR a.is_header = true);\n  IF bad > 0 THEN RAISE EXCEPTION 'Journal references inactive or non-postable accounts'; END IF;\n\n  SELECT * INTO p FROM public.fin_period_for(j.organization_id, j.accounting_date);\n  IF p.id IS NULL THEN RAISE EXCEPTION 'No accounting period covers %', j.accounting_date; END IF;\n  IF p.status NOT IN ('open') AND NOT (p.status = 'soft_closed' AND j.journal_type = 'adjustment') THEN\n    RAISE EXCEPTION 'Accounting period % is %', p.name, p.status;\n  END IF;\n\n  IF j.journal_type <> 'reversal' AND j.source_document_id IS NOT NULL AND EXISTS (\n      SELECT 1 FROM public.journal_entries x\n      WHERE x.organization_id = j.organization_id AND x.id <> j.id\n        AND x.source_document_type = j.source_document_type\n        AND x.source_document_id = j.source_document_id\n        AND x.status = 'posted' AND x.journal_type <> 'reversal'\n        AND x.reversed_by_journal_id IS NULL) THEN\n    RAISE EXCEPTION 'This source document has already been posted';\n  END IF;\n\n  UPDATE public.journal_entries\n    SET status='posted', total_debit=d, total_credit=c, period_id=p.id,\n        posted_by=auth.uid(), posted_at=now()\n    WHERE id = j.id;\n\n  RETURN jsonb_build_object('ok', true, 'journal_id', j.id, 'total', d, 'period', p.name);\nEND $function$\n",
+      "definition_md5": "4162e3e7a44d05a75389087945abe2b2",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "fin_post_journal(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_finance_canonical_mark_posted(_org uuid, _source uuid, _journal uuid, _receipt uuid)\n RETURNS void\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  UPDATE public.canonical_transaction_states s\n     SET financial_state = 'posted',\n         journal_id = COALESCE(_journal, s.journal_id),\n         receipt_id = COALESCE(_receipt, s.receipt_id),\n         blocking_reason = NULL,\n         next_action = 'Posted to the general ledger.',\n         updated_at = now(),\n         version = s.version + 1\n   WHERE s.organization_id = _org\n     AND s.source_id = _source\n     AND s.financial_state NOT IN ('posted','reversed','not-applicable');\n$function$\n",
+      "definition_md5": "0c201a4949d3228a990950efbe388e62",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_finance_canonical_mark_posted(uuid,uuid,uuid,uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_finance_exception_register(_branch uuid DEFAULT NULL::uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date)\n RETURNS TABLE(kind text, module text, reference text, source_id uuid, amount numeric, currency text, occurred_on date, age_days integer, status text, reason text, detail text, responsible text, action text, drill_to text, last_attempt timestamp with time zone, attempts integer, last_error text, branch_id uuid, property text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE org uuid:=public.current_org_id(); today date:=current_date; BEGIN\n IF org IS NULL OR NOT(public.is_org_admin() OR public.has_permission('finance','view') OR public.can_read_general_ledger()) THEN RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE='42501'; END IF;\n RETURN QUERY SELECT s.financial_state,s.source_module,coalesce(s.source_reference,s.source_id::text),s.source_id,s.amount,s.currency,s.occurred_at::date,greatest(0,today-s.occurred_at::date),s.financial_state,coalesce(s.blocking_reason,s.next_action),coalesce(s.blocking_reason,s.next_action),'Finance',coalesce(s.next_action,'Resolve at source and retry.'),\n  CASE s.source_module WHEN 'inventory' THEN '/inventory/receiving' WHEN 'supplier_invoice' THEN '/finance/payables' WHEN 'supplier_payment' THEN '/finance/payables' WHEN 'deposit' THEN '/finance/deposits' WHEN 'payment' THEN '/finance/queue' WHEN 'pos' THEN '/pos/orders' WHEN 'events' THEN '/events/bookings' WHEN 'delivery' THEN '/delivery' WHEN 'laundry' THEN '/laundry' ELSE '/finance/posting' END,\n  s.updated_at,coalesce(r.attempts,0),r.last_error,s.branch_id,b.name\n FROM public.canonical_transaction_states s LEFT JOIN public.branches b ON b.id=s.branch_id LEFT JOIN LATERAL(SELECT x.attempts,x.last_error FROM public.finance_posting_receipts x WHERE x.organization_id=s.organization_id AND public.neo_canonical_posting_module(x.source_module)=s.source_module AND x.source_id=s.source_id ORDER BY x.updated_at DESC LIMIT 1)r ON true\n WHERE s.organization_id=org AND s.financial_state IN('blocked','failed')\n   -- The night audit writes its own lifecycle record, so an exception run left\n   -- a blocked record that the next run counted as a fresh exception forever.\n   AND NOT EXISTS (SELECT 1 FROM public.night_audit_runs nr WHERE nr.id = s.source_id)\n   AND (_branch IS NULL OR s.branch_id=_branch) AND (_from IS NULL OR s.occurred_at::date>=_from) AND (_to IS NULL OR s.occurred_at::date<=_to)\n UNION ALL\n SELECT 'blocked',public.neo_canonical_posting_module(r.source_module),coalesce(r.source_reference,r.source_id::text),r.source_id,r.amount,r.currency,coalesce(r.occurred_on,r.created_at::date),greatest(0,today-coalesce(r.occurred_on,r.created_at::date)),'blocked','Posting receipt is not backed by a balanced posted journal','Posting receipt is not backed by a balanced posted journal','Finance','Repair the journal link or reverse and repost.','/finance/posting',r.updated_at,r.attempts,r.last_error,r.branch_id,b.name\n FROM public.finance_posting_receipts r LEFT JOIN public.branches b ON b.id=r.branch_id LEFT JOIN public.journal_entries j ON j.id=r.journal_id\n WHERE r.organization_id=org AND r.status='posted' AND (j.id IS NULL OR j.status<>'posted' OR abs(coalesce(j.total_debit,0)-coalesce(j.total_credit,0))>=0.01) AND (_branch IS NULL OR r.branch_id=_branch) AND (_from IS NULL OR coalesce(r.occurred_on,r.created_at::date)>=_from) AND (_to IS NULL OR coalesce(r.occurred_on,r.created_at::date)<=_to)\n UNION ALL\n SELECT 'failed',public.neo_canonical_posting_module(r.source_module),coalesce(r.source_reference,r.source_id::text),r.source_id,r.amount,r.currency,coalesce(r.occurred_on,r.created_at::date),greatest(0,today-coalesce(r.occurred_on,r.created_at::date)),'failed',coalesce(nullif(r.last_error,''),'Posting attempt failed'),coalesce(nullif(r.last_error,''),'Posting attempt failed'),'Finance','Resolve the cause at source and retry the posting.',\n  CASE public.neo_canonical_posting_module(r.source_module) WHEN 'inventory' THEN '/inventory/receiving' WHEN 'supplier_invoice' THEN '/finance/payables' WHEN 'supplier_payment' THEN '/finance/payables' WHEN 'deposit' THEN '/finance/deposits' WHEN 'payment' THEN '/finance/queue' WHEN 'pos' THEN '/pos/orders' WHEN 'events' THEN '/events/bookings' WHEN 'delivery' THEN '/delivery' WHEN 'laundry' THEN '/laundry' ELSE '/finance/posting' END,\n  r.updated_at,r.attempts,r.last_error,r.branch_id,b.name\n FROM public.finance_posting_receipts r LEFT JOIN public.branches b ON b.id=r.branch_id\n WHERE r.organization_id=org AND r.status IN('failed','blocked')\n   AND NOT EXISTS (SELECT 1 FROM public.canonical_transaction_states s2 WHERE s2.organization_id=r.organization_id AND s2.source_id=r.source_id AND s2.financial_state IN('blocked','failed'))\n   AND (_branch IS NULL OR r.branch_id=_branch) AND (_from IS NULL OR coalesce(r.occurred_on,r.created_at::date)>=_from) AND (_to IS NULL OR coalesce(r.occurred_on,r.created_at::date)<=_to)\n ORDER BY 1,7 DESC;\nEND $function$\n",
+      "definition_md5": "94f136c7374520a1c33259f73f55c380",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_finance_exception_register(uuid,date,date)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_finance_post_family(_module text, _source uuid, _silent boolean DEFAULT false)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  org uuid := public.current_org_id();\n  res jsonb; branch uuid; amount numeric := 0; ref text; occurred date; cur text;\n  journal uuid; okd boolean; msg text;\nBEGIN\n  IF _module = 'deposit' THEN\n    RETURN public.neo_deposit_post(_source, _silent);\n  ELSIF _module = 'payment' THEN\n    RETURN public.neo_payment_post(_source, _silent);\n  ELSIF _module NOT IN ('inventory', 'supplier_invoice', 'supplier_payment') THEN\n    RETURN public.neo_finance_post_source(_module, _source, _silent);\n  END IF;\n\n  IF org IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'no_organisation'); END IF;\n  IF NOT (public.is_org_admin() OR public.has_permission('finance','edit')\n          OR public.has_permission('finance','approve')) AND NOT _silent THEN\n    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended(_module || ':' || _source::text, 0));\n\n  IF EXISTS (SELECT 1 FROM public.finance_posting_receipts\n              WHERE organization_id = org AND idempotency_key = _module || ':' || _source::text\n                AND status = 'posted') THEN\n    RETURN jsonb_build_object('ok', true, 'reason', 'already_posted', 'module', _module, 'source_id', _source);\n  END IF;\n\n  IF _module = 'inventory' THEN\n    SELECT g.branch_id, coalesce(g.total_value,0), coalesce(g.grn_number, g.id::text),\n           coalesce(g.delivery_date, (g.received_at)::date, (g.created_at)::date)\n      INTO branch, amount, ref, occurred\n      FROM public.goods_receipts g WHERE g.id = _source AND g.organization_id = org;\n    IF ref IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n\n    IF EXISTS (SELECT 1 FROM public.goods_receipts g WHERE g.id = _source AND g.reversed_at IS NOT NULL) THEN\n      res := jsonb_build_object('ok', false, 'reason', 'reversed',\n             'detail', 'This receipt was reversed — no further posting is required.');\n    ELSIF NOT EXISTS (SELECT 1 FROM public.goods_receipts g WHERE g.id = _source\n                       AND g.status IN ('received','accepted','completed','closed','posted')) THEN\n      res := jsonb_build_object('ok', false, 'reason', 'not_accepted',\n             'detail', 'Complete and accept the receipt in Stores before it can be recognised.');\n    ELSE\n      res := public.neo_grn_post_accrual(_source);\n    END IF;\n\n  ELSIF _module = 'supplier_invoice' THEN\n    SELECT v.branch_id, coalesce(v.amount,0), coalesce(v.invoice_number, v.id::text),\n           coalesce(v.invoice_date, (v.created_at)::date)\n      INTO branch, amount, ref, occurred\n      FROM public.supplier_invoices v WHERE v.id = _source AND v.organization_id = org;\n    IF ref IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    res := public.neo_supplier_invoice_accept(_source, NULL);\n\n  ELSE\n    SELECT sp.branch_id, coalesce(sp.amount,0), coalesce(sp.payment_number, sp.id::text),\n           coalesce(sp.paid_on, (sp.created_at)::date)\n      INTO branch, amount, ref, occurred\n      FROM public.supplier_payments sp WHERE sp.id = _source AND sp.organization_id = org;\n    IF ref IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    res := public.neo_supplier_payment_advance(_source, 'settle', NULL);\n  END IF;\n\n  okd := coalesce((res->>'ok')::boolean, res ? 'journal_id');\n  journal := nullif(res->>'journal_id','')::uuid;\n  msg := coalesce(res->>'detail', res->>'reason');\n  cur := public.neo_fact_currency(org, branch);\n\n  PERFORM public.neo_record_posting_receipt(\n    org, branch, _module, _source, ref,\n    CASE WHEN okd THEN 'posted' ELSE 'blocked' END,\n    amount, cur, NULL, msg, CASE WHEN okd THEN NULL ELSE msg END, occurred);\n\n  IF okd AND journal IS NOT NULL THEN\n    UPDATE public.finance_posting_receipts\n       SET journal_id = coalesce(journal_id, journal)\n     WHERE organization_id = org AND idempotency_key = _module || ':' || _source::text;\n  END IF;\n\n  RETURN res;\nEND $function$\n",
+      "definition_md5": "4271fba359558e4e58e0a66adfe36bce",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_finance_post_family(text,uuid,boolean)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_finance_post_txn(_source_type text, _source_id uuid, _silent boolean DEFAULT false)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  org uuid := public.current_org_id();\n  branch uuid; cur text; ref text; occurred date; amount numeric := 0;\n  posting text := 'revenue'; lines jsonb := '[]'::jsonb; res jsonb;\n  customer uuid; net numeric; tax numeric; svc numeric; settle text;\n  o public.pos_orders; fl public.folio_lines; pay public.payments;\n  ev public.event_bookings; inv public.invoices; si public.supplier_invoices;\n  sp public.supplier_payments; lo public.guest_laundry_orders; deliv record;\n  paid numeric; remainder numeric; key text;\nBEGIN\n  IF org IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'no_organisation'); END IF;\n  IF NOT _silent AND NOT (public.is_org_admin()\n        OR public.has_permission('finance','edit') OR public.has_permission('finance','approve')) THEN\n    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';\n  END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended(_source_type || ':' || _source_id::text, 0));\n\n  IF _source_type = 'pos_order' THEN\n    SELECT * INTO o FROM public.pos_orders\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF o.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := o.branch_id; ref := o.order_number; customer := o.customer_id;\n    occurred := (coalesce(o.closed_at, o.created_at))::date; amount := coalesce(o.grand_total,0);\n    IF o.status NOT IN ('closed','paid','settled','completed','charged-to-room') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Order is ' || o.status || '. Draft, sent, ready and served orders are not revenue.');\n    END IF;\n\n    IF o.folio_id IS NOT NULL THEN\n      posting := 'room_charge';\n      res := public.neo_post_pos_order(o.id);\n      PERFORM public.neo_record_posting_receipt(org, branch, 'pos', o.id, ref,\n        CASE WHEN coalesce((res->>'ok')::boolean,false) THEN 'posted' ELSE 'blocked' END,\n        amount, public.neo_fact_currency(org, branch), nullif(res->>'folio_line_id','')::uuid,\n        'Routed to folio ' || o.folio_id::text || ' - revenue is recognised on the folio charge, not on the order.',\n        NULL, occurred);\n      UPDATE public.finance_posting_receipts SET posting_type = posting\n        WHERE organization_id = org AND source_module = 'pos' AND source_id = o.id;\n      RETURN coalesce(res,'{}'::jsonb) || jsonb_build_object('posting_type', posting);\n    END IF;\n\n    tax := coalesce(o.tax_total,0); svc := coalesce(o.service_charge_total,0);\n    amount := greatest(coalesce(o.grand_total,0),\n                       coalesce(o.subtotal,0) - coalesce(o.discount_total,0));\n    net := amount - tax - svc;\n    IF o.corporate_account_id IS NOT NULL AND coalesce(o.paid_total,0) < amount THEN\n      settle := '1060';\n    ELSE\n      -- The money account follows the receipt: the account the cashier chose,\n      -- otherwise the account this property uses for that tender.\n      SELECT public.neo_gl_account_code(org, p.method, p.destination_account_id) INTO settle\n        FROM public.pos_payments p WHERE p.order_id = o.id\n         AND p.status IN ('confirmed','paid','completed','captured','settled')\n        ORDER BY p.amount DESC LIMIT 1;\n      settle := coalesce(settle, public.neo_gl_settlement_code_for(org, 'cash'), '1010');\n    END IF;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', settle, 'debit', amount, 'description', 'Settlement ' || coalesce(ref,'')),\n      jsonb_build_object('code', public.neo_gl_revenue_code_scoped(org, o.order_type, NULL), 'credit', net),\n      jsonb_build_object('code', '2040', 'credit', tax, 'description', 'VAT'),\n      jsonb_build_object('code', '2050', 'credit', svc, 'description', 'Service charge'));\n\n  ELSIF _source_type = 'folio_charge' THEN\n    SELECT * INTO fl FROM public.folio_lines\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF fl.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := fl.branch_id; ref := coalesce(fl.reference, fl.description); customer := fl.customer_id;\n    occurred := coalesce(fl.operational_date, fl.posting_date::date);\n    IF fl.status <> 'posted' OR coalesce(fl.line_type,'charge') = 'payment' THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Only posted folio charges are recognised.');\n    END IF;\n    tax := coalesce(fl.tax_amount,0);\n    svc := coalesce(fl.service_charge_amount,0);\n    amount := coalesce(fl.gross_amount,0) - coalesce(fl.discount_amount,0) + tax + svc;\n    net := coalesce(fl.gross_amount,0) - coalesce(fl.discount_amount,0);\n    IF amount <= 0 THEN RETURN jsonb_build_object('ok', false, 'reason', 'zero_amount'); END IF;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '1060', 'debit', amount, 'description', 'Guest ledger ' || coalesce(ref,'')),\n      jsonb_build_object('code', public.neo_gl_revenue_code_scoped(org, fl.category, fl.revenue_centre), 'credit', net),\n      jsonb_build_object('code', '2040', 'credit', tax, 'description', 'VAT'),\n      jsonb_build_object('code', '2050', 'credit', svc, 'description', 'Service charge'));\n\n  ELSIF _source_type = 'folio_payment' THEN\n    SELECT * INTO pay FROM public.payments\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF pay.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := pay.branch_id; ref := pay.receipt_number; customer := pay.customer_id;\n    occurred := coalesce(pay.paid_at, pay.created_at)::date; amount := coalesce(pay.amount,0);\n    posting := 'collection';\n    IF coalesce(pay.status,'') NOT IN ('confirmed','completed','paid','succeeded','captured') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Only confirmed receipts reduce the outstanding balance.');\n    END IF;\n    IF amount = 0 THEN RETURN jsonb_build_object('ok', false, 'reason', 'zero_amount'); END IF;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', public.neo_gl_account_code(org, pay.method, pay.destination_account_id),\n                         'debit', amount, 'description', 'Receipt ' || coalesce(ref,'')),\n      jsonb_build_object('code', '1060', 'credit', amount, 'description', 'Guest / customer ledger'));\n\n  ELSIF _source_type = 'event_deposit' THEN\n    SELECT * INTO ev FROM public.event_bookings\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF ev.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := ev.branch_id; ref := ev.event_reference; customer := ev.customer_id;\n    occurred := coalesce(ev.confirmed_at::date, ev.event_date); posting := 'deposit';\n    amount := coalesce(ev.deposit_paid, 0);\n    IF amount <= 0 THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'No deposit has been received. Forecast is never revenue.');\n    END IF;\n    SELECT public.neo_gl_account_code(org, p.method, p.destination_account_id) INTO settle\n      FROM public.payments p\n     WHERE p.organization_id = org AND p.source_module = 'events' AND p.source_record_id = ev.id\n       AND coalesce(p.status,'') IN ('confirmed','completed','paid','succeeded','captured')\n     ORDER BY p.amount DESC LIMIT 1;\n    settle := coalesce(settle, public.neo_gl_settlement_code_for(org, 'cash'), '1010');\n    lines := jsonb_build_array(\n      jsonb_build_object('code', settle, 'debit', amount, 'description', 'Event deposit ' || coalesce(ref,'')),\n      jsonb_build_object('code', '2030', 'credit', amount, 'description', 'Event deposit held'));\n\n  ELSIF _source_type = 'event_invoice' THEN\n    SELECT * INTO inv FROM public.invoices\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF inv.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := inv.branch_id; ref := inv.invoice_number; customer := inv.customer_id;\n    occurred := inv.issue_date; posting := 'invoice'; amount := coalesce(inv.total,0);\n    IF coalesce(inv.status,'draft') NOT IN ('issued','sent','partially_paid','paid','overdue') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Draft and cancelled invoices are not receivables.');\n    END IF;\n    net := coalesce(inv.subtotal,0) - coalesce(inv.discount_total,0);\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '1060', 'debit', amount, 'description', 'Invoice ' || coalesce(ref,'')),\n      jsonb_build_object('code', CASE WHEN inv.event_booking_id IS NOT NULL THEN public.neo_gl_revenue_code_scoped(org, 'events', NULL) ELSE '4090' END,\n                         'credit', net),\n      jsonb_build_object('code', '2050', 'credit', coalesce(inv.service_charge_total,0),\n                         'description', 'Service charge'),\n      jsonb_build_object('code', '2040', 'credit', coalesce(inv.tax_total,0), 'description', 'VAT'));\n\n  ELSIF _source_type = 'event_earned' THEN\n    SELECT * INTO ev FROM public.event_bookings\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF ev.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := ev.branch_id; ref := ev.event_reference; customer := ev.customer_id;\n    occurred := ev.event_date; posting := 'earned'; amount := coalesce(ev.total_amount,0);\n    IF ev.status NOT IN ('completed','closed') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Event is ' || ev.status || '. Confirmed and provisional bookings are forecast, not revenue.');\n    END IF;\n    IF amount <= 0 THEN RETURN jsonb_build_object('ok', false, 'reason', 'zero_amount'); END IF;\n    paid := least(coalesce(ev.deposit_paid,0), amount);\n    remainder := amount - paid;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '2030', 'debit', paid, 'description', 'Deposit applied'),\n      jsonb_build_object('code', '1060', 'debit', remainder, 'description', 'Event receivable'),\n      jsonb_build_object('code', public.neo_gl_revenue_code_scoped(org, 'events', NULL), 'credit', amount, 'description', 'Event revenue ' || coalesce(ref,'')));\n\n  ELSIF _source_type = 'event_cancellation' THEN\n    SELECT * INTO ev FROM public.event_bookings\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF ev.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := ev.branch_id; ref := ev.event_reference; customer := ev.customer_id;\n    occurred := coalesce(ev.cancelled_at::date, ev.event_date); posting := 'cancellation';\n    IF ev.status <> 'cancelled' THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle');\n    END IF;\n    PERFORM public.neo_finance_reverse_posting('event_earned', ev.id, 'earned', 'Event cancelled');\n    amount := coalesce(ev.cancellation_fee, 0);\n    paid := coalesce(ev.deposit_paid, 0);\n    remainder := greatest(paid - amount, 0);\n    IF amount = 0 AND remainder = 0 THEN\n      RETURN jsonb_build_object('ok', true, 'reason', 'nothing_to_recognise');\n    END IF;\n    SELECT public.neo_gl_account_code(org, p.method, p.destination_account_id) INTO settle\n      FROM public.payments p\n     WHERE p.organization_id = org AND p.source_module = 'events' AND p.source_record_id = ev.id\n     ORDER BY p.amount DESC LIMIT 1;\n    settle := coalesce(settle, public.neo_gl_settlement_code_for(org, 'cash'), '1010');\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '2030', 'debit', paid, 'description', 'Deposit released'),\n      jsonb_build_object('code', '1060', 'debit', greatest(amount - paid, 0),\n                         'description', 'Cancellation receivable'),\n      jsonb_build_object('code', public.neo_gl_revenue_code_scoped(org, 'events', NULL), 'credit', amount, 'description', 'Cancellation fee ' || coalesce(ref,'')),\n      jsonb_build_object('code', settle, 'credit', remainder, 'description', 'Refund to client'));\n    amount := greatest(amount, paid);\n\n  ELSIF _source_type = 'delivery_order' THEN\n    SELECT d.id, d.branch_id, d.order_number, d.customer_id, d.grand_total, d.tax_total,\n           d.order_status, d.payment_status, d.payment_method, d.delivered_at, d.created_at\n      INTO deliv FROM public.delivery_orders d\n      WHERE d.id = _source_id AND d.organization_id = org FOR UPDATE;\n    IF deliv.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := deliv.branch_id; ref := deliv.order_number; customer := deliv.customer_id;\n    occurred := coalesce(deliv.delivered_at, deliv.created_at)::date;\n    amount := coalesce(deliv.grand_total,0); tax := coalesce(deliv.tax_total,0);\n    IF deliv.order_status NOT IN ('delivered','completed') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Only completed deliveries are recognised.');\n    END IF;\n    IF deliv.payment_status IN ('paid','settled','completed') THEN\n      SELECT public.neo_gl_account_code(org, coalesce(p.method, deliv.payment_method), p.destination_account_id)\n        INTO settle\n        FROM public.payments p\n       WHERE p.organization_id = org AND p.source_module = 'delivery' AND p.source_record_id = deliv.id\n         AND coalesce(p.status,'') IN ('confirmed','completed','paid','succeeded','captured')\n       ORDER BY p.amount DESC LIMIT 1;\n      settle := coalesce(settle, public.neo_gl_account_code(org, deliv.payment_method, NULL), '1010');\n    ELSE\n      settle := '1060';\n    END IF;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', settle, 'debit', amount, 'description', 'Delivery ' || coalesce(ref,'')),\n      jsonb_build_object('code', '4070', 'credit', amount - tax),\n      jsonb_build_object('code', '2040', 'credit', tax, 'description', 'VAT'));\n\n  ELSIF _source_type = 'laundry_order' THEN\n    SELECT * INTO lo FROM public.guest_laundry_orders\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF lo.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := lo.branch_id; ref := lo.laundry_number;\n    occurred := coalesce(lo.delivered_at, lo.created_at)::date; amount := coalesce(lo.total,0);\n    IF lo.status NOT IN ('delivered','completed','closed') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Only completed laundry orders are recognised.');\n    END IF;\n    IF lo.folio_id IS NOT NULL THEN\n      posting := 'folio_charge';\n      res := public.laundry_post_charge(lo.id);\n      PERFORM public.neo_record_posting_receipt(org, branch, 'laundry', lo.id, ref,\n        CASE WHEN coalesce((res->>'ok')::boolean,false) THEN 'posted' ELSE 'blocked' END,\n        amount, public.neo_fact_currency(org, branch), nullif(res->>'folio_line_id','')::uuid,\n        'Charged to the guest folio - revenue is recognised on the folio charge.', NULL, occurred);\n      UPDATE public.finance_posting_receipts SET posting_type = posting\n        WHERE organization_id = org AND source_module = 'laundry' AND source_id = lo.id;\n      RETURN coalesce(res,'{}'::jsonb) || jsonb_build_object('posting_type', posting);\n    END IF;\n    tax := coalesce(lo.tax_amount,0);\n    settle := coalesce(public.neo_gl_settlement_code_for(org, 'cash'), '1010');\n    lines := jsonb_build_array(\n      jsonb_build_object('code', settle, 'debit', amount, 'description', 'Laundry ' || coalesce(ref,'')),\n      jsonb_build_object('code', public.neo_gl_revenue_code_scoped(org, 'laundry', NULL), 'credit', amount - tax),\n      jsonb_build_object('code', '2040', 'credit', tax, 'description', 'VAT'));\n\n  ELSIF _source_type = 'supplier_invoice' THEN\n    SELECT * INTO si FROM public.supplier_invoices\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF si.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := si.branch_id; ref := si.invoice_number; occurred := si.invoice_date;\n    amount := coalesce(si.amount,0); tax := coalesce(si.tax_amount,0); posting := 'payable';\n    IF si.approved_at IS NULL OR si.status NOT IN ('approved','matched','partially_paid','paid') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle',\n        'detail', 'Only approved supplier invoices become payables. Requests and purchase orders do not.');\n    END IF;\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '1070', 'debit', amount - tax, 'description', 'Goods / services received'),\n      jsonb_build_object('code', '2040', 'debit', tax, 'description', 'Input VAT'),\n      jsonb_build_object('code', '2010', 'credit', amount, 'description', 'Supplier invoice ' || coalesce(ref,'')));\n\n  ELSIF _source_type = 'supplier_payment' THEN\n    SELECT * INTO sp FROM public.supplier_payments\n      WHERE id = _source_id AND organization_id = org FOR UPDATE;\n    IF sp.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;\n    branch := sp.branch_id; ref := sp.payment_number; occurred := sp.paid_on;\n    amount := coalesce(sp.amount,0); posting := 'payable_payment';\n    IF sp.status NOT IN ('paid','completed','settled') THEN\n      RETURN jsonb_build_object('ok', false, 'reason', 'ineligible_lifecycle');\n    END IF;\n    -- Money leaves the account the hotel actually paid from.\n    lines := jsonb_build_array(\n      jsonb_build_object('code', '2010', 'debit', amount, 'description', 'Supplier payment ' || coalesce(ref,'')),\n      jsonb_build_object('code', public.neo_gl_account_code(org, sp.method, sp.bank_account_id),\n                         'credit', amount));\n\n  ELSE\n    RETURN jsonb_build_object('ok', false, 'reason', 'unknown_source_type');\n  END IF;\n\n  cur := public.neo_fact_currency(org, branch);\n  occurred := coalesce(occurred, (now() AT TIME ZONE public.neo_fact_timezone(org, branch))::date);\n  key := _source_type || ':' || _source_id::text || ':' || posting;\n\n  res := public.neo_gl_post(org, branch, split_part(_source_type,'_',1), _source_type, _source_id,\n                            posting, occurred, cur,\n                            initcap(replace(_source_type,'_',' ')) || ' ' || coalesce(ref,''),\n                            lines, customer, NULL);\n\n  PERFORM public.neo_record_posting_receipt(org, branch, _source_type, _source_id, ref,\n    'posted', amount, cur, NULL,\n    CASE WHEN coalesce((res->>'duplicate_prevented')::boolean,false)\n         THEN 'Duplicate replay prevented - the existing journal was reused.'\n         ELSE 'Posted to journal ' || (res->>'journal_id') END,\n    NULL, occurred);\n\n  UPDATE public.finance_posting_receipts\n     SET posting_type = posting, journal_id = (res->>'journal_id')::uuid\n   WHERE organization_id = org AND source_module = _source_type AND source_id = _source_id;\n\n  PERFORM public.emit_domain_event(org, branch, 'finance.posted', _source_type, _source_id,\n    jsonb_build_object('posting_type', posting, 'amount', amount, 'currency', cur,\n                       'journal_id', res->>'journal_id', 'occurred_on', occurred),\n    'finance.posted:' || key, customer);\n\n  RETURN res || jsonb_build_object('source_type', _source_type, 'source_id', _source_id,\n                                   'posting_type', posting, 'amount', amount);\nEXCEPTION WHEN OTHERS THEN\n  PERFORM public.neo_record_posting_receipt(org, branch, _source_type, _source_id, ref,\n    'failed', amount, coalesce(cur,'KES'), NULL, NULL, SQLERRM, occurred);\n  IF _silent THEN RETURN jsonb_build_object('ok', false, 'reason', 'failed', 'detail', SQLERRM); END IF;\n  RAISE;\nEND $function$\n",
+      "definition_md5": "dd038308a32b104e8dbfde392ff330af",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_finance_post_txn(text,uuid,boolean)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_finance_posting_queue(_branch uuid DEFAULT NULL::uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date)\n RETURNS TABLE(source_module text, source_id uuid, reference text, source_status text, amount numeric, currency text, occurred_on date, eligible boolean, posting_status text, rule text, required_action text, drill_to text, last_error text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE org uuid:=public.current_org_id(); BEGIN\n IF org IS NULL OR NOT(public.is_org_admin() OR public.has_permission('finance','view')) THEN RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE='42501'; END IF;\n RETURN QUERY SELECT s.source_module,s.source_id,s.source_reference,s.operational_state,s.amount,s.currency,s.occurred_at::date,s.financial_state='eligible',s.financial_state,\n  'Canonical state '||s.operational_state||' → '||s.financial_state,\n  coalesce(s.next_action,CASE s.financial_state WHEN 'eligible' THEN 'Post to the general ledger.' WHEN 'blocked' THEN 'Resolve the source exception.' WHEN 'failed' THEN 'Correct the failure and retry safely.' ELSE 'Complete the current operational stage.' END),\n  CASE s.source_module WHEN 'inventory' THEN '/inventory/receiving' WHEN 'supplier_invoice' THEN '/finance/payables' WHEN 'supplier_payment' THEN '/finance/payables' WHEN 'deposit' THEN '/finance/deposits' WHEN 'payment' THEN '/finance/queue' WHEN 'pos' THEN '/pos/orders' WHEN 'events' THEN '/events/bookings' WHEN 'delivery' THEN '/delivery' WHEN 'laundry' THEN '/laundry' ELSE '/finance/posting' END,\n  coalesce(s.blocking_reason,(SELECT r.last_error FROM public.finance_posting_receipts r WHERE r.organization_id=s.organization_id AND public.neo_canonical_posting_module(r.source_module)=s.source_module AND r.source_id=s.source_id ORDER BY r.updated_at DESC LIMIT 1))\n FROM public.canonical_transaction_states s WHERE s.organization_id=org AND (_branch IS NULL OR s.branch_id=_branch) AND (_from IS NULL OR s.occurred_at::date>=_from) AND (_to IS NULL OR s.occurred_at::date<=_to) AND s.source_module IN('pos','folio','laundry','events','delivery','inventory','supplier_invoice','supplier_payment','deposit','payment') AND s.financial_state NOT IN('posted','reversed','not-applicable') ORDER BY (s.financial_state='eligible') DESC,s.occurred_at DESC LIMIT 500;\nEND $function$\n",
+      "definition_md5": "06e9f84092e8c40e6dcc1e159b503d08",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_finance_posting_queue(uuid,date,date)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_financial_state_from_receipt()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE s text; m text:=public.neo_canonical_posting_module(NEW.source_module); balanced boolean:=false;\nBEGIN\n IF NEW.journal_id IS NOT NULL THEN SELECT abs(coalesce(total_debit,0)-coalesce(total_credit,0))<0.01 AND status='posted' INTO balanced FROM public.journal_entries WHERE id=NEW.journal_id AND organization_id=NEW.organization_id; END IF;\n s:=CASE WHEN lower(coalesce(NEW.status,'pending'))='posted' AND NOT coalesce(balanced,false) THEN 'blocked' WHEN lower(coalesce(NEW.status,'pending')) IN('posted','failed','blocked','reversed','eligible') THEN lower(NEW.status) ELSE 'pending' END;\n PERFORM public.neo_financial_state_set(NEW.organization_id,NEW.branch_id,m,NEW.source_id,NEW.source_reference,NULL,s,CASE WHEN s='blocked' AND NEW.status='posted' THEN 'Posting receipt has no balanced posted journal' WHEN s IN('failed','blocked') THEN coalesce(NEW.last_error,NEW.detail) ELSE NEW.detail END,NEW.amount,NEW.currency,NEW.occurred_on,NEW.journal_id,NEW.id,NEW.last_error,NEW.requested_by,jsonb_build_object('idempotency_key',NEW.idempotency_key));\n PERFORM public.neo_canonical_transaction_set(NEW.organization_id,NEW.branch_id,m,NEW.source_id,NEW.source_reference,coalesce((SELECT operational_status FROM public.financial_states WHERE source_module=m AND source_id=NEW.source_id),'pending'),s,NEW.amount,NEW.currency,NEW.idempotency_key,NEW.requested_by,'Finance',CASE s WHEN 'eligible' THEN 'Post to the general ledger' WHEN 'blocked' THEN 'Resolve the posting exception and retry' WHEN 'failed' THEN 'Correct the failure and retry safely' ELSE NULL END,CASE WHEN s='blocked' AND NEW.status='posted' THEN 'Posting receipt has no balanced posted journal' ELSE NEW.last_error END,NEW.journal_id,NEW.id,jsonb_strip_nulls(jsonb_build_object('journal_id',NEW.journal_id,'receipt_id',NEW.id)),'{}'::jsonb,coalesce(NEW.updated_at,NEW.created_at));\n RETURN NEW;\nEND $function$\n",
+      "definition_md5": "0af12c33c52a94ce889ba412f1e44369",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_financial_state_from_receipt()"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_financial_state_set(_org uuid, _branch uuid, _module text, _source uuid, _reference text, _operational text, _financial text, _reason text, _amount numeric, _currency text, _accounting_date date, _journal uuid, _receipt uuid, _last_error text, _actor uuid, _detail jsonb)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _id uuid;\nBEGIN\n  IF _org IS NULL OR _source IS NULL OR _module IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  INSERT INTO public.financial_states AS fs (\n    organization_id, branch_id, source_module, source_id, source_reference,\n    operational_status, financial_status, reason, amount, currency,\n    accounting_date, journal_id, receipt_id, last_error, actor_id,\n    posted_at, reversed_at, detail, attempts, last_attempt_at\n  ) VALUES (\n    _org, _branch, _module, _source, _reference,\n    _operational, COALESCE(_financial, 'pending'), _reason, COALESCE(_amount, 0), COALESCE(_currency, 'KES'),\n    _accounting_date, _journal, _receipt, _last_error, _actor,\n    CASE WHEN _financial = 'posted' THEN now() END,\n    CASE WHEN _financial = 'reversed' THEN now() END,\n    COALESCE(_detail, '{}'::jsonb), 0, now()\n  )\n  ON CONFLICT (source_module, source_id) DO UPDATE SET\n    branch_id = COALESCE(EXCLUDED.branch_id, fs.branch_id),\n    source_reference = COALESCE(EXCLUDED.source_reference, fs.source_reference),\n    operational_status = COALESCE(EXCLUDED.operational_status, fs.operational_status),\n    financial_status = EXCLUDED.financial_status,\n    reason = EXCLUDED.reason,\n    amount = EXCLUDED.amount,\n    currency = COALESCE(EXCLUDED.currency, fs.currency),\n    accounting_date = COALESCE(EXCLUDED.accounting_date, fs.accounting_date),\n    journal_id = COALESCE(EXCLUDED.journal_id, fs.journal_id),\n    receipt_id = COALESCE(EXCLUDED.receipt_id, fs.receipt_id),\n    last_error = EXCLUDED.last_error,\n    actor_id = COALESCE(EXCLUDED.actor_id, fs.actor_id),\n    posted_at = CASE WHEN EXCLUDED.financial_status = 'posted' THEN COALESCE(fs.posted_at, now()) ELSE fs.posted_at END,\n    reversed_at = CASE WHEN EXCLUDED.financial_status = 'reversed' THEN COALESCE(fs.reversed_at, now()) ELSE fs.reversed_at END,\n    detail = COALESCE(EXCLUDED.detail, fs.detail),\n    attempts = fs.attempts + CASE WHEN EXCLUDED.financial_status IN ('failed','blocked') THEN 1 ELSE 0 END,\n    last_attempt_at = now()\n  RETURNING fs.id INTO _id;\n\n  RETURN _id;\nEND;\n$function$\n",
+      "definition_md5": "fb751a53d66f8490e90fd679b34f67ac",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_financial_state_set(uuid,uuid,text,uuid,text,text,text,text,numeric,text,date,uuid,uuid,text,uuid,jsonb)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_gl_post(_org uuid, _branch uuid, _module text, _source_type text, _source_id uuid, _posting_type text, _date date, _currency text, _desc text, _lines jsonb, _customer uuid DEFAULT NULL::uuid, _reverses uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE key text := _source_type || ':' || _source_id::text || ':' || _posting_type;\n        j uuid; ln jsonb; i int := 0; td numeric := 0; tc numeric := 0; acct uuid;\n        d numeric; c numeric; prior text;\nBEGIN\n  SELECT id INTO j FROM public.journal_entries\n   WHERE organization_id = _org\n     AND (idempotency_key = key OR idempotency_key LIKE key || ':correction:%')\n     AND reversed_by_journal_id IS NULL\n   ORDER BY created_at DESC LIMIT 1;\n  IF j IS NOT NULL THEN\n    RETURN jsonb_build_object('ok', true, 'journal_id', j, 'duplicate_prevented', true);\n  END IF;\n  IF EXISTS (SELECT 1 FROM public.journal_entries\n             WHERE organization_id = _org AND idempotency_key = key\n               AND reversed_by_journal_id IS NOT NULL) THEN\n    key := key || ':correction:' || (1 + (SELECT count(*) FROM public.journal_entries\n      WHERE organization_id = _org AND idempotency_key LIKE key || ':correction:%'))::text;\n  END IF;\n\n  INSERT INTO public.journal_entries\n    (organization_id, branch_id, journal_number, journal_type, accounting_date,\n     period_id, source_module, source_document_type, source_document_id,\n     idempotency_key, description, currency, status, created_by, reverses_journal_id)\n  VALUES (_org, _branch, public.next_document_number('journal','JV',_branch),\n          CASE WHEN _reverses IS NULL THEN 'automatic' ELSE 'reversal' END, _date,\n          public.neo_gl_period(_org, _date), _module,\n          _source_type || ':' || _posting_type, _source_id, key, _desc,\n          coalesce(_currency,'KES'), 'draft', auth.uid(), _reverses)\n  RETURNING id INTO j;\n\n  FOR ln IN SELECT * FROM jsonb_array_elements(_lines) LOOP\n    d := round(coalesce((ln->>'debit')::numeric, 0), 2);\n    c := round(coalesce((ln->>'credit')::numeric, 0), 2);\n    CONTINUE WHEN d = 0 AND c = 0;\n    acct := public.neo_gl_acct(_org, ln->>'code');\n    IF acct IS NULL THEN\n      RAISE EXCEPTION 'chart_of_accounts is missing postable account %', ln->>'code';\n    END IF;\n    i := i + 1;\n    INSERT INTO public.journal_entry_lines\n      (organization_id, journal_id, line_number, account_id, description, debit, credit,\n       branch_id, customer_id)\n    VALUES (_org, j, i, acct, coalesce(ln->>'description', _desc), d, c, _branch, _customer);\n    td := td + d; tc := tc + c;\n  END LOOP;\n\n  IF i = 0 THEN RAISE EXCEPTION 'nothing_to_post'; END IF;\n  IF round(td,2) <> round(tc,2) THEN\n    RAISE EXCEPTION 'Journal does not balance: debits % vs credits %', td, tc;\n  END IF;\n\n  UPDATE public.journal_entries\n     SET total_debit = round(td,2), total_credit = round(tc,2)\n   WHERE id = j;\n\n  -- Automatic module postings are system postings: the operational authority was\n  -- already verified upstream, so the caller does not need manual journal rights.\n  prior := coalesce(current_setting('neo.system_posting', true), 'off');\n  PERFORM set_config('neo.system_posting', 'on', true);\n  PERFORM public.fin_post_journal(j);\n  PERFORM set_config('neo.system_posting', prior, true);\n  RETURN jsonb_build_object('ok', true, 'journal_id', j, 'duplicate_prevented', false);\nEND;\n$function$\n",
+      "definition_md5": "7dfd4e4a4589661155fb5d7bcd02adfa",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_gl_post(uuid,uuid,text,text,uuid,text,date,text,text,jsonb,uuid,uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_gl_revenue_code_scoped(_org uuid, _category text, _revenue_centre text DEFAULT NULL::text)\n RETURNS text\n LANGUAGE plpgsql\n STABLE\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  cat text := replace(replace(lower(btrim(coalesce(_category, 'other'))), '-', '_'), ' ', '_');\n  centre text := replace(replace(lower(btrim(coalesce(_revenue_centre, ''))), '-', '_'), ' ', '_');\nBEGIN\n  -- All organizations other than Savannah retain the installed behavior.\n  IF _org IS DISTINCT FROM 'aa17d427-f816-49bc-b02e-1a89e44806a2'::uuid THEN\n    RETURN public.neo_gl_revenue_code(_category);\n  END IF;\n\n  -- The account codes below were inspected for Savannah only.\n  -- Room service is currently treated as restaurant revenue (4010):\n  -- no separate room-service account is configured in Savannah.\n  IF cat IN ('accommodation','room','rooms','lodging') THEN RETURN '4000'; END IF;\n  IF cat IN ('food_beverage','fnb','f_b') AND centre IN ('bar','main_bar','beverage') THEN RETURN '4020'; END IF;\n  IF cat IN ('food_beverage','fnb','f_b') AND centre IN ('coffee','coffee_station','cafe') THEN RETURN '4030'; END IF;\n  IF cat IN ('meal_plan','restaurant','food','food_beverage','fnb','f_b','dining','kitchen',\n    'dine_in','takeaway','take_away','takeout','counter','quick_service','pickup','walk_in',\n    'buffet','banquet_food','room_service','in_room_dining','cafe') THEN RETURN '4010'; END IF;\n  IF cat IN ('bar','beverage','beverages','drinks','minibar','poolbar','pool_bar') THEN RETURN '4020'; END IF;\n  IF cat IN ('coffee','espresso','barista') THEN RETURN '4030'; END IF;\n  IF cat IN ('laundry','dry_cleaning') THEN RETURN '4040'; END IF;\n  IF cat IN ('event','events','banquet','conference') THEN RETURN '4050'; END IF;\n  IF cat = 'delivery' THEN RETURN '4060'; END IF;\n  IF cat IN ('transfer','transfers','airport_transfer') THEN RETURN '4070'; END IF;\n  IF cat = 'transport' THEN RETURN '4080'; END IF;\n  IF cat IN ('other','miscellaneous','excursion') THEN RETURN '4090'; END IF;\n\n  -- Fail closed for Savannah unrecognized categories instead of posting misclassified revenue.\n  RAISE EXCEPTION 'Unmapped Savannah revenue category: %', coalesce(_category,'<NULL>')\n    USING ERRCODE = '22023';\nEND;\n$function$\n",
+      "definition_md5": "5261acae7633d86c8042c72dbe9a23e0",
+      "security_definer": false,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_gl_revenue_code_scoped(uuid,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_gl_revenue_code(_category text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'public'\nAS $function$\n  WITH n AS (\n    SELECT replace(replace(lower(btrim(coalesce(_category,'other'))), '-', '_'), ' ', '_') AS c\n  )\n  SELECT CASE (SELECT c FROM n)\n    WHEN 'accommodation' THEN '4010' WHEN 'room' THEN '4010' WHEN 'rooms' THEN '4010'\n    WHEN 'lodging' THEN '4010'\n    WHEN 'meal_plan' THEN '4020' WHEN 'restaurant' THEN '4020' WHEN 'food' THEN '4020'\n    WHEN 'fnb' THEN '4020' WHEN 'f_b' THEN '4020' WHEN 'dining' THEN '4020'\n    WHEN 'kitchen' THEN '4020' WHEN 'dine_in' THEN '4020' WHEN 'takeaway' THEN '4020'\n    WHEN 'take_away' THEN '4020' WHEN 'takeout' THEN '4020' WHEN 'counter' THEN '4020'\n    WHEN 'quick_service' THEN '4020' WHEN 'pickup' THEN '4020' WHEN 'walk_in' THEN '4020'\n    WHEN 'buffet' THEN '4020' WHEN 'banquet_food' THEN '4020' WHEN 'cafe' THEN '4020'\n    WHEN 'bar' THEN '4030' WHEN 'beverage' THEN '4030' WHEN 'beverages' THEN '4030'\n    WHEN 'drinks' THEN '4030' WHEN 'minibar' THEN '4030' WHEN 'poolbar' THEN '4030'\n    WHEN 'pool_bar' THEN '4030'\n    WHEN 'room_service' THEN '4040' WHEN 'in_room_dining' THEN '4040'\n    WHEN 'laundry' THEN '4050' WHEN 'dry_cleaning' THEN '4050'\n    WHEN 'event' THEN '4060' WHEN 'events' THEN '4060' WHEN 'banquet' THEN '4060'\n    WHEN 'conference' THEN '4060'\n    WHEN 'delivery' THEN '4070'\n    WHEN 'transport' THEN '4080' WHEN 'airport_transfer' THEN '4080'\n    ELSE '4090' END;\n$function$\n",
+      "definition_md5": "356b539623f311fa89019b39f862361e",
+      "security_definer": false,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_gl_revenue_code(text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_journal_canonical_sync()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.status = 'posted'\n     AND NEW.source_document_id IS NOT NULL\n     AND COALESCE(NEW.total_debit,0) = COALESCE(NEW.total_credit,0)\n     AND COALESCE(NEW.total_debit,0) <> 0 THEN\n    PERFORM public.neo_finance_canonical_mark_posted(NEW.organization_id, NEW.source_document_id, NEW.id, NULL);\n  END IF;\n  RETURN NEW;\nEND $function$\n",
+      "definition_md5": "ae9012f7d7c272dbe4cc3ea6590f74c1",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_journal_canonical_sync()"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_post_pos_order(_order uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare org uuid:=public.current_org_id(); o public.pos_orders; line uuid; prior text;\nbegin\n  if org is null or not (public.is_org_admin() or public.has_permission('finance','view') or public.has_permission('restaurant','orders.settle') or public.neo_system_posting()) then raise exception 'insufficient_privilege' using errcode='42501'; end if;\n  -- Locked so two settlements of the same bill cannot both pass the\n  -- already-posted check and charge the guest folio twice.\n  select * into o from public.pos_orders where id=_order and organization_id=org for update;\n  if not found then return jsonb_build_object('ok',false,'reason','not_found'); end if;\n  if o.status not in ('closed','paid','settled','completed','charged-to-room') then return jsonb_build_object('ok',false,'reason','not_finalised','status',o.status); end if;\n  if o.folio_post_status='posted' then return jsonb_build_object('ok',true,'reason','already_posted'); end if;\n  if o.folio_id is null then return jsonb_build_object('ok',false,'reason','no_folio','detail','The order is not attached to a guest folio, so it cannot be posted as a folio charge.'); end if;\n  prior:=coalesce(current_setting('neo.system_posting',true),'off');\n  perform set_config('neo.system_posting','on',true);\n  line:=public.folio_post_charge(o.folio_id,'food-beverage','Point of sale order '||o.order_number,1,o.subtotal,o.tax_total,o.service_charge_total,o.discount_total,'pos',o.id,'fnb','pos:'||o.id::text,null);\n  perform set_config('neo.system_posting',prior,true);\n  update public.pos_orders set folio_post_status='posted',updated_at=now() where id=o.id;\n  return jsonb_build_object('ok',true,'folio_line_id',line);\nend $function$\n",
+      "definition_md5": "a0c1778b099d91a0c39d3fb7ab3667ce",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_post_pos_order(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_receipt_resolve_journal()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.journal_id IS NULL AND lower(coalesce(NEW.status,'')) = 'posted' THEN\n    SELECT j.id INTO NEW.journal_id\n      FROM public.journal_entries j\n     WHERE j.organization_id = NEW.organization_id\n       AND j.source_document_id = NEW.source_id\n       AND j.status = 'posted'\n       AND abs(coalesce(j.total_debit,0) - coalesce(j.total_credit,0)) < 0.01\n     ORDER BY j.posted_at DESC NULLS LAST, j.created_at DESC\n     LIMIT 1;\n  END IF;\n  RETURN NEW;\nEND $function$\n",
+      "definition_md5": "39999fffc3b0b523b0486036161fd8d4",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_receipt_resolve_journal()"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_record_posting_receipt(_org uuid, _branch uuid, _module text, _source uuid, _reference text, _status text, _amount numeric, _currency text, _folio_line uuid, _detail text, _error text, _occurred date)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE _mod text := _module;\n        _key text := public.neo_canonical_posting_module(_module) || ':' || _source::text; _id uuid;\nBEGIN\n  INSERT INTO public.finance_posting_receipts AS r\n    (organization_id, branch_id, source_module, source_id, source_reference, idempotency_key,\n     status, amount, currency, folio_line_id, detail, attempts, last_error, requested_by,\n     posted_at, occurred_on)\n  VALUES (_org, _branch, _mod, _source, _reference, _key, _status, coalesce(_amount,0),\n          coalesce(_currency,'KES'), _folio_line, _detail, 1, _error, auth.uid(),\n          CASE WHEN _status = 'posted' THEN now() END, _occurred)\n  ON CONFLICT (organization_id, idempotency_key) DO UPDATE\n     SET status = CASE WHEN r.status = 'posted' THEN 'posted' ELSE excluded.status END,\n         amount = excluded.amount,\n         currency = excluded.currency,\n         folio_line_id = coalesce(r.folio_line_id, excluded.folio_line_id),\n         detail = excluded.detail,\n         attempts = r.attempts + 1,\n         last_error = excluded.last_error,\n         requested_by = coalesce(excluded.requested_by, r.requested_by),\n         posted_at = coalesce(r.posted_at, excluded.posted_at),\n         occurred_on = coalesce(r.occurred_on, excluded.occurred_on)\n  RETURNING r.id INTO _id;\n  RETURN _id;\nEND $function$\n",
+      "definition_md5": "b6572ae73812155d3ae2eb08d71878b6",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_record_posting_receipt(uuid,uuid,text,uuid,text,text,numeric,text,uuid,text,text,date)"
+    }
+  ],
+  "triggers": [
+    {
+      "definition": "CREATE TRIGGER finance_posting_receipts_touch BEFORE UPDATE ON public.finance_posting_receipts FOR EACH ROW EXECUTE FUNCTION fin_touch_updated_at()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.fin_touch_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN NEW.updated_at = now(); RETURN NEW; END $function$\n",
+      "function_md5": "d1a9917bb6dd63a3498f7557c6b82b31",
+      "function_signature": "fin_touch_updated_at()",
+      "table_name": "finance_posting_receipts",
+      "trigger_name": "finance_posting_receipts_touch"
+    },
+    {
+      "definition": "CREATE TRIGGER financial_state_from_receipt AFTER INSERT OR UPDATE ON public.finance_posting_receipts FOR EACH ROW EXECUTE FUNCTION neo_financial_state_from_receipt()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.neo_financial_state_from_receipt()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE s text; m text:=public.neo_canonical_posting_module(NEW.source_module); balanced boolean:=false;\nBEGIN\n IF NEW.journal_id IS NOT NULL THEN SELECT abs(coalesce(total_debit,0)-coalesce(total_credit,0))<0.01 AND status='posted' INTO balanced FROM public.journal_entries WHERE id=NEW.journal_id AND organization_id=NEW.organization_id; END IF;\n s:=CASE WHEN lower(coalesce(NEW.status,'pending'))='posted' AND NOT coalesce(balanced,false) THEN 'blocked' WHEN lower(coalesce(NEW.status,'pending')) IN('posted','failed','blocked','reversed','eligible') THEN lower(NEW.status) ELSE 'pending' END;\n PERFORM public.neo_financial_state_set(NEW.organization_id,NEW.branch_id,m,NEW.source_id,NEW.source_reference,NULL,s,CASE WHEN s='blocked' AND NEW.status='posted' THEN 'Posting receipt has no balanced posted journal' WHEN s IN('failed','blocked') THEN coalesce(NEW.last_error,NEW.detail) ELSE NEW.detail END,NEW.amount,NEW.currency,NEW.occurred_on,NEW.journal_id,NEW.id,NEW.last_error,NEW.requested_by,jsonb_build_object('idempotency_key',NEW.idempotency_key));\n PERFORM public.neo_canonical_transaction_set(NEW.organization_id,NEW.branch_id,m,NEW.source_id,NEW.source_reference,coalesce((SELECT operational_status FROM public.financial_states WHERE source_module=m AND source_id=NEW.source_id),'pending'),s,NEW.amount,NEW.currency,NEW.idempotency_key,NEW.requested_by,'Finance',CASE s WHEN 'eligible' THEN 'Post to the general ledger' WHEN 'blocked' THEN 'Resolve the posting exception and retry' WHEN 'failed' THEN 'Correct the failure and retry safely' ELSE NULL END,CASE WHEN s='blocked' AND NEW.status='posted' THEN 'Posting receipt has no balanced posted journal' ELSE NEW.last_error END,NEW.journal_id,NEW.id,jsonb_strip_nulls(jsonb_build_object('journal_id',NEW.journal_id,'receipt_id',NEW.id)),'{}'::jsonb,coalesce(NEW.updated_at,NEW.created_at));\n RETURN NEW;\nEND $function$\n",
+      "function_md5": "0af12c33c52a94ce889ba412f1e44369",
+      "function_signature": "neo_financial_state_from_receipt()",
+      "table_name": "finance_posting_receipts",
+      "trigger_name": "financial_state_from_receipt"
+    },
+    {
+      "definition": "CREATE TRIGGER posting_receipt_history AFTER INSERT OR UPDATE ON public.finance_posting_receipts FOR EACH ROW EXECUTE FUNCTION neo_posting_receipt_history()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.neo_posting_receipt_history()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n INSERT INTO public.finance_posting_receipt_history(receipt_id,organization_id,branch_id,source_module,source_id,attempt_number,status,amount,currency,journal_id,detail,error,actor_id)\n VALUES(NEW.id,NEW.organization_id,NEW.branch_id,public.neo_canonical_posting_module(NEW.source_module),NEW.source_id,greatest(coalesce(NEW.attempts,1),1),NEW.status,NEW.amount,NEW.currency,NEW.journal_id,NEW.detail,NEW.last_error,NEW.requested_by)\n ON CONFLICT(receipt_id,attempt_number) DO UPDATE SET status=excluded.status,journal_id=excluded.journal_id,detail=excluded.detail,error=excluded.error;\n RETURN NEW;\nEND $function$\n",
+      "function_md5": "94ed67aa0dbe75b1f38a333f4e97271a",
+      "function_signature": "neo_posting_receipt_history()",
+      "table_name": "finance_posting_receipts",
+      "trigger_name": "posting_receipt_history"
+    },
+    {
+      "definition": "CREATE TRIGGER receipt_resolve_journal BEFORE INSERT OR UPDATE ON public.finance_posting_receipts FOR EACH ROW EXECUTE FUNCTION neo_receipt_resolve_journal()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.neo_receipt_resolve_journal()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.journal_id IS NULL AND lower(coalesce(NEW.status,'')) = 'posted' THEN\n    SELECT j.id INTO NEW.journal_id\n      FROM public.journal_entries j\n     WHERE j.organization_id = NEW.organization_id\n       AND j.source_document_id = NEW.source_id\n       AND j.status = 'posted'\n       AND abs(coalesce(j.total_debit,0) - coalesce(j.total_credit,0)) < 0.01\n     ORDER BY j.posted_at DESC NULLS LAST, j.created_at DESC\n     LIMIT 1;\n  END IF;\n  RETURN NEW;\nEND $function$\n",
+      "function_md5": "39999fffc3b0b523b0486036161fd8d4",
+      "function_signature": "neo_receipt_resolve_journal()",
+      "table_name": "finance_posting_receipts",
+      "trigger_name": "receipt_resolve_journal"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_receipt_canonical_sync AFTER INSERT OR UPDATE OF status ON public.finance_posting_receipts FOR EACH ROW EXECUTE FUNCTION neo_receipt_canonical_sync()",
+      "enabled": "O",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.neo_receipt_canonical_sync()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.status = 'posted' AND NEW.source_id IS NOT NULL THEN\n    PERFORM public.neo_finance_canonical_mark_posted(NEW.organization_id, NEW.source_id, NEW.journal_id, NEW.id);\n  END IF;\n  RETURN NEW;\nEND $function$\n",
+      "function_md5": "3d75b41b05565691e486d02152a3fc06",
+      "function_signature": "neo_receipt_canonical_sync()",
+      "table_name": "finance_posting_receipts",
+      "trigger_name": "trg_receipt_canonical_sync"
+    }
+  ],
+  "orders": [
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "closed_at": "2026-11-04T07:52:54.381956+00:00",
+      "created_at": "2026-10-02T12:32:12.884236+00:00",
+      "currency": "KES",
+      "discount_total": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000001",
+      "folio_post_status": "posted",
+      "grand_total": 2111.5,
+      "id": "80000000-0000-4000-8000-000000000002",
+      "order_number": "FIXTURE-POS-1",
+      "order_type": "bar",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "paid_total": 0,
+      "payment_status": "paid",
+      "service_charge_total": 61.5,
+      "status": "charged-to-room",
+      "subtotal": 2050,
+      "tax_total": 282.76
+    },
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "closed_at": "2026-11-02T13:05:40.3758+00:00",
+      "created_at": "2026-11-02T13:04:50.244172+00:00",
+      "currency": "KES",
+      "discount_total": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000003",
+      "folio_post_status": "posted",
+      "grand_total": 3399,
+      "id": "80000000-0000-4000-8000-000000000004",
+      "order_number": "FIXTURE-POS-2",
+      "order_type": "bar",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "paid_total": 3399,
+      "payment_status": "paid",
+      "service_charge_total": 99,
+      "status": "charged-to-room",
+      "subtotal": 3300,
+      "tax_total": 455.17
+    },
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "closed_at": null,
+      "created_at": "2026-11-02T13:42:48.35249+00:00",
+      "currency": "KES",
+      "discount_total": 0,
+      "folio_id": null,
+      "folio_post_status": "not-posted",
+      "grand_total": 4635,
+      "id": "80000000-0000-4000-8000-000000000005",
+      "order_number": "FIXTURE-POS-3",
+      "order_type": "event-catering",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "paid_total": 4635,
+      "payment_status": "paid",
+      "service_charge_total": 135,
+      "status": "paid",
+      "subtotal": 4500,
+      "tax_total": 620.69
+    },
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "closed_at": "2026-11-04T07:30:08.868637+00:00",
+      "created_at": "2026-11-04T07:29:34.840086+00:00",
+      "currency": "KES",
+      "discount_total": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000006",
+      "folio_post_status": "posted",
+      "grand_total": 1081.5,
+      "id": "80000000-0000-4000-8000-000000000007",
+      "order_number": "FIXTURE-POS-4",
+      "order_type": "room-service",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "paid_total": 0,
+      "payment_status": "paid",
+      "service_charge_total": 31.5,
+      "status": "charged-to-room",
+      "subtotal": 1050,
+      "tax_total": 144.82
+    }
+  ],
+  "receipts": [
+    {
+      "amount": 3399,
+      "attempts": 1,
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "currency": "KES",
+      "detail": "Fixture room transfer; revenue on folio.",
+      "folio_line_id": null,
+      "id": "80000000-0000-4000-8000-000000000008",
+      "idempotency_key": "pos:80000000-0000-4000-8000-000000000004",
+      "journal_id": null,
+      "last_error": null,
+      "occurred_on": "2026-11-02",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_type": "room_charge",
+      "source_id": "80000000-0000-4000-8000-000000000004",
+      "source_module": "pos",
+      "source_reference": "FIXTURE-POS-2",
+      "status": "posted",
+      "updated_at": "2026-11-02T13:05:40.3758+00:00"
+    },
+    {
+      "amount": 1081.5,
+      "attempts": 1,
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "currency": "KES",
+      "detail": "Fixture room transfer; revenue on folio.",
+      "folio_line_id": null,
+      "id": "80000000-0000-4000-8000-000000000009",
+      "idempotency_key": "pos:80000000-0000-4000-8000-000000000007",
+      "journal_id": null,
+      "last_error": null,
+      "occurred_on": "2026-11-04",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_type": "room_charge",
+      "source_id": "80000000-0000-4000-8000-000000000007",
+      "source_module": "pos",
+      "source_reference": "FIXTURE-POS-4",
+      "status": "posted",
+      "updated_at": "2026-11-04T07:30:08.868637+00:00"
+    },
+    {
+      "amount": 2111.5,
+      "attempts": 1,
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "currency": "KES",
+      "detail": "Fixture room transfer; revenue on folio.",
+      "folio_line_id": null,
+      "id": "80000000-0000-4000-8000-00000000000a",
+      "idempotency_key": "pos:80000000-0000-4000-8000-000000000002",
+      "journal_id": null,
+      "last_error": null,
+      "occurred_on": "2026-11-04",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_type": "room_charge",
+      "source_id": "80000000-0000-4000-8000-000000000002",
+      "source_module": "pos",
+      "source_reference": "FIXTURE-POS-1",
+      "status": "posted",
+      "updated_at": "2026-11-04T07:52:54.381956+00:00"
+    },
+    {
+      "amount": 4635,
+      "attempts": 1,
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "currency": "KES",
+      "detail": null,
+      "folio_line_id": null,
+      "id": "80000000-0000-4000-8000-00000000000b",
+      "idempotency_key": "pos:80000000-0000-4000-8000-000000000005",
+      "journal_id": null,
+      "last_error": "Unmapped Savannah revenue category: event-catering",
+      "occurred_on": "2026-11-02",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_type": "revenue",
+      "source_id": "80000000-0000-4000-8000-000000000005",
+      "source_module": "pos_order",
+      "source_reference": "FIXTURE-POS-3",
+      "status": "failed",
+      "updated_at": "2026-11-02T13:55:33.66621+00:00"
+    }
+  ],
+  "folio_lines": [
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "category": "food-beverage",
+      "discount_amount": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000003",
+      "gross_amount": 2844.83,
+      "id": "80000000-0000-4000-8000-00000000000c",
+      "line_type": "charge",
+      "operational_date": "2026-11-02",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_date": "2026-11-02T13:05:40.3758+00:00",
+      "revenue_centre": "fnb",
+      "service_charge_amount": 99,
+      "source_module": "pos",
+      "source_record_uuid": "80000000-0000-4000-8000-000000000004",
+      "status": "posted",
+      "tax_amount": 455.17
+    },
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "category": "food-beverage",
+      "discount_amount": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000006",
+      "gross_amount": 905.18,
+      "id": "80000000-0000-4000-8000-00000000000d",
+      "line_type": "charge",
+      "operational_date": "2026-11-04",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_date": "2026-11-04T07:30:08.868637+00:00",
+      "revenue_centre": "fnb",
+      "service_charge_amount": 31.5,
+      "source_module": "pos",
+      "source_record_uuid": "80000000-0000-4000-8000-000000000007",
+      "status": "posted",
+      "tax_amount": 144.82
+    },
+    {
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "category": "food-beverage",
+      "discount_amount": 0,
+      "folio_id": "80000000-0000-4000-8000-000000000001",
+      "gross_amount": 1767.24,
+      "id": "80000000-0000-4000-8000-00000000000e",
+      "line_type": "charge",
+      "operational_date": "2026-11-04",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posting_date": "2026-11-04T07:52:54.381956+00:00",
+      "revenue_centre": "fnb",
+      "service_charge_amount": 61.5,
+      "source_module": "pos",
+      "source_record_uuid": "80000000-0000-4000-8000-000000000002",
+      "status": "posted",
+      "tax_amount": 282.76
+    }
+  ],
+  "journals": [
+    {
+      "accounting_date": "2026-11-02",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "created_at": "2026-11-02T13:05:40.3758+00:00",
+      "currency": "KES",
+      "document_number": "",
+      "id": "80000000-0000-4000-8000-00000000000f",
+      "idempotency_key": "folio_charge:80000000-0000-4000-8000-00000000000c:revenue",
+      "journal_number": "JV-SCN-2026-000351",
+      "journal_type": "automatic",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posted_at": "2026-11-02T13:05:40.3758+00:00",
+      "reversed_by_journal_id": null,
+      "reverses_journal_id": null,
+      "source_document_id": "80000000-0000-4000-8000-00000000000c",
+      "source_document_type": "folio_charge:revenue",
+      "source_module": "folio",
+      "status": "posted",
+      "total_credit": 3399,
+      "total_debit": 3399
+    },
+    {
+      "accounting_date": "2026-11-04",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "created_at": "2026-11-04T07:52:54.381956+00:00",
+      "currency": "KES",
+      "document_number": "",
+      "id": "80000000-0000-4000-8000-000000000010",
+      "idempotency_key": "folio_charge:80000000-0000-4000-8000-00000000000e:revenue",
+      "journal_number": "JV-SCN-2026-000368",
+      "journal_type": "automatic",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posted_at": "2026-11-04T07:52:54.381956+00:00",
+      "reversed_by_journal_id": null,
+      "reverses_journal_id": null,
+      "source_document_id": "80000000-0000-4000-8000-00000000000e",
+      "source_document_type": "folio_charge:revenue",
+      "source_module": "folio",
+      "status": "posted",
+      "total_credit": 2111.5,
+      "total_debit": 2111.5
+    },
+    {
+      "accounting_date": "2026-11-04",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "created_at": "2026-11-04T07:30:08.868637+00:00",
+      "currency": "KES",
+      "document_number": "",
+      "id": "80000000-0000-4000-8000-000000000011",
+      "idempotency_key": "folio_charge:80000000-0000-4000-8000-00000000000d:revenue",
+      "journal_number": "JV-SCN-2026-000366",
+      "journal_type": "automatic",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "posted_at": "2026-11-04T07:30:08.868637+00:00",
+      "reversed_by_journal_id": null,
+      "reverses_journal_id": null,
+      "source_document_id": "80000000-0000-4000-8000-00000000000d",
+      "source_document_type": "folio_charge:revenue",
+      "source_module": "folio",
+      "status": "posted",
+      "total_credit": 1081.5,
+      "total_debit": 1081.5
+    }
+  ],
+  "journal_lines": [
+    {
+      "account_id": "80000000-0000-4000-8000-000000000012",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 0,
+      "debit": 3399,
+      "id": "80000000-0000-4000-8000-000000000013",
+      "journal_id": "80000000-0000-4000-8000-00000000000f",
+      "line_number": 1,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000014",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 2844.83,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-000000000015",
+      "journal_id": "80000000-0000-4000-8000-00000000000f",
+      "line_number": 2,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000016",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 455.17,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-000000000017",
+      "journal_id": "80000000-0000-4000-8000-00000000000f",
+      "line_number": 3,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000018",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 99,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-000000000019",
+      "journal_id": "80000000-0000-4000-8000-00000000000f",
+      "line_number": 4,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000012",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 0,
+      "debit": 1081.5,
+      "id": "80000000-0000-4000-8000-00000000001a",
+      "journal_id": "80000000-0000-4000-8000-000000000011",
+      "line_number": 1,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000014",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 905.18,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-00000000001b",
+      "journal_id": "80000000-0000-4000-8000-000000000011",
+      "line_number": 2,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000016",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 144.82,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-00000000001c",
+      "journal_id": "80000000-0000-4000-8000-000000000011",
+      "line_number": 3,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000018",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 31.5,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-00000000001d",
+      "journal_id": "80000000-0000-4000-8000-000000000011",
+      "line_number": 4,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000012",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 0,
+      "debit": 2111.5,
+      "id": "80000000-0000-4000-8000-00000000001e",
+      "journal_id": "80000000-0000-4000-8000-000000000010",
+      "line_number": 1,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000014",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 1767.24,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-00000000001f",
+      "journal_id": "80000000-0000-4000-8000-000000000010",
+      "line_number": 2,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000016",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 282.76,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-000000000020",
+      "journal_id": "80000000-0000-4000-8000-000000000010",
+      "line_number": 3,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    },
+    {
+      "account_id": "80000000-0000-4000-8000-000000000018",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c",
+      "credit": 61.5,
+      "debit": 0,
+      "id": "80000000-0000-4000-8000-000000000021",
+      "journal_id": "80000000-0000-4000-8000-000000000010",
+      "line_number": 4,
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "payment_method": null,
+      "revenue_centre": null,
+      "tax_code_id": null
+    }
+  ],
+  "revenue_accounts": [
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4000",
+      "id": "80000000-0000-4000-8000-000000000022",
+      "is_header": false,
+      "name": "Rooms Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4010",
+      "id": "80000000-0000-4000-8000-000000000014",
+      "is_header": false,
+      "name": "Restaurant Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4020",
+      "id": "80000000-0000-4000-8000-000000000023",
+      "is_header": false,
+      "name": "Bar Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4030",
+      "id": "80000000-0000-4000-8000-000000000024",
+      "is_header": false,
+      "name": "Coffee Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4040",
+      "id": "80000000-0000-4000-8000-000000000025",
+      "is_header": false,
+      "name": "Laundry Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4050",
+      "id": "80000000-0000-4000-8000-000000000026",
+      "is_header": false,
+      "name": "Events Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4060",
+      "id": "80000000-0000-4000-8000-000000000027",
+      "is_header": false,
+      "name": "Delivery Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4070",
+      "id": "80000000-0000-4000-8000-000000000028",
+      "is_header": false,
+      "name": "Transfers Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4090",
+      "id": "80000000-0000-4000-8000-000000000029",
+      "is_header": false,
+      "name": "Other Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    },
+    {
+      "active": true,
+      "category": "revenue",
+      "code": "4080",
+      "id": "80000000-0000-4000-8000-00000000002a",
+      "is_header": false,
+      "name": "Transport Revenue",
+      "organization_id": "aa17d427-f816-49bc-b02e-1a89e44806a2",
+      "postable": true
+    }
+  ],
+  "cases": [
+    {
+      "receipt": "80000000-0000-4000-8000-000000000008",
+      "order": "80000000-0000-4000-8000-000000000004",
+      "line": "80000000-0000-4000-8000-00000000000c",
+      "journal": "80000000-0000-4000-8000-00000000000f",
+      "amount": 3399,
+      "reference": "FIXTURE-POS-2"
+    },
+    {
+      "receipt": "80000000-0000-4000-8000-000000000009",
+      "order": "80000000-0000-4000-8000-000000000007",
+      "line": "80000000-0000-4000-8000-00000000000d",
+      "journal": "80000000-0000-4000-8000-000000000011",
+      "amount": 1081.5,
+      "reference": "FIXTURE-POS-4"
+    },
+    {
+      "receipt": "80000000-0000-4000-8000-00000000000a",
+      "order": "80000000-0000-4000-8000-000000000002",
+      "line": "80000000-0000-4000-8000-00000000000e",
+      "journal": "80000000-0000-4000-8000-000000000010",
+      "amount": 2111.5,
+      "reference": "FIXTURE-POS-1"
+    }
+  ],
+  "changedSignatures": [
+    "neo_gl_revenue_code_scoped(uuid,text,text)",
+    "neo_post_pos_order(uuid)",
+    "neo_receipt_resolve_journal()",
+    "neo_finance_post_txn(text,uuid,boolean)"
+  ],
+  "fixtureNotice": "Synthetic record identifiers/references. Reviewed source definitions and business scope retained. Never connects to operational Supabase."
+}

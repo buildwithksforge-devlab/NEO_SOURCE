@@ -1,0 +1,130 @@
+{
+  "date": "2026-11-09",
+  "source": "Follow-up of NEO-STALE-VIEW-AUDIT-2026-11-09.json and user-supplied SQL 139",
+  "scope": "Source-confirmed gaps and explicitly reviewed false positives. These are linked follow-ups, not additional closed issues or a replacement for authenticated/runtime tests.",
+  "items": [
+    {
+      "id": "SV-001",
+      "status": "Repaired and deployed in batch 25",
+      "finding": "PMS/deposit/cash success refreshed only some caches",
+      "file": "src/lib/payment-view-refresh.ts",
+      "nextAction": "Shared refresh now includes reservation, finance, register, folio projection, payment lifecycle, audit and till. Deployed as 1e122a207782d3fa. Authenticated workflow acceptance remains separate."
+    },
+    {
+      "id": "SV-002",
+      "status": "Repaired and deployed in batch 25",
+      "finding": "Payment-register key omitted worker/organization/authority boundaries",
+      "file": "src/lib/payment-register.ts",
+      "nextAction": "Identity key and ready-access gate added; 43 focused checks pass."
+    },
+    {
+      "id": "SV-003",
+      "status": "Confirmed gap; SQL 137 installed",
+      "finding": "Reservation deposits were absent from payment-attempt-only register",
+      "file": "src/lib/payment-register.ts",
+      "nextAction": "Read-only projection now includes deposits and deduplicates linked payment/event representations; 31 database checks pass."
+    },
+    {
+      "id": "SV-004",
+      "status": "Repaired and deployed in batch 26; authenticated acceptance pending",
+      "finding": "Station stock has no explicit refresh root, polling or live subscription",
+      "file": "src/lib/station-stock.ts",
+      "nextAction": "Connect actual stock changes and bounded refresh; test station/store changes and remote worker updates. Batch 26: visible 15-second stock refresh, current-assignment station selection, shared durable cash/payment keys, refusal handling and fresh second-collection amount. 19 final focused app checks pass; SQL 145 installed and verified."
+    },
+    {
+      "id": "SV-005",
+      "status": "Repaired and deployed in batch 26; authenticated acceptance pending",
+      "finding": "Station selection only initializes when empty and can retain a station after property/assignment changes",
+      "file": "src/routes/_shell.station-stock.tsx",
+      "nextAction": "Derive effective selection from the current authorized station list before querying stores. Batch 26: visible 15-second stock refresh, current-assignment station selection, shared durable cash/payment keys, refusal handling and fresh second-collection amount. 19 final focused app checks pass; SQL 145 installed and verified."
+    },
+    {
+      "id": "SV-006",
+      "status": "Repaired and deployed in batch 27",
+      "finding": "Outbox batch replay creates an invalidator but never calls it on success",
+      "file": "src/lib/finance-posting.ts",
+      "nextAction": "Saved replay result is validated; actual posting, lifecycle, outbox, automation and intelligence roots are refreshed. Focused cache tests pass. No live replay performed."
+    },
+    {
+      "id": "SV-007",
+      "status": "Repaired and deployed in batch 26; authenticated acceptance pending",
+      "finding": "PMS cash dialog has an intent key but omits it from the cash request",
+      "file": "src/components/pms/ReservationActions.tsx",
+      "nextAction": "Carry a stable collection key through cash retries and retain distinct keys for genuine second payments. Batch 26: visible 15-second stock refresh, current-assignment station selection, shared durable cash/payment keys, refusal handling and fresh second-collection amount. 19 final focused app checks pass; SQL 145 installed and verified."
+    },
+    {
+      "id": "SV-008",
+      "status": "Repaired and deployed in batch 26; authenticated acceptance pending",
+      "finding": "PMS payment amount initializes from balance once and is not reset on later openings",
+      "file": "src/components/pms/ReservationActions.tsx",
+      "nextAction": "Refresh the suggested amount from the latest balance per new collection; preserve failed-intent retry details. Batch 26: visible 15-second stock refresh, current-assignment station selection, shared durable cash/payment keys, refusal handling and fresh second-collection amount. 19 final focused app checks pass; SQL 145 installed and verified."
+    },
+    {
+      "id": "SV-009",
+      "status": "Confirmed disconnected command; repair pending",
+      "finding": "pms_confirm_payment exists in deployed database but has no application caller",
+      "file": "src/integrations/supabase/types.ts",
+      "nextAction": "Connect authorized confirmation of manually received bank/card tenders with saved reference/evidence; provider-backed confirmation remains distinct."
+    },
+    {
+      "id": "SV-010",
+      "status": "Confirmed semantic defect; repair pending",
+      "finding": "Deposit-state sync labels the reservation Paid when the minimum deposit target is met",
+      "file": "supabase/migrations",
+      "nextAction": "SQL 139 confirms minimum deposit is used rather than full quoted stay; 36 paid-label/positive stored-balance review candidates among 96 reservations are not proof of additional money owed."
+    },
+    {
+      "id": "SV-011",
+      "status": "Reviewed POS connection; financial remote refresh repaired in batch 27",
+      "finding": "Provider-intent checkout polls terminal status; POS parent has real-time payment invalidation",
+      "file": "src/routes/_shell.pos.tsx",
+      "nextAction": "Existing POS realtime/intent polling retained. Finance register/lifecycle/folio views now have visible refresh and identity boundaries; fallback selected operational refresh is tested."
+    },
+    {
+      "id": "SV-012",
+      "status": "Partial failure candidate; not yet proven defect",
+      "finding": "Recipe menu item is created before recipe save; the full success path refreshes menu, partial failures require review",
+      "file": "src/lib/recipe-master.ts",
+      "nextAction": "Test failed second step and publication/readiness before deciding the repair."
+    },
+    {
+      "id": "SV-013",
+      "status": "Reviewed connection; no repair indicated by this flag",
+      "finding": "Workspace switching clears all queries and reloads the session",
+      "file": "src/lib/workspaces.ts",
+      "nextAction": "Static refresh regex missed clear/reload; not a missing-invalidation defect."
+    },
+    {
+      "id": "SV-014",
+      "status": "Reviewed connection; no repair indicated by this flag",
+      "finding": "Kitchen transitions refresh through onSettled",
+      "file": "src/lib/kitchen-tickets.ts",
+      "nextAction": "Direct onSuccess only displays toast; onSettled settles ticket/kitchen/POS queries."
+    },
+    {
+      "id": "SV-015",
+      "status": "Reviewed read-only action",
+      "finding": "Opening a guest document creates a signed URL and access log",
+      "file": "src/lib/guest-documents.ts",
+      "nextAction": "No change to the underlying document list, so missing list invalidation is not automatically a defect."
+    },
+    {
+      "id": "SV-016",
+      "status": "Reviewed polling connection",
+      "finding": "Rider location is read through bounded customer polling",
+      "file": "src/lib/delivery-live.ts",
+      "nextAction": "Do not invalidate every browser cache on every GPS ping; verify the polling and expiry contract."
+    }
+  ],
+  "reservationEvidence": {
+    "reservations": 96,
+    "paidLabelWithPositiveStoredBookingBalance": 36,
+    "interpretation": "Review candidates only. Do not recollect, alter balances or rewrite payment history based on a stored-label conflict."
+  },
+  "batch27": {
+    "sourceId": "3e60a4b662a22e13",
+    "versionId": "028d70c4-47ad-4e4d-b82b-4a3f808c9cc5",
+    "scope": "Finish only the stale-view batch already pending; pause other queue work at user request.",
+    "report": "NEO-QUEUE-BATCH-27-2026-11-10.md"
+  }
+}

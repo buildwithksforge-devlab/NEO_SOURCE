@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    12
+  ],
+  "passed": 3930,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousUniquePasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "priorApplication",
+      "previousUniquePasses": 3880,
+      "retained": 3880,
+      "regressions": []
+    }
+  ],
+  "targeted": {
+    "passed": 52,
+    "failed": 0,
+    "skipped": 7
+  },
+  "typecheck": "passed",
+  "productionBuildSmoke": "passed",
+  "applicationSourceChanged": true,
+  "operationalWrites": false,
+  "deployed": false,
+  "advancedOriginalRecords": [
+    "NEO-BKL-B01",
+    "NEO-BKL-B02",
+    "NEO-BKL-B03",
+    "NEO-BKL-B04",
+    "NEO-BKL-R06",
+    "NEO-BKL-C01"
+  ],
+  "newlyStarted": [
+    "NEO-BKL-B01",
+    "NEO-BKL-B02",
+    "NEO-BKL-B03",
+    "NEO-BKL-B04"
+  ],
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 27,
+    "Awaiting deployment/retest": 21,
+    "Queued": 30,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "codeProgress": {
+    "queued": 30,
+    "activePartial": 27,
+    "awaitingDeploymentRetest": 21,
+    "awaitingWorkflowTest": 25,
+    "awaitingPrintAgentDeployment": 1,
+    "partiallyVerified": 1,
+    "fullyVerified": 1,
+    "note": "Source progress categories are distinct from final acceptance. 105 is the acceptance-open count, not the count untouched."
+  },
+  "limitations": [
+    "Presentation classification only; no server ticket routing, authority or employee assignments changed.",
+    "Explicit display types win; legacy generic beverage/production fallback remains. Unknown custom stations are not silently assigned to kitchen.",
+    "Four records started scoped fixes; full dynamic station creation/authentication remains open.",
+    "No operational database writes, app deployment or full department certification.",
+    "Skipped database checks remain explicitly uncertified."
+  ]
+}

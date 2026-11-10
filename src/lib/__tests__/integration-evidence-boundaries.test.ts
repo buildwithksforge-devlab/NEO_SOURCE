@@ -1,0 +1,35 @@
+import {beforeEach, afterEach, describe, it, expect, vi} from 'vitest';
+const mocks=vi.hoisted(()=>({load:vi.fn(),token:vi.fn()}));
+vi.mock('@tanstack/react-start',()=>({createServerFn:()=>{const b:any={middleware:()=>b,inputValidator:()=>b,handler:(f:any)=>f};return b}}));
+vi.mock('@/integrations/supabase/auth-middleware',()=>({requireSupabaseAuth:{}}));
+vi.mock('@/lib/mpesa.server',()=>({loadMpesaCredentials:mocks.load,darajaToken:mocks.token}));
+import {runProviderTest,testMpesaCallbackEndpoint} from '@/lib/integrations.functions';
+import {requireRecordedProviderTest} from '@/lib/integration-test-evidence';
+let rpc:any;
+const invoke=(providerCode='lovable_ai')=>(runProviderTest as any)({data:{providerCode},context:{supabase:{rpc}}});
+const callback=()=>(testMpesaCallbackEndpoint as any)({context:{supabase:{rpc}}});
+beforeEach(()=>{
+ vi.resetAllMocks();
+ rpc=vi.fn(async(name:string,args:any)=>({data:name==='current_org_id'?'org-a':name==='is_org_admin'?true:name==='neo_integration_record_test'?{recorded:true,status:args._status}:false,error:null}));
+ vi.stubEnv('LOVABLE_API_KEY','synthetic-secret-do-not-return');
+ vi.stubEnv('PUBLIC_SITE_URL','https://example.invalid');
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('Invalid callback token',{status:401})));
+ mocks.load.mockResolvedValue({environment:'sandbox'});mocks.token.mockResolvedValue({ok:true,data:'synthetic-token'});
+});
+afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals()});
+describe('integration evidence boundaries',()=>{
+ it('does not certify an AI connection from key presence',async()=>{const r=await invoke();expect(r.status).toBe('unsupported');expect(r.recorded).toBe(true);expect(JSON.stringify(r)).not.toContain('synthetic-secret');expect(fetch).not.toHaveBeenCalled()});
+ it('refuses a test without an active organisation before provider access',async()=>{rpc.mockResolvedValue({data:null,error:null});await expect(invoke('daraja')).rejects.toThrow('organisation');expect(mocks.load).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled()});
+ it('requires edit authority before loading provider credentials',async()=>{rpc.mockImplementation(async(n:string)=>({data:n==='current_org_id'?'org-a':false,error:null}));await expect(invoke('daraja')).rejects.toThrow('permission');expect(mocks.load).not.toHaveBeenCalled()});
+ it('requires authority before callback network probes',async()=>{rpc.mockImplementation(async(n:string)=>({data:n==='current_org_id'?'org-a':false,error:null}));await expect(callback()).rejects.toThrow('permission');expect(fetch).not.toHaveBeenCalled()});
+ it.each([false,null,{}])('rejects unconfirmed saved evidence %j',async(recorded)=>{const original=rpc.getMockImplementation();rpc.mockImplementation(async(n:string,a:any)=>n==='neo_integration_record_test'?{data:{recorded,status:a._status},error:null}:original(n,a));await expect(invoke()).rejects.toThrow('not confirmed')});
+ it('rejects a different saved status',async()=>{const original=rpc.getMockImplementation();rpc.mockImplementation(async(n:string,a:any)=>n==='neo_integration_record_test'?{data:{recorded:true,status:'passed'},error:null}:original(n,a));await expect(invoke()).rejects.toThrow('not confirmed')});
+ it('does not report success when saving fails',async()=>{const original=rpc.getMockImplementation();rpc.mockImplementation(async(n:string,a:any)=>n==='neo_integration_record_test'?{data:null,error:{message:'write denied'}}:original(n,a));await expect(invoke('daraja')).rejects.toThrow('could not be saved')});
+ it('records authentication only after a real provider token result',async()=>{expect(await invoke('daraja')).toMatchObject({status:'passed',recorded:true});expect(rpc).toHaveBeenCalledWith('neo_integration_record_test',expect.objectContaining({_test_type:'authentication',_status:'passed'}))});
+ it('redacts thrown provider errors',async()=>{mocks.token.mockRejectedValue(new Error('synthetic-secret-do-not-return'));const r=await invoke('daraja');expect(r.status).toBe('failed');expect(JSON.stringify(r)).not.toContain('synthetic-secret')});
+ it('requires the endpoint-specific rejection body, not a generic proxy 401',async()=>{vi.mocked(fetch).mockResolvedValue(new Response('Unauthorized',{status:401}));expect((await callback()).status).toBe('failed')});
+ it('does not accept redirects as endpoint evidence',async()=>{vi.mocked(fetch).mockResolvedValue(new Response('',{status:302}));expect((await callback()).status).toBe('failed')});
+ it('uses unique invalid tokens, bounded requests and no redirect following',async()=>{expect((await callback()).status).toBe('passed');await callback();const calls=vi.mocked(fetch).mock.calls;expect(calls[0]![0]).not.toBe(calls[1]![0]);expect(calls[0]![1]).toMatchObject({method:'POST',redirect:'manual',body:'{"probe":true}'});expect(calls[0]![1]!.signal).toBeInstanceOf(AbortSignal)});
+ it.each([{recorded:false},{provider:'other'},{durationMs:NaN},{status:'unknown'},{environment:''}])('UI rejects invalid evidence %j',patch=>{expect(()=>requireRecordedProviderTest({provider:'daraja',status:'passed',recorded:true,detail:'ok',environment:'sandbox',durationMs:1,...patch},'daraja')).toThrow()});
+ it('UI accepts a confirmed saved failed result without converting it to success',()=>{expect(requireRecordedProviderTest({provider:'daraja',status:'failed',recorded:true,detail:'declined',environment:'sandbox',durationMs:1},'daraja').status).toBe('failed')});
+});

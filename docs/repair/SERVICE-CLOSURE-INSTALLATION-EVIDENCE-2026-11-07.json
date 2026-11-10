@@ -1,0 +1,8 @@
+{
+  "recordedOn": "2026-11-07",
+  "diagnostic_version": "prepaid-service-closure-install-v1",
+  "engine_definition_matches": true,
+  "neighbors_unchanged": true,
+  "retainedFunctions": 8,
+  "scope": "User-supplied operational code-installation postcheck. No order/service transition or new payment executed by agent."
+}

@@ -92,9 +92,11 @@ export function usePropertyStores(branchIdOverride?: string | null) {
     queryKey: ["kitchen", "property-stores", organizationId, property ?? "all"],
     enabled: Boolean(organizationId),
     queryFn: async () => {
+      if (!organizationId) throw new Error("Choose a workspace before loading stores.");
       let q = supabase
         .from("stock_locations")
         .select("id, name, code, location_type, branch_id, active")
+        .eq("organization_id", organizationId)
         .eq("active", true)
         .order("name");
       if (property) q = q.or(`branch_id.eq.${property},branch_id.is.null`);
@@ -121,14 +123,19 @@ export type StationImpact = {
 };
 
 export function useStationImpact(stationId: string | null) {
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["kitchen", "station-impact", stationId],
-    enabled: Boolean(stationId),
+    queryKey: ["kitchen", "station-impact", organizationId, stationId],
+    enabled: Boolean(organizationId && stationId),
     queryFn: async (): Promise<StationImpact> => {
+      if (!organizationId || !stationId) throw new Error("Choose a workspace and station before checking impact.");
       const { data, error } = await guardedRpc(supabase as never, "neo_station_store_impact", {
         _station: stationId,
       });
       if (error) throw new Error(error.message);
+      if (!data || typeof data !== "object" || typeof (data as Raw)["allowed"] !== "boolean") {
+        throw new Error("The server did not confirm station impact. Refresh and try again.");
+      }
       const r = (data ?? {}) as Raw;
       return {
         allowed: Boolean(r["allowed"]),
@@ -163,6 +170,10 @@ export function useSetStationStore() {
         _reason: input.reason ?? null,
       });
       if (error) throw new Error(error.message);
+      const result = data as Raw | null;
+      if (result?.["ok"] !== true || result["station_id"] !== input.stationId || result["location_id"] !== input.locationId) {
+        throw new Error(String(result?.["detail"] ?? "The server did not confirm the supply store change."));
+      }
       return data as Raw;
     },
     onSuccess: (data) => {
@@ -182,6 +193,10 @@ export function useClearStationStore() {
         _reason: input.reason ?? null,
       });
       if (error) throw new Error(error.message);
+      const result = data as Raw | null;
+      if (result?.["ok"] !== true || result["station_id"] !== input.stationId) {
+        throw new Error(String(result?.["detail"] ?? "The server did not confirm removal of the store mapping."));
+      }
       return data as Raw;
     },
     onSuccess: () => {
@@ -221,11 +236,13 @@ export function useStationStoreRules() {
     queryKey: ["kitchen", "routing-rules-view", organizationId],
     enabled: Boolean(organizationId),
     queryFn: async (): Promise<StationRoutingRule[]> => {
+      if (!organizationId) throw new Error("Choose a workspace before loading routing rules.");
       const { data, error } = await supabase
         .from("station_routing_rules")
         .select(
           "id, priority, active, operational_stations!station_routing_rules_station_id_fkey(name), menu_items(name), menu_categories(name)",
         )
+        .eq("organization_id", organizationId)
         .order("priority");
       if (error) throw error;
       return ((data ?? []) as unknown as Raw[]).map((r) => ({

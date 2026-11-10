@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-09",
+  "batch": 26,
+  "sourceId": "03b7153eb8dcea0e",
+  "versionId": "669f2229-7e69-4e04-bbf0-5ad9392b4e78",
+  "rollbackVersion": "6968bac2-6e5c-40ca-839f-7649c6e6321e",
+  "sql145": "User verified both function matches and unchanged cash settlement",
+  "regression": {
+    "date": "2026-11-09",
+    "passed": true,
+    "passedTests": 4291,
+    "failedTests": 0,
+    "skippedTests": 155,
+    "finalFocused": {
+      "tests": 19,
+      "failed": 0,
+      "scope": "Actual payment-dialog retry/reopen/new collection, folio close response and station assignment selection. Added three interaction tests after full run."
+    },
+    "database": {
+      "checks": 79,
+      "passed": true,
+      "installer": "145",
+      "userPostcheckVerified": true
+    },
+    "scope": "Offline regression and isolated synthetic database checks. No live financial transaction or authenticated business-day certification.",
+    "previousReleaseUniquePasses": 4264,
+    "retainedPreviousUniquePasses": 4264,
+    "regressions": [],
+    "documentedPriorReleaseTestRename": "The batch-25 final type cleanup removed an unused method property and renamed its bank payment attempt description to payment attempt; assertion unchanged."
+  },
+  "typecheck": true,
+  "build": true,
+  "startupSmoke": true,
+  "sourceIdentity": true,
+  "liveHttp": {
+    "date": "2026-11-09",
+    "passed": true,
+    "origin": "https://neo-preview.neo-hospitality.workers.dev",
+    "sourceId": "03b7153eb8dcea0e",
+    "rows": [
+      {
+        "path": "/",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "03b7153eb8dcea0e"
+      },
+      {
+        "path": "/auth",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "03b7153eb8dcea0e"
+      },
+      {
+        "path": "/pos/orders",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "03b7153eb8dcea0e"
+      }
+    ],
+    "scope": "HTTP startup/auth and protected client-shell response; no new hydrated-browser claim. No authenticated departmental workflow, real provider delivery or physical device output was exercised."
+  },
+  "operationalAcceptance": false
+}

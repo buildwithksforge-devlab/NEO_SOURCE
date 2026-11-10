@@ -92,8 +92,10 @@ export function useLaundryContext() {
 
 function useLaundryInvalidate() {
   const qc = useQueryClient();
+  const { organizationId } = useAuth();
   return () => {
     void qc.invalidateQueries({ queryKey: ["laundry-department"] });
+    void qc.invalidateQueries({ queryKey: ["guest-laundry-mine", organizationId] });
     void qc.invalidateQueries({ queryKey: ["ops"] });
   };
 }
@@ -250,12 +252,16 @@ export function useAdvanceLaundryBatch() {
   const invalidate = useLaundryInvalidate();
   return useMutation({
     mutationFn: async (input: { batchId: string; status: string }) => {
-      const { error } = await guardedRpc(db, "neo_laundry_batch_advance", {
+      const { data, error } = await guardedRpc(db, "neo_laundry_batch_advance", {
         _batch: input.batchId,
         _status: input.status,
       });
       if (error) throw new Error(error.message);
-      return input.status;
+      const result = data as { ok?: boolean; status?: string; detail?: string } | null;
+      if (result?.ok !== true || result.status !== input.status) {
+        throw new Error(result?.detail || "The server did not confirm the requested batch stage. Refresh before trying again.");
+      }
+      return result.status;
     },
     onSuccess: (status) => {
       invalidate();

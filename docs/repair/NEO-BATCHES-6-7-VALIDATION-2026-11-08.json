@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    6,
+    7
+  ],
+  "passed": 3831,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousPasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "previousBatch",
+      "previousPasses": 3777,
+      "retained": 3777,
+      "regressions": []
+    }
+  ],
+  "typecheck": "passed",
+  "productionBuildSmoke": "passed",
+  "isolatedLaundrySynchronization": 32,
+  "operationalWrites": false,
+  "deployed": false,
+  "originalQueueTotal": 106,
+  "fullyVerified": 1,
+  "remainingAcceptance": 105,
+  "advancedOriginalRecords": [
+    "NEO-BKL-F04",
+    "NEO-BKL-L02",
+    "NEO-BKL-F01",
+    "NEO-BKL-F05",
+    "NEO-BKL-L04",
+    "NEO-BKL-F06",
+    "NEO-BKL-C07",
+    "NEO-BKL-H01",
+    "NEO-BKL-H03"
+  ],
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 8,
+    "Awaiting deployment/retest": 18,
+    "Queued": 52,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "initialRegressionRun": {
+    "passed": 3823,
+    "failed": 2,
+    "skipped": 155
+  },
+  "resolvedFindings": [
+    "Synchronous callback draft-clear timing corrected; baseline tests unchanged.",
+    "Unchanged viewport file-scan check passed focused rerun and final full run."
+  ],
+  "limitations": [
+    "Local source only; no app or SQL deployment.",
+    "SQL 87 refuses definitions that differ from the reviewed source and requires enabled lifecycle triggers.",
+    "Historical deadlines/orders are not automatically rewritten.",
+    "Delivery, payment, stock and complete workflow acceptance remain separately tracked."
+  ]
+}

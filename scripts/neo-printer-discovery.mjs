@@ -57,23 +57,31 @@ export function decodePrinterDns(packet) {
     }
     if (type === 1 && length === 4)
       records.push({ name: owner.name, type, address: [...packet.subarray(start, end)].join(".") });
+    if (type === 12) {
+      const target = dnsName(packet, start);
+      if (target.end > end) throw Error("Invalid PTR target");
+      records.push({ name: owner.name, type, target: target.name });
+    }
     offset = end;
   }
   return records;
 }
-export function printerDnsQuery() {
-  const services = ["_pdl-datastream._tcp.local", "_ipp._tcp.local", "_ipps._tcp.local"];
+export function printerDnsQuery(questions = [
+  { name: "_pdl-datastream._tcp.local", type: 12 },
+  { name: "_ipp._tcp.local", type: 12 },
+  { name: "_ipps._tcp.local", type: 12 },
+]) {
   const header = Buffer.alloc(12);
   header.writeUInt16BE(0x4e45, 0);
-  header.writeUInt16BE(services.length, 4);
+  header.writeUInt16BE(questions.length, 4);
   return Buffer.concat([
     header,
-    ...services.map((service) =>
+    ...questions.map(({ name: service, type }) =>
       Buffer.concat([
         ...service
           .split(".")
           .map((label) => Buffer.concat([Buffer.from([label.length]), Buffer.from(label)])),
-        Buffer.from([0, 0, 12, 0, 1]),
+        Buffer.from([0, type >> 8, type & 255, 0, 1]),
       ]),
     ),
   ]);
@@ -83,6 +91,7 @@ export async function discoverNetwork({ duration = 3500, socketFactory = createS
   const notes = [];
   await new Promise((resolve) => {
     const socket = socketFactory({ type: "udp4", reuseAddr: true });
+    const asked = new Set();
     let done = false;
     const finish = () => {
       if (done) return;
@@ -102,6 +111,25 @@ export async function discoverNetwork({ duration = 3500, socketFactory = createS
       if (records.length > 1000) return;
       try {
         records.push(...decodePrinterDns(packet));
+        // Some printers omit additional SRV/A records from their browse reply.
+        // Resolve only advertised printer instances and their local hosts.
+        const questions = [];
+        for (const row of records) {
+          let name, type;
+          if (row.type === 12 && /\._(?:pdl-datastream|ipps?)\._tcp\.local$/.test(row.target)) {
+            name = row.target; type = 33;
+          } else if (row.type === 33 && /\._(?:pdl-datastream|ipps?)\._tcp\.local$/.test(row.name)
+            && row.target.endsWith(".local")) {
+            name = row.target; type = 1;
+          } else continue;
+          const key = `${type}:${name}`;
+          if (asked.has(key) || asked.size >= 128 || records.some(r => r.type === type && r.name === name)) continue;
+          asked.add(key);
+          questions.push({ name, type });
+        }
+        if (!done && questions.length) socket.send(printerDnsQuery(questions), 5353, "224.0.0.251", error => {
+          if (error) notes.push(error.message);
+        });
       } catch {
         /* Ignore malformed local advertisements. */
       }

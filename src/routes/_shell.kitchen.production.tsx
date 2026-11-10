@@ -1,3 +1,4 @@
+import {usePropertyClock} from '@/lib/use-property-clock';
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Plus } from "lucide-react";
@@ -50,6 +51,7 @@ export const Route = createFileRoute("/_shell/kitchen/production")({
 function Page() {
   const { can } = useAuth();
   const query = useProductionBatches();
+  const {timeZone} = usePropertyClock();
   const recipes = useRecipes();
   const stations = useKitchenStations();
   const saveBatch = useSaveBatch();
@@ -122,7 +124,8 @@ function Page() {
               title="New production batch"
               description="Record a bulk preparation run against an approved recipe."
               submitLabel="Save batch"
-              pending={saveBatch.isPending}
+              pending={saveBatch.isPending || !timeZone}
+              timeZone={timeZone}
               fields={fields}
               onSubmit={(values) =>
                 saveBatch.mutateAsync({ ...values, status: values["status"] ?? "planned" })

@@ -1,3 +1,5 @@
+import {selectReservationFolio,linkedFolioBalance} from '@/lib/reservation-folios';
+import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,7 +22,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { formatDate, formatDateTime, money, titleCase } from "@/lib/pms";
+import { formatDate, formatDateTime, money, moneyWithCode, titleCase } from "@/lib/pms";
 import { useReservation, useReservationFolios, useReservationHistory } from "@/lib/pms-data";
 import {
   EmptyState,
@@ -72,6 +74,7 @@ function ReservationDetail() {
   const qc = useQueryClient();
   const reservation = useReservation(id);
   const folios = useReservationFolios(id);
+  const [selectedFolioId, setSelectedFolioId] = useState<string | null>(null);
   const history = useReservationHistory(id);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -83,6 +86,7 @@ function ReservationDetail() {
         deposit_required: number;
         nightly_rate: number;
         payment_status: string;
+        currency: string;
         meal_plans: { code: string } | null;
         rate_plans: { name: string } | null;
         corporate_accounts: { legal_name: string; trading_name: string | null } | null;
@@ -133,6 +137,7 @@ function ReservationDetail() {
 
   if (reservation.isLoading)
     return <p className="text-sm text-muted-foreground">Loading reservation…</p>;
+  if (reservation.error) return <EmptyState title="Could not load reservation" description={reservation.error instanceof Error ? reservation.error.message : "Refresh before using this reservation."} />;
   if (!r) {
     return (
       <EmptyState
@@ -147,7 +152,10 @@ function ReservationDetail() {
     );
   }
 
-  const folio = (folios.data ?? [])[0] as unknown as FolioWithLines | undefined;
+  const linkedFolios = (folios.data ?? []) as unknown as FolioWithLines[];
+  const folio = selectReservationFolio(linkedFolios, selectedFolioId);
+  const aggregateBalance = linkedFolioBalance(linkedFolios, r.currency);
+  const canWriteFolio = !folios.isLoading && !folios.isError && Boolean(folio && ["open", "under-review", "reopened"].includes(folio.status));
 
   return (
     <div>
@@ -213,7 +221,7 @@ function ReservationDetail() {
                 {r.group_bookings ? <Row label="Group" value={r.group_bookings.name} /> : null}
               </dl>
               <div className="mt-4">
-                <DepositPanel reservationId={r.id} />
+                <DepositPanel reservationId={r.id} branchId={r.branch_id} />
               </div>
               {r.special_requests ? (
                 <div className="mt-4 rounded-lg border border-border/70 p-3 text-sm">
@@ -237,9 +245,9 @@ function ReservationDetail() {
                         <ReceiptText className="mr-2 size-4" /> Open folio
                       </Link>
                     </Button>
-                    <PostChargeDialog folioId={folio.id} />
-                    <RecordPaymentDialog folioId={folio.id} balance={Number(folio.balance)} />
-                    {Number(folio.balance) > 0 ? (
+                    {canWriteFolio ? <PostChargeDialog folioId={folio.id} /> : null}
+                    {canWriteFolio ? <RecordPaymentDialog folioId={folio.id} balance={Number(folio.balance)} /> : null}
+                    {canWriteFolio && Number(folio.balance) > 0 ? (
                       <MpesaPromptDialog
                         sourceModule="folio"
                         sourceRecordId={folio.id}
@@ -252,7 +260,14 @@ function ReservationDetail() {
                 ) : null
               }
             >
-              {!folio ? (
+              {linkedFolios.length > 1 ? <div className="mb-4 space-y-2">
+                <Label htmlFor="reservation-folio">Linked folio</Label>
+                <Select value={folio?.id ?? ""} onValueChange={setSelectedFolioId}>
+                  <SelectTrigger id="reservation-folio"><SelectValue placeholder="Choose a linked folio" /></SelectTrigger>
+                  <SelectContent>{linkedFolios.map(item => <SelectItem key={item.id} value={item.id}>{item.folio_number} · {titleCase(item.status)} · {item.currency} {money(item.balance, item.currency)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div> : null}
+              {folios.isLoading ? <p className="text-sm text-muted-foreground">Loading linked folios…</p> : folios.isError ? <p role="alert" className="text-sm text-destructive">Could not verify linked folios. Refresh before recording a charge or payment.</p> : !folio ? (
                 <EmptyState
                   icon={ReceiptText}
                   title="No folio yet"
@@ -416,8 +431,10 @@ function ReservationDetail() {
           <dl className="space-y-3 text-sm">
             <Row label="Name" value={r.customers?.full_name ?? "—"} />
             <Row label="VIP" value={r.is_vip ? "Yes" : "No"} />
-            <Row label="Payment status" value={titleCase(r.payment_status)} />
-            <Row label="Balance" value={money(folio?.balance ?? r.balance)} />
+            <Row label="Recorded payment status" value={titleCase(r.payment_status)} />
+            <Row label="Booking balance" value={moneyWithCode(r.balance, r.currency)} />
+            {folio ? <Row label="Selected folio balance" value={folios.isLoading ? "Loading…" : folios.isError ? "Could not verify" : moneyWithCode(folio.balance, folio.currency)} /> : null}
+            {linkedFolios.length > 1 ? <Row label="All linked folios balance" value={folios.isLoading ? "Loading…" : folios.isError ? "Could not verify" : aggregateBalance === null ? "Review folio currencies or balances" : moneyWithCode(aggregateBalance, r.currency)} /> : null}
           </dl>
         </SectionCard>
       </div>

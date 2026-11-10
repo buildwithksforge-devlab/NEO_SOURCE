@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    8,
+    9
+  ],
+  "passed": 3890,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousPasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "previousBatch",
+      "previousPasses": 3821,
+      "retained": 3821,
+      "regressions": []
+    }
+  ],
+  "typecheck": "passed",
+  "productionBuildSmoke": "passed",
+  "isolatedReservationFolioStatus": 25,
+  "isolatedRoomReadiness": 47,
+  "operationalWrites": false,
+  "deployed": false,
+  "originalQueueTotal": 106,
+  "fullyVerified": 1,
+  "remainingAcceptance": 105,
+  "advancedOriginalRecords": [
+    "NEO-BKL-D01",
+    "NEO-BKL-D02",
+    "NEO-BKL-D03",
+    "NEO-BKL-J03",
+    "NEO-BKL-R06",
+    "NEO-BKL-D07",
+    "NEO-BKL-D04",
+    "NEO-BKL-D05",
+    "NEO-BKL-E01",
+    "NEO-BKL-E04",
+    "NEO-BKL-E03"
+  ],
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 13,
+    "Awaiting deployment/retest": 21,
+    "Queued": 44,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "sourceInstallCandidates": [
+    "89 / migration 20261108130000",
+    "91 / migration 20261108140000"
+  ],
+  "limitations": [
+    "Local code only; no live SQL or app deployment.",
+    "No historical financial labels, room states or reservations backfilled.",
+    "Protected other-organization valid behavior retained in isolated cases; full role isolation remains uncertified.",
+    "155 skipped tests are not counted as verified passes.",
+    "Physical printing and full department workflows remain open."
+  ]
+}

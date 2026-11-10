@@ -1,0 +1,20 @@
+import {describe,it,expect} from 'vitest';
+import {savedRecord,savedGuestBooking,savedQuotation} from '@/lib/mutation-evidence';
+import {guestDisplayName,publishedNightlyRate,roomQuoteBreakdown,calendarNights} from '@/lib/guest-presentation';
+describe('queued guest and quotation boundaries',()=>{
+ it.each([null,undefined,{},[],{id:null},{id:'null'},{id:'undefined'},{id:' '},{id:3},{ok:false,id:'record'}])('rejects unconfirmed saved identity %j',value=>expect(()=>savedRecord(value)).toThrow());
+ it('preserves a valid replay result',()=>expect(savedRecord({id:'existing',created:false})).toEqual({id:'existing',created:false}));
+ it.each([null,{ok:false,id:'r'},{ok:true,id:'r',confirmation_number:'',total_amount:1},{ok:true,id:'r',confirmation_number:'REF',total_amount:NaN},{ok:true,id:'r',confirmation_number:'REF',total_amount:-1}])('does not advertise an unconfirmed guest reservation %j',value=>expect(()=>savedGuestBooking(value)).toThrow());
+ it('accepts the original booking proof without inventing a second booking',()=>expect(savedGuestBooking({ok:true,id:'r',confirmation_number:'REF',total_amount:8700,idempotent:true}).idempotent).toBe(true));
+ it.each([{quotation_id:'wrong',line_count:2,grand_total:100},{quotation_id:'quote',line_count:1,grand_total:100},{quotation_id:'quote',line_count:2,grand_total:Infinity}])('does not close pricing editor on incomplete save %j',value=>expect(()=>savedQuotation(value,'quote',2)).toThrow());
+ it('accepts persisted quotation line count and total',()=>expect(savedQuotation({quotation_id:'quote',line_count:2,grand_total:100},'quote',2)['grand_total']).toBe(100));
+ it.each([0,-10,null,undefined,'',false,NaN,Infinity,'not-priced'])('does not publish missing or invalid rate %j',value=>expect(publishedNightlyRate(value)).toBeNull());
+ it('retains the configured positive rate',()=>expect(publishedNightlyRate('7500')).toBe(7500));
+ it('explains 7,500 to 8,700 without changing the server total',()=>expect(roomQuoteBreakdown({nightly_rate:7500,nights:1,total_amount:8700})).toEqual({base:7500,adjustment:1200,total:8700}));
+ it('keeps discounts as negative adjustments',()=>expect(roomQuoteBreakdown({nightly_rate:7500,nights:2,total_amount:14000})).toEqual({base:15000,adjustment:-1000,total:14000}));
+ it('does not invent a breakdown for malformed facts',()=>expect(roomQuoteBreakdown({nightly_rate:NaN,nights:1,total_amount:100})).toBeNull());
+ it('uses hotel profile consistently before stale authentication metadata',()=>expect(guestDisplayName({full_name:' Updated Name '},{full_name:'Old Name'})).toBe('Updated Name'));
+ it('falls back only to a real nonblank metadata name',()=>{expect(guestDisplayName({full_name:' '},{full_name:' Guest Name '})).toBe('Guest Name');expect(guestDisplayName(null,{full_name:5})).toBe('')});
+ it.each([['2026-02-30','2026-03-05'],['2026-11-07','2026-11-07'],['bad','2026-11-08'],['2026-11-09','2026-11-08']])('refuses invalid/empty stays %s to %s',(a,b)=>expect(calendarNights(a,b)).toBe(0));
+ it('counts leap days and DST calendar nights without browser timezone offsets',()=>{expect(calendarNights('2028-02-28','2028-03-01')).toBe(2);expect(calendarNights('2026-03-07','2026-03-09')).toBe(2)});
+});

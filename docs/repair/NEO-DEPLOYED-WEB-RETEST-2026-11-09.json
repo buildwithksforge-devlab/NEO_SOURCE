@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-09",
+  "passed": true,
+  "origin": "https://neo-preview.neo-hospitality.workers.dev",
+  "sourceId": "a7909d0c559a0935",
+  "rows": [
+    {
+      "path": "/",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "a7909d0c559a0935"
+    },
+    {
+      "path": "/auth",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "a7909d0c559a0935"
+    },
+    {
+      "path": "/pos/orders",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "a7909d0c559a0935"
+    }
+  ],
+  "browser": {
+    "buildId": "a7909d0c559a0935",
+    "emailInputs": 1,
+    "passwordInputs": 1,
+    "consoleErrors": 0,
+    "horizontalOverflow": false,
+    "protectedRouteRedirect": "/auth?redirect=%2Fpos%2Forders"
+  },
+  "scope": "HTTP startup/auth and protected client-shell response plus hydrated sign-in browser inspection and signed-out client redirect. No authenticated departmental workflow, real provider delivery or physical device output was exercised.",
+  "cloudflareVersion": "5234c00d-f8d2-42c2-a04a-0024769787ad",
+  "previousVersion": "97d6c983-a57c-4c64-8d6c-39067a103527"
+}
