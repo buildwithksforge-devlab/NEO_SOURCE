@@ -1,3 +1,6 @@
+import { requireSavedRecord } from "@/lib/durable-command-result";
+import { requireStockCommandResult, requireMovementId } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -14,7 +17,8 @@ function useCtx() {
   return {
     organizationId,
     organization_id: organizationId as string,
-    branch_id: activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
+    branch_id:
+      activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
     userId: user?.id ?? null,
   };
 }
@@ -62,7 +66,9 @@ export function useReplenishmentRecommendations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stock_replenishment_recommendations")
-        .select("id, stock_item_id, branch_id, on_hand, threshold, recommended_quantity, source, status, created_at, stock_items(name, base_unit)")
+        .select(
+          "id, stock_item_id, branch_id, on_hand, threshold, recommended_quantity, source, status, created_at, stock_items(name, base_unit)",
+        )
         .eq("status", "recommended")
         .order("created_at", { ascending: false })
         .limit(100);
@@ -71,7 +77,6 @@ export function useReplenishmentRecommendations() {
     },
   });
 }
-
 
 /**
  * Quantity a replenishment recommendation should buy: back up to the par
@@ -98,7 +103,7 @@ export function useRaiseReorderRequest() {
   return useMutation({
     mutationFn: async (input: { item: Row; quantity: number; justification?: string }) => {
       const quantity = Number(input.quantity) || 0;
-      if (quantity <= 0) throw new Error("Enter the quantity to request before raising it.");
+      if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Enter a finite positive quantity before raising the request.");
       const itemId = String(input.item["id"] ?? "");
       if (!itemId) throw new Error("This recommendation has no stock item to request.");
       // A purchase request always belongs to one property. Viewing "All
@@ -139,18 +144,17 @@ export function useRaiseReorderRequest() {
           "A draft purchase request already exists for this item — open Procurement to review or submit it.",
         );
       }
-      return String(result["request_id"] ?? "");
+      return String(requireSavedRecord(data, ["request_id"], "The purchase request was not saved.")["request_id"]);
     },
     onSuccess: () => {
-      toast.success("Draft purchase request raised — Procurement reviews before anything is ordered");
-      void qc.invalidateQueries({ queryKey: ["procurement", "requests"] });
-      void qc.invalidateQueries({ queryKey: ["inventory", "reorder"] });
+      toast.success(
+        "Draft purchase request raised — Procurement reviews before anything is ordered",
+      );
+      return invalidateSupplyViews(qc);
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
-
 
 export function useMenuProfitability() {
   const { organizationId } = useCtx();
@@ -190,10 +194,11 @@ export function useStockLocations() {
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await applyTo(
-        supabase.from("stock_locations").select(sel("id, name, code, location_type, is_main, active, branch_id")),
+        supabase
+          .from("stock_locations")
+          .select(sel("id, name, code, location_type, is_main, active, branch_id")),
         "stock_locations",
-      )
-        .order("name");
+      ).order("name");
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -208,15 +213,16 @@ export function useStockItems() {
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await applyTo(
-        supabase.from("stock_items").select(
-          sel(
-            "id, name, sku, base_unit, purchase_unit, purchase_to_base, min_level, reorder_point, par_level, max_level, reorder_quantity, average_cost, last_cost, track_expiry, active, category_id, container_type, container_volume_ml, tracking_method, may_open_for_pours, default_pour_ml, stock_categories(name), stock_levels(quantity_on_hand, location_id)",
+        supabase
+          .from("stock_items")
+          .select(
+            sel(
+              "id, name, sku, base_unit, purchase_unit, purchase_to_base, min_level, reorder_point, par_level, max_level, reorder_quantity, average_cost, last_cost, track_expiry, active, category_id, container_type, container_volume_ml, tracking_method, may_open_for_pours, default_pour_ml, stock_categories(name), stock_levels(quantity_on_hand, location_id)",
+            ),
           ),
-        ),
 
         "stock_items",
-      )
-        .order("name");
+      ).order("name");
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -231,7 +237,13 @@ export function useStockMovements(limit = 60) {
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await applyTo(
-        supabase.from("stock_movements").select(sel("id, movement_type, quantity, unit, value, reason, reference_type, reference_id, created_at, stock_items(name), stock_locations!stock_movements_location_id_fkey(name)")),
+        supabase
+          .from("stock_movements")
+          .select(
+            sel(
+              "id, movement_type, quantity, unit, value, reason, reference_type, reference_id, created_at, stock_items(name), stock_locations!stock_movements_location_id_fkey(name)",
+            ),
+          ),
         "stock_movements",
       )
         .order("created_at", { ascending: false })
@@ -239,7 +251,10 @@ export function useStockMovements(limit = 60) {
       if (error) throw error;
       const movements = (data ?? []) as unknown as Row[];
       const requisitionIds = movements
-        .filter((row) => String(row["reference_type"] ?? "").replace(/_/g, "-") === "internal-requisition")
+        .filter(
+          (row) =>
+            String(row["reference_type"] ?? "").replace(/_/g, "-") === "internal-requisition",
+        )
         .map((row) => String(row["reference_id"] ?? ""))
         .filter(Boolean);
       if (requisitionIds.length === 0) return movements;
@@ -267,7 +282,11 @@ export function useExpiringBatches() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stock_batches")
-        .select(sel("id, batch_number, expiry_date, quantity, unit_cost, stock_items(name, base_unit), stock_locations(name)"))
+        .select(
+          sel(
+            "id, batch_number, expiry_date, quantity, unit_cost, stock_items(name, base_unit), stock_locations(name)",
+          ),
+        )
         .gt("quantity", 0)
         .not("expiry_date", "is", null)
         .order("expiry_date")
@@ -288,7 +307,11 @@ export function useSuppliers() {
       const { data, error } = await applyTo(
         supabase
           .from("suppliers")
-          .select(sel("id, name, contact_person, phone, email, categories, credit_terms_days, outstanding_balance, rating, on_time_deliveries, late_deliveries, active, branch_id")),
+          .select(
+            sel(
+              "id, name, contact_person, phone, email, categories, credit_terms_days, outstanding_balance, rating, on_time_deliveries, late_deliveries, active, branch_id",
+            ),
+          ),
         "suppliers",
       ).order("name");
       if (error) throw error;
@@ -333,7 +356,11 @@ export function usePurchaseOrders() {
       const { data, error } = await applyTo(
         supabase
           .from("purchase_orders")
-          .select(sel("id, order_number, status, expected_date, total_amount, currency, created_at, branch_id, branches(name), suppliers(name)")),
+          .select(
+            sel(
+              "id, order_number, status, expected_date, total_amount, currency, created_at, branch_id, branches(name), suppliers(name)",
+            ),
+          ),
         "purchase_orders",
       ).order("created_at", { ascending: false });
       if (error) throw error;
@@ -352,7 +379,11 @@ export function useGoodsReceipts() {
       const { data, error } = await applyTo(
         supabase
           .from("goods_receipts")
-          .select(sel("id, grn_number, status, received_at, total_value, is_partial, branch_id, branches(name), suppliers(name), stock_locations(name)")),
+          .select(
+            sel(
+              "id, grn_number, status, received_at, total_value, is_partial, branch_id, branches(name), suppliers(name), stock_locations(name)",
+            ),
+          ),
         "goods_receipts",
       ).order("received_at", { ascending: false });
       if (error) throw error;
@@ -369,7 +400,11 @@ export function useStockTransfers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stock_transfers")
-        .select(sel("id, transfer_number, status, reason, created_at, from_location:stock_locations!stock_transfers_from_location_id_fkey(name), to_location:stock_locations!stock_transfers_to_location_id_fkey(name)"))
+        .select(
+          sel(
+            "id, transfer_number, status, reason, created_at, from_location:stock_locations!stock_transfers_from_location_id_fkey(name), to_location:stock_locations!stock_transfers_to_location_id_fkey(name)",
+          ),
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
@@ -385,7 +420,11 @@ export function useStockAdjustments() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stock_adjustments")
-        .select(sel("id, adjustment_number, reason, status, total_value, created_at, stock_locations(name)"))
+        .select(
+          sel(
+            "id, adjustment_number, reason, status, total_value, created_at, stock_locations(name)",
+          ),
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
@@ -401,7 +440,11 @@ export function useStockTakes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stock_takes")
-        .select(sel("id, reference, count_type, status, scheduled_for, variance_value, created_at, stock_locations(name)"))
+        .select(
+          sel(
+            "id, reference, count_type, status, scheduled_for, variance_value, created_at, stock_locations(name)",
+          ),
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
@@ -413,9 +456,7 @@ export function useStockTakes() {
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return (...keys: string[]) => {
-    for (const key of keys) void qc.invalidateQueries({ queryKey: [key] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 export function useSaveRecord(table: string, invalidate: string[], label = "Saved") {
@@ -429,7 +470,8 @@ export function useSaveRecord(table: string, invalidate: string[], label = "Save
     },
     onSuccess: () => {
       toast.success(label);
-      invalidateAll(...invalidate);
+      const refresh = invalidateAll(...invalidate);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -484,7 +526,8 @@ export function useSaveStockThresholds() {
   const { branchId } = useActivePropertyFilter();
   return useMutation({
     mutationFn: async (input: { id: string; reorderPoint: number; parLevel: number }) => {
-      if (input.reorderPoint < 0 || input.parLevel < 0) throw new Error("Levels cannot be negative");
+      if (input.reorderPoint < 0 || input.parLevel < 0)
+        throw new Error("Levels cannot be negative");
       if (input.parLevel > 0 && input.parLevel < input.reorderPoint) {
         throw new Error("The par level has to be at least the reorder point");
       }
@@ -511,7 +554,8 @@ export function useSaveStockThresholds() {
     },
     onSuccess: () => {
       toast.success(branchId ? "Reorder levels saved for this property" : "Reorder levels saved");
-      invalidateAll("inventory", "procurement");
+      const refresh = invalidateAll("inventory", "procurement");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -570,12 +614,12 @@ export function useSaveStockThresholdsBulk() {
           ? `${count} reorder rules saved for this property`
           : `${count} reorder rules saved`,
       );
-      invalidateAll("inventory", "procurement");
+      const refresh = invalidateAll("inventory", "procurement");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 /**
  * Weekly stores report: item group → category → stock item, with each
@@ -604,12 +648,16 @@ export function useDeleteRecord(table: string, invalidate: string[]) {
   const invalidateAll = useInvalidate();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table as never).delete().eq("id", id);
+      const { error } = await supabase
+        .from(table as never)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Removed");
-      invalidateAll(...invalidate);
+      const refresh = invalidateAll(...invalidate);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -645,13 +693,15 @@ export function useApplyMovement() {
       if (input.batchNumber) args["_batch_number"] = input.batchNumber;
       if (input.expiry) args["_expiry"] = input.expiry;
       if (input.idempotencyKey) args["_idempotency_key"] = input.idempotencyKey;
-      const { error } = await guardedRpc(supabase, "inventory_apply_movement", args as never);
+      const { data, error } = await guardedRpc(supabase, "inventory_apply_movement", args as never);
       if (error) throw error;
+      return requireMovementId(data);
     },
 
     onSuccess: () => {
       toast.success("Stock movement posted.");
-      invalidateAll("inventory");
+      const refresh = invalidateAll("inventory");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -661,12 +711,18 @@ export function usePostReceipt() {
   const invalidateAll = useInvalidate();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await guardedRpc(supabase, "inventory_post_receipt", { _receipt: id });
+      const { data, error } = await guardedRpc(supabase, "inventory_post_receipt", {
+        _receipt: id,
+      });
       if (error) throw error;
+      return requireStockCommandResult(data, "receipt");
     },
-    onSuccess: () => {
-      toast.success("Delivery posted to stock.");
-      invalidateAll("inventory", "procurement");
+    onSuccess: (result) => {
+      if (result["status"] === "pending-finance")
+        toast.warning("Delivery posted to stock; Finance accrual still needs attention.");
+      else toast.success("Delivery posted to stock.");
+      const refresh = invalidateAll("inventory", "procurement");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -676,12 +732,16 @@ export function usePostTransfer() {
   const invalidateAll = useInvalidate();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await guardedRpc(supabase, "inventory_post_transfer", { _transfer: id });
+      const { data, error } = await guardedRpc(supabase, "inventory_post_transfer", {
+        _transfer: id,
+      });
       if (error) throw error;
+      return requireStockCommandResult(data, "transfer");
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Transfer completed.");
-      invalidateAll("inventory");
+      const refresh = invalidateAll("inventory");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -691,12 +751,16 @@ export function usePostAdjustment() {
   const invalidateAll = useInvalidate();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await guardedRpc(supabase, "inventory_post_adjustment", { _adjustment: id });
+      const { data, error } = await guardedRpc(supabase, "inventory_post_adjustment", {
+        _adjustment: id,
+      });
       if (error) throw error;
+      return requireStockCommandResult(data, "adjustment");
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Adjustment approved and posted.");
-      invalidateAll("inventory");
+      const refresh = invalidateAll("inventory");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -706,12 +770,16 @@ export function useCloseStockTake() {
   const invalidateAll = useInvalidate();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await guardedRpc(supabase, "inventory_post_stock_take", { _take: id });
+      const { data, error } = await guardedRpc(supabase, "inventory_post_stock_take", {
+        _take: id,
+      });
       if (error) throw error;
+      return requireStockCommandResult(data, "stock-take");
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("Stock take closed and variances posted.");
-      invalidateAll("inventory");
+      const refresh = invalidateAll("inventory");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -766,7 +834,9 @@ export function useLiveStockBoard() {
     queryKey: ["inventory", "live-board", organizationId, branch_id],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(supabase, "neo_stock_live_board", { _branch: branch_id });
+      const { data, error } = await guardedRpc(supabase, "neo_stock_live_board", {
+        _branch: branch_id,
+      });
       if (error) throw error;
       const board = (data ?? {}) as Partial<LiveStockBoard>;
       return {
@@ -796,7 +866,9 @@ export function useRecalculateStockLevels() {
   const { branch_id } = useCtx();
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await guardedRpc(supabase, "neo_stock_recalculate_levels", { _branch: branch_id });
+      const { data, error } = await guardedRpc(supabase, "neo_stock_recalculate_levels", {
+        _branch: branch_id,
+      });
       if (error) throw error;
       const result = (data ?? {}) as {
         ok?: boolean;
@@ -819,13 +891,18 @@ export function useRecalculateStockLevels() {
     onSuccess: (result) => {
       const corrected = Number(result.corrected ?? 0);
       const noBaseline = Number(result.without_ledger ?? 0);
-      const tail = noBaseline > 0 ? ` ${noBaseline} lines have no recorded opening balance and were left untouched.` : "";
+      const tail =
+        noBaseline > 0
+          ? ` ${noBaseline} lines have no recorded opening balance and were left untouched.`
+          : "";
       toast.success(
         (corrected > 0
           ? `Recalculated ${result.checked ?? 0} lines — ${corrected} corrected from the ledger.`
-          : `Recalculated ${result.checked ?? 0} lines — every balance already matched the ledger.`) + tail,
+          : `Recalculated ${result.checked ?? 0} lines — every balance already matched the ledger.`) +
+          tail,
       );
-      invalidateAll("inventory");
+      const refresh = invalidateAll("inventory");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

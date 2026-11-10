@@ -1,3 +1,4 @@
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Procurement department layer.
@@ -46,10 +47,7 @@ export function useProcurementContext() {
 
 function useProcurementInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["procurement-department"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 import { useScopedDepartmentByKey } from "@/lib/scoped-options";
@@ -70,7 +68,9 @@ export function useSupplierQuotations(requestId: string | null) {
     queryFn: async () => {
       let q = db
         .from("supplier_quotations")
-        .select("*, suppliers:supplier_id(id, name, payment_terms, credit_terms_days, rating, on_time_deliveries, late_deliveries)")
+        .select(
+          "*, suppliers:supplier_id(id, name, payment_terms, credit_terms_days, rating, on_time_deliveries, late_deliveries)",
+        )
         .order("created_at", { ascending: false })
         .limit(200);
       if (requestId) q = q.eq("request_id", requestId);
@@ -128,8 +128,9 @@ export function useRecordQuotation() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Quotation recorded for comparison");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -140,7 +141,11 @@ export function useSelectQuotation() {
   const invalidate = useProcurementInvalidate();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { quotationId: string; requestId: string | null; reason: string }) => {
+    mutationFn: async (input: {
+      quotationId: string;
+      requestId: string | null;
+      reason: string;
+    }) => {
       if (!input.reason.trim()) throw new Error("Record why this supplier is recommended");
       if (input.requestId) {
         const { error: clearError } = await db
@@ -163,8 +168,9 @@ export function useSelectQuotation() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Supplier recommended — the order still follows the approval rules");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -197,7 +203,9 @@ export function useRfqs(requestId: string | null) {
     queryFn: async () => {
       let q = db
         .from("rfqs")
-        .select("*, rfq_suppliers(id, supplier_id, dispatch_state, dispatch_channel, dispatched_at, dispatch_note, responded_at, suppliers:supplier_id(id, name, email, phone, whatsapp))")
+        .select(
+          "*, rfq_suppliers(id, supplier_id, dispatch_state, dispatch_channel, dispatched_at, dispatch_note, responded_at, suppliers:supplier_id(id, name, email, phone, whatsapp))",
+        )
         .order("created_at", { ascending: false })
         .limit(100);
       if (requestId) q = q.eq("request_id", requestId);
@@ -260,8 +268,9 @@ export function useCreateRfq() {
       return rfq as { id: string; rfq_number: string };
     },
     onSuccess: (rfq) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(`${rfq.rfq_number} prepared — nothing is sent until you despatch it`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -292,13 +301,13 @@ export function useRecordRfqDispatch() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Supplier communication recorded");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 /* ------------------------------------------------------------------ *
  * Supplier order follow-up: ordered vs received vs outstanding
@@ -315,7 +324,13 @@ export function useOrderTracking() {
         .select(
           "*, suppliers:supplier_id(id, name, phone, email), purchase_order_lines(id, description, quantity, received_quantity, accepted_quantity, unit, unit_price)",
         )
-        .in("status", ["approved", "pending-delivery", "sent", "partially-received", "partially-invoiced"])
+        .in("status", [
+          "approved",
+          "pending-delivery",
+          "sent",
+          "partially-received",
+          "partially-invoiced",
+        ])
         .order("expected_date", { ascending: true, nullsFirst: false })
         .limit(200);
       if (branchId) q = q.eq("branch_id", branchId);
@@ -328,7 +343,9 @@ export function useOrderTracking() {
           (sum, l) => sum + num(l["accepted_quantity"] ?? l["received_quantity"]),
           0,
         );
-        const expected = order["expected_date"] ? new Date(String(order["expected_date"])).getTime() : null;
+        const expected = order["expected_date"]
+          ? new Date(String(order["expected_date"])).getTime()
+          : null;
         return {
           ...order,
           ordered_quantity: ordered,
@@ -420,7 +437,12 @@ export function useCreateProcurementTask() {
   const { user } = useAuth();
   const department = useProcurementDepartment();
   return useMutation({
-    mutationFn: async (input: { title: string; dueAt?: string | null; priority?: string; description?: string }) => {
+    mutationFn: async (input: {
+      title: string;
+      dueAt?: string | null;
+      priority?: string;
+      description?: string;
+    }) => {
       if (!organizationId) throw new Error("No organisation context");
       if (!input.title.trim()) throw new Error("Give the task a title");
       return await createDepartmentTask(db, {
@@ -435,11 +457,11 @@ export function useCreateProcurementTask() {
         assignee_id: user?.id ?? null,
         created_by: user?.id ?? null,
       });
-
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Procurement task created");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -460,8 +482,9 @@ export function useUpdateProcurementTask() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Task updated");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -518,8 +541,9 @@ export function useReportProcurementStockNeed() {
       return data as string;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Office supply need recorded for Stores");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

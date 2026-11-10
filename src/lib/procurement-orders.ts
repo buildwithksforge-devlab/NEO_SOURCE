@@ -1,3 +1,5 @@
+import { requireOrderCloseResult } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 /**
  * Purchase order board.
  *
@@ -19,7 +21,8 @@ import type { Row } from "@/lib/inventory";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-export type OrderStage = "awaiting_approval" | "open" | "partly_received" | "completed" | "cancelled";
+export type OrderStage =
+  "awaiting_approval" | "open" | "partly_received" | "completed" | "cancelled";
 
 export type OrderView = {
   id: string;
@@ -50,7 +53,16 @@ const n = (v: unknown): number => {
 
 const CANCELLED = ["cancelled", "voided", "rejected"];
 const AWAITING = ["draft", "pending_approval", "pending-approval"];
-const DONE = ["closed", "completed", "received", "fully-received", "fully_received", "fully-invoiced", "invoiced", "paid"];
+const DONE = [
+  "closed",
+  "completed",
+  "received",
+  "fully-received",
+  "fully_received",
+  "fully-invoiced",
+  "invoiced",
+  "paid",
+];
 
 function stageOf(status: string, ordered: number, received: number): OrderStage {
   if (CANCELLED.includes(status)) return "cancelled";
@@ -124,11 +136,7 @@ export function usePurchaseOrderBoard() {
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["procurement"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-    void qc.invalidateQueries({ queryKey: ["reconciliation"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 /** Close an order that will not be delivered in full; a written reason is kept. */
@@ -141,11 +149,12 @@ export function useCloseOrder() {
         _reason: reason,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+      return requireOrderCloseResult(data, orderId);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Purchase order closed");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

@@ -14,6 +14,9 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_menu_remove_item: "authenticated",
+  neo_reservation_collection_position: "authenticated",
+  pms_confirm_payment: "authenticated",
   current_org_id: "authenticated",
   neo_device_admin_list: "authenticated",
   neo_device_activation_issue: "authenticated",

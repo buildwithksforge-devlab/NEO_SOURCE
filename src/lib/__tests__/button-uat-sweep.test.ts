@@ -122,7 +122,8 @@ describe("button-by-button UAT — mutation wiring", () => {
       const s = readFileSync(join("src/lib", f), "utf8");
       const direct = /invalidateQueries/.test(s);
       const shared = /import\s*\{\s*invalidatePaymentViews\s*\}\s*from\s*["']@\/lib\/payment-view-refresh["']/.test(s) && /invalidatePaymentViews\(qc\)/.test(s);
-      return /useMutation/.test(s) && !direct && !shared;
+      const supply = /import\s*\{\s*invalidateSupplyViews\s*\}\s*from\s*["\']@\/lib\/supply-view-refresh["\']/.test(s) && /invalidateSupplyViews\(\s*qc\s*(?:,\s*keys)?\s*\)/.test(s);
+      return /useMutation/.test(s) && !direct && !shared && !supply;
     });
     expect(stale).toEqual([]);
   });

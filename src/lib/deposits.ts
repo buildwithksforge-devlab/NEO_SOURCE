@@ -95,9 +95,7 @@ export function useDepositPosition(reservationId: string | null | undefined, ena
 
 function useInvalidateDeposits() {
   const qc = useQueryClient();
-  return () => {
-    invalidatePaymentViews(qc);
-  };
+  return () => invalidatePaymentViews(qc);
 }
 
 /**
@@ -143,7 +141,7 @@ export function useRecordDeposit() {
       } else {
         toast.warning(`Deposit recorded — Finance ${r.finance?.reason ?? "posting is pending"}`);
       }
-      invalidate();
+      return invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -170,16 +168,7 @@ export function useDepositOverride() {
   });
 }
 
-/**
- * One posting intent per source event and property.
- *
- * A key minted at random per submission made every retry — and every second
- * operator confirming the same money — a *new* deposit, which is how one
- * reservation came to sit twice in the Finance posting queue. The key is now
- * derived from the facts of the intent itself (property, reservation, amount,
- * method, reference, business date), so repeating the same intent returns the
- * existing deposit while a genuinely different one still records.
- */
+/** Stable identity per collection; retries keep it and a genuine next collection gets a new identity. Legacy callers retain their previous deterministic keys. */
 export const depositIdempotencyKey = (input: {
   reservationId: string;
   propertyId: string | null;
@@ -187,7 +176,9 @@ export const depositIdempotencyKey = (input: {
   method: string;
   reference?: string;
   businessDate?: string;
+  intentKey?: string;
 }) =>
+  input.intentKey ? stableIdempotencyKey("deposit", "record", [input.propertyId,input.reservationId,input.intentKey]) :
   stableIdempotencyKey("deposit", "record", [
     input.propertyId,
     input.reservationId,

@@ -1,3 +1,5 @@
+import {useReservationCollectionPosition} from "@/lib/reservation-collections";
+import {ReservationCollections} from "@/components/pms/ReservationCollections";
 import {selectReservationFolio,linkedFolioBalance} from '@/lib/reservation-folios';
 import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
 import { useState } from "react";
@@ -73,6 +75,7 @@ function ReservationDetail() {
   const { organizationId, user, profile, can } = useAuth();
   const qc = useQueryClient();
   const reservation = useReservation(id);
+  const collections=useReservationCollectionPosition(id);
   const folios = useReservationFolios(id);
   const [selectedFolioId, setSelectedFolioId] = useState<string | null>(null);
   const history = useReservationHistory(id);
@@ -155,7 +158,7 @@ function ReservationDetail() {
   const linkedFolios = (folios.data ?? []) as unknown as FolioWithLines[];
   const folio = selectReservationFolio(linkedFolios, selectedFolioId);
   const aggregateBalance = linkedFolioBalance(linkedFolios, r.currency);
-  const canWriteFolio = !folios.isLoading && !folios.isError && Boolean(folio && ["open", "under-review", "reopened"].includes(folio.status));
+  const canWriteFolio = Boolean(collections.data) && !collections.error && !folios.isLoading && !folios.isError && Boolean(folio && ["open", "under-review", "reopened"].includes(folio.status));
 
   return (
     <div>
@@ -193,6 +196,7 @@ function ReservationDetail() {
           <TabsList>
             <TabsTrigger value="stay">Stay</TabsTrigger>
             <TabsTrigger value="folio">Folio</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="manage">Manage</TabsTrigger>
           </TabsList>
@@ -246,7 +250,7 @@ function ReservationDetail() {
                       </Link>
                     </Button>
                     {canWriteFolio ? <PostChargeDialog folioId={folio.id} /> : null}
-                    {canWriteFolio ? <RecordPaymentDialog folioId={folio.id} balance={Number(folio.balance)} /> : null}
+                    {canWriteFolio ? <RecordPaymentDialog folioId={folio.id} balance={collections.data?.headroom ?? Number(folio.balance)} /> : null}
                     {canWriteFolio && Number(folio.balance) > 0 ? (
                       <MpesaPromptDialog
                         sourceModule="folio"
@@ -324,28 +328,14 @@ function ReservationDetail() {
                     </Table>
                   </TableScroll>
 
-                  <h3 className="mt-6 mb-2 text-sm font-semibold">Payments</h3>
-                  {(folio.payments ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No payments recorded.</p>
-                  ) : (
-                    <ul className="space-y-2 text-sm">
-                      {(folio.payments ?? []).map((p) => (
-                        <li
-                          key={p.id}
-                          className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2"
-                        >
-                          <span>
-                            {p.receipt_number} · {titleCase(p.method)} · {formatDateTime(p.paid_at)}
-                          </span>
-                          <span className="font-medium">{money(p.amount, folio.currency)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <h3 className="mt-6 mb-2 text-sm font-semibold">Deposits & payments</h3>
+                  <ReservationCollections reservationId={r.id} folioIds={linkedFolios.map(f=>f.id)} />
                 </>
               )}
             </SectionCard>
           </TabsContent>
+
+          <TabsContent value="payments" className="mt-4"><SectionCard title="Deposits & payments" description="Saved collections for this reservation, including deposits received before check-in."><ReservationCollections reservationId={r.id} folioIds={linkedFolios.map(f=>f.id)} /></SectionCard></TabsContent>
 
           <TabsContent value="history" className="mt-4">
             <SectionCard
@@ -431,8 +421,10 @@ function ReservationDetail() {
           <dl className="space-y-3 text-sm">
             <Row label="Name" value={r.customers?.full_name ?? "—"} />
             <Row label="VIP" value={r.is_vip ? "Yes" : "No"} />
-            <Row label="Recorded payment status" value={titleCase(r.payment_status)} />
-            <Row label="Booking balance" value={moneyWithCode(r.balance, r.currency)} />
+            {collections.error ? <p role="alert" className="text-sm text-destructive">Could not verify collections. Refresh before recording a payment.</p> : null}
+            {collections.data ? <><Row label="Collected" value={moneyWithCode(collections.data.collected,collections.data.currency)} /><Row label="Awaiting confirmation" value={moneyWithCode(collections.data.pending,collections.data.currency)} /></> : null}
+            <Row label="Payment status" value={collections.data ? titleCase(collections.data.payment_status) : collections.isPending ? "Loading…" : "Could not verify"} />
+            <Row label="Booking balance" value={collections.data ? moneyWithCode(collections.data.outstanding,collections.data.currency) : collections.isPending ? "Loading…" : "Could not verify"} />
             {folio ? <Row label="Selected folio balance" value={folios.isLoading ? "Loading…" : folios.isError ? "Could not verify" : moneyWithCode(folio.balance, folio.currency)} /> : null}
             {linkedFolios.length > 1 ? <Row label="All linked folios balance" value={folios.isLoading ? "Loading…" : folios.isError ? "Could not verify" : aggregateBalance === null ? "Review folio currencies or balances" : moneyWithCode(aggregateBalance, r.currency)} /> : null}
           </dl>

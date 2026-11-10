@@ -196,7 +196,7 @@ function OrderTerminal() {
   const scoped = scopeCatalogueToOutlet(items.data ?? [], outlet);
   const menuRows = scoped.rows.filter(
     (m) =>
-      m.availability !== "discontinued" &&
+      m.availability === "available" && m.publish_status === "published" &&
       (category === "all" || m.category_id === category) &&
       (!q || m.name.toLowerCase().includes(q)),
   );
@@ -377,7 +377,7 @@ function OrderTerminal() {
                         key={m.id}
                         disabled={
                           !can("pos", "orders.create") ||
-                          m.availability === "out-of-stock" ||
+                          m.availability !== "available" || m.publish_status !== "published" ||
                           m.station_missing
                         }
                         title={

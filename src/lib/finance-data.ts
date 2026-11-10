@@ -1,4 +1,8 @@
-import {invalidatePaymentViews} from "@/lib/payment-view-refresh";
+import {
+  requireSupplierPaymentResult,
+  requireScheduleReleaseResult,
+} from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,13 +25,20 @@ export function useFinanceCtx() {
   const { branchId: activeBranchId } = useActivePropertyFilter();
   return {
     organizationId,
-    branchId: activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
+    branchId:
+      activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
     userId: user?.id ?? null,
     userName: (profile as { full_name?: string } | null)?.full_name ?? "",
   };
 }
 
-function useList(key: string, table: string, select: string, build?: (q: Builder) => Builder, deps: unknown[] = []) {
+function useList(
+  key: string,
+  table: string,
+  select: string,
+  build?: (q: Builder) => Builder,
+  deps: unknown[] = [],
+) {
   const { organizationId } = useFinanceCtx();
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery({
@@ -84,7 +95,11 @@ export function useTrialBalance(from: string, to: string, branchId: string | nul
     queryKey: ["finance", "trial-balance", organizationId, from, to, branchId],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(db, "fin_trial_balance", { _from: from, _to: to, _branch: branchId });
+      const { data, error } = await guardedRpc(db, "fin_trial_balance", {
+        _from: from,
+        _to: to,
+        _branch: branchId,
+      });
       if (error) throw error;
       return (data ?? []) as Row[];
     },
@@ -165,18 +180,27 @@ export const useCreditNotes = () =>
   );
 
 export const useCreditApplications = () =>
-  useList("credit-applications", "corporate_credit_applications", "*, corporate_accounts(legal_name)", (q) =>
-    q.order("created_at", { ascending: false }),
+  useList(
+    "credit-applications",
+    "corporate_credit_applications",
+    "*, corporate_accounts(legal_name)",
+    (q) => q.order("created_at", { ascending: false }),
   );
 
 export const useCollectionNotes = () =>
-  useList("collection-notes", "collection_notes", "*, corporate_accounts(legal_name), customers(full_name)", (q) =>
-    q.order("created_at", { ascending: false }).limit(200),
+  useList(
+    "collection-notes",
+    "collection_notes",
+    "*, corporate_accounts(legal_name), customers(full_name)",
+    (q) => q.order("created_at", { ascending: false }).limit(200),
   );
 
 export const useStatements = () =>
-  useList("statements", "customer_statements", "*, corporate_accounts(legal_name), customers(full_name)", (q) =>
-    q.order("period_end", { ascending: false }).limit(200),
+  useList(
+    "statements",
+    "customer_statements",
+    "*, corporate_accounts(legal_name), customers(full_name)",
+    (q) => q.order("period_end", { ascending: false }).limit(200),
   );
 
 export const useSupplierInvoices = () =>
@@ -214,23 +238,24 @@ export function useAdvanceSupplierPayment() {
         _reason: input.reason ?? null,
       } as never);
       if (error) throw error;
-      return (data ?? {}) as {
-        ok?: boolean;
-        idempotent?: boolean;
-        status?: string;
-        journal_id?: string | null;
-        detail?: string;
-      };
+      return requireSupplierPaymentResult(data, input.paymentId, input.action);
     },
-    onSuccess: (r) => {
-      if (r.ok === false) toast.error(r.detail ?? "The payment could not be settled.");
+    onSuccess: (r, vars) => {
+      if (vars.action === "fail") toast.success("Payment marked failed; no settlement recorded.");
+      else if (r.ok === false) toast.error(r.detail ?? "The payment could not be settled.");
       else if (r.idempotent) toast.info(`Already ${r.status}.`);
       else if (r.status === "paid")
-        toast.success(r.journal_id ? "Paid and posted to the ledger" : "Paid â€” posting is pending");
+        toast.success(
+          r.journal_id ? "Paid and posted to the ledger" : "Paid â€” posting is pending",
+        );
       else toast.success(`Payment ${r.status}`);
-      invalidate();
+      const refresh = invalidate();
+      return refresh;
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      return invalidate();
+    },
   });
 }
 
@@ -262,34 +287,33 @@ export function useReleasePaymentSchedule() {
         _paid_on: input.paidOn ?? null,
       } as never);
       if (error) throw error;
-      return (data ?? {}) as {
-        ok?: boolean;
-        idempotent?: boolean;
-        status?: string;
-        payment_number?: string | null;
-      };
+      return requireScheduleReleaseResult(data);
     },
     onSuccess: (r) => {
-      if (r.idempotent) toast.info("This schedule was already released.");
+      if (r.idempotent) toast.info("Saved supplier payment is " + r.status + ".");
       else toast.success(`Released as ${r.payment_number ?? "a supplier payment"}`);
-      invalidate();
+      const refresh = invalidate();
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
-
 export const usePaymentSchedules = () =>
-  useList("payment-schedules", "payment_schedules", "*, suppliers(name)", (q) => q.order("scheduled_date"));
+  useList("payment-schedules", "payment_schedules", "*, suppliers(name)", (q) =>
+    q.order("scheduled_date"),
+  );
 
-export const useSuppliers = () => useList("suppliers", "suppliers", "id, name, active", (q) => q.order("name"));
+export const useSuppliers = () =>
+  useList("suppliers", "suppliers", "id, name, active", (q) => q.order("name"));
 
 export const usePayments = () =>
   useList("payments", "payments", "*, customers(full_name)", (q) =>
     q.order("paid_at", { ascending: false }).limit(300),
   );
 
-export const useBankAccounts = () => useList("bank-accounts", "bank_accounts", "*", (q) => q.order("name"));
+export const useBankAccounts = () =>
+  useList("bank-accounts", "bank_accounts", "*", (q) => q.order("name"));
 
 export const useStatementEntries = (bankAccountId: string | null) =>
   useList(
@@ -317,12 +341,17 @@ export const useCashCounts = () =>
   );
 
 export const useCashTransfers = () =>
-  useList("cash-transfers", "cash_transfers", "*, cash_drawers!cash_transfers_from_drawer_id_fkey(name)", (q) =>
-    q.order("sent_at", { ascending: false }).limit(200),
+  useList(
+    "cash-transfers",
+    "cash_transfers",
+    "*, cash_drawers!cash_transfers_from_drawer_id_fkey(name)",
+    (q) => q.order("sent_at", { ascending: false }).limit(200),
   );
 
 export const useCashierShifts = () =>
-  useList("shifts", "pos_shifts", "*", (q) => q.order("opened_at", { ascending: false }).limit(100));
+  useList("shifts", "pos_shifts", "*", (q) =>
+    q.order("opened_at", { ascending: false }).limit(100),
+  );
 
 export const useOtaReceivables = () =>
   useList("ota", "ota_receivables", "*, ota_vcc_records(*)", (q) =>
@@ -330,7 +359,9 @@ export const useOtaReceivables = () =>
   );
 
 export const useEtimsSubmissions = () =>
-  useList("etims", "etims_submissions", "*", (q) => q.order("created_at", { ascending: false }).limit(200));
+  useList("etims", "etims_submissions", "*", (q) =>
+    q.order("created_at", { ascending: false }).limit(200),
+  );
 
 export const useTaxTransactions = () =>
   useList("tax-transactions", "tax_transactions", "*, tax_codes(code, name)", (q) =>
@@ -342,14 +373,22 @@ export const useExpenses = () =>
     q.order("expense_date", { ascending: false }).limit(200),
   );
 
-export const useBudgets = () => useList("budgets", "budgets", "*, budget_lines(*)", (q) => q.order("created_at", { ascending: false }));
+export const useBudgets = () =>
+  useList("budgets", "budgets", "*, budget_lines(*)", (q) =>
+    q.order("created_at", { ascending: false }),
+  );
 
 export const useFinancialAlerts = () =>
-  useList("alerts", "financial_alerts", "*", (q) => q.order("created_at", { ascending: false }).limit(100));
+  useList("alerts", "financial_alerts", "*", (q) =>
+    q.order("created_at", { ascending: false }).limit(100),
+  );
 
 export const useCorporateAccounts = () =>
-  useList("corporate", "corporate_accounts", "id, legal_name, account_number, account_status", (q) =>
-    q.order("legal_name"),
+  useList(
+    "corporate",
+    "corporate_accounts",
+    "id, legal_name, account_number, account_status",
+    (q) => q.order("legal_name"),
   );
 
 export const useFinanceFolios = () =>
@@ -364,11 +403,15 @@ export const useFinanceFolios = () =>
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return () => invalidatePaymentViews(qc);
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 /** Generic org-scoped insert with audit logging. */
-export function useFinanceInsert(table: string, action: string, options?: { branchScoped?: boolean }) {
+export function useFinanceInsert(
+  table: string,
+  action: string,
+  options?: { branchScoped?: boolean },
+) {
   const ctx = useFinanceCtx();
   const invalidate = useInvalidate();
   return useMutation({
@@ -380,7 +423,9 @@ export function useFinanceInsert(table: string, action: string, options?: { bran
       const payload: Row = {
         ...values,
         organization_id: ctx.organizationId,
-        ...(options?.branchScoped !== false && ctx.branchId ? { branch_id: values["branch_id"] ?? ctx.branchId } : {}),
+        ...(options?.branchScoped !== false && ctx.branchId
+          ? { branch_id: values["branch_id"] ?? ctx.branchId }
+          : {}),
         ...(table === "payment_schedules" ? { created_by: ctx.userId } : {}),
       };
       const { data, error } = await db.from(table).insert(payload).select().single();
@@ -397,8 +442,9 @@ export function useFinanceInsert(table: string, action: string, options?: { bran
         recordId: (data as Row)["id"] ?? null,
         newValue: data,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Saved");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -424,8 +470,9 @@ export function useFinanceUpdate(table: string, action: string) {
         newValue: data,
         reason: reason ?? null,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Updated");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -450,8 +497,9 @@ export function useSeedFinanceDefaults() {
         module: "finance",
         newValue: data,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Finance defaults ready");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -463,7 +511,9 @@ export function useCreateJournal() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async (input: { header: Row; lines: Row[] }) => {
-      const { data: number, error: numErr } = await guardedRpc(db, "next_document_number", { _doc_type: "journal" });
+      const { data: number, error: numErr } = await guardedRpc(db, "next_document_number", {
+        _doc_type: "journal",
+      });
       if (numErr) throw numErr;
       const { data: journal, error } = await db
         .from("journal_entries")
@@ -500,8 +550,9 @@ export function useCreateJournal() {
         recordId: (journal as Row)["id"] ?? null,
         newValue: journal,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success(`Journal ${(journal as Row)["journal_number"]} created as draft`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -526,8 +577,9 @@ export function usePostJournal() {
         recordId: (data as Row)?.["journal_id"] ?? null,
         newValue: data,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Journal posted to the ledger");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -538,7 +590,10 @@ export function useReverseJournal() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async ({ journalId, reason }: { journalId: string; reason: string }) => {
-      const { data, error } = await guardedRpc(db, "fin_reverse_journal", { _journal: journalId, _reason: reason });
+      const { data, error } = await guardedRpc(db, "fin_reverse_journal", {
+        _journal: journalId,
+        _reason: reason,
+      });
       if (error) throw error;
       return { data: data as Row, reason };
     },
@@ -553,8 +608,9 @@ export function useReverseJournal() {
         newValue: data,
         reason,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Reversal journal posted");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -565,7 +621,12 @@ export function useRequestFinanceApproval() {
   const ctx = useFinanceCtx();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { approvalType: string; reference: string; amount?: number; reason: string }) => {
+    mutationFn: async (input: {
+      approvalType: string;
+      reference: string;
+      amount?: number;
+      reason: string;
+    }) => {
       const { data, error } = await db
         .from("approval_requests")
         .insert({
@@ -593,8 +654,9 @@ export function useRequestFinanceApproval() {
         recordId: (data as Row)["id"] ?? null,
         newValue: data,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Sent to the Approval Centre");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -825,9 +887,12 @@ export function useRecordCustomerReceipt() {
     onSuccess: (r) => {
       if (r.duplicate_prevented) toast.info("That receipt was already recorded.");
       else if (r.invoice_status === "paid")
-        toast.success(`Receipt ${r.receipt_number ?? ""} recorded â€” invoice settled in full`.trim());
+        toast.success(
+          `Receipt ${r.receipt_number ?? ""} recorded â€” invoice settled in full`.trim(),
+        );
       else toast.success(`Receipt ${r.receipt_number ?? ""} recorded`.trim());
-      invalidate();
+      const refresh = invalidate();
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

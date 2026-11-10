@@ -1815,7 +1815,8 @@ export function useSaveMenuItem() {
         _currency: payload.currency ?? null,
       } as never);
       if (error) throw error;
-      return data as unknown as { ok: boolean; item_id: string };
+      if (!data || data.ok !== true || typeof data.item_id !== 'string' || !data.item_id || (payload.id && data.item_id !== payload.id)) throw new Error('The saved menu item could not be verified. Your edits have been retained.');
+      return data as {ok:true;item_id:string};
     },
     onSuccess: () => {
       toast.success("Menu item saved.");
@@ -1823,4 +1824,16 @@ export function useSaveMenuItem() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+}
+
+/** Archive a used item, or delete a draft only when no reference would be lost. */
+export function useRemoveMenuItem(){
+ const invalidate=useMenuInvalidate();
+ return useMutation({mutationFn:async(input:{id:string;mode:'archive'|'delete-draft';reason:string})=>{
+  if(!input.reason.trim())throw new Error('A removal reason is required.');
+  const {data,error}=await guardedRpc(supabase,"neo_menu_remove_item",{_item:input.id,_mode:input.mode,_reason:input.reason.trim()});
+  if(error)throw error;
+  if(!data||data.ok!==true||data.item_id!==input.id||data.mode!==input.mode)throw new Error('The menu removal could not be verified. Refresh before retrying.');
+  return data as {ok:true;item_id:string;mode:string};
+ },onSuccess:(result)=>{toast.success(result.mode==='archive'?'Item archived. Existing sales history retained.':'Unused draft item deleted.');invalidate();},onError:(error:Error)=>toast.error(error.message)});
 }
