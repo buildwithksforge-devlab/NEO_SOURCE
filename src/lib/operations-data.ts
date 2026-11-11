@@ -1063,7 +1063,41 @@ export function useSaveWorkOrder() {
       await assertRoomWordingMatches(input);
       if (input["id"]) {
         const { id, note, ...patch } = input;
-        if (patch["status"] && !Object.hasOwn(patch,"assigned_to")) {
+                if (Object.hasOwn(patch, "assigned_to")) {
+          const unexpected = Object.keys(patch).filter(
+            (key) => key !== "assigned_to" && key !== "status",
+          );
+          if (unexpected.length > 0) {
+            throw new Error("Save other work-order edits separately from technician assignment.");
+          }
+          if (patch["status"] !== undefined && patch["status"] !== "assigned") {
+            throw new Error("Technician assignment cannot perform another status transition.");
+          }
+          if (typeof patch["assigned_to"] !== "string" || !patch["assigned_to"].trim()) {
+            throw new Error("Select an eligible technician.");
+          }
+
+          const { data, error } = await guardedRpc(db, "neo_maint_assign_technician", {
+            _work_order: String(id),
+            _technician: patch["assigned_to"],
+          });
+          if (error) throw error;
+
+          const saved = requireSavedRecord(
+            data,
+            ["id", "assigned_to", "status"],
+            "The technician assignment was not saved.",
+          );
+          if (
+            saved["id"] !== id ||
+            saved["assigned_to"] !== patch["assigned_to"] ||
+            saved["status"] !== "assigned"
+          ) {
+            throw new Error("Saved technician assignment does not match the request.");
+          }
+          return saved as Row;
+        }
+        if (Object.hasOwn(patch, "status")) {
           const {data,error}=await guardedRpc(db,"neo_maint_job_advance",{
             _work_order:id,_status:patch["status"],_note:note??patch["completion_notes"]??"",_diagnosis:patch["diagnosis"]??"",
           });
@@ -1071,6 +1105,17 @@ export function useSaveWorkOrder() {
           const saved=requireSavedRecord(data,["id","status"],"No saved maintenance status was returned.");
           if(saved["id"]!==id || saved["status"]!==patch["status"])throw new Error("The requested maintenance transition was not saved.");
           return saved as Row;
+        }
+        const protectedFields = [
+          "assigned_to",
+          "accepted_at",
+          "completed_at",
+          "closed_at",
+          "verified_at",
+          "verified_by",
+        ];
+        if (protectedFields.some((key) => Object.hasOwn(patch, key))) {
+          throw new Error("Maintenance lifecycle fields require a protected workflow.");
         }
         // Read the row back so "saved" means the canonical record actually changed.
         const { data, error } = await db

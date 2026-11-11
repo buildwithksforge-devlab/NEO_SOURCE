@@ -385,6 +385,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_grounds_task_create: "authenticated",
   neo_grounds_task_assign: "authenticated",
   neo_grounds_task_advance: "authenticated",
+  neo_maint_assign_technician: "authenticated",
   neo_maint_job_advance: "authenticated",
   neo_maint_consume_part: "authenticated",
   neo_maint_issuable_stock: "authenticated",

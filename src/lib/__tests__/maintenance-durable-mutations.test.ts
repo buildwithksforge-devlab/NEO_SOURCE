@@ -86,29 +86,67 @@ describe("maintenance durable lifecycle mutations", () => {
       expect(mock.success).not.toHaveBeenCalled();
     },
   );
-  it("retains a legitimate assignment update and requires its saved row", async () => {
-    const query: {
-      update: ReturnType<typeof vi.fn>;
-      eq: ReturnType<typeof vi.fn>;
-      select: ReturnType<typeof vi.fn>;
-      maybeSingle: ReturnType<typeof vi.fn>;
-    } = { update: vi.fn(), eq: vi.fn(), select: vi.fn(), maybeSingle: vi.fn() };
-    query.update.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    query.maybeSingle.mockResolvedValue({
-      data: { id: "wo-1", work_order_number: "WO-1" },
+  it("assigns technicians through the protected RPC without direct table writes", async () => {
+    mock.rpc.mockResolvedValue({
+      data: {
+        id: "wo-1",
+        assigned_to: "tech-1",
+        status: "assigned",
+      },
       error: null,
     });
-    mock.from.mockReturnValue(query);
-    expect(
-      await (useSaveWorkOrder() as unknown as Mutation).mutationFn({
+
+    const result = await (useSaveWorkOrder() as unknown as Mutation).mutationFn({
+      id: "wo-1",
+      assigned_to: "tech-1",
+      status: "assigned",
+    });
+
+    expect(result).toMatchObject({
+      id: "wo-1",
+      assigned_to: "tech-1",
+      status: "assigned",
+    });
+
+    expect(mock.rpc).toHaveBeenCalledWith(
+      expect.anything(),
+      "neo_maint_assign_technician",
+      {
+        _work_order: "wo-1",
+        _technician: "tech-1",
+      },
+    );
+    expect(mock.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete assignment results", async () => {
+    mock.rpc.mockResolvedValue({
+      data: { id: "wo-1", status: "assigned" },
+      error: null,
+    });
+
+    await expect(
+      (useSaveWorkOrder() as unknown as Mutation).mutationFn({
         id: "wo-1",
         assigned_to: "tech-1",
         status: "assigned",
       }),
-    ).toEqual({ id: "wo-1", work_order_number: "WO-1" });
-    expect(query.update).toHaveBeenCalledWith({ assigned_to: "tech-1", status: "assigned" });
+    ).rejects.toThrow();
+
+    expect(mock.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects mixed assignment and lifecycle changes", async () => {
+    await expect(
+      (useSaveWorkOrder() as unknown as Mutation).mutationFn({
+        id: "wo-1",
+        assigned_to: "tech-1",
+        status: "closed",
+      }),
+    ).rejects.toThrow();
+
+    expect(mock.rpc).not.toHaveBeenCalled();
+    expect(mock.from).not.toHaveBeenCalled();
   });
 });
 describe("maintenance room-hold result boundary", () => {
