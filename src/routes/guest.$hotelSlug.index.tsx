@@ -120,9 +120,9 @@ function GuestHome() {
       <section
         className="relative isolate overflow-hidden rounded-3xl px-6 py-10 sm:px-10 sm:py-14"
         style={{
-          background: ws.icon_url
-            ? `linear-gradient(120deg, rgba(2,10,28,0.85), rgba(2,10,28,0.45)), url(${ws.icon_url}) center/cover`
-            : `linear-gradient(130deg, ${brandFallback.navy} 0%, ${brandFallback.secondary} 45%, ${primary} 140%)`,
+          backgroundColor: brandFallback.navy,
+          backgroundImage: ws.icon_url ? `url(${ws.icon_url})` : undefined,
+          backgroundSize: "cover", backgroundPosition: "center", backgroundBlendMode: "multiply",
         }}
       >
         <div className="max-w-2xl">
@@ -144,7 +144,7 @@ function GuestHome() {
               to="/guest/$hotelSlug/book"
               params={{ hotelSlug }}
               className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-              style={{ background: primary, borderRadius: buttonRadius(ws.button_style) }}
+              style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
             >
               Check availability
             </Link>
@@ -170,21 +170,21 @@ function GuestHome() {
         <section className="neo-rider-card mt-6 min-w-0 p-5 sm:p-6">
           <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: primary }}>
+              <p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--pa-accent-ink)" }}>
                 You are checked in
               </p>
-              <p className="mt-1 text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+              <p className="mt-1 text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                 {stay.data.room_number ? `Room ${stay.data.room_number}` : "Room being assigned"}
               </p>
-              <p className="neo-public-copy text-sm" style={{ color: brandFallback.steel }}>
+              <p className="neo-public-copy text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
                 {stay.data.arrival_date} → {stay.data.departure_date}
               </p>
             </div>
             <div className="min-w-0 sm:text-right">
-              <p className="text-xs" style={{ color: brandFallback.steel }}>
+              <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 Folio balance
               </p>
-              <p className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+              <p className="text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                 {money(stay.data.folio_balance ?? 0)}
               </p>
             </div>
@@ -194,7 +194,7 @@ function GuestHome() {
               to="/guest/$hotelSlug/explore"
               params={{ hotelSlug }}
               className="inline-flex min-h-10 items-center px-4 text-sm font-semibold text-white"
-              style={{ background: primary, borderRadius: buttonRadius(ws.button_style) }}
+              style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
             >
               Order to my room
             </Link> : null}
@@ -203,7 +203,7 @@ function GuestHome() {
               params={{ hotelSlug }}
               className="inline-flex min-h-10 items-center border px-4 text-sm font-semibold"
               style={{
-                color: primary,
+                color: "var(--pa-accent-ink)",
                 borderColor: primary,
                 borderRadius: buttonRadius(ws.button_style),
               }}
@@ -215,7 +215,7 @@ function GuestHome() {
               params={{ hotelSlug }}
               className="inline-flex min-h-10 items-center border px-4 text-sm font-semibold"
               style={{
-                color: brandFallback.steel,
+                color: "var(--guest-muted, #52627A)",
                 borderColor: "rgba(0,0,0,0.12)",
                 borderRadius: buttonRadius(ws.button_style),
               }}
@@ -240,19 +240,19 @@ function GuestHome() {
       ) : upcoming ? (
         <section className="neo-rider-card mt-6 grid min-w-0 gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.18em]" style={{ color: primary }}>
+            <p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--pa-accent-ink)" }}>
               Your stay
             </p>
-            <p className="mt-1 text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="mt-1 text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               {String(upcoming["arrival_date"])} → {String(upcoming["departure_date"])}
             </p>
-            <p className="neo-public-copy text-sm" style={{ color: brandFallback.steel }}>
+            <p className="neo-public-copy text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               <span data-public-id>{String(upcoming["confirmation_number"])}</span> ·{" "}
               {String(upcoming["nights"])} night(s) · {String(upcoming["status"])}
             </p>
           </div>
           <div className="min-w-0 sm:text-right" data-public-actions>
-            <p className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               {money(upcoming["total_amount"])}
             </p>
             <Link
@@ -262,7 +262,7 @@ function GuestHome() {
                 reservationReference: String(upcoming["confirmation_number"]),
               }}
               className="text-sm font-medium"
-              style={{ color: primary }}
+              style={{ color: "var(--pa-accent-ink)" }}
             >
               View my stay
             </Link>
@@ -270,10 +270,10 @@ function GuestHome() {
         </section>
       ) : (
         <section className="neo-rider-card mt-6 p-5 sm:p-6">
-          <p className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+          <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
             No stay booked yet
           </p>
-          <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+          <p className="neo-public-copy mt-1 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
             When you book with {ws.hotel_name}, your room, dates and charges appear here.
           </p>
         </section>
@@ -291,10 +291,10 @@ function GuestHome() {
                   params={{ hotelSlug }}
                   className="flex h-full min-h-24 flex-col justify-between rounded-2xl border border-black/5 bg-white p-4 transition-shadow hover:shadow-md"
                 >
-                  <Icon className="size-5" style={{ color: primary }} aria-hidden />
+                  <Icon className="size-5" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                   <span
                     className="mt-3 block truncate text-sm font-semibold"
-                    style={{ color: brandFallback.secondary }}
+                    style={{ color: "var(--guest-text, #07142D)" }}
                   >
                     {item.label}
                   </span>
@@ -312,23 +312,23 @@ function GuestHome() {
               <li key={String(r["id"])} className="min-w-0 rounded-2xl border border-black/5 bg-white p-4">
                 <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       <span data-public-id>{String(r["confirmation_number"])}</span>
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {String(r["arrival_date"])} → {String(r["departure_date"])} ·{" "}
                       {String(r["status"])}
                     </p>
                   </div>
                   <div className="min-w-0 sm:text-right">
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(r["total_amount"])}
                     </p>
                     <Link
                       to="/guest/$hotelSlug/reservations/$reservationReference"
                       params={{ hotelSlug, reservationReference: String(r["confirmation_number"]) }}
                       className="text-xs font-medium"
-                      style={{ color: primary }}
+                      style={{ color: "var(--pa-accent-ink)" }}
                     >
                       View details
                     </Link>
@@ -352,10 +352,10 @@ function GuestHome() {
                 key={hotel.branch_id}
                 className="min-w-0 rounded-2xl border border-black/5 bg-white p-4"
               >
-                <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                   {hotel.display_name ?? hotel.public_slug}
                 </p>
-                <p className="text-xs" style={{ color: brandFallback.steel }}>
+                <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {Number(hotel.stays) > 0
                     ? `${hotel.stays} stay(s)${hotel.last_activity ? ` · last ${hotel.last_activity}` : ""}`
                     : "Account only"}
@@ -364,7 +364,7 @@ function GuestHome() {
                   to="/guest/$hotelSlug"
                   params={{ hotelSlug: hotel.public_slug }}
                   className="mt-2 inline-block text-xs font-semibold"
-                  style={{ color: primary }}
+                  style={{ color: "var(--pa-accent-ink)" }}
                 >
                   Open
                 </Link>
@@ -383,14 +383,14 @@ function GuestHome() {
                 className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white p-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     <span data-public-id>{String(r["confirmation_number"])}</span>
                   </p>
-                  <p className="text-xs" style={{ color: brandFallback.steel }}>
+                  <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {String(r["arrival_date"])} → {String(r["departure_date"])}
                   </p>
                 </div>
-                <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                   {money(r["total_amount"])}
                 </span>
               </li>
@@ -407,7 +407,7 @@ function GuestHome() {
               <a
                 href={`tel:${ws.contact_phone}`}
                 className="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-white"
-                style={{ background: primary, borderRadius: buttonRadius(ws.button_style) }}
+                style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
               >
                 Call {ws.contact_phone}
               </a>
@@ -417,7 +417,7 @@ function GuestHome() {
                 href={`mailto:${ws.contact_email}`}
                 className="inline-flex min-h-11 items-center border px-4 text-sm font-semibold"
                 style={{
-                  color: primary,
+                  color: "var(--pa-accent-ink)",
                   borderColor: primary,
                   borderRadius: buttonRadius(ws.button_style),
                 }}

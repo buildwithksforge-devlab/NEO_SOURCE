@@ -19,6 +19,7 @@ export function sourceFingerprint(root: string, sourceFiles?: readonly string[])
         "public",
         "supabase/migrations",
         "scripts",
+        "agents",
         "package.json",
         "package-lock.json",
         "vite.config.ts",
@@ -29,7 +30,7 @@ export function sourceFingerprint(root: string, sourceFiles?: readonly string[])
   for (const file of [...new Set(files)]
     .filter(
       (file) =>
-        (/\.(tsx?|m?js|css|json|webmanifest|svg|html|sql)$/.test(file) || file.endsWith("/_headers")) &&
+        (/\.(tsx?|m?js|css|json|webmanifest|svg|html|sql|cs|ps1|cmd|txt|zip|sha256)$/.test(file) || file.endsWith("/_headers")) &&
         !/(^|\/)\.env(?:\.|$)/.test(file),
     )
     .sort()) {

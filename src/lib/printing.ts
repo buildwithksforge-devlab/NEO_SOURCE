@@ -128,6 +128,34 @@ export function usePrinters(organizationId: string | null | undefined) {
  * POS order pages should use usePosReceiptPrintState() instead of loading the
  * organisation-wide print history.
  */
+export function usePrintJobDelivery(
+  jobId: string | null,
+  organizationId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: [KEY, "delivery", organizationId ?? null, jobId],
+    enabled: Boolean(jobId && organizationId),
+    refetchInterval: (query) =>
+      ["completed", "failed"].includes(query.state.data?.status ?? "") ? false : 2500,
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("print_jobs")
+        .select("id,status,last_error,completed_at")
+        .eq("id", jobId!)
+        .eq("organization_id", organizationId!)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("Print outcome is not visible. Check the print queue.");
+      return data as {
+        id: string;
+        status: string;
+        last_error: string | null;
+        completed_at: string | null;
+      };
+    },
+  });
+}
+
 export function usePrintJobs(organizationId: string | null | undefined) {
   return useQuery({
     queryKey: [KEY, "jobs", organizationId ?? null],
@@ -166,6 +194,7 @@ export function usePrintJobs(organizationId: string | null | undefined) {
 export function usePosReceiptPrintState(orderId: string | null | undefined) {
   return useQuery<PosReceiptPrintState>({
     queryKey: [KEY, "pos-receipt-state", orderId ?? null],
+    refetchInterval: 5000,
 
     enabled: Boolean(orderId),
 
@@ -275,7 +304,7 @@ export function useQueuePrint() {
     onSuccess: (jobId) => {
       invalidate();
 
-      toast.success(`Queued ${jobId} — record the result once you know whether it printed`);
+      toast.success(`Queued ${jobId} — the property agent will report printer delivery`);
     },
 
     onError: (e: Error) => {

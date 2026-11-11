@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw, Lock, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ import {
   useReopenEventBill,
 } from "@/lib/events-data";
 
-const ENTRY_TYPES = ["deposit", "payment", "refund", "credit", "adjustment"];
+const ENTRY_TYPES = ["deposit", "payment"];
 /** Events collect the same tenders as every other desk, from the one catalogue. */
 const EVENT_METHODS = methodsFor([
   "cash",
@@ -73,6 +73,14 @@ export function EventBillDialog({
   const finalise = useFinaliseEventBill();
   const reopen = useReopenEventBill();
 
+  const [intentKey, setIntentKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    setIntentKey(crypto.randomUUID());
+    setAmount("");
+    setReference("");
+    setReason("");
+    setAccount(null);
+  }, [bookingId]);
   const [entryType, setEntryType] = useState("payment");
   const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState("");
@@ -95,6 +103,7 @@ export function EventBillDialog({
     record.mutate(
       {
         bookingId,
+        intentKey,
         amount: Number(amount),
         entryType,
         method,
@@ -104,6 +113,7 @@ export function EventBillDialog({
       },
       {
         onSuccess: () => {
+          setIntentKey(crypto.randomUUID());
           setAmount("");
           setReference("");
           setReason("");
@@ -113,7 +123,12 @@ export function EventBillDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!busy) onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -277,7 +292,7 @@ export function EventBillDialog({
             {canCreate ? (
               <div className="rounded-xl border border-border/60 p-4">
                 <h4 className="mb-3 text-sm font-semibold">Record an entry</h4>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Entry type</Label>
                     <Select value={entryType} onValueChange={setEntryType}>
@@ -333,11 +348,17 @@ export function EventBillDialog({
                     </Label>
                     <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
                   </div>
-                </div>
+                </fieldset>
                 <Button
                   className="mt-3"
                   size="sm"
-                  disabled={busy || !amount.trim() || Number.isNaN(Number(amount))}
+                  disabled={
+                    busy ||
+                    !amount.trim() ||
+                    !Number.isFinite(Number(amount)) ||
+                    Number(amount) <= 0 ||
+                    Math.abs(Math.round(Number(amount) * 100) - Number(amount) * 100) > 0.000001
+                  }
                   onClick={submitEntry}
                 >
                   Record entry

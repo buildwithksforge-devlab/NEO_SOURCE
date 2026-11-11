@@ -101,6 +101,7 @@ function canPrintDocument(
   isAdmin: boolean,
 ) {
   if (isAdmin) return true;
+  if (type === "pos_receipt" && can("restaurant", "orders", "create")) return true;
 
   const permission = DOCUMENT_PERMISSIONS[type];
 

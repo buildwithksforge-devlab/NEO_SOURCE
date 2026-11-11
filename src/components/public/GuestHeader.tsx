@@ -1,4 +1,4 @@
-import { guestDisplayName } from '@/lib/guest-presentation';
+import { guestDisplayName } from "@/lib/guest-presentation";
 /**
  * The Guest app header and footer.
  *
@@ -32,7 +32,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PoweredByNeo, PublicCreatorCredit, useWorkspace } from "@/components/public/PublicAppShell";
+import {
+  PoweredByNeo,
+  PublicCreatorCredit,
+  useWorkspace,
+} from "@/components/public/PublicAppShell";
 import { brandFallback, brandInitials, type PublicWorkspace } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { useGuestActiveStay } from "@/lib/guest-ordering";
@@ -77,7 +81,8 @@ function PropertyMark({ ws, size = 44 }: { ws: PublicWorkspace; size?: number })
       style={{
         width: size,
         height: size,
-        background: `linear-gradient(140deg, ${ws.primary_color || brandFallback.primary}, ${brandFallback.navy})`,
+        background: ws.primary_color || brandFallback.primary,
+        color: "var(--pa-on-primary)",
         fontSize: size * 0.34,
       }}
       aria-hidden
@@ -99,13 +104,7 @@ function StayBadge({ tone, children }: { tone: string; children: string }) {
   );
 }
 
-export function GuestHeader({
-  hotelSlug,
-  active,
-}: {
-  hotelSlug: string;
-  active: string;
-}) {
+export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: string }) {
   const ws = useWorkspace();
   const { user } = useCustomerSession();
   const queryClient = useQueryClient();
@@ -200,7 +199,7 @@ export function GuestHeader({
               {unread > 0 ? (
                 <span
                   className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full px-1 text-[0.6rem] font-bold text-white"
-                  style={{ background: primary }}
+                  style={{ background: primary, color: "var(--pa-on-primary)" }}
                 >
                   {unread > 9 ? "9+" : unread}
                 </span>
@@ -225,7 +224,7 @@ export function GuestHeader({
               >
                 <span
                   className="grid size-6 shrink-0 place-items-center rounded-full text-[0.65rem] font-semibold text-white"
-                  style={{ background: primary }}
+                  style={{ background: primary, color: "var(--pa-on-primary)" }}
                   aria-hidden
                 >
                   {brandInitials(displayName)}
@@ -239,7 +238,10 @@ export function GuestHeader({
                     {name}
                   </span>
                   {stayLabel ? (
-                    <span className="block text-xs font-normal" style={{ color: primary }}>
+                    <span
+                      className="block text-xs font-normal"
+                      style={{ color: "var(--pa-accent-ink)" }}
+                    >
                       {stayLabel}
                     </span>
                   ) : null}
@@ -291,7 +293,7 @@ export function GuestHeader({
               params={{ hotelSlug }}
               search={{ next: pathname, mode: undefined }}
               className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white"
-              style={{ background: primary }}
+              style={{ background: primary, color: "var(--pa-on-primary)" }}
             >
               <UserRound className="size-4" aria-hidden /> Sign in
             </Link>

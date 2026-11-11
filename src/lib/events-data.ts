@@ -1,3 +1,4 @@
+import { invalidatePaymentViews } from "@/lib/payment-view-refresh";
 import { savedRecord } from '@/lib/mutation-evidence';
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useCallback, useState } from "react";
@@ -1311,10 +1312,9 @@ function useBillingMutation<TVars>(
       });
       return result;
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ["events"] }), invalidatePaymentViews(qc)]);
       toast.success(successMessage(result));
-      void qc.invalidateQueries({ queryKey: ["events"] });
-      void qc.invalidateQueries({ queryKey: ["finance"] });
       void organizationId;
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1352,12 +1352,13 @@ export function useRecordEventPayment() {
     entryType: string;
     method: string;
     reference?: string | undefined;
-    intentKey?: string | undefined;
+    intentKey: string;
     reason?: string | undefined;
     /** Which of the hotel's accounts received the money. */
     destinationAccountId?: string | null | undefined;
   }>(
     async (v) => {
+      if (!v.intentKey || !Number.isFinite(v.amount) || v.amount <= 0 || Math.abs(Math.round(v.amount * 100) - v.amount * 100) > 0.000001) throw new Error("Enter a positive amount in cents and keep the payment attempt identity.");
       const { data, error } = await guardedRpc(db, "neo_event_billing_record_payment", {
         _booking: v.bookingId,
         _amount: v.amount,
@@ -1369,7 +1370,9 @@ export function useRecordEventPayment() {
         _account: v.destinationAccountId ?? null,
       } as never);
       if (error) throw error;
-      return (data ?? {}) as Record<string, unknown>;
+      const saved = (data ?? {}) as Record<string, unknown>;
+      if (saved["ok"] === true && ["payment_id", "receipt_id", "receipt_number", "journal_id"].some((key) => typeof saved[key] !== "string" || !String(saved[key]).trim())) throw new Error("The saved receipt and posted journal were not confirmed. Keep this payment attempt and retry.");
+      return saved;
     },
     "events.billing.payment",
     () => "Entry recorded against the event bill.",

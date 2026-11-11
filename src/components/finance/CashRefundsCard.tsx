@@ -82,7 +82,7 @@ export function CashRefundsCard({ branchId }: { branchId?: string | null }) {
                 <FolioIdentityLine folioId={r.folio_id} />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {r.status === "pending_approval" && !r.mine ? (
+                {r.status === "pending_approval" && !r.mine && r.can_approve===true ? (
                   <>
                     <Input
                       className="h-9 w-44"
@@ -116,7 +116,7 @@ export function CashRefundsCard({ branchId }: { branchId?: string | null }) {
                     You raised this refund, so someone else must authorise it.
                   </p>
                 ) : null}
-                {r.status === "approved" ? (
+                {r.status === "approved" && r.can_settle===true ? (
                   <Button size="sm" disabled={settle.isPending} onClick={() => settle.mutate(r.id)}>
                     Pay out from my till
                   </Button>

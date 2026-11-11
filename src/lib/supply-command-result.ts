@@ -138,3 +138,16 @@ export function requireGoodsReceiptResult(value: unknown): RecordValue {
   requireStockCommandResult(result["posting"], "receipt");
   return result;
 }
+
+export function requireBlindReceiptResult(value: unknown, countId: string): RecordValue {
+  const result = object(value, "The approved count was not posted.");
+  if (
+    result["ok"] !== true ||
+    result["count_id"] !== countId ||
+    result["status"] !== "posted" ||
+    !uuid(result["grn_id"])
+  )
+    throw new Error("The approved count lacks its matching saved GRN. Refresh before retrying.");
+  if (result["replayed"] !== true) requireGoodsReceiptResult(result["lifecycle_result"]);
+  return result;
+}

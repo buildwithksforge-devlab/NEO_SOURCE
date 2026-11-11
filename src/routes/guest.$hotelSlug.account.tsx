@@ -70,7 +70,7 @@ function AccountPage() {
     return (
       <GuestScreen hotelSlug={hotelSlug} active="account">
         <div className="flex justify-center py-16">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       </GuestScreen>
     );
@@ -101,10 +101,10 @@ function AccountPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="account">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           My account
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Guest number {String(customer["customer_number"] ?? "—")} ·{" "}
           {String(customer["guest_account_status"] ?? "active")}
         </p>
@@ -122,10 +122,10 @@ function AccountPage() {
             const Icon = entry.icon;
             return (
               <Link key={entry.to} to={entry.to} params={{ hotelSlug }} className="neo-rider-card flex min-w-0 items-start gap-3 p-4">
-                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: ws.primary_color }} aria-hidden />
+                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold" style={{ color: brandFallback.secondary }}>{entry.label}</span>
-                  <span className="neo-line-2 block text-xs" style={{ color: brandFallback.steel }}>{entry.detail}</span>
+                  <span className="block text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>{entry.label}</span>
+                  <span className="neo-line-2 block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>{entry.detail}</span>
                 </span>
               </Link>
             );
@@ -155,7 +155,7 @@ function AccountPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Email</Label>
-            <p className="text-sm" style={{ color: brandFallback.steel }}>
+            <p className="text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {String(customer["email"] ?? "—")} (verified sign-in address)
             </p>
           </div>
@@ -168,7 +168,7 @@ function AccountPage() {
 
       <GuestSection title="Communication preferences">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm" style={{ color: brandFallback.secondary }}>
+          <span className="text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
             Receive offers and news from {ws.hotel_name}
           </span>
           <Switch
@@ -195,10 +195,10 @@ function AccountPage() {
           <ul className="space-y-2">
             {(addresses.data ?? []).map((a) => (
               <li key={String(a["id"])} className="rounded-xl border border-black/5 p-3 text-sm">
-                <span className="font-medium" style={{ color: brandFallback.secondary }}>
+                <span className="font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(a["label"] ?? "Address")}
                 </span>
-                <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {String(a["address_line"] ?? "")} {String(a["city"] ?? "")}
                 </span>
               </li>

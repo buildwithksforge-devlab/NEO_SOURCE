@@ -1,3 +1,4 @@
+import {PosRefundPanel} from "@/components/pos/PosRefundPanel";
 import {cashTender} from '@/lib/pos-payment-display';
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
@@ -302,6 +303,7 @@ function OrderTerminal() {
           ) : null
         }
       />
+      {data ? <PosRefundPanel key={data.id} orderId={data.id}/> : null}
 
       <QueryState
         isLoading={order.isLoading}
@@ -852,19 +854,21 @@ function OrderTerminal() {
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!voidReason.trim()}
-                  onClick={() => {
-                    if (!voidItem) return;
-                    requestVoid.mutate({
+                  disabled={!voidReason.trim() || requestVoid.isPending}
+                  onClick={async () => {
+                    if (!voidItem || requestVoid.isPending) return;
+                    try {
+                    await requestVoid.mutateAsync({
                       orderId: data.id,
                       orderItemId: voidItem.id,
-                      kind: "item-void",
+                      kind: "item",
                       amount: voidItem.total,
                       reason: voidReason,
                       preparationStatus: voidItem.status,
                     });
                     setVoidReason("");
                     setVoidItem(null);
+                    } catch { /* Keep the reason and item visible for correction. */ }
                   }}
                 >
                   Send for approval

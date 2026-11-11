@@ -451,6 +451,12 @@ export function PrintersPage() {
         title="Pair this property computer"
         description="Generate a one-time secret for the Windows computer that can reach these printers. The raw secret is never stored in NEØ."
       >
+        <div className="mb-4 space-y-2 rounded-md border p-4">
+          <p className="font-medium">Install the Windows print agent</p>
+          <p className="text-sm text-muted-foreground">Download and extract the Windows package. Run Install Print Agent, then open NEO Print Agent. Generate the pairing configuration below and import it into the agent. Assign a physical Windows or network printer to this computer. Keep the agent running; it sends receipts and production tickets to the printer and reports the result to NEØ.</p>
+          <Button asChild variant="outline"><a href="/downloads/NEO-Print-Agent-Windows.zip" download>Download Windows print agent</a></Button>
+          <p className="text-xs text-muted-foreground">Windows 10/11 with .NET Framework 4.8. PDF and OneNote queues are for document testing and do not confirm paper output. A Windows handoff confirms delivery to the driver, not that paper emerged.</p>
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <Label>Computer name</Label>
@@ -492,7 +498,7 @@ export function PrintersPage() {
           <div className="mt-4 space-y-2 rounded-md border border-warning/40 bg-warning/5 p-4">
             <p className="font-medium">Copy this secret now</p>
             <p className="text-sm text-muted-foreground">
-              It is shown once. Put it in neo-print-agent.json on the paired property computer.
+              It is shown once. Download the configuration and use Import pairing configuration in the Windows agent.
             </p>
 
             <Button

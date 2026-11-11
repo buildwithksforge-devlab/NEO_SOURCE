@@ -111,6 +111,9 @@ export type FieldSpec = {
   placeholder?: string;
   required?: boolean;
   span?: boolean;
+  min?: number;
+  max?: number;
+  step?: number | "any";
 };
 
 /**
@@ -310,6 +313,9 @@ export function RecordForm({
               <Input
                 id={`f-${f.name}`}
                 type={f.type ?? "text"}
+                min={f.min}
+                max={f.max}
+                step={f.step}
                 defaultValue={String(opening[f.name] ?? "")}
                 placeholder={f.placeholder ?? ""}
                 required={f.required ?? false}

@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 24,
+  "scope": "Actual revised receiving/posting routines and exported columns. Stock movement and accrual emitters modeled; actual inventory conversion and GL failure/replay effects tested separately."
+}

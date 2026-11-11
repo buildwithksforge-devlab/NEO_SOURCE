@@ -1,3 +1,5 @@
+import { requireVoidResult } from "@/lib/pos-void-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
 import { useScopedRealtime } from "@/lib/realtime-scope";
@@ -386,6 +388,7 @@ export function useVoidRequests() {
   return useQuery({
     queryKey: ["pos", "void-requests", organizationId, filterKey],
     enabled: Boolean(organizationId),
+    refetchInterval: 15_000,
     queryFn: async () => {
       const { data, error } = await applyTo(supabase.from("pos_void_requests").select("*, pos_orders(order_number), pos_order_items(item_name)"), "pos_void_requests")
         .order("created_at", { ascending: false })
@@ -402,8 +405,9 @@ export function useRefundRequests() {
   return useQuery({
     queryKey: ["pos", "refund-requests", organizationId, filterKey],
     enabled: Boolean(organizationId),
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("pos_refund_requests").select("*, pos_orders(order_number), pos_payments(method, amount)"), "pos_refund_requests")
+      const { data, error } = await applyTo(supabase.from("pos_refund_requests").select("*, pos_orders(order_number), pos_payments(method, amount, destination_account_id)"), "pos_refund_requests")
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -1198,136 +1202,42 @@ export function useRemoveDraftOrder() {
 
 export function useRequestVoid() {
   const qc = useQueryClient();
-  const ctx = useOrgContext();
   return useMutation({
     mutationFn: async (input: {
-      orderId: string;
-      orderItemId?: string | null;
-      kind: string;
-      amount: number;
-      reason: string;
-      preparationStatus?: string | null;
+      orderId: string; orderItemId?: string | null; kind: string;
+      amount: number; reason: string; preparationStatus?: string | null;
     }) => {
-      const { error } = await supabase.from("pos_void_requests").insert({
-        organization_id: ctx.organization_id,
-        branch_id: ctx.branch_id,
-        order_id: input.orderId,
-        order_item_id: input.orderItemId ?? null,
-        request_kind: input.kind,
-        amount: input.amount,
-        reason: input.reason,
-        preparation_status: input.preparationStatus ?? null,
-        requested_by: ctx.userId,
+      if (input.kind !== "item" || !input.orderItemId) throw new Error("Select an item to request its void.");
+      const { data, error } = await guardedRpc(supabase, "neo_pos_void_request", {
+        _order: input.orderId, _item: input.orderItemId, _reason: input.reason.trim(),
       });
       if (error) throw error;
+      return requireVoidResult(data, { orderId: input.orderId });
     },
     onSuccess: () => {
-      toast.success("Void request sent for approval.");
-      void qc.invalidateQueries({ queryKey: ["pos", "void-requests"] });
+      toast.success("Void request saved for approval.");
+      return qc.invalidateQueries({ queryKey: ["pos"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
 export function useDecideVoid() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
   const qc = useQueryClient();
-  const ctx = useOrgContext();
   return useMutation({
     mutationFn: async ({ id, approve, note }: { id: string; approve: boolean; note?: string }) => {
-      const { data: req, error: reqErr } = await applyTo(supabase.from("pos_void_requests").select("*"), "pos_void_requests")
-        .eq("id", id)
-        .single();
-      if (reqErr) throw reqErr;
-      if (req.requested_by === ctx.userId) throw new Error("You cannot approve your own request.");
-      if (req.status !== "pending") throw new Error("This request has already been decided.");
-
-      const { error } = await supabase
-        .from("pos_void_requests")
-        .update({
-          status: approve ? "applied" : "rejected",
-          decided_by: ctx.userId,
-          decided_at: new Date().toISOString(),
-          decision_note: note ?? null,
-        })
-        .eq("id", id)
-        .eq("status", "pending");
-      if (error) throw error;
-
-      if (approve && req.order_item_id) {
-        await supabase.from("pos_order_items").update({ status: "cancel-pending" }).eq("id", req.order_item_id);
-        await supabase.from("pos_order_items").update({ status: "voided" }).eq("id", req.order_item_id);
-        await recalcOrderTotals(req.order_id);
-      }
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["pos", filterKey] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}
-
-export function useRequestRefund() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
-  const qc = useQueryClient();
-  const ctx = useOrgContext();
-  return useMutation({
-    mutationFn: async (input: { orderId: string; paymentId: string; amount: number; reason: string; method?: string }) => {
-      const { data: payment, error: payErr } = await applyTo(supabase.from("pos_payments").select("amount, status"), "pos_payments")
-        .eq("id", input.paymentId)
-        .single();
-      if (payErr) throw payErr;
-      if (payment.status !== "confirmed") throw new Error("Only confirmed payments can be refunded.");
-      if (input.amount > Number(payment.amount)) throw new Error("Refund cannot exceed the original payment.");
-
-      const { error } = await supabase.from("pos_refund_requests").insert({
-        organization_id: ctx.organization_id,
-        branch_id: ctx.branch_id,
-        order_id: input.orderId,
-        payment_id: input.paymentId,
-        amount: input.amount,
-        reason: input.reason,
-        method: input.method ?? null,
-        requested_by: ctx.userId,
+      const { data, error } = await guardedRpc(supabase, "neo_pos_void_decide", {
+        _request: id, _approve: approve, _note: note?.trim() || null,
       });
       if (error) throw error;
+      return requireVoidResult(data, { requestId: id, approve });
     },
-    onSuccess: () => {
-      toast.success("Refund request sent for approval.");
-      void qc.invalidateQueries({ queryKey: ["pos", "refund-requests", filterKey] });
-    },
+    onSuccess: () => invalidateSupplyViews(qc, ["pos", "kitchen", "bar"]),
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
-export function useDecideRefund() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
-  const qc = useQueryClient();
-  const ctx = useOrgContext();
-  return useMutation({
-    mutationFn: async ({ id, approve, note }: { id: string; approve: boolean; note?: string }) => {
-      const { data: req, error: reqErr } = await applyTo(supabase.from("pos_refund_requests").select("*"), "pos_refund_requests")
-        .eq("id", id)
-        .single();
-      if (reqErr) throw reqErr;
-      if (req.requested_by === ctx.userId) throw new Error("You cannot approve your own request.");
-      // The RPC decides the request, marks the payment refunded and posts the
-      // reversing entry to Finance in one transaction — no dead-end approvals.
-      const { error } = await (supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
-      }).rpc("neo_pos_refund_decide", {
-        _request: id,
-        _approve: approve,
-        _note: note ?? null,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["pos"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}
+export {useRequestRefund,useDecideRefund} from '@/lib/pos-refunds';
 
 export function useOpenShift() {
   const qc = useQueryClient();

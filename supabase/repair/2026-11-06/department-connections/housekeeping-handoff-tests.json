@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 16,
+  "scope": "Actual installed room derivation and task routines with scoped corrections; synthetic rows and modeled audit/event emitters only."
+}

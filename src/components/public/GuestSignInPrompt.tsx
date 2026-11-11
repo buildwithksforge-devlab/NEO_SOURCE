@@ -27,16 +27,16 @@ export function GuestSignInPrompt({
     <section className="neo-rider-card mt-5 grid min-w-0 items-center gap-4 p-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:p-6">
       <span
         className="grid size-11 shrink-0 place-items-center rounded-xl"
-        style={{ background: `${primary}1a`, color: primary }}
+        style={{ background: `${primary}1a`, color: "var(--pa-accent-ink)" }}
         aria-hidden
       >
         <Lock className="size-5" />
       </span>
       <div className="min-w-0">
-        <h2 className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+        <h2 className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           {title}
         </h2>
-        <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="neo-public-copy mt-1 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           {description}
         </p>
       </div>
@@ -46,7 +46,7 @@ export function GuestSignInPrompt({
           params={{ hotelSlug }}
           search={{ next, mode: undefined }}
           className="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-white"
-          style={{ background: primary, borderRadius: buttonRadius(ws.button_style) }}
+          style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
         >
           Sign in
         </Link>
@@ -55,7 +55,7 @@ export function GuestSignInPrompt({
           params={{ hotelSlug }}
           search={{ next, mode: "register" }}
           className="inline-flex min-h-11 items-center px-3 text-sm font-medium"
-          style={{ color: primary }}
+          style={{ color: "var(--pa-accent-ink)" }}
         >
           Create account
         </Link>

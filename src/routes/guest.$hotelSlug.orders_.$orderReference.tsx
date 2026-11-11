@@ -13,8 +13,8 @@ import { useCancelGuestOrder, useGuestOrderTracking } from "@/lib/guest-ordering
 function Amount({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt style={{ color: brandFallback.steel }}>{label}</dt>
-      <dd style={{ color: brandFallback.secondary }}>{value}</dd>
+      <dt style={{ color: "var(--guest-muted, #52627A)" }}>{label}</dt>
+      <dd style={{ color: "var(--guest-text, #07142D)" }}>{value}</dd>
     </div>
   );
 }
@@ -48,10 +48,10 @@ function TrackingPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
       <section className="neo-rider-card p-6">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           Order {orderReference}
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Live status from {ws.hotel_name}'s kitchen and dispatch.
         </p>
       </section>
@@ -60,7 +60,7 @@ function TrackingPage() {
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to track this order" description="Order details and live fulfilment progress are private to the account that placed it." />
       ) : tracking.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : !order ? (
         <GuestSection title="Order not found">
@@ -72,20 +72,20 @@ function TrackingPage() {
       ) : (
         <>
           <GuestSection title="Status">
-            <p className="text-lg font-semibold" style={{ color: ws.primary_color }}>
+            <p className="text-lg font-semibold" style={{ color: "var(--pa-accent-ink)" }}>
               {statusLabel(order.order_status)}
             </p>
-            <p className="mt-1 text-sm" style={{ color: brandFallback.steel }}>
+            <p className="mt-1 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {statusLabel(order.fulfilment_type)} · {statusLabel(order.payment_status)} ·{" "}
               {money(order.grand_total, currency)}
             </p>
             {order.estimated_delivery_at ? (
-              <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+              <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 Estimated {new Date(order.estimated_delivery_at).toLocaleTimeString()}
               </p>
             ) : null}
             {order.kitchen_status ? (
-              <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+              <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 Kitchen: {statusLabel(order.kitchen_status)}
               </p>
             ) : null}
@@ -95,18 +95,18 @@ function TrackingPage() {
             <GuestSection title="Your rider">
               <div className="flex items-center gap-3">
                 <span className="flex size-11 items-center justify-center rounded-full bg-black/5">
-                  <Bike className="size-5" style={{ color: brandFallback.steel }} aria-hidden />
+                  <Bike className="size-5" style={{ color: "var(--guest-muted, #52627A)" }} aria-hidden />
                 </span>
                 <span>
-                  <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                  <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                     {order.courier.display_name}
                   </span>
-                  <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                  <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {order.courier.vehicle_type ?? "Rider"} · {statusLabel(order.dispatch_status)}
                   </span>
                 </span>
               </div>
-              <p className="mt-3 text-xs" style={{ color: brandFallback.steel }}>
+              <p className="mt-3 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 For your rider's safety and privacy, contact details stay with the property — call the front desk if you
                 need to reach them.
               </p>
@@ -117,10 +117,10 @@ function TrackingPage() {
             <ul className="divide-y divide-black/5">
               {order.items.map((item, index) => (
                 <li key={`${item.name}-${index}`} className="flex items-center justify-between gap-3 py-2.5">
-                  <span className="text-sm" style={{ color: brandFallback.secondary }}>
+                  <span className="text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
                     {item.quantity} × {item.name}
                   </span>
-                  <span className="text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                  <span className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                     {money(item.line_total, currency)}
                   </span>
                 </li>
@@ -150,13 +150,13 @@ function TrackingPage() {
               ) : null}
               <div
                 className="flex items-center justify-between border-t border-black/5 pt-2 text-base font-semibold"
-                style={{ color: brandFallback.secondary }}
+                style={{ color: "var(--guest-text, #07142D)" }}
               >
                 <span>Total</span>
                 <span>{money(order.grand_total, currency)}</span>
               </div>
             </dl>
-            <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+            <p className="mt-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
               {statusLabel(order.payment_status)}
               {order.payment_method ? ` · ${statusLabel(order.payment_method)}` : ""}
             </p>
@@ -174,7 +174,7 @@ function TrackingPage() {
                 }}
                 disabled={cancel.isPending}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold disabled:opacity-60"
-                style={{ borderColor: "rgba(0,0,0,0.12)", color: brandFallback.secondary }}
+                style={{ borderColor: "rgba(0,0,0,0.12)", color: "var(--guest-text, #07142D)" }}
               >
                 {cancel.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                 Cancel this order
@@ -182,7 +182,7 @@ function TrackingPage() {
             </GuestSection>
           ) : order.cancelled_at ? null : (
             <GuestSection title="Need to change something?">
-              <p className="text-sm" style={{ color: brandFallback.steel }}>
+              <p className="text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
                 Your order is already with the property, so please call {ws.hotel_name} to change or
                 cancel it.
               </p>
@@ -195,14 +195,14 @@ function TrackingPage() {
                 <li key={`${event.status}-${index}`} className="flex items-start gap-3">
                   <span
                     className="mt-1 size-2 rounded-full"
-                    style={{ background: ws.primary_color || brandFallback.primary }}
+                    style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
                     aria-hidden
                   />
                   <span>
-                    <span className="block text-sm" style={{ color: brandFallback.secondary }}>
+                    <span className="block text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
                       {statusLabel(event.status)}
                     </span>
-                    <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                    <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {new Date(event.at).toLocaleString()}
                     </span>
                   </span>
@@ -213,7 +213,7 @@ function TrackingPage() {
         </>
       )}
 
-      <div className="mt-4 px-1 text-center text-xs" style={{ color: brandFallback.steel }}>
+      <div className="mt-4 px-1 text-center text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
         <Link to="/guest/$hotelSlug/orders" params={{ hotelSlug }} className="underline">
           Back to my orders
         </Link>

@@ -25,14 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { usePrinters, useQueuePrint } from "@/lib/printing";
+import { usePrinters, useQueuePrint, usePrintJobDelivery } from "@/lib/printing";
 import type { BusinessDocumentType } from "@/components/common/DocumentPrintButton";
 import type { Printer as PrinterProfile } from "@/lib/printing";
 
-function roleMatches(
-  printer: PrinterProfile,
-  requestedRole: string | undefined,
-): boolean {
+function roleMatches(printer: PrinterProfile, requestedRole: string | undefined): boolean {
   if (!requestedRole) return true;
 
   const configured = String(printer.printer_role ?? "").toLowerCase();
@@ -70,6 +67,7 @@ export function SendToPrinterButton({
   const [open, setOpen] = useState(false);
   const [printer, setPrinter] = useState("");
   const [job, setJob] = useState<string | null>(null);
+  const delivery = usePrintJobDelivery(job, organizationId);
 
   const available = useMemo(
     () =>
@@ -86,13 +84,12 @@ export function SendToPrinterButton({
 
   if (!id) return null;
 
-  if (
-    !(
-      isAdmin ||
-      can("pos", "receipts", "print") ||
-      can("front-office", "print")
-    )
-  ) {
+  if (!(
+    isAdmin ||
+    can("pos", "receipts", "print") ||
+    (type === "pos_receipt" && can("restaurant", "orders", "create")) ||
+    can("front-office", "print")
+  )) {
     return null;
   }
 
@@ -111,9 +108,7 @@ export function SendToPrinterButton({
       {
         printer: target,
         documentType: type,
-        title: documentNumber
-          ? `${type} ${documentNumber}`
-          : type,
+        title: documentNumber ? `${type} ${documentNumber}` : type,
         payload: {
           document_type: type,
           document_id: id,
@@ -131,12 +126,7 @@ export function SendToPrinterButton({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        className="gap-2"
-        onClick={() => setOpen(true)}
-      >
+      <Button size="sm" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
         <Printer className="size-4" />
         {label}
       </Button>
@@ -160,28 +150,43 @@ export function SendToPrinterButton({
 
           {job ? (
             <div className="flex items-start gap-3 rounded-md border p-4">
-              <CheckCircle2 className="mt-0.5 size-5 text-success" />
+              {delivery.data?.status === "completed" ? (
+                <CheckCircle2 className="mt-0.5 size-5 text-success" />
+              ) : (
+                <Printer className="mt-0.5 size-5" />
+              )}
               <div>
-                <p className="font-medium">Print job queued</p>
+                <p className="font-medium">
+                  {delivery.data?.status === "completed"
+                    ? "Delivered to printer transport"
+                    : delivery.data?.status === "failed"
+                      ? "Printer needs attention"
+                      : delivery.data?.status === "printing"
+                        ? "Sending to printer"
+                        : "Print job queued"}
+                </p>
                 <p className="text-sm text-muted-foreground">
-                  Job {job}. NEØ will retry or use the configured same-station
-                  backup if the agent confirms that nothing printed.
+                  Job {job}.{" "}
+                  {delivery.data?.status === "completed"
+                    ? "The agent reports successful handoff. Check the printer for paper output."
+                    : (delivery.data?.last_error ??
+                      "Waiting for the paired property computer. If it confirms nothing printed, NEØ can retry or use the configured same-station backup.")}
+                  {delivery.isError
+                    ? " The latest outcome could not be loaded; check the print queue before retrying."
+                    : ""}
                 </p>
               </div>
             </div>
           ) : available.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active printer matches this property and printer role. Configure
-              the printer's property, role, station and connection in
-              Configuration Centre → Integrations → Printers & Print Queue.
+              No active printer matches this property and printer role. Configure the printer's
+              property, role, station and connection in Configuration Centre → Integrations →
+              Printers & Print Queue.
             </p>
           ) : (
             <div className="space-y-2">
               <Label>Printer</Label>
-              <Select
-                value={printer || preferred?.id || ""}
-                onValueChange={setPrinter}
-              >
+              <Select value={printer || preferred?.id || ""} onValueChange={setPrinter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a printer" />
                 </SelectTrigger>
@@ -192,9 +197,7 @@ export function SendToPrinterButton({
                       {candidate.printer_role
                         ? ` · ${candidate.printer_role.replace(/_/g, " ")}`
                         : ""}
-                      {candidate.health_status !== "online"
-                        ? ` · ${candidate.health_status}`
-                        : ""}
+                      {candidate.health_status !== "online" ? ` · ${candidate.health_status}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -206,13 +209,8 @@ export function SendToPrinterButton({
             {job ? (
               <Button onClick={reset}>Close</Button>
             ) : (
-              <Button
-                disabled={available.length === 0 || queue.isPending}
-                onClick={send}
-              >
-                {queue.isPending ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : null}
+              <Button disabled={available.length === 0 || queue.isPending} onClick={send}>
+                {queue.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Queue the print
               </Button>
             )}

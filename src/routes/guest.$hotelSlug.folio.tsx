@@ -45,10 +45,10 @@ function FolioPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           My bill
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Everything posted to your account at {ws.hotel_name}, exactly as the property's ledger holds it.
         </p>
       </section>
@@ -57,7 +57,7 @@ function FolioPage() {
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your bill" description="Your folio, confirmed payments and receipts are visible only to your account." />
       ) : bill.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : list.length === 0 ? (
         <GuestSection title="Folios">
@@ -81,7 +81,7 @@ function FolioPage() {
                       className="rounded-full border px-3 py-1.5 text-xs font-medium"
                       style={{
                         borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.1)",
-                        color: isActive ? ws.primary_color : brandFallback.steel,
+                        color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                       }}
                     >
                       {f.folio_number ?? f.id.slice(0, 8)} · {f.status}
@@ -107,10 +107,10 @@ function FolioPage() {
               className="neo-public-row mt-4 rounded-xl px-4 py-3"
               style={{ background: "rgba(0,0,0,0.03)" }}
             >
-              <span className="text-sm font-medium" style={{ color: brandFallback.steel }}>
+              <span className="text-sm font-medium" style={{ color: "var(--guest-muted, #52627A)" }}>
                  Outstanding
               </span>
-              <span className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+              <span className="text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                  {money(activeFolio?.outstanding, currency)}
               </span>
             </div>
@@ -130,15 +130,15 @@ function FolioPage() {
                 {lines.map((line) => (
                   <li key={line.id} className="neo-public-row py-3">
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                      <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                         {line.description ?? "Charge"}
                       </span>
-                      <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                      <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {line.posting_date ? new Date(line.posting_date).toLocaleDateString() : "—"} · qty{" "}
                         {line.quantity ?? 1}
                       </span>
                     </span>
-                    <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(line.net_amount, currency)}
                     </span>
                   </li>
@@ -158,17 +158,17 @@ function FolioPage() {
               {payments.map((p) => (
                 <li key={p.id} className="neo-public-row rounded-xl border border-black/5 p-3">
                   <span className="flex min-w-0 items-center gap-3">
-                    <Receipt className="size-4" style={{ color: brandFallback.steel }} aria-hidden />
+                    <Receipt className="size-4" style={{ color: "var(--guest-muted, #52627A)" }} aria-hidden />
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                      <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                         <span data-public-id>{p.receipt_number ?? "Receipt"}</span>
                       </span>
-                      <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                      <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {p.paid_at ? new Date(p.paid_at).toLocaleString() : "—"} · {p.method ?? ""}
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {money(p.amount, p.currency ?? "KES")}
                   </span>
                 </li>
@@ -178,7 +178,7 @@ function FolioPage() {
         </GuestSection>
       ) : null}
 
-      <div className="mt-4 px-1 text-center text-xs" style={{ color: brandFallback.steel }}>
+      <div className="mt-4 px-1 text-center text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
         <Link to="/guest/$hotelSlug/trips" params={{ hotelSlug }} className="underline">
           Back to my stay
         </Link>
@@ -190,10 +190,10 @@ function FolioPage() {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-black/5 p-3">
-      <dt className="text-xs" style={{ color: brandFallback.steel }}>
+      <dt className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+      <dd className="mt-1 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         {value}
       </dd>
     </div>

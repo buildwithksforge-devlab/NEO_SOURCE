@@ -1,3 +1,5 @@
+import { useGuestDisplayPrefs } from "@/lib/guest-display-preferences";
+import { guestPalette } from "@/lib/public-palette";
 import { useEffect, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { writeLaunchLockup } from "@/lib/brand-cache";
@@ -44,6 +46,7 @@ export function GuestScreen({
   children: ReactNode;
 }) {
   const ws = useWorkspace();
+  const { prefs } = useGuestDisplayPrefs();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const primary = ws.primary_color || brandFallback.primary;
 
@@ -64,10 +67,15 @@ export function GuestScreen({
 
   return (
     <div
-      className="neo-public-app flex min-h-screen flex-col"
+      className="neo-public-app neo-guest-app flex min-h-screen flex-col"
+      data-guest-appearance={prefs.appearance}
+      data-reduced-motion={prefs.reducedMotion}
+      data-larger-text={prefs.largerText}
+      data-high-contrast={prefs.highContrast}
       style={
         {
-          background: ws.background_color || brandFallback.background,
+          ...guestPalette(primary, ws.background_color || brandFallback.background),
+          background: "var(--guest-ground)",
           "--pa-primary": primary,
           "--pa-secondary": ws.secondary_color || brandFallback.secondary,
           "--pa-muted": brandFallback.steel,
@@ -78,32 +86,31 @@ export function GuestScreen({
       <GuestHeader hotelSlug={hotelSlug} active={active} />
 
       <PullToRefresh>
-      <main className="neo-public-wrap flex-1 py-6 sm:py-9">
-        <PreviewBanner experience="Guest" />
-        <div className="min-w-0 pb-24 lg:pb-4">{children}</div>
-      </main>
+        <main className="neo-public-wrap flex-1 py-7 sm:py-10">
+          <PreviewBanner experience="Guest" />
+          <div className="min-w-0 pb-24 lg:pb-4">{children}</div>
+        </main>
       </PullToRefresh>
 
       <GuestFooter hotelSlug={hotelSlug} />
 
       <nav
         aria-label="Guest app"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-neo-midnight/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        className="neo-guest-tabbar fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <ul className="mx-auto flex w-full max-w-5xl">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive =
-              tab.key === active ||
-              (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
+              tab.key === active || (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
             return (
               <li key={tab.key} className="flex-1">
                 <Link
                   to={tab.to}
                   params={{ hotelSlug }}
                   aria-current={isActive ? "page" : undefined}
-                  className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2.5 text-[0.68rem] font-medium"
-                  style={{ color: isActive ? primary : "rgba(255,255,255,0.58)" }}
+                  className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-3 text-[0.7rem] font-medium"
+                  style={{ color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)" }}
                 >
                   <Icon className="size-5" aria-hidden />
                   <span className="w-full truncate text-center">{tab.label}</span>
@@ -141,12 +148,15 @@ export function GuestSection({
         <div className="min-w-0">
           <h2
             className="text-lg font-semibold tracking-tight"
-            style={{ color: brandFallback.secondary }}
+            style={{ color: "var(--guest-text, #07142D)" }}
           >
             {title}
           </h2>
           {description ? (
-            <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+            <p
+              className="neo-public-copy mt-1 text-sm"
+              style={{ color: "var(--guest-muted, #52627A)" }}
+            >
               {description}
             </p>
           ) : null}

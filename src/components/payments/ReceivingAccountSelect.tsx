@@ -22,6 +22,8 @@ export function ReceivingAccountSelect({
   label = "Money received into",
   hint,
   disabled,
+  branchId,
+  requireExplicit = false,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
@@ -29,8 +31,10 @@ export function ReceivingAccountSelect({
   label?: string;
   hint?: string;
   disabled?: boolean;
+  branchId?: string | null;
+  requireExplicit?: boolean;
 }) {
-  const accounts = useReceivingAccounts();
+  const accounts = useReceivingAccounts(branchId);
   const options = accounts.data ?? [];
   // An account with no ledger mapping cannot steer the journal on its own.
   const unmapped = value ? options.find((a) => a.id === value && !a.gl_code) : undefined;
@@ -38,8 +42,14 @@ export function ReceivingAccountSelect({
   if (!accounts.isLoading && options.length === 0) {
     return (
       <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-        No receiving accounts are set up for this property yet, so the money will follow the account
-        normally used for the payment method. Add them under Finance → Banking.
+        {requireExplicit ? (
+          "Set up the refund account and its ledger mapping under Finance → Banking before recording this payout."
+        ) : (
+          <>
+            No receiving accounts are set up for this property yet, so the money will follow the
+            account normally used for the payment method. Add them under Finance → Banking.
+          </>
+        )}
       </p>
     );
   }
@@ -56,7 +66,9 @@ export function ReceivingAccountSelect({
           <SelectValue placeholder="Choose an account" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="auto">Use the usual account for this method</SelectItem>
+          {!requireExplicit ? (
+            <SelectItem value="auto">Use the usual account for this method</SelectItem>
+          ) : null}
           {options.map((a) => (
             <SelectItem key={a.id} value={a.id}>
               {a.name}
@@ -68,7 +80,8 @@ export function ReceivingAccountSelect({
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">
-        {hint ?? "Where this money lands. The payment method stays a separate record of how it was paid."}
+        {hint ??
+          "Where this money lands. The payment method stays a separate record of how it was paid."}
       </p>
       {unmapped ? (
         <p className="text-xs text-warning">

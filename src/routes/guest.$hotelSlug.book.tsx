@@ -134,18 +134,18 @@ function BookPage() {
       <GuestScreen hotelSlug={hotelSlug} active="book">
         <GuestSection title="Your stay is confirmed" description="The front office can see it straight away.">
           <div className="rounded-xl border border-black/5 p-4">
-            <p className="text-xs uppercase tracking-wide" style={{ color: brandFallback.steel }}>
+            <p className="text-xs uppercase tracking-wide" style={{ color: "var(--guest-muted, #52627A)" }}>
               Confirmation
             </p>
-            <p className="text-xl font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               {confirmed.reference}
             </p>
-            <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+            <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {arrival} to {departure} · {nights} night{nights === 1 ? "" : "s"} · {adults} adult
               {adults === 1 ? "" : "s"}
               {children ? ` · ${children} child${children === 1 ? "" : "ren"}` : ""}
             </p>
-            <p className="mt-2 text-base font-semibold" style={{ color: primary }}>
+            <p className="mt-2 text-base font-semibold" style={{ color: "var(--pa-accent-ink)" }}>
               {money(confirmed.total, confirmed.quote.currency)}
             </p>
           </div>
@@ -219,7 +219,7 @@ function BookPage() {
             />
           </div>
         </div>
-        <p className="mt-3 text-xs" style={{ color: brandFallback.steel }}>
+        <p className="mt-3 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
           {nights > 0 ? `${nights} night${nights === 1 ? "" : "s"}` : "Choose a departure after your arrival."}
         </p>
       </GuestSection>
@@ -250,27 +250,27 @@ function BookPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {offer.room_type_name}
                       </p>
                       {offer.description ? (
-                        <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+                        <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                           {offer.description}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {offer.rooms_available} room{offer.rooms_available === 1 ? "" : "s"} left
                         {offer.rate_plan_name ? ` · ${offer.rate_plan_name}` : ""}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold" style={{ color: primary }}>
+                      <p className="text-sm font-semibold" style={{ color: "var(--pa-accent-ink)" }}>
                         {money(offer.nightly_rate, offer.currency)}
                       </p>
-                      <p className="text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         per night
                       </p>
-                      <p className="mt-1 text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(offer.total_amount, offer.currency)} total
                       </p>
                     </div>
@@ -306,9 +306,9 @@ function BookPage() {
             rows={3}
           />
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm" style={{ color: brandFallback.steel }}>
+            <p className="text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {chosen.room_type_name} · {nights} night{nights === 1 ? "" : "s"} ·{" "}
-              <strong style={{ color: brandFallback.secondary }}>
+              <strong style={{ color: "var(--guest-text, #07142D)" }}>
                 {money(chosen.total_amount, chosen.currency)}
               </strong>
             </p>

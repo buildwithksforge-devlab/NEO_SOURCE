@@ -2198,3 +2198,27 @@ body {
   box-shadow:0 26px 70px -48px rgba(0,0,0,.95);
 }
 .neo-partner-tabs { position:sticky; top:.5rem; z-index:8; border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:.35rem; background:rgba(2,10,28,.82); backdrop-filter:blur(18px); }
+
+/* Guest companion: retain hotel colours with readable semantic surfaces in both appearances. */
+.neo-guest-app { color:var(--guest-text);color-scheme:var(--guest-scheme);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.5; }
+.neo-guest-app :is(.neo-pub-display,.neo-public-title) {font-family:inherit;font-weight:650;letter-spacing:-.035em;line-height:1.15;text-wrap:balance;}
+.neo-guest-app h1 {font-size:clamp(1.75rem,1.4rem + 1.2vw,2.5rem);}
+.neo-guest-app .neo-public-copy {line-height:1.6;}
+.neo-guest-app .neo-rider-card {background:var(--guest-surface);color:var(--guest-text);border:1px solid var(--guest-border);border-radius:1rem;box-shadow:none;}
+.neo-guest-tabbar {border-top:1px solid var(--guest-border);background:var(--guest-surface);color:var(--guest-muted);}
+.neo-guest-tabbar a {min-height:3.5rem;transition:color 140ms ease;}
+.neo-guest-tabbar a[aria-current="page"] svg {stroke-width:2.3;}
+.neo-guest-app :is(button,a,input,select,textarea):focus-visible {outline:2px solid var(--pa-accent-ink);outline-offset:3px;}
+.neo-guest-app :is(input:not([type=checkbox]):not([type=radio]),textarea,select) {background:var(--guest-surface);color:var(--guest-text);border-color:var(--guest-border);font-size:max(1rem,1em);min-height:2.75rem;}
+.neo-guest-app :is(input,textarea)::placeholder {color:var(--guest-muted);opacity:1;}
+.neo-guest-app :is(button,a[role=button]) {touch-action:manipulation;}
+.neo-guest-app :is(button,input,textarea,select):disabled {opacity:.65;cursor:not-allowed;}
+.neo-guest-app :is(.bg-white,.bg-white\/60,.bg-white\/70,.bg-white\/80,.bg-white\/90) {background-color:var(--guest-surface);}
+html[data-guest-appearance="dark"] .neo-guest-app:not([data-guest-appearance="light"]), .neo-guest-app[data-guest-appearance="dark"], .dark .neo-guest-app:not([data-guest-appearance="light"]) {--guest-ground:#111827!important;--guest-surface:#172033!important;--guest-text:#F1F5F9!important;--guest-muted:#B3C0D2!important;--guest-border:#344156!important;--guest-scheme:dark!important;--pa-accent-ink:var(--pa-accent-ink-dark)!important;}
+@media(prefers-color-scheme:dark) {html:not([data-appearance="light"]) .neo-guest-app:not([data-guest-appearance="light"]) {--guest-ground:#111827!important;--guest-surface:#172033!important;--guest-text:#F1F5F9!important;--guest-muted:#B3C0D2!important;--guest-border:#344156!important;--guest-scheme:dark!important;--pa-accent-ink:var(--pa-accent-ink-dark)!important;}}
+@media(prefers-reduced-motion:reduce) {.neo-guest-app *, .neo-guest-app *::before, .neo-guest-app *::after {animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}}
+
+html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system"], .neo-guest-app[data-guest-appearance="light"] {--guest-ground:#F7F9FC!important;--guest-surface:#FFFFFF!important;--guest-text:#10213A!important;--guest-muted:#52627A!important;--guest-border:#DCE3EC!important;--guest-scheme:light!important;--pa-accent-ink:var(--pa-accent-ink-light)!important;}
+.neo-guest-app[data-larger-text="true"] main :is(p,li,label,input,textarea,button,a,dt,dd) {font-size:1.0625rem;line-height:1.6;}
+.neo-guest-app[data-high-contrast="true"] {--guest-muted:var(--guest-text)!important;--guest-border:var(--guest-text)!important;}
+.neo-guest-app[data-reduced-motion="true"] *, .neo-guest-app[data-reduced-motion="true"] *::before, .neo-guest-app[data-reduced-motion="true"] *::after {animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}

@@ -86,7 +86,7 @@ function ProfilePage() {
     return (
       <GuestScreen hotelSlug={hotelSlug} active="profile">
         <div className="flex justify-center py-16">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       </GuestScreen>
     );
@@ -122,7 +122,7 @@ function ProfilePage() {
       {/* Overview: an identity band, not a white card. */}
       <section
         className="grid min-w-0 gap-5 rounded-3xl p-6 text-white sm:grid-cols-[auto_minmax(0,1fr)] sm:p-8"
-        style={{ background: `linear-gradient(135deg, ${brandFallback.navy}, ${primary}55)` }}
+        style={{ background: brandFallback.navy }}
       >
         <AvatarUploader
           path={(customer["avatar_url"] as string | null) ?? null}
@@ -159,10 +159,10 @@ function ProfilePage() {
       <GuestSection title="My hotel" description="Only relationships this hotel's records actually hold.">
         <ul className="grid min-w-0 gap-2 sm:grid-cols-2">
           <li className="neo-rider-card p-4">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               {ws.hotel_name}
             </p>
-            <p className="text-xs" style={{ color: brandFallback.steel }}>
+            <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
               {stayRow
                 ? `Staying now · ${dateLabel(stayRow.arrival_date)} – ${dateLabel(stayRow.departure_date)}`
                 : grouped.upcoming.length > 0
@@ -173,10 +173,10 @@ function ProfilePage() {
             </p>
           </li>
           <li className="neo-rider-card p-4">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               Loyalty
             </p>
-            <p className="text-xs" style={{ color: brandFallback.steel }}>
+            <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
               This hotel has not published a loyalty programme in your account yet.
             </p>
           </li>
@@ -203,7 +203,7 @@ function ProfilePage() {
             ] as const).map(([label, rows]) =>
               rows.length === 0 ? null : (
                 <div key={label} className="min-w-0">
-                  <h3 className="text-xs uppercase tracking-[0.18em]" style={{ color: brandFallback.steel }}>
+                  <h3 className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {label}
                   </h3>
                   <ul className="mt-2 space-y-2">
@@ -213,10 +213,10 @@ function ProfilePage() {
                         className="grid min-w-0 gap-1 rounded-xl border border-black/5 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                          <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                             {String(row["confirmation_number"] ?? "Reservation")}
                           </p>
-                          <p className="truncate text-xs" style={{ color: brandFallback.steel }}>
+                          <p className="truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                             {dateLabel(row["arrival_date"])} – {dateLabel(row["departure_date"])} ·{" "}
                             {String(row["nights"] ?? "—")} night(s)
                           </p>
@@ -225,7 +225,7 @@ function ProfilePage() {
                           to="/guest/$hotelSlug/reservations/$reservationReference"
                           params={{ hotelSlug, reservationReference: String(row["confirmation_number"] ?? "") }}
                           className="text-sm font-semibold"
-                          style={{ color: primary }}
+                          style={{ color: "var(--pa-accent-ink)" }}
                         >
                           View
                         </Link>
@@ -252,12 +252,12 @@ function ProfilePage() {
             const Icon = entry.icon;
             return (
               <Link key={entry.to} to={entry.to} params={{ hotelSlug }} className="neo-rider-card flex min-w-0 items-start gap-3 p-4">
-                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: primary }} aria-hidden />
+                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <span className="block text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {entry.label}
                   </span>
-                  <span className="neo-line-2 block text-xs" style={{ color: brandFallback.steel }}>
+                  <span className="neo-line-2 block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {entry.detail}
                   </span>
                 </span>
@@ -279,7 +279,7 @@ function ProfilePage() {
           </div>
           <div className="space-y-1.5">
             <Label>Email</Label>
-            <p className="text-sm" style={{ color: brandFallback.steel }}>
+            <p className="text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {String(customer["email"] ?? "—")} — your verified sign-in address. Change it in Settings.
             </p>
           </div>
@@ -297,10 +297,10 @@ function ProfilePage() {
           <ul className="grid gap-2 sm:grid-cols-2">
             {(addresses.data ?? []).map((a) => (
               <li key={String(a["id"])} className="rounded-xl border border-black/5 bg-white p-3 text-sm">
-                <span className="font-medium" style={{ color: brandFallback.secondary }}>
+                <span className="font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(a["label"] ?? "Address")}
                 </span>
-                <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {String(a["address_line"] ?? "")} {String(a["city"] ?? "")}
                 </span>
               </li>

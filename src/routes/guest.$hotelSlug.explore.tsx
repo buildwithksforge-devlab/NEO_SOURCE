@@ -102,9 +102,9 @@ function Pill({
       aria-pressed={active}
       className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium"
       style={{
-        borderColor: active ? tint : "rgba(0,0,0,0.1)",
-        color: active ? "#ffffff" : brandFallback.secondary,
-        background: active ? tint : "#ffffff",
+        borderColor: active ? tint : "var(--guest-border)",
+        color: active ? "var(--pa-on-primary)" : "var(--guest-text)",
+        background: active ? tint : "var(--guest-surface)",
       }}
     >
       {children}
@@ -168,10 +168,10 @@ function ExplorePage() {
     <GuestScreen hotelSlug={hotelSlug} active="explore">
       <section className="grid min-w-0 items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
-          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
+          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
             Explore {ws.hotel_name}
           </h1>
-          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: brandFallback.steel }}>
+          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
             Rooms, dining, services and experiences — prices and availability exactly as the
             property publishes them.
           </p>
@@ -200,7 +200,7 @@ function ExplorePage() {
               to="/guest/$hotelSlug/book"
               params={{ hotelSlug }}
               className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-              style={{ background: primary, borderRadius: radius }}
+              style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
             >
               Choose dates
             </Link>
@@ -232,25 +232,25 @@ function ExplorePage() {
                 >
                   <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                     <div className="min-w-0">
-                      <p className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {offer.room_type_name}
                       </p>
                       {offer.description ? (
-                        <p className="neo-line-2 text-xs" style={{ color: brandFallback.steel }}>
+                        <p className="neo-line-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                           {offer.description}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {offer.rooms_available} available
                         {offer.max_occupancy ? ` · sleeps ${offer.max_occupancy}` : ""}
                         {offer.rate_plan_name ? ` · ${offer.rate_plan_name}` : ""}
                       </p>
                     </div>
                     <div className="min-w-0 sm:text-right">
-                      <p className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(offer.nightly_rate, offer.currency)}
                       </p>
-                      <p className="text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         per night
                       </p>
                     </div>
@@ -260,7 +260,7 @@ function ExplorePage() {
                       to="/guest/$hotelSlug/book"
                       params={{ hotelSlug }}
                       className="inline-flex min-h-10 items-center px-4 text-sm font-semibold text-white"
-                      style={{ background: primary, borderRadius: radius }}
+                      style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
                     >
                       Book this room
                     </Link>
@@ -325,16 +325,16 @@ function ExplorePage() {
                         fallback={<DishArtwork name={name} tint={primary} />}
                       />
                       <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
-                        <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                        <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                           {String(item["name"])}
                         </p>
                         {item["description"] ? (
-                          <p className="neo-line-2 text-xs" style={{ color: brandFallback.steel }}>
+                          <p className="neo-line-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                             {String(item["description"])}
                           </p>
                         ) : null}
                         <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pt-3">
-                          <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                          <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                             {money(item["base_price"])}
                           </span>
                           <span className="flex min-w-0 items-center gap-1">
@@ -353,7 +353,7 @@ function ExplorePage() {
                                   })
                                 }
                                 className="grid min-h-9 min-w-9 place-items-center rounded-full"
-                                style={{ color: primary }}
+                                style={{ color: "var(--pa-accent-ink)" }}
                               >
                                 <Heart
                                   className="size-4"
@@ -366,7 +366,7 @@ function ExplorePage() {
                               params={{ hotelSlug }}
                               search={{ item: String(item["id"]) }}
                               className="inline-flex min-h-9 items-center px-3 text-xs font-semibold"
-                              style={{ color: primary, border: `1px solid ${primary}`, borderRadius: radius }}
+                              style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                             >
                               Order
                             </Link>
@@ -394,7 +394,7 @@ function ExplorePage() {
                   to="/guest/$hotelSlug/laundry"
                   params={{ hotelSlug }}
                   className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-                  style={{ background: primary, borderRadius: radius }}
+                  style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
                 >
                   Send laundry
                 </Link>
@@ -426,14 +426,14 @@ function ExplorePage() {
                     className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white p-4"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {item.name}
                       </p>
-                      <p className="text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         Express {money(item.express_price)} · {item.turnaround_hours}h
                       </p>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(item.normal_price)}
                     </span>
                   </li>
@@ -451,7 +451,7 @@ function ExplorePage() {
                   to="/guest/$hotelSlug/transport"
                   params={{ hotelSlug }}
                   className="inline-flex min-h-11 items-center border px-5 text-sm font-semibold"
-                  style={{ color: primary, borderColor: primary, borderRadius: radius }}
+                  style={{ color: "var(--pa-accent-ink)", borderColor: primary, borderRadius: radius }}
                 >
                   Request a transfer
                 </Link>
@@ -472,17 +472,17 @@ function ExplorePage() {
                     key={String(product["id"])}
                     className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white p-4"
                   >
-                    <Bike className="size-4 shrink-0" style={{ color: primary }} aria-hidden />
+                    <Bike className="size-4 shrink-0" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {String(product["name"])}
                       </p>
-                      <p className="truncate text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {String(product["category"] ?? "Transfer")}
                         {product["max_passengers"] ? ` · up to ${String(product["max_passengers"])}` : ""}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(product["base_price"], String(product["currency"] ?? "KES"))}
                     </span>
                   </li>
@@ -500,7 +500,7 @@ function ExplorePage() {
                 to="/guest/$hotelSlug/trips"
                 params={{ hotelSlug }}
                 className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-                style={{ background: primary, borderRadius: radius }}
+                style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
               >
                 Make a request
               </Link>
@@ -536,14 +536,14 @@ function ExplorePage() {
                       <div className="min-w-0">
                         <p
                           className="break-words text-sm font-semibold"
-                          style={{ color: brandFallback.secondary }}
+                          style={{ color: "var(--guest-text, #07142D)" }}
                         >
                           {item.name}
                         </p>
                         {item.event_type ? (
                           <p
                             className="truncate text-[0.68rem] uppercase tracking-[0.16em]"
-                            style={{ color: brandFallback.steel }}
+                            style={{ color: "var(--guest-muted, #52627A)" }}
                           >
                             {item.event_type}
                           </p>
@@ -551,17 +551,17 @@ function ExplorePage() {
                       </div>
                       <span
                         className="shrink-0 text-sm font-semibold"
-                        style={{ color: brandFallback.secondary }}
+                        style={{ color: "var(--guest-text, #07142D)" }}
                       >
                         {money(item.price, "KES")}
                       </span>
                     </div>
                     {item.description ? (
-                      <p className="break-words text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="break-words text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {item.description}
                       </p>
                     ) : null}
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {[basis, guests, item.valid_to ? `Available until ${item.valid_to}` : null]
                         .filter(Boolean)
                         .join(" · ") || "Ask reception for today's availability."}
@@ -570,7 +570,7 @@ function ExplorePage() {
                       to="/guest/$hotelSlug/trips"
                       params={{ hotelSlug }}
                       className="inline-flex min-h-11 w-fit items-center px-4 text-sm font-semibold"
-                      style={{ color: primary, border: `1px solid ${primary}`, borderRadius: radius }}
+                      style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                     >
                       Enquire
                     </Link>

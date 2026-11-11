@@ -73,6 +73,8 @@ export function preloadBrandImage(url: string | null | undefined) {
  * simply leaves the default theme in place.
  */
 export const BRAND_BOOT_SCRIPT = `(function(){try{
+var gp=JSON.parse(localStorage.getItem("neo.guest.display-preferences")||"null");
+if(gp&&(gp.appearance==="light"||gp.appearance==="dark"))document.documentElement.dataset.guestAppearance=gp.appearance;
 var r=JSON.parse(localStorage.getItem(${JSON.stringify(BRAND_CACHE_KEY)})||"null");
 if(!r)return;
 var k=r.theme==="dark"||(r.theme==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);

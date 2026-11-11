@@ -1,3 +1,4 @@
+import { formatTaxCodeRate, taxCodeFractionFromPercent } from "@/lib/tax-code-rate";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, SectionCard, StatCard } from "@/components/common/DataDisplay";
 import {
@@ -59,13 +60,13 @@ function TaxPage() {
   const codeFields: FieldSpec[] = [
     { name: "code", label: "Tax code", required: true, placeholder: "VAT16" },
     { name: "name", label: "Name", required: true, placeholder: "VAT standard rate" },
-    { name: "rate", label: "Rate (%)", type: "number", required: true },
+    { name: "rate", label: "Rate (%)", type: "number", required: true, min: 0, max: 100, step: 0.01 },
     {
       name: "treatment",
       label: "Treatment",
       type: "select",
       required: true,
-      options: ["standard", "zero_rated", "exempt", "reverse_charge", "levy"].map((v) => ({
+      options: ["standard", "zero_rated", "exempt", "withholding", "service_charge"].map((v) => ({
         value: v,
         label: titleCase(v),
       })),
@@ -110,7 +111,7 @@ function TaxPage() {
 
       <SectionCard
         title="Tax codes"
-        description="Standard, zero-rated, exempt, reverse-charge and levy codes with effective dating."
+        description="Standard, zero-rated, exempt, withholding and service-charge codes with effective dating."
         actions={
           <FormDialog
             title="New tax code"
@@ -121,9 +122,10 @@ function TaxPage() {
                 fields={codeFields}
                 submitLabel="Create tax code"
                 busy={createCode.isPending}
-                onSubmit={(values) =>
-                  createCode.mutate({ ...values, active: true }, { onSuccess: close })
-                }
+                onSubmit={async (values) => {
+                  await createCode.mutateAsync({ ...values, rate: taxCodeFractionFromPercent(values["rate"]), active: true });
+                  close();
+                }}
               />
             )}
           </FormDialog>
@@ -147,7 +149,7 @@ function TaxPage() {
               <tr key={String(c["id"])}>
                 <td className="py-2 pr-4 font-mono text-xs">{String(c["code"])}</td>
                 <td className="py-2 pr-4">{String(c["name"])}</td>
-                <td className="py-2 pr-4">{num(c["rate"])}%</td>
+                <td className="py-2 pr-4">{formatTaxCodeRate(c["rate"])}</td>
                 <td className="py-2 pr-4">{titleCase(String(c["treatment"]))}</td>
                 <td className="py-2 pr-4">{c["inclusive"] ? "Yes" : "No"}</td>
                 <td className="py-2 pr-4">

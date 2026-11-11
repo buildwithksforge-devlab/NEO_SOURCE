@@ -75,7 +75,7 @@ function TripsPage() {
           to="/guest/$hotelSlug/folio"
           params={{ hotelSlug }}
           className="rounded-xl bg-white p-4 text-sm font-medium shadow-sm"
-          style={{ color: brandFallback.secondary }}
+          style={{ color: "var(--guest-text, #07142D)" }}
         >
           My bill & receipts
         </Link>
@@ -83,7 +83,7 @@ function TripsPage() {
           to="/guest/$hotelSlug/transport"
           params={{ hotelSlug }}
           className="rounded-xl bg-white p-4 text-sm font-medium shadow-sm"
-          style={{ color: brandFallback.secondary }}
+          style={{ color: "var(--guest-text, #07142D)" }}
         >
           Transport & transfers
         </Link>
@@ -91,7 +91,7 @@ function TripsPage() {
           to="/guest/$hotelSlug/laundry"
           params={{ hotelSlug }}
           className="rounded-xl bg-white p-4 text-sm font-medium shadow-sm"
-          style={{ color: brandFallback.secondary }}
+          style={{ color: "var(--guest-text, #07142D)" }}
         >
           Laundry
         </Link>
@@ -105,17 +105,17 @@ function TripsPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           My trips
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Stays, current room context and every request you have raised.
         </p>
       </section>
 
       {stay ? (
         <GuestSection title="You are in house" description="Current stay context from the property system.">
-          <dl className="grid gap-2 text-sm" style={{ color: brandFallback.secondary }}>
+          <dl className="grid gap-2 text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
             <Line label="Confirmation" value={String(stay["confirmation_number"])} />
             <Line label="Arrival" value={String(stay["arrival_date"])} />
             <Line label="Departure" value={String(stay["departure_date"])} />
@@ -138,7 +138,7 @@ function TripsPage() {
                 className="rounded-full border px-3 py-1.5 text-xs font-medium"
                 style={{
                   borderColor: category === c.value ? ws.primary_color : "rgba(0,0,0,0.1)",
-                  color: category === c.value ? ws.primary_color : brandFallback.steel,
+                  color: category === c.value ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                 }}
               >
                 {c.label}
@@ -165,7 +165,7 @@ function TripsPage() {
       <GuestSection title="My requests">
         {requests.isLoading ? (
           <div className="flex justify-center py-6">
-            <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+            <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
           </div>
         ) : (requests.data?.length ?? 0) === 0 ? (
           <PublicEmptyState title="No requests yet" description="Anything you ask for will be tracked here." />
@@ -173,10 +173,10 @@ function TripsPage() {
           <ul className="space-y-2">
             {(requests.data ?? []).map((r) => (
               <li key={String(r["id"])} className="rounded-xl border border-black/5 p-3">
-                <p className="text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                <p className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(r["description"])}
                 </p>
-                <p className="text-xs" style={{ color: brandFallback.steel }}>
+                <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {String(r["category"])} ·{" "}
                   {requestStatusLabels[String(r["status"])] ?? String(r["status"])} ·{" "}
                   {new Date(String(r["created_at"])).toLocaleString()}
@@ -190,7 +190,7 @@ function TripsPage() {
       <GuestSection title="My reservations">
         {reservations.isLoading ? (
           <div className="flex justify-center py-6">
-            <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+            <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
           </div>
         ) : (reservations.data?.length ?? 0) === 0 ? (
           <PublicEmptyState
@@ -202,10 +202,10 @@ function TripsPage() {
             {(reservations.data ?? []).map((r) => (
               <li key={String(r["id"])} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-xl border border-black/5 p-3">
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                  <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                     <span data-public-id>{String(r["confirmation_number"])}</span>
                   </span>
-                  <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                  <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {String(r["arrival_date"])} → {String(r["departure_date"])} · {String(r["status"])}
                   </span>
                 </span>
@@ -213,7 +213,7 @@ function TripsPage() {
                   to="/guest/$hotelSlug/reservations/$reservationReference"
                   params={{ hotelSlug, reservationReference: String(r["confirmation_number"]) }}
                   className="text-xs font-medium"
-                  style={{ color: ws.primary_color }}
+                  style={{ color: "var(--pa-accent-ink)" }}
                 >
                   View details
                 </Link>
@@ -229,7 +229,7 @@ function TripsPage() {
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
-      <dt style={{ color: brandFallback.steel }}>{label}</dt>
+      <dt style={{ color: "var(--guest-muted, #52627A)" }}>{label}</dt>
       <dd className="break-words text-right font-medium">{value}</dd>
     </div>
   );
@@ -271,7 +271,7 @@ function MyStaySection({ organizationId, enabled }: { organizationId: string; en
     >
       {stays.isLoading ? (
         <div className="flex justify-center py-6">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : (stays.data?.length ?? 0) === 0 ? (
         <PublicEmptyState
@@ -282,11 +282,11 @@ function MyStaySection({ organizationId, enabled }: { organizationId: string; en
         <ul className="space-y-2">
           {(stays.data ?? []).map((s) => (
             <li key={String(s["id"])} className="rounded-xl border border-black/5 p-3">
-              <p className="text-sm font-medium" style={{ color: brandFallback.secondary }}>
+              <p className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                 {String(s["confirmation_number"])}
                 {s["room_number"] ? ` · Room ${String(s["room_number"])}` : ""}
               </p>
-              <p className="text-xs" style={{ color: brandFallback.steel }}>
+              <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 {String(s["arrival_date"])} → {String(s["departure_date"])} ·{" "}
                 {String(s["status"])} · Balance {money(s["balance"])}
               </p>
@@ -296,7 +296,7 @@ function MyStaySection({ organizationId, enabled }: { organizationId: string; en
       )}
 
       <div className="mt-4 space-y-2 rounded-xl bg-black/[0.02] p-3">
-        <p className="text-xs font-medium" style={{ color: brandFallback.secondary }}>
+        <p className="text-xs font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
           Confirm a booking is yours
         </p>
         <Input

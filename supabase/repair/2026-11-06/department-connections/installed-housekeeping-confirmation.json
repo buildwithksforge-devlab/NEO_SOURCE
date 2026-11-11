@@ -1,0 +1,23 @@
+{
+  "diagnostic_version": "housekeeping-scoped-handoff-v1",
+  "definitions_match": true,
+  "definition_checks": [
+    {
+      "signature": "public.hk_complete_job(uuid,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.hk_recalculate_room(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.hk_record_inspection(uuid,text,text,jsonb,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.hk_start_job(uuid,uuid)",
+      "matches": true
+    }
+  ],
+  "evidence": "User Results JSON confirms all four routines."
+}

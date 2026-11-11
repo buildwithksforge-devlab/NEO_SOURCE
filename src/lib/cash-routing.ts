@@ -1,5 +1,5 @@
-import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
-import {confirmedCashRpc as callRpc} from '@/lib/cash-command-result';
+import { invalidatePaymentViews } from "@/lib/payment-view-refresh";
+import { confirmedCashRpc as callRpc } from "@/lib/cash-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,10 +90,10 @@ export function useTillContext(branchId?: string | null) {
 
 function useInvalidateCash() {
   const qc = useQueryClient();
-  return () => {
-    invalidatePaymentViews(qc);
-    void qc.invalidateQueries({queryKey:["pos"]});
-  };
+  return () =>
+    Promise.all([invalidatePaymentViews(qc), qc.invalidateQueries({ queryKey: ["pos"] })]).then(
+      () => undefined,
+    );
 }
 
 export function useRequestCashPayment() {
@@ -116,7 +116,7 @@ export function useRequestCashPayment() {
         }),
       ),
     onSuccess: (result) => {
-      invalidate();
+      const refresh = invalidate();
       if (result.status === "confirmed") {
         toast.success(`Cash received — receipt ${result.receipt_number ?? ""}`.trim());
       } else if (result.status === "pending") {
@@ -124,6 +124,7 @@ export function useRequestCashPayment() {
       } else if (result.status === "no_till") {
         toast.error(result.message ?? "No active cash drawer is available.");
       }
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -133,12 +134,11 @@ export function useConfirmCashReceipt() {
   const invalidate = useInvalidateCash();
   return useMutation({
     mutationFn: (request: string) =>
-      unwrap(
-        callRpc<CashRequestResult>(client, "neo_cash_confirm_receipt", { _request: request }),
-      ),
+      unwrap(callRpc<CashRequestResult>(client, "neo_cash_confirm_receipt", { _request: request })),
     onSuccess: (result) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(`Cash confirmed — receipt ${result.receipt_number ?? ""}`.trim());
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -155,8 +155,9 @@ export function useCancelCashRequest() {
         }),
       ),
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Cash request cancelled");
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -231,7 +232,7 @@ export function useRequestPosCashPayment() {
         }),
       ),
     onSuccess: (result) => {
-      invalidate();
+      const refresh = invalidate();
       if (result.status === "confirmed") {
         toast.success(`Cash received — receipt ${result.receipt_number ?? ""}`.trim());
       } else if (result.status === "pending") {
@@ -239,6 +240,7 @@ export function useRequestPosCashPayment() {
       } else if (result.status === "no_till") {
         toast.error(result.message ?? "No active cash drawer is available.");
       }
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -299,8 +301,9 @@ export function useSendCashTransfer() {
         }),
       ),
     onSuccess: (r) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(`Transfer ${r.transfer_number} sent — awaiting confirmation`);
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -310,12 +313,19 @@ export function useConfirmCashTransfer() {
   const invalidate = useInvalidateCash();
   return useMutation({
     mutationFn: (transfer: string) =>
-      unwrap(callRpc<{ transfer_number: string }>(client, "neo_cash_transfer_confirm", {
-        _transfer: transfer,
-      })),
+      unwrap(
+        callRpc<{ transfer_number: string }>(client, "neo_cash_transfer_confirm", {
+          _transfer: transfer,
+        }),
+      ),
     onSuccess: (r) => {
-      invalidate();
-      toast.success(r.transfer_number ? `Transfer ${r.transfer_number} received into your till` : "Transfer already received into your till");
+      const refresh = invalidate();
+      toast.success(
+        r.transfer_number
+          ? `Transfer ${r.transfer_number} received into your till`
+          : "Transfer already received into your till",
+      );
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -325,13 +335,16 @@ export function useCancelCashTransfer() {
   const invalidate = useInvalidateCash();
   return useMutation({
     mutationFn: (input: { transfer: string; reason: string }) =>
-      unwrap(callRpc(client, "neo_cash_transfer_cancel", {
-        _transfer: input.transfer,
-        _reason: input.reason,
-      })),
+      unwrap(
+        callRpc(client, "neo_cash_transfer_cancel", {
+          _transfer: input.transfer,
+          _reason: input.reason,
+        }),
+      ),
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Transfer cancelled and returned to your till");
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -360,6 +373,8 @@ export type CashRefund = {
   created_at: string;
   settled_at: string | null;
   mine: boolean;
+  can_approve?: boolean;
+  can_settle?: boolean;
 };
 
 export function useCashRefunds(branchId?: string | null) {
@@ -378,21 +393,27 @@ export function useCashRefunds(branchId?: string | null) {
 export function useRequestCashRefund() {
   const invalidate = useInvalidateCash();
   return useMutation({
-    mutationFn: (input: { payment: string; amount: number; reason: string }) =>
+    mutationFn: (input: { payment: string; amount: number; reason: string; attempt: string }) =>
       unwrap(
-        callRpc<{ status: string; threshold: number }>(client, "neo_cash_refund_request", {
+        callRpc<{ status: string; threshold: number }>(client, "neo_cash_refund_request_v2", {
           _payment: input.payment,
           _amount: input.amount,
           _reason: input.reason,
+          _attempt: input.attempt,
         }),
       ),
     onSuccess: (r) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(
-        r.status === "approved"
-          ? "Refund authorised — pay it out from your till"
-          : Number.isFinite(r.threshold) ? `Refund above the ${r.threshold} approval threshold — sent for approval` : "Refund sent for approval",
+        r.status === "settled"
+          ? "This refund was already paid out."
+          : r.status === "approved"
+            ? "Refund authorised — pay it out from your till"
+            : Number.isFinite(r.threshold)
+              ? `Refund above the ${r.threshold} approval threshold — sent for approval`
+              : "Refund sent for approval",
       );
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -410,8 +431,9 @@ export function useDecideCashRefund() {
         }),
       ),
     onSuccess: (r) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(r.status === "approved" ? "Refund approved" : "Refund rejected");
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -427,8 +449,9 @@ export function useSettleCashRefund() {
         }),
       ),
     onSuccess: (r) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(`Refund paid out — receipt ${r.refund_receipt_number ?? ""}`.trim());
+      return refresh;
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -550,7 +573,12 @@ export type PaymentTrace = {
     accounting_date: string | null;
     total_debit: number;
     total_credit: number;
-    lines: { account_code: string | null; account_name: string | null; debit: number; credit: number }[];
+    lines: {
+      account_code: string | null;
+      account_name: string | null;
+      debit: number;
+      credit: number;
+    }[];
   } | null;
   audit: {
     id: string;

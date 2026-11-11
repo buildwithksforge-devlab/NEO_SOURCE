@@ -14,6 +14,13 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_pos_refund_settle: "authenticated",
+  neo_pos_refund_position: "authenticated",
+  neo_pos_refund_request: "authenticated",
+  neo_cash_refund_request_v2: "authenticated",
+  neo_hr_delete_incorrect_employee: "authenticated",
+  neo_pos_void_request: "authenticated",
+  neo_pos_void_decide: "authenticated",
   neo_menu_remove_item: "authenticated",
   neo_reservation_collection_position: "authenticated",
   pms_confirm_payment: "authenticated",
