@@ -135,6 +135,14 @@ export function orderStatusTone(status: string): Tone {
   return "neutral";
 }
 
+export function deliveryPaymentSettled(status: string | null | undefined): boolean {
+  return ["paid", "settled", "captured", "completed"].includes(
+    String(status ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+}
+
 export function dispatchStatusTone(status: string): Tone {
   if (status === "delivered") return "success";
   if (["delivery-failed", "returned"].includes(status)) return "destructive";
@@ -315,7 +323,6 @@ export function riderEligibility(
     blockers.push(reason);
     chips.push("Not linked");
   }
-
 
   const availability = (rider.availability_status ?? "unknown").toLowerCase();
   chips.push(titleCase(availability));

@@ -1,5 +1,5 @@
 import {PosRefundPanel} from "@/components/pos/PosRefundPanel";
-import {cashTender} from '@/lib/pos-payment-display';
+import {cashTender, outstandingPaidBill} from '@/lib/pos-payment-display';
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -237,6 +237,9 @@ function OrderTerminal() {
           data ? (
             <>
               <OrderStatusBadge status={data.status} />
+              {outstandingPaidBill(data) ? (
+                <span className="text-sm font-medium text-destructive">Payment outstanding</span>
+              ) : null}
               {removableDraft && mayRemoveDraft ? (
                 <Button variant="destructive" onClick={() => setRemoveOpen(true)}>
                   <Trash2 className="mr-2 size-4" /> Delete draft order

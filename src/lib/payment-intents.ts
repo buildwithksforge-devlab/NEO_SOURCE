@@ -25,8 +25,6 @@ export type PaymentIntentOpen = {
   attempt_id?: string;
   provider?: string;
   environment?: string;
-  /** Returned once so the operator can hand it to the processor's configuration. */
-  callback_token?: string;
 };
 
 export type PaymentIntentStatus = {

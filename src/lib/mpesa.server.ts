@@ -21,9 +21,7 @@ export type MpesaCredentials = {
   enabled: boolean;
 };
 
-export type DarajaResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; status: string; detail: string };
+export type DarajaResult<T> = { ok: true; data: T } | { ok: false; status: string; detail: string };
 
 const HOSTS = {
   sandbox: "https://sandbox.safaricom.co.ke",
@@ -62,7 +60,9 @@ export function stkPassword(shortCode: string, passkey: string, timestamp: strin
 }
 
 /** Loads tenant credentials with the trusted client; secrets stay server-side. */
-export async function loadMpesaCredentials(organizationId: string): Promise<MpesaCredentials | null> {
+export async function loadMpesaCredentials(
+  organizationId: string,
+): Promise<MpesaCredentials | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("mpesa_settings")
@@ -79,7 +79,8 @@ export async function loadMpesaCredentials(organizationId: string): Promise<Mpes
   if (!shortCode || !consumerKey || !consumerSecret || !passkey) return null;
   return {
     organizationId,
-    environment: String(row["environment"] ?? "sandbox") === "production" ? "production" : "sandbox",
+    environment:
+      String(row["environment"] ?? "sandbox") === "production" ? "production" : "sandbox",
     shortCode,
     partyB: String(row["party_b"] ?? "").trim() || shortCode,
     transactionType: String(row["transaction_type"] ?? "CustomerPayBillOnline"),
@@ -93,19 +94,43 @@ export async function loadMpesaCredentials(organizationId: string): Promise<Mpes
   };
 }
 
-export async function darajaToken(creds: MpesaCredentials): Promise<DarajaResult<string>> {
+export async function darajaToken(
+  creds: Pick<MpesaCredentials, "environment" | "consumerKey" | "consumerSecret">,
+): Promise<DarajaResult<string>> {
   const auth = btoa(`${creds.consumerKey}:${creds.consumerSecret}`);
   try {
-    const res = await fetch(`${darajaHost(creds.environment)}/oauth/v1/generate?grant_type=client_credentials`, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
+    const res = await fetch(
+      `${darajaHost(creds.environment)}/oauth/v1/generate?grant_type=client_credentials`,
+      {
+        headers: { Authorization: `Basic ${auth}` },
+      },
+    );
     const text = await res.text();
-    if (!res.ok) return { ok: false, status: `http-${res.status}`, detail: text.slice(0, 400) };
-    const parsed = JSON.parse(text) as { access_token?: string };
-    if (!parsed.access_token) return { ok: false, status: "no-token", detail: text.slice(0, 400) };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: `http-${res.status}`,
+        detail: `Safaricom rejected the authentication request (HTTP ${res.status}).`,
+      };
+    let parsed: { access_token?: string };
+    try {
+      parsed = JSON.parse(text) as { access_token?: string };
+    } catch {
+      return {
+        ok: false,
+        status: "invalid-response",
+        detail: "Safaricom returned an unreadable authentication response.",
+      };
+    }
+    if (!parsed.access_token)
+      return { ok: false, status: "no-token", detail: "Safaricom did not issue an access token." };
     return { ok: true, data: parsed.access_token };
-  } catch (error) {
-    return { ok: false, status: "network", detail: (error as Error).message };
+  } catch {
+    return {
+      ok: false,
+      status: "network",
+      detail: "Safaricom could not be reached. Check the connection and try again.",
+    };
   }
 }
 
@@ -121,7 +146,13 @@ export type StkPushResult = {
 
 export async function stkPush(
   creds: MpesaCredentials,
-  input: { msisdn: string; amount: number; accountReference: string; description: string; callbackUrl: string },
+  input: {
+    msisdn: string;
+    amount: number;
+    accountReference: string;
+    description: string;
+    callbackUrl: string;
+  },
 ): Promise<DarajaResult<StkPushResult & { request: Record<string, unknown> }>> {
   const tokenResult = await darajaToken(creds);
   if (!tokenResult.ok) return tokenResult;
@@ -152,19 +183,39 @@ export async function stkPush(
     try {
       parsed = JSON.parse(text) as StkPushResult;
     } catch {
-      return { ok: false, status: `http-${res.status}`, detail: text.slice(0, 400) };
+      if (res.ok) {
+        return {
+          ok: false,
+          status: "ambiguous",
+          detail:
+            "Safaricom returned an unreadable response after receiving the prompt request. Check the phone and collection status before retrying.",
+        };
+      }
+      return {
+        ok: false,
+        status: `http-${res.status}`,
+        detail: `Safaricom returned an unreadable STK response (HTTP ${res.status}).`,
+      };
     }
     if (!res.ok || parsed.ResponseCode !== "0") {
       return {
         ok: false,
         status: `http-${res.status}`,
-        detail: parsed.errorMessage ?? parsed.ResponseDescription ?? text.slice(0, 400),
+        detail: `Safaricom did not accept the STK request (HTTP ${res.status}; code ${parsed.errorCode ?? parsed.ResponseCode ?? "unknown"}).`,
       };
     }
-    const safeRequest = { ...body, Password: "[redacted]" } as Record<string, unknown>;
+    const safeRequest = { ...body, Password: "[redacted]", CallBackURL: "[redacted]" } as Record<
+      string,
+      unknown
+    >;
     return { ok: true, data: { ...parsed, request: safeRequest } };
-  } catch (error) {
-    return { ok: false, status: "network", detail: (error as Error).message };
+  } catch {
+    return {
+      ok: false,
+      status: "ambiguous",
+      detail:
+        "The connection ended before Safaricom confirmed whether the prompt was received. Check the phone and collection status before retrying.",
+    };
   }
 }
 
@@ -201,14 +252,26 @@ export async function stkQuery(
     try {
       parsed = JSON.parse(text) as StkQueryResult;
     } catch {
-      return { ok: false, status: `http-${res.status}`, detail: text.slice(0, 400) };
+      return {
+        ok: false,
+        status: `http-${res.status}`,
+        detail: `Safaricom returned an unreadable status response (HTTP ${res.status}).`,
+      };
     }
     if (!res.ok && !parsed.ResultCode) {
-      return { ok: false, status: `http-${res.status}`, detail: parsed.errorMessage ?? text.slice(0, 400) };
+      return {
+        ok: false,
+        status: `http-${res.status}`,
+        detail: `Safaricom could not verify the request (HTTP ${res.status}).`,
+      };
     }
     return { ok: true, data: parsed };
-  } catch (error) {
-    return { ok: false, status: "network", detail: (error as Error).message };
+  } catch {
+    return {
+      ok: false,
+      status: "network",
+      detail: "Safaricom could not be reached for status verification.",
+    };
   }
 }
 

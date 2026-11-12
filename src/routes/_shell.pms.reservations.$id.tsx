@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { formatDate, formatDateTime, money, moneyWithCode, titleCase } from "@/lib/pms";
+import { canCheckInReservationStatus } from "@/lib/checkin-lifecycle";
 import { useReservation, useReservationFolios, useReservationHistory } from "@/lib/pms-data";
 import {
   EmptyState,
@@ -178,7 +179,7 @@ function ReservationDetail() {
                 <AssignRoomDialog reservation={r} label="Move room" transfer />
                 <CheckOutDialog reservation={r} balance={Number(folio?.balance ?? 0)} />
               </>
-            ) : (
+            ) : canCheckInReservationStatus(r.status) ? (
               <>
                 <AssignRoomDialog
                   reservation={r}
@@ -186,7 +187,7 @@ function ReservationDetail() {
                 />
                 <CheckInDialog reservation={r} />
               </>
-            )}
+            ) : null}
           </div>
         }
       />

@@ -18,7 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import {
@@ -41,7 +47,10 @@ export const Route = createFileRoute("/admin/payments-mpesa")({
           "Connect Safaricom Daraja to NEØ: store paybill credentials securely, verify connectivity and reconcile every STK payment prompt.",
       },
       { property: "og:title", content: "M-Pesa Payments — NEØ Administration" },
-      { property: "og:description", content: "Configure Safaricom Daraja and reconcile M-Pesa collections." },
+      {
+        property: "og:description",
+        content: "Configure Safaricom Daraja and reconcile M-Pesa collections.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -74,7 +83,10 @@ function MpesaAdminPage() {
   const reconcile = useServerFn(reconcileMpesaTransaction);
   const queryClient = useQueryClient();
 
-  const settings = useQuery<MpesaSettings>({ queryKey: ["mpesa-settings", filterKey], queryFn: () => load({ data: undefined as never }) });
+  const settings = useQuery<MpesaSettings>({
+    queryKey: ["mpesa-settings", filterKey],
+    queryFn: () => load({ data: undefined as never }),
+  });
 
   const [environment, setEnvironment] = useState("sandbox");
   const [shortCode, setShortCode] = useState("");
@@ -104,7 +116,14 @@ function MpesaAdminPage() {
     enabled: Boolean(settings.data?.authorised),
     refetchInterval: 15000,
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("mpesa_transactions").select("id, created_at, msisdn, amount, status, source_module, account_reference, mpesa_receipt_number, result_desc, applied_at"), "mpesa_transactions")
+      const { data, error } = await applyTo(
+        supabase
+          .from("mpesa_transactions")
+          .select(
+            "id, created_at, msisdn, amount, status, source_module, account_reference, mpesa_receipt_number, result_desc, applied_at",
+          ),
+        "mpesa_transactions",
+      )
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -147,7 +166,6 @@ function MpesaAdminPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-
   const saveMutation = useMutation({
     mutationFn: async (rotateToken: boolean) =>
       save({
@@ -181,7 +199,9 @@ function MpesaAdminPage() {
       // yet; the reply names exactly what is still missing.
       if (result.enable_blocked) {
         setEnabled(false);
-        toast.warning(result.reason ?? "Saved, but collections stay switched off until the setup is complete.");
+        toast.warning(
+          result.reason ?? "Saved, but collections stay switched off until the setup is complete.",
+        );
       } else {
         toast.success("M-Pesa settings saved");
       }
@@ -193,7 +213,14 @@ function MpesaAdminPage() {
   });
 
   const testMutation = useMutation({
-    mutationFn: async () => test({ data: undefined as never }),
+    mutationFn: async () =>
+      test({
+        data: {
+          environment: environment === "production" ? "production" : "sandbox",
+          consumerKey: consumerKey || null,
+          consumerSecret: consumerSecret || null,
+        },
+      }),
     onSuccess: (result) => {
       if (result.ok) toast.success(result.detail);
       else toast.error(result.detail);
@@ -221,7 +248,12 @@ function MpesaAdminPage() {
   }
 
   if (!settings.data?.authorised) {
-    return <AccessDeniedPanel subject="M-Pesa payment settings" detail={settings.data?.reason ?? "You do not have permission to configure M-Pesa."} />;
+    return (
+      <AccessDeniedPanel
+        subject="M-Pesa payment settings"
+        detail={settings.data?.reason ?? "You do not have permission to configure M-Pesa."}
+      />
+    );
   }
 
   const s = settings.data;
@@ -229,13 +261,41 @@ function MpesaAdminPage() {
   // Readiness is stated plainly: a prompt can only be sent once every one of
   // these is in place, so a half-saved connection never looks finished.
   const readiness: { label: string; done: boolean; hint: string }[] = [
-    { label: "Environment", done: Boolean(s.environment), hint: `${s.environment ?? "sandbox"} selected` },
-    { label: "Business short code", done: Boolean(s.short_code), hint: s.short_code ? "Saved" : "Not saved yet — enter it above and save" },
-    { label: "Party B (store number)", done: Boolean(s.party_b ?? s.short_code), hint: s.party_b ? "Saved" : "Falls back to the short code" },
-    { label: "Transaction type", done: Boolean(s.transaction_type), hint: s.transaction_type ?? "" },
-    { label: "Consumer key", done: Boolean(s.has_consumer_key), hint: s.has_consumer_key ? "Stored" : "Paste it above and save" },
-    { label: "Consumer secret", done: Boolean(s.has_consumer_secret), hint: s.has_consumer_secret ? "Stored" : "Paste it above and save" },
-    { label: "Passkey", done: Boolean(s.has_passkey), hint: s.has_passkey ? "Stored" : "Paste it above and save" },
+    {
+      label: "Environment",
+      done: Boolean(s.environment),
+      hint: `${s.environment ?? "sandbox"} selected`,
+    },
+    {
+      label: "Business short code",
+      done: Boolean(s.short_code),
+      hint: s.short_code ? "Saved" : "Not saved yet — enter it above and save",
+    },
+    {
+      label: "Party B (store number)",
+      done: Boolean(s.party_b ?? s.short_code),
+      hint: s.party_b ? "Saved" : "Falls back to the short code",
+    },
+    {
+      label: "Transaction type",
+      done: Boolean(s.transaction_type),
+      hint: s.transaction_type ?? "",
+    },
+    {
+      label: "Consumer key",
+      done: Boolean(s.has_consumer_key),
+      hint: s.has_consumer_key ? "Stored" : "Paste it above and save",
+    },
+    {
+      label: "Consumer secret",
+      done: Boolean(s.has_consumer_secret),
+      hint: s.has_consumer_secret ? "Stored" : "Paste it above and save",
+    },
+    {
+      label: "Passkey",
+      done: Boolean(s.has_passkey),
+      hint: s.has_passkey ? "Stored" : "Paste it above and save",
+    },
     {
       label: "Callback address",
       done: Boolean(s.callback_url),
@@ -245,7 +305,11 @@ function MpesaAdminPage() {
           ? "Using the address you entered"
           : "Using this site's own address — enter your published address for live payments",
     },
-    { label: "Switched on for collections", done: Boolean(s.enabled), hint: s.enabled ? "On" : "Turn on once the details above are saved" },
+    {
+      label: "Switched on for collections",
+      done: Boolean(s.enabled),
+      hint: s.enabled ? "On" : "Turn on once the details above are saved",
+    },
   ];
   const outstanding = readiness.filter((r) => !r.done);
   const callbackIsTemporary = Boolean(s.callback_temporary);
@@ -277,12 +341,17 @@ function MpesaAdminPage() {
       >
         <ul className="grid gap-2 sm:grid-cols-2">
           {readiness.map((r) => (
-            <li key={r.label} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/40 p-2.5 text-sm">
+            <li
+              key={r.label}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/40 p-2.5 text-sm"
+            >
               <span className="min-w-0">
                 <span className="block font-medium">{r.label}</span>
                 <span className="block text-xs text-muted-foreground">{r.hint}</span>
               </span>
-              <StatusPill tone={r.done ? "success" : "warning"}>{r.done ? "Ready" : "Needed"}</StatusPill>
+              <StatusPill tone={r.done ? "success" : "warning"}>
+                {r.done ? "Ready" : "Needed"}
+              </StatusPill>
             </li>
           ))}
         </ul>
@@ -290,20 +359,23 @@ function MpesaAdminPage() {
           <StatusPill tone={stagePill.tone}>{stagePill.text}</StatusPill>
           {s.status === "tested" && s.environment === "production" && !s.production_ready ? (
             <span>
-              Live collections stay off until a published callback address is saved here and registered with Safaricom.
+              Live collections stay off until a published callback address is saved here and
+              registered with Safaricom.
             </span>
           ) : null}
         </div>
         {callbackIsTemporary ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            This address belongs to the temporary editor preview. Register the address from your published site with Safaricom so
-            confirmations keep arriving.
+            This address belongs to the temporary editor preview. Register the address from your
+            published site with Safaricom so confirmations keep arriving.
           </p>
         ) : null}
       </SectionCard>
 
-
-      <SectionCard title="Connection" description="Paybill or till details and Daraja API credentials.">
+      <SectionCard
+        title="Connection"
+        description="Paybill or till details and Daraja API credentials."
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-1.5">
             <Label>Environment</Label>
@@ -324,44 +396,92 @@ function MpesaAdminPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CustomerPayBillOnline">Paybill (CustomerPayBillOnline)</SelectItem>
-                <SelectItem value="CustomerBuyGoodsOnline">Till (CustomerBuyGoodsOnline)</SelectItem>
+                <SelectItem value="CustomerPayBillOnline">
+                  Paybill (CustomerPayBillOnline)
+                </SelectItem>
+                <SelectItem value="CustomerBuyGoodsOnline">
+                  Till (CustomerBuyGoodsOnline)
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-shortcode">Business short code</Label>
-            <Input id="mp-shortcode" value={shortCode} onChange={(e) => setShortCode(e.target.value)} placeholder="174379" />
+            <Input
+              id="mp-shortcode"
+              value={shortCode}
+              onChange={(e) => setShortCode(e.target.value)}
+              placeholder="174379"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-partyb">Party B (store number)</Label>
-            <Input id="mp-partyb" value={partyB} onChange={(e) => setPartyB(e.target.value)} placeholder="Same as short code unless a till" />
+            <Input
+              id="mp-partyb"
+              value={partyB}
+              onChange={(e) => setPartyB(e.target.value)}
+              placeholder="Same as short code unless a till"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-account">Default account reference</Label>
-            <Input id="mp-account" value={accountReference} onChange={(e) => setAccountReference(e.target.value)} placeholder="Hotel name or account" />
+            <Input
+              id="mp-account"
+              value={accountReference}
+              onChange={(e) => setAccountReference(e.target.value)}
+              placeholder="Hotel name or account"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-base">Public callback base URL (optional)</Label>
-            <Input id="mp-base" value={callbackBaseUrl} onChange={(e) => setCallbackBaseUrl(e.target.value)} placeholder="Leave blank to use this site's address" />
-            <p className="text-xs text-muted-foreground">Only needed if Safaricom must call a different address than this site.</p>
+            <Input
+              id="mp-base"
+              value={callbackBaseUrl}
+              onChange={(e) => setCallbackBaseUrl(e.target.value)}
+              placeholder="Leave blank to use this site's address"
+            />
+            <p className="text-xs text-muted-foreground">
+              Only needed if Safaricom must call a different address than this site.
+            </p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-key">Consumer key {s.has_consumer_key ? "(stored)" : ""}</Label>
-            <Input id="mp-key" type="password" value={consumerKey} onChange={(e) => setConsumerKey(e.target.value)} placeholder={s.has_consumer_key ? "••••••••" : "Paste key"} />
+            <Input
+              id="mp-key"
+              type="password"
+              value={consumerKey}
+              onChange={(e) => setConsumerKey(e.target.value)}
+              placeholder={s.has_consumer_key ? "••••••••" : "Paste key"}
+            />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="mp-secret">Consumer secret {s.has_consumer_secret ? "(stored)" : ""}</Label>
-            <Input id="mp-secret" type="password" value={consumerSecret} onChange={(e) => setConsumerSecret(e.target.value)} placeholder={s.has_consumer_secret ? "••••••••" : "Paste secret"} />
+            <Label htmlFor="mp-secret">
+              Consumer secret {s.has_consumer_secret ? "(stored)" : ""}
+            </Label>
+            <Input
+              id="mp-secret"
+              type="password"
+              value={consumerSecret}
+              onChange={(e) => setConsumerSecret(e.target.value)}
+              placeholder={s.has_consumer_secret ? "••••••••" : "Paste secret"}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mp-passkey">Passkey {s.has_passkey ? "(stored)" : ""}</Label>
-            <Input id="mp-passkey" type="password" value={passkey} onChange={(e) => setPasskey(e.target.value)} placeholder={s.has_passkey ? "••••••••" : "Paste passkey"} />
+            <Input
+              id="mp-passkey"
+              type="password"
+              value={passkey}
+              onChange={(e) => setPasskey(e.target.value)}
+              placeholder={s.has_passkey ? "••••••••" : "Paste passkey"}
+            />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
               <p className="text-sm font-medium">Enabled for collections</p>
-              <p className="text-xs text-muted-foreground">Staff can only send prompts while this is on.</p>
+              <p className="text-xs text-muted-foreground">
+                Staff can only send prompts while this is on.
+              </p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
@@ -369,7 +489,9 @@ function MpesaAdminPage() {
 
         <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-xs">
           <p className="font-medium">Callback URL to register with Safaricom</p>
-          <p className="mt-1 break-all font-mono">{s.callback_url ?? "Save the settings to generate the callback URL."}</p>
+          <p className="mt-1 break-all font-mono">
+            {s.callback_url ?? "Save the settings to generate the callback URL."}
+          </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -382,7 +504,12 @@ function MpesaAdminPage() {
             >
               <Copy className="mr-2 size-3.5" /> Copy
             </Button>
-            <Button size="sm" variant="outline" onClick={() => saveMutation.mutate(true)} disabled={saveMutation.isPending}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => saveMutation.mutate(true)}
+              disabled={saveMutation.isPending}
+            >
               Rotate callback token
             </Button>
           </div>
@@ -390,12 +517,24 @@ function MpesaAdminPage() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button onClick={() => saveMutation.mutate(false)} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 size-4" />
+            )}
             Save settings
           </Button>
-          <Button variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending}>
-            {testMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <PlugZap className="mr-2 size-4" />}
-            Test connection
+          <Button
+            variant="outline"
+            onClick={() => testMutation.mutate()}
+            disabled={testMutation.isPending || saveMutation.isPending}
+          >
+            {testMutation.isPending ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <PlugZap className="mr-2 size-4" />
+            )}
+            Test {consumerKey || consumerSecret ? "entered" : "saved"} credentials
           </Button>
           {s.last_check_status ? (
             <StatusPill tone={s.last_check_status === "ok" ? "success" : "destructive"}>
@@ -405,7 +544,13 @@ function MpesaAdminPage() {
             <StatusPill tone="default">Not verified</StatusPill>
           )}
         </div>
-        {s.last_check_detail ? <p className="mt-2 text-xs text-muted-foreground">{s.last_check_detail}</p> : null}
+        {s.last_check_detail ? (
+          <p className="mt-2 text-xs text-muted-foreground">{s.last_check_detail}</p>
+        ) : null}
+        <p className="mt-2 text-xs text-muted-foreground">
+          You can test newly entered Consumer Key and Secret before saving. A draft test never
+          stores credentials or marks a different saved environment as verified.
+        </p>
       </SectionCard>
 
       <SectionCard
@@ -445,10 +590,15 @@ function MpesaAdminPage() {
                     <td className="py-2">{new Date(t.created_at as string).toLocaleString()}</td>
                     <td>{t.msisdn as string}</td>
                     <td>{Number(t.amount).toFixed(2)}</td>
-                    <td>{t.source_module === "folio" ? "Guest folio" : "Restaurant bill"} {t.account_reference ?? ""}</td>
+                    <td>
+                      {t.source_module === "folio" ? "Guest folio" : "Restaurant bill"}{" "}
+                      {t.account_reference ?? ""}
+                    </td>
                     <td>{(t.mpesa_receipt_number as string) ?? "—"}</td>
                     <td>
-                      <StatusPill tone={STATUS_TONE[t.status as string] ?? "default"}>{t.status as string}</StatusPill>
+                      <StatusPill tone={STATUS_TONE[t.status as string] ?? "default"}>
+                        {t.status as string}
+                      </StatusPill>
                     </td>
                     <td className="text-right">
                       {t.applied_at ? null : (
@@ -499,8 +649,12 @@ function MpesaAdminPage() {
                     <StatusPill tone="destructive">Not applied</StatusPill>
                     {new Date(e.received_at).toLocaleString()}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">{e.detail ?? "No detail recorded."}</p>
-                  <p className="text-xs text-muted-foreground">Reference {e.checkout_request_id ?? "—"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {e.detail ?? "No detail recorded."}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Reference {e.checkout_request_id ?? "—"}
+                  </p>
                 </div>
                 <Button
                   size="sm"
@@ -517,4 +671,3 @@ function MpesaAdminPage() {
     </div>
   );
 }
-

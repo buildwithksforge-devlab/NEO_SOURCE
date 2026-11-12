@@ -66,4 +66,24 @@ describe("provider intents", () => {
     expect(route).toContain("No outcome in payload");
     expect(route).toContain("neo_payment_intent_apply");
   });
+
+  it("keeps provider callback bearer tokens hashed and dispatches each intent once", () => {
+    const migration = read("supabase/migrations/20261112140000_provider_payment_dispatch_safety.sql");
+    const gateway = read("src/lib/payment-gateway.functions.ts");
+    const open = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_open"),
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_claim_dispatch"),
+    );
+    const apply = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_apply"),
+    );
+
+    expect(open).toContain("'environment', env");
+    expect(open).not.toContain("'callback_token'");
+    expect(migration).toContain("extensions.digest(convert_to(_token, 'UTF8'), 'sha256')");
+    expect(apply).toContain("WHERE callback_token = encode(");
+    expect(gateway).toContain("neo_payment_intent_claim_dispatch");
+    expect(gateway).toContain("const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`");
+    expect(gateway).not.toContain("row.callback_token");
+  });
 });

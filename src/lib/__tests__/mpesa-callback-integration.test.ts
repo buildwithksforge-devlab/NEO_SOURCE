@@ -11,10 +11,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route } from "@/routes/api/public/mpesa.callback.$token";
 
+const queryState = vi.hoisted(() => ({
+  resultCode: "0",
+  unavailable: false,
+}));
+
 type Insert = Record<string, unknown>;
 
 const inserts: { table: string; row: Insert }[] = [];
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+let transactionOwnerOrg = "org-1";
 let applyResult: { data: unknown; error: { message: string } | null } = {
   data: { applied: true, status: "success" },
   error: null,
@@ -40,8 +46,17 @@ function makeAdmin() {
             : { data: null, error: null };
         }
         if (table === "mpesa_transactions") {
-          return state["checkout_request_id"] === "ws_CO_1"
-            ? { data: { id: "txn-1", applied_at: null }, error: null }
+          return state["organization_id"] === transactionOwnerOrg &&
+            state["checkout_request_id"] === "ws_CO_1"
+            ? {
+                data: {
+                  id: "txn-1",
+                  applied_at: null,
+                  amount: 2500,
+                  merchant_request_id: "mr-1",
+                },
+                error: null,
+              }
             : { data: null, error: null };
         }
         return { data: null, error: null };
@@ -63,6 +78,27 @@ vi.mock("@/integrations/supabase/client.server", () => ({
     return makeAdmin();
   },
 }));
+
+vi.mock("@/lib/mpesa.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mpesa.server")>();
+  return {
+    ...actual,
+    loadMpesaCredentials: vi.fn(async () => ({ organizationId: "org-1" })),
+    stkQuery: vi.fn(async () =>
+      queryState.unavailable
+        ? { ok: false as const, status: "network", detail: "unavailable" }
+        : {
+            ok: true as const,
+            data: {
+              ResultCode: queryState.resultCode,
+              ResultDesc: "Daraja verified result",
+              CheckoutRequestID: "ws_CO_1",
+              MerchantRequestID: "mr-1",
+            },
+          },
+    ),
+  };
+});
 
 const payload = (resultCode: number) => ({
   Body: {
@@ -100,6 +136,9 @@ describe("M-Pesa STK callback", () => {
   beforeEach(() => {
     inserts.length = 0;
     rpcCalls.length = 0;
+    transactionOwnerOrg = "org-1";
+    queryState.resultCode = "0";
+    queryState.unavailable = false;
     applyResult = { data: { applied: true, status: "success" }, error: null };
   });
 
@@ -107,6 +146,19 @@ describe("M-Pesa STK callback", () => {
     const res = await post("not-a-real-token-xx", payload(0));
     expect(res.status).toBe(401);
     expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("does not resolve another tenant's transaction through a valid callback token", async () => {
+    transactionOwnerOrg = "org-2";
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      organization_id: "org-1",
+      accepted: false,
+      retryable: false,
+    });
   });
 
   it("applies a successful payment to its transaction and acknowledges the provider", async () => {
@@ -124,8 +176,33 @@ describe("M-Pesa STK callback", () => {
   });
 
   it("applies a cancelled result rather than dropping it", async () => {
+    queryState.resultCode = "1032";
     await post("tenant-token-1234567890", payload(1032));
     expect(rpcCalls[0]!.args["_result_code"]).toBe(1032);
+  });
+
+  it("does not apply an unverified callback result", async () => {
+    queryState.resultCode = "1032";
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: false,
+    });
+  });
+
+  it("requests a provider retry when Daraja status verification is unavailable", async () => {
+    queryState.unavailable = true;
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: true,
+    });
   });
 
   it("records a retryable audit entry and asks the provider to retry when applying fails", async () => {

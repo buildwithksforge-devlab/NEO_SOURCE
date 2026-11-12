@@ -34,6 +34,7 @@ import {
   titleCase,
   today,
 } from "@/lib/pms";
+import { canCheckInReservationStatus } from "@/lib/checkin-lifecycle";
 import {
   useAssignRoom,
   useAvailability,
@@ -48,6 +49,7 @@ import {
 type Reservation = {
   id: string;
   confirmation_number: string;
+  status: string;
   room_id: string | null;
   room_type_id: string | null;
   arrival_date: string;
@@ -256,7 +258,7 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
   const deposit = useDepositPosition(reservation.id, open);
   const gate = depositGate(deposit.data);
 
-  if (!can("pms", "arrivals.edit")) return null;
+  if (!can("pms", "arrivals.edit") || !canCheckInReservationStatus(reservation.status)) return null;
 
   return (
     <ActionDialog

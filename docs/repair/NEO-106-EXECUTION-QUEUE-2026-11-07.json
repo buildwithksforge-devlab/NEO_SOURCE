@@ -6,8 +6,8 @@
     "byStage": {
       "Partially verified": 1,
       "Awaiting agent deployment": 1,
-      "In progress": 38,
-      "Awaiting workflow test": 45,
+      "In progress": 39,
+      "Awaiting workflow test": 44,
       "Queued": 14,
       "Awaiting deployment/retest": 5,
       "Verified done": 2
@@ -107,13 +107,13 @@
       "module": "POS billing and cashier",
       "workflow": "Receipts routing to historical or incorrect tills.",
       "description": "Receipts routing to historical or incorrect tills.",
-      "evidence": "New user-supplied consolidation brief, section A. Current full outcome not independently established. Batch 2: payment dialog now requests till context for the actual order branch and blocks unavailable context. SQL 79 found zero missing/cross-property/out-of-window shifts among 11 scoped payments.",
+      "evidence": "New user-supplied consolidation brief, section A. Batch 2 payment dialog requests till context for the actual order branch and blocks unavailable context. SQL 79 found zero missing/cross-property/out-of-window shifts among 11 scoped payments. Labelled live POS trial POS-20261110-MUCVW closed with 1 House Soda served; cash 100 + card 209 confirmed, receipts RCT-2026-000106/107, stock movement Soda 300ml (SCN) consumption -1 pc attributed to this order, and posted Finance journal JV-SCN-2026-000401 KES309. Separate no-prep routing trial POS-20261111-AM6A9 remains Sent/Accepted, unpaid KES309; its void request is now confirmed Pending/Awaiting a manager. No action was taken on that ticket.",
       "expectedBehavior": "One order routes to production, is served, settles to the active till, deducts stock once, produces a receipt and balanced journal, and closes.",
       "actualBehavior": "Receipts routing to historical or incorrect tills. (reported; scope limited by evidence above)",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Order-property till preview repaired locally; full till/shift workflow still open",
+      "currentStatus": "One labelled live POS sale verified through served status, split payment/receipts, one direct-stock deduction and posted POS journal. Separate POS-20261111-AM6A9 no-prep trial remains pending independent manager void approval; role access mismatch blocks its cleanup. Recipe-stock availability issue and duplicate/retry acceptance remain open.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-SETTLEMENT",
       "relatedOriginalIds": "FO08 POS05 POS06 POS07 POS08 POS09 POS10",
@@ -127,7 +127,7 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "Awaiting workflow test",
       "closed": false,
-      "nextAction": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "nextAction": "Resolve independent manager access to POS approvals through authorized role/configuration procedures, then decide the already-pending no-prep void request. Continue recipe-stock validation only after the negative Kitchen Store Rice balance is traced and safely resolved. Do not bypass the guard or mark the no-prep ticket served.",
       "queueNumber": 4,
       "batch19Progress": "Tested web source fc9e4adcd8389bde is deployed to existing neo-preview. Relevant live SQL fingerprints are verified where this repair needs them. Execute the named role/property workflow and original-pass regressions; deployment is not an end-to-end acceptance closure."
     },
@@ -137,13 +137,13 @@
       "module": "POS billing and cashier",
       "workflow": "Payment, receipt, cashier shift, and accounting journal inconsistencies.",
       "description": "Payment, receipt, cashier shift, and accounting journal inconsistencies.",
-      "evidence": "New user-supplied consolidation brief, section A. Current full outcome not independently established. Batch 23: deployed cash reference defect reproduced under actual unique index; SQL 128 and SQL 130 user postchecks match installed functions. 52 isolated checks cover split collections, stable retries, tender/change, source scope and cashier guards. UI changes pass focused tests; final release checks underway. Final batch 23: 4,232 tests passed, zero failed, 155 skipped; original 3,667 and batch 22 4,198 unique passes retained. Typecheck/build/smoke passed. Build 8a1337497fad6597 deployed as d2055ea3-9593-4ef4-85aa-96a47c1bc6d4; live HTTP build identity/private-no-store verified.",
+      "evidence": "New user-supplied consolidation brief, section A. Batch 23 previously reproduced the cash reference defect under the actual unique index; SQL 128/130 postchecks and isolated retry tests are prior evidence only. Live labelled POS-20261110-MUCVW was reloaded Closed/Served, confirmed KES100 cash + KES209 card, receipts RCT-2026-000106/107, stock consumption Soda 300ml (SCN) -1 pc with order reference, and Posted POS journal JV-SCN-2026-000401 KES309. Separate no-prep POS-20261111-AM6A9 remains unpaid and its void request is Pending/Awaiting a manager. Live duplicate external-reference retry not executed.",
       "expectedBehavior": "One order routes to production, is served, settles to the active till, deducts stock once, produces a receipt and balanced journal, and closes.",
       "actualBehavior": "Payment, receipt, cashier shift, and accounting journal inconsistencies. (reported; scope limited by evidence above)",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "currentStatus": "Labelled live sale POS-20261110-MUCVW verified through split tender, receipts, direct-stock movement and posted journal. POS-20261111-AM6A9 remains pending manager void, unpaid; live pos_payments_external_ref_uidx duplicate/retries, cashier shift and closure remain untested.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-SETTLEMENT",
       "relatedOriginalIds": "FO08 POS05 POS06 POS07 POS08 POS09 POS10",
@@ -157,7 +157,7 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "Awaiting workflow test",
       "closed": false,
-      "nextAction": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "nextAction": "Do not pay the live trial until authorized service/tender boundary is available. Then test fresh split cash receipt/change, duplicate external-ref retries, partly-paid visibility, till reconciliation and posting evidence.",
       "queueNumber": 5,
       "batches13To18CodeProgress": "Cash mutation success now requires real matching persisted status/receipt evidence. POS direct capture and routed cash enforce source/property/till/cashier identity, reserved headroom, actual confirmed-paid totals and valid replay links. Actual reviewed POS/card and four routed-cash functions pass isolated tests. Known capture-consistency code scope is ready; full journal/shift/role acceptance remains a deployment gate.",
       "batch19Progress": "Tested web source fc9e4adcd8389bde is deployed to existing neo-preview. Relevant live SQL fingerprints are verified where this repair needs them. Execute the named role/property workflow and original-pass regressions; deployment is not an end-to-end acceptance closure.",
@@ -702,13 +702,13 @@
       "module": "Recipes and consumption",
       "workflow": "Incorrect or incomplete ingredient deductions.",
       "description": "Incorrect or incomplete ingredient deductions.",
-      "evidence": "New user-supplied consolidation brief, section C. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section C. Current full outcome not independently established. Live 2026-11-11 POS send of Beef Pilau was rejected by the stock guard: needs 204 g Rice (SCN), 0 available in SCN Kitchen Store. Live Stock showed that store at -612 g Rice (SCN) and SCN Main Store at 99,388 g. No inventory movement was created; negative balance origin needs source-ledger trace. On 2026-11-12 at Savanna Crown Taveta, sending fresh labelled draft POS-20261112-J8II7 failed with store_unmapped for Main Kitchen, Salad / Cold Larder, Beverage, Grill and Coffee Station. Draft was removed with an audited reason; no service, payment or stock movement occurred.",
       "expectedBehavior": "Each sold item produces its configured recipe/direct-stock movement exactly once, with source traceability and reconciled quantities.",
       "actualBehavior": "Incorrect or incomplete ingredient deductions. (reported; scope limited by evidence above)",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P1",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Reported issue — current reproduction pending",
+      "currentStatus": "Live Taveta POS send reproduced store_unmapped. A later read-only Kitchen Settings check shows 4 of 7 stations ready using sample mappings (Beverage to SCT Beverage Store; Fry, Grill, and Main Kitchen to SCT Kitchen Store); Coffee Station, Salad / Cold Larder, and Pastry remain unmapped. The page reports 21 routed menu items and 5 unable to post stock. These sample mappings have not been independently confirmed as physically correct and have not passed a fresh POS trial. Local UI candidate filters store choices to active non-main stores on the exact property; Pastry's issuing store remains unconfirmed.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STOCK",
       "relatedOriginalIds": "INV02 INV03 INV04 BAR02 BAR03 BAR04",
@@ -722,12 +722,28 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "In progress",
       "closed": false,
-      "nextAction": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "nextAction": "Use only the four existing Taveta sample mappings. Confirm item-level stock eligibility and a safe production boundary before any fresh POS send; do not infer physical correctness or map the remaining stations. Separately trace the historical SCN Kitchen Store Rice -612 g balance and last movement against source ledger; do not correct it without verified physical evidence.",
       "queueNumber": 21,
       "codeProgress": "Batch 3: recipe input/unit/overflow validation repaired; targeted tests pass. Canonical stock ledger workflow remains open.",
       "batch10CodeProgress": "Actual consumption core now rejects invalid sold quantities, invalid recipe yields, missing/foreign stock and empty expansions; no zero-line success posting. Ingredient movement dependencies modeled in 54 isolated SQL checks; full inventory acceptance remains open.",
       "batch12CodeProgress": "Supply-store mapping changes no longer report success on null/failed/wrong-station/wrong-location server results. Store reads explicitly filter organization; these client confirmations complement batch 10 core boundary checks, not full physical inventory certification.",
       "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-020",
+          "pages": "POS / restaurant floor",
+          "status": "Live send blocked; no downstream effects",
+          "finding": "Savanna Crown Taveta has seven active production stations with no valid consumption mapping and 21 routed menu items blocked. Active SCT Beverage Store and SCT Kitchen Store are available; SCT Main Store is not a valid POS consumption source. The current selector exposes Main Store even though the server refuses it. No station-store assignment was made; Pastry's issuing store is not established.",
+          "executionStage": "2026-11-12 fresh labelled POS trial",
+          "nextAction": "Confirm Pastry's physical issuing store and authorization, then assign only exact property-owned departmental stores through the audited settings RPC; never assign Main Store."
+        },
+        {
+          "observationId": "OPS-20261112-022",
+          "pages": "Kitchen Settings & station routing",
+          "status": "Four sample mappings visible; no fresh mapped-station POS trial",
+          "finding": "Read-only preview recheck shows Beverage drawing from SCT Beverage Store and Fry, Grill, and Main Kitchen drawing from SCT Kitchen Store. Coffee Station, Salad / Cold Larder, and Pastry have no store. The page reports 21 routed menu items and 5 unable to post stock. The UI attributes the mappings to Mr Saitoti; physical issuing-store correctness is not independently verified.",
+          "executionStage": "2026-11-12 read-only Taveta settings recheck",
+          "nextAction": "Use only the existing sample mappings. Verify item-level stock eligibility and the production boundary before any fresh send; do not add mappings or claim live POS acceptance without downstream evidence."
+        },
         {
           "observationId": "OPS-20261109-012",
           "pages": "9",
@@ -750,7 +766,7 @@
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Reported issue — current reproduction pending",
+      "currentStatus": "Partial persisted evidence: a labelled live direct-stock POS order cut one Soda 300ml (SCN) and posted to Finance; a prior live recipe order shows component consumption. Fresh Beef Pilau trial remains blocked by SCN Kitchen Store Rice at -612 g (0 available); its source and recipe-store reconciliation remain unresolved.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STOCK",
       "relatedOriginalIds": "INV02 INV03 INV04 BAR02 BAR03 BAR04",
@@ -947,7 +963,7 @@
       "module": "Recipes and consumption",
       "workflow": "Stock movement reconciliation against actual sales needs validation.",
       "description": "Stock movement reconciliation against actual sales needs validation.",
-      "evidence": "New user-supplied consolidation brief, section C. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section C. Current full outcome not independently established. Live Stock on 2026-11-11 showed SCN Kitchen Store Rice (SCN) -612 g while SCN Main Store held 99,388 g; Beef Pilau send was blocked at 0 available for required 204 g. This corroborates an existing negative-stock trace item but does not establish cause. No transfer or correction made.",
       "expectedBehavior": "Each sold item produces its configured recipe/direct-stock movement exactly once, with source traceability and reconciled quantities.",
       "actualBehavior": "Stock movement reconciliation against actual sales needs validation. (reported; scope limited by evidence above)",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
@@ -1026,13 +1042,13 @@
       "module": "Stations, displays and staff identity",
       "workflow": "Coffee ingredient mappings and beer inventory deductions have failed in previous testing.",
       "description": "Coffee ingredient mappings and beer inventory deductions have failed in previous testing.",
-      "evidence": "New user-supplied consolidation brief, section B. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section B. Live POS-20261111-AM6A9 routed House Soda to Main Bar ticket KT-BA1D96-DA8B; its no-prep void request is persisted Pending/Awaiting a manager, so no serve action was attempted. Separate labelled POS-20261110-MUCVW was reloaded Closed with House Soda Served; recent movement records Soda 300ml (SCN) Consumption -1 pc against the order. The order's receipts are RCT-2026-000106/107 and Finance journal JV-SCN-2026-000401 is Posted. Displays were not tested per user direction.",
       "expectedBehavior": "Configured departments/stations route the correct items; independently identified authorised staff accept and complete them with audited stock effects.",
       "actualBehavior": "Coffee ingredient mappings and beer inventory deductions have failed in previous testing. (reported; scope limited by evidence above)",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Reported issue — current reproduction pending",
+      "currentStatus": "Bar routing and a separate labelled live House Soda sale/stock cut/Finance posting are evidenced. No-prep trial awaits independent void approval; fresh kitchen recipe and station-role serve acceptance remain open.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STATIONS",
       "relatedOriginalIds": "F10 KD02 KD03 BAR01 INV02 INV03 INV04",
@@ -1149,7 +1165,7 @@
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Currency/register/retry repairs deployed; full reservation balance and confirmation semantics remain under repair",
+      "currentStatus": "Currency/register/retry repairs deployed; fresh Taveta reservation/check-in/folio persisted with a partial balance. Deposit receipt is posted but its journal detail is blank; local migration candidate addresses receipt traceability, not yet installed or live-verified.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STAY",
       "relatedOriginalIds": "FO01 FO02 FO03 FO04 FO05 FO08 FO10 FO11 FO12 FO13",
@@ -1163,10 +1179,20 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "In progress",
       "closed": false,
-      "nextAction": "Repair minimum-deposit/full-booking status distinction and test actual balances, allocations, partial/split tenders, pending confirmation and refunds. Review historical conflicts from source evidence; do not recollect automatically.",
+      "nextAction": "Validate and install the receipt journal-detail migration through the protected database process, then verify the existing Taveta receipt detail without retrying/reposting. Continue testing reservation balance, allocation, pending confirmation and refunds; do not recollect automatically.",
       "queueNumber": 32,
       "batches8And9CodeProgress": "Pre-arrival deposits below the quote remain partial even when an uncharged folio has zero balance; all active linked folios count. Deposit gate rejects missing/nonfinite money. SQL 89 has 25 isolated checks; no historical label backfill.",
-      "batch19Progress": "Tested web source fc9e4adcd8389bde is deployed to existing neo-preview. Relevant live SQL fingerprints are verified where this repair needs them. Execute the named role/property workflow and original-pass regressions; deployment is not an end-to-end acceptance closure."
+      "batch19Progress": "Tested web source fc9e4adcd8389bde is deployed to existing neo-preview. Relevant live SQL fingerprints are verified where this repair needs them. Execute the named role/property workflow and original-pass regressions; deployment is not an end-to-end acceptance closure.",
+      "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-021",
+          "pages": "Reservation History, Folio, Finance Posting",
+          "status": "Deposit/check-in persisted; receipt posted with journal detail missing",
+          "finding": "RES-2611-7F701 has KES 655.05 user-confirmed deposit, checked-in room 101 and folio INV-2026-000054 with KES 4,844.95 open. Finance shows one posted deposit receipt attempt but no journal detail; source stores the journal ID in financial_states.",
+          "executionStage": "2026-11-12 fresh Taveta reservation workflow",
+          "nextAction": "Repair receipt traceability without retrying the deposit or editing posted journal history; verify migration through protected deployment and retest read-only."
+        }
+      ]
     },
     {
       "issueId": "NEO-BKL-D02",
@@ -1198,6 +1224,14 @@
       "queueNumber": 33,
       "batches8And9CodeProgress": "Reservation detail distinguishes booking balance, selected folio balance and all linked balances; active folio selection and explicit loading/error states prevent silently choosing old void/history. Other balance surfaces remain open.",
       "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-004",
+          "pages": "Finance Posting and source migration",
+          "status": "Receipt traceability gap reproduced; posting itself is shown as posted",
+          "finding": "Taveta deposit RES-2611-7F701 has one posted receipt attempt with no Detail/journal value. The checked-in neo_deposit_post records jid in financial_states but passes res->>'detail' into the posting receipt.",
+          "executionStage": "2026-11-12 live Finance read-only trace and source review",
+          "nextAction": "Validate the local receipt-detail migration against deployed schema, then inspect receipt metadata without reposting the deposit; separately reconcile liability and folio-application journals."
+        },
         {
           "observationId": "OPS-20261109-010",
           "pages": "7,12",
@@ -1302,6 +1336,14 @@
       "queueNumber": 35,
       "batches8And9CodeProgress": "Deposit capture uses the actual reservation property clock and finite positive amount; linked balances and pre-arrival status are tested. No historical financial repair or full deposit-to-folio/GL certification performed.",
       "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-022",
+          "pages": "Finance Posting and source migration",
+          "status": "Receipt traceability gap reproduced; posting itself is shown as posted",
+          "finding": "Taveta deposit RES-2611-7F701 has one posted receipt attempt with no Detail/journal value. The checked-in neo_deposit_post records jid in financial_states but passes res->>'detail' into the posting receipt.",
+          "executionStage": "2026-11-12 live Finance read-only trace and source review",
+          "nextAction": "Validate the local receipt-detail migration against deployed schema, then inspect receipt metadata without reposting the deposit; separately reconcile liability and folio-application journals."
+        },
         {
           "observationId": "OPS-20261109-010",
           "pages": "7,12",
@@ -1501,13 +1543,13 @@
       "module": "Reservations and guest folios",
       "workflow": "Checkout settlement and subsequent room release require end-to-end verification.",
       "description": "Checkout settlement and subsequent room release require end-to-end verification.",
-      "evidence": "New user-supplied consolidation brief, section D. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section D. During read-only review of the completed labelled stay RES-2611-34F3F, the Checked Out detail screen still exposed Check in and Change room. No action was submitted and no reservation data changed. The pms_check_in SQL contract accepts only confirmed, guaranteed, tentative, and pending-deposit. Local UI eligibility guard and shared dialog guard added; 27 focused lifecycle tests and npm run typecheck pass. Deployment and preview retest remain pending. Full checkout/room-release workflow evidence is documented in AUTHENTICATED-ACCEPTANCE-2026-11-11.md; this queue item remains open.",
       "expectedBehavior": "Quote, deposit, partial balance, reservation, stay, folio charges, checkout and room release remain consistent and auditable.",
-      "actualBehavior": "Checkout settlement and subsequent room release require end-to-end verification. (reported; scope limited by evidence above)",
+      "actualBehavior": "The labelled hotel trial completed checkout, settlement, housekeeping rework and reinspection, and room resale availability. Read-only review then found invalid Check in and Change room controls on the Checked Out detail page; no terminal action was submitted. Local UI guards now hide those actions for ineligible statuses; preview retest remains pending.",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P1",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Open verification gate",
+      "currentStatus": "Labelled checkout/room-release workflow passed; checked-out action eligibility fixed locally and validated, pending deployment/preview retest",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STAY",
       "relatedOriginalIds": "FO01 FO02 FO03 FO04 FO05 FO08 FO10 FO11 FO12 FO13",
@@ -1521,7 +1563,7 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "Awaiting workflow test",
       "closed": false,
-      "nextAction": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "nextAction": "Review and deploy the local eligibility guard through the existing protected process; verify Checked Out details no longer offer Check in or Change room in the preview, without mutating the stay.",
       "queueNumber": 42
     },
     {
@@ -1805,13 +1847,13 @@
       "module": "Requisition, receiving and AP",
       "workflow": "Replacement/return guard failures.",
       "description": "Replacement/return guard failures.",
-      "evidence": "New user-supplied consolidation brief, section G. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section G. Read-only Savannah Crown /procurement/reconciliation review on 2026-11-12 showed three approved counts awaiting posting. Two rows explicitly state virtual/test replacement and no actual goods/supplier commitment (LPO-SCN-2026-000012 / NEO-UAT-20261023-R26-DN2-REPLACEMENT; LPO-SCN-2026-000013 / NEO-UAT-20261024-R31-DN2-REPLACEMENT), but both had enabled Post Approved GRN actions. No action or stock change was made. The approved-queue RPC omits posting_block_reason despite UI support; posting RPC has no explicit virtual/no-goods refusal. Local migration 20261112090000_block_virtual_blind_receiving.sql adds both guards and retains maker/poster separation. Isolated PGlite migration suite passed 3/3; focused offline department suites passed 153/153. Actual deployed-schema migration, preview retest and prior real replacement GRN failure remain open.",
       "expectedBehavior": "Independent approvals link requisition, PO, blind receipt, GRN, custody, returns and matched supplier liabilities with safe retries.",
-      "actualBehavior": "Replacement/return guard failures. (reported; scope limited by evidence above)",
+      "actualBehavior": "Two explicitly virtual approved replacement counts in the preview are offered for stock posting despite notes stating no actual goods/supplier commitment. No posting was attempted. Local server and queue guards were added; not installed or live-retested. The historical replacement GRN posting failure is still unresolved.",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P1",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Reported issue — current reproduction pending",
+      "currentStatus": "Virtual-only approved counts were live-observed as postable; local queue/server guard migration candidate passes isolated PGlite checks; deployed install/preview retest and real replacement GRN failure remain open",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-STOCK",
       "relatedOriginalIds": "ST01 ST02 ST03 ST04 ST05 ST06 ST07 PR01",
@@ -1825,10 +1867,18 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "In progress",
       "closed": false,
-      "nextAction": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "nextAction": "Validate migration against the deployed schema and existing function definition; install only through the protected database process; verify both synthetic counts are blocked without stock mutation; separately reproduce the replacement GRN failure using a real authorized delivery or isolated database and inspect rollback/retry evidence.",
       "queueNumber": 51,
       "batches13To18CodeProgress": "Known return boundary now refuses malformed quantities/costs, wrong scoped stores, partial skipped submissions and missing movement IDs; confirmed client result must match direction/location/movement count. Replacement-specific workflows remain open.",
       "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-001",
+          "pages": "Procurement / Receiving Reconciliation",
+          "status": "Live read-only guard gap confirmed; no database mutation",
+          "finding": "Two approved virtual replacement counts stating no actual goods/supplier commitment showed enabled Post Approved GRN actions; the third approved count was not confirmed physically and was left untouched.",
+          "executionStage": "2026-11-12 live preview read-only inspection",
+          "nextAction": "Deploy and verify the virtual-only refusal separately from testing real physical receiving."
+        },
         {
           "observationId": "OPS-20261109-024",
           "pages": "16",
@@ -2606,13 +2656,13 @@
       "module": "Dispatch, manual Till claims and STK",
       "workflow": "Delivery dispatch and rider completion not fully demonstrated.",
       "description": "Delivery dispatch and rider completion not fully demonstrated.",
-      "evidence": "New user-supplied consolidation brief, section K. Current full outcome not independently established.",
+      "evidence": "New user-supplied consolidation brief, section K. On 2026-11-12, direct navigation/reload of /delivery/queue and /delivery remained at the WorkspaceBootGate label 'Preparing your workspace…' for more than 18 seconds; browser captured no failed request, HTTP error or page/console error. The route subsequently loaded by navigating through the authenticated app menu from Laundry. Live queue showed 2 waiting-for-rider, 3 with rider, 6 delivered. No dispatch or rider transition was submitted. Delivery dispatch contract suite passed 42 isolated tests, not live acceptance.",
       "expectedBehavior": "Guest-owned claims receive independent merchant approval; dispatch/completion and separate STK callbacks settle exactly once with durable evidence.",
-      "actualBehavior": "Delivery dispatch and rider completion not fully demonstrated. (reported; scope limited by evidence above)",
+      "actualBehavior": "Direct cold navigation/reload was observed stuck at the workspace boot skeleton, but in-app navigation loaded the queue. Persisted stage counts were visible; dispatch/rider completion was not exercised. No delivery mutations were made.",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P1",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Open verification gate",
+      "currentStatus": "In-app queue loaded and showed persisted stage counts; dispatch/rider transitions remain untested; cold deep-link boot stall needs follow-up",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-PAYMENTS",
       "relatedOriginalIds": "",
@@ -2624,9 +2674,19 @@
       "sourceReference": "User backlog attachment 612bc0eb, section K",
       "workstream": "A development + B UAT",
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
-      "queueStage": "Awaiting workflow test",
+      "queueStage": "In progress",
       "closed": false,
-      "nextAction": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "nextAction": "Investigate the cold deep-link/reload boot stall; then test a safe delivery dispatch/completion with persisted order, rider and audit evidence.",
+      "operationsReportEvidence": [
+        {
+          "observationId": "OPS-20261112-002",
+          "pages": "/delivery/queue and /delivery",
+          "status": "Recovered by in-app navigation; no transaction attempted",
+          "finding": "Cold direct navigation/reload remained at 'Preparing your workspace…' for more than 18 seconds with no request failure or browser runtime error. Navigating to Delivery Queue through the menu from Laundry loaded the screen: 2 waiting, 3 with rider, 6 delivered.",
+          "executionStage": "2026-11-12 live preview read-only inspection",
+          "nextAction": "Trace cold deep-link boot stall, then continue dispatch and rider acceptance."
+        }
+      ],
       "queueNumber": 75
     },
     {
@@ -2664,13 +2724,13 @@
       "module": "Dispatch, manual Till claims and STK",
       "workflow": "Payment reconciliation and duplicate callback protection need validation.",
       "description": "Payment reconciliation and duplicate callback protection need validation.",
-      "evidence": "New user-supplied consolidation brief, section K. Current full outcome not independently established. Batch 23: deployed cash reference defect reproduced under actual unique index; SQL 128 and SQL 130 user postchecks match installed functions. 52 isolated checks cover split collections, stable retries, tender/change, source scope and cashier guards. UI changes pass focused tests; final release checks underway. Final batch 23: 4,232 tests passed, zero failed, 155 skipped; original 3,667 and batch 22 4,198 unique passes retained. Typecheck/build/smoke passed. Build 8a1337497fad6597 deployed as d2055ea3-9593-4ef4-85aa-96a47c1bc6d4; live HTTP build identity/private-no-store verified.",
+      "evidence": "New user-supplied consolidation brief, section K. Current full outcome not independently established. Batch 23: deployed cash reference defect reproduced under actual unique index; SQL 128 and SQL 130 user postchecks match installed functions. 52 isolated checks cover split collections, stable retries, tender/change, source scope and cashier guards. UI changes pass focused tests; final release checks underway. Final batch 23: 4,232 tests passed, zero failed, 155 skipped; original 3,667 and batch 22 4,198 unique passes retained. Typecheck/build/smoke passed. Build 8a1337497fad6597 deployed as d2055ea3-9593-4ef4-85aa-96a47c1bc6d4; live HTTP build identity/private-no-store verified. On 2026-11-12, read-only Savannah Crown preview inspection found an enabled Record money action on already-paid DEL-2026-000010; opening the dialog prefilled KES 2,785. Dialog was cancelled without submission. Local UI now hides collection for settled statuses; the initial Delivery stage/dispatch suites passed 57 checks. Final seven-file regression batch passed 125 tests, followed by a focused 22-test rerun; complete workspace typecheck and production build passed, with non-fatal Vite chunk-size and dependency bundling warnings. Diff whitespace check passed. Local source change is not deployed or live-retested.",
       "expectedBehavior": "Guest-owned claims receive independent merchant approval; dispatch/completion and separate STK callbacks settle exactly once with durable evidence.",
-      "actualBehavior": "Payment reconciliation and duplicate callback protection need validation. (reported; scope limited by evidence above)",
+      "actualBehavior": "Live settled delivery order DEL-2026-000010 exposed Record money with KES 2,785 prefilled. The dialog was cancelled without submitting. Local UI guard hides the action for settled statuses; callback/retry behavior and downstream payment reconciliation remain unverified.",
       "rootCause": "Unknown: supplied historical report, not a fresh reproduction",
       "severity": "P0",
       "severityBasis": "Provisional impact triage; P0 marks potential integrity exposure, not confirmation of current corruption.",
-      "currentStatus": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "currentStatus": "Local UI guard added for already-settled delivery payments; focused tests, complete typecheck, and production build pass. Deployment/live retest pending. Duplicate callback and full workflow acceptance remain open.",
       "classification": "Evidence pending; classification deferred",
       "dependency": "ARCH-PAYMENTS",
       "relatedOriginalIds": "",
@@ -2684,7 +2744,7 @@
       "deduplication": "Related scenario; retain permanent ID and evidence. Link shared dependency rather than collapsing separate failure cases.",
       "queueStage": "Awaiting workflow test",
       "closed": false,
-      "nextAction": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "nextAction": "Review and deploy only through the protected process, then confirm the settled-order collection action is absent. Separately test a fresh labelled collection/retry and persisted receipt, invoice, audit and Finance effects; continue mixed-tender accounting and register/deposit evidence.",
       "queueNumber": 77,
       "operationsReportEvidence": [
         {
@@ -2694,6 +2754,14 @@
           "finding": "Distinct top-up/split payment fails pos_payments_external_ref_uidx",
           "executionStage": "Database repair installed; fresh workflow test pending",
           "nextAction": "SQL 128 code verified installed. Preserve original payments. Verify a fresh second collection after payment-screen release; no historical retry performed."
+        },
+        {
+          "observationId": "OPS-20261112-003",
+          "pages": "/delivery/queue",
+          "status": "Live UI affordance defect observed; no payment submitted",
+          "finding": "Paid delivery order DEL-2026-000010 showed enabled Record money; opening the dialog prefilled KES 2,785. Cancelled without submission. Local UI now gates that action on normalized unsettled status; no operational record changed.",
+          "executionStage": "2026-11-12 read-only live observation; local source repair and isolated tests",
+          "nextAction": "Typecheck and local diff review passed. Deploy only through the protected process, then verify the settled-order action is absent; independently test a fresh labelled collection/retry and persisted receipt, invoice, audit and Finance effects."
         }
       ]
     },
@@ -4054,5 +4122,17 @@
   "staleViewAuditReports": [
     "NEO-STALE-VIEW-AUDIT-2026-11-09.md",
     "NEO-STALE-VIEW-REVIEWED-FINDINGS-2026-11-09.md"
-  ]
+  ],
+  "authenticatedAcceptance20261111": {
+    "scope":  "Savannah Crown only; Mawimbi Jiko read-only",
+    "report":  "AUTHENTICATED-ACCEPTANCE-2026-11-11.md",
+    "liveChains": "HOTEL01 reservation through deposit, check-in, folio, settlement, checkout, housekeeping rework/pass, resale availability and cancellation passed as labelled app workflow; physical cleaning excluded. Labelled POS-20261110-MUCVW passed read-only re-verification: served House Soda, confirmed split tender/receipts, one Soda 300ml direct-stock deduction and posted POS journal. POS-20261111-AM6A9 remains a no-prep Sent/Accepted order with a persisted Pending/Awaiting-manager void request. Procurement, refunds and closure incomplete. Display systems not retested per user direction.",
+    "downstream": "HOTEL01 receipt RCT-2026-000108 KES 3,400 posted to journal acbd6e9e-d2a4-4293-987d-72f935e69136; deposit and folio charges posted. POS-20261110-MUCVW receipts RCT-2026-000106 (cash 100) and RCT-2026-000107 (card 209); stock movement Soda 300ml (SCN) -1 pc; journal JV-SCN-2026-000401 KES309 Posted. Prior live order POS-20261109-A39FK has recipe/direct-stock movement evidence and Posted journal JV-SCN-2026-000395. Live stock gate remains: Beef Pilau requires 204g Rice, SCN Kitchen Store -612g / 0 available vs Main Store 99,388g; no correction made.",
+    "productDefects":  "Terminal omitted existing outstanding-payment warning for POS-20260912-GODJU; fixed locally with existing display rule; deployment pending",
+    "verified": "Hotel app chain and Finance posting references; housekeeping task and room resale availability; labelled POS-20261110-MUCVW served/split-paid, receipts persisted, one direct-stock movement traced to the order, and POS journal posted; prior live POS-20261109-A39FK recipe/direct-stock movements and journal; POS-20261111-AM6A9 no-prep void request persisted Pending/Awaiting manager. Prior independent checks remain 27 focused UI tests, 4 synthetic business-day tests, 101 synthetic collection checks, and gated inventory 37 passed/1 missing-SQL failure/169 skipped; not live acceptance.",
+    "failed": "Fresh food send for Beef Pilau stopped at the live availability guard: requires 204g Rice (SCN), but SCN Kitchen Store shows -612g / 0 available. The mismatch with Main Store 99,388g remains unexplained; no invented restock/transfer. This is a stock-precondition failure, not proof the recipe-cut logic failed.",
+    "blocked": "No-prep POS-20261111-AM6A9 remains Sent/Accepted, unpaid and awaiting its persisted manager void request. Both active Restaurant Manager SCN-FNB-005 and Operations Manager SCN-EXEC-001 were denied /pos/approvals; do not bypass. Fresh recipe-stock cut/retry remains pending the kitchen negative-balance trace and safe physical service. Supplier receiving because no physical delivery boundary; refunds/payout because independent authorization and payout controls; till/day closure because expected cash KES 865607.68 vs opening float KES 500000 without verified physical count and EOD not opened/audited. Live duplicate external-reference retry not executed.",
+    "gateDeclarations": 36,
+    "closedItemsAdded": 0
+}
 }

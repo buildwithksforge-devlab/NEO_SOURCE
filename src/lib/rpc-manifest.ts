@@ -123,9 +123,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_partner_access_list: "authenticated",
   neo_partner_set_access: "authenticated",
 
-
   // Account, workspace and staff provisioning
-  
+
   neo_delete_structure_record: "authenticated",
   customer_register_self: "authenticated",
   neo_guest_claim_invitation: "authenticated",
@@ -247,7 +246,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   ops_room_availability: "authenticated",
   ops_room_state_reconciliation: "authenticated",
 
-
   // Front office and PMS
   pms_assign_room: "authenticated",
   pms_available_rooms: "authenticated",
@@ -317,11 +315,10 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_index_coverage_scan: "authenticated",
   neo_rbac_model_health: "authenticated",
 
-
   // Human Resources Ã¢â‚¬â€ staff-account Ã¢â€ â€™ employee-record reconciliation
   neo_hr_reconcile_staff: "authenticated",
   neo_hr_leave_sync_entitlements: "authenticated",
-  
+
   neo_hr_leave_apply: "authenticated",
   neo_hr_leave_decide: "authenticated",
   neo_hr_payroll_compute: "authenticated",
@@ -330,7 +327,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_hr_set_payroll_enrolment: "authenticated",
   neo_my_work: "authenticated",
   neo_onboard_staff: "authenticated",
-
 
   neo_hr_offboard_employee: "authenticated",
   neo_stores_issue: "authenticated",
@@ -566,8 +562,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_hr_case_open: "authenticated",
   neo_hr_case_review: "authenticated",
 
-
-
   // Inventory & Stores Ã¢â‚¬â€ department requests and controlled counting
   neo_stores_requisition_reject: "authenticated",
   neo_stores_shortage_to_pr: "authenticated",
@@ -585,7 +579,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_bar_menu: "authenticated",
   neo_bar_open_orders: "authenticated",
   neo_bar_overview: "authenticated",
-
 
   // Finance, events and marketing
   fin_metrics: "authenticated",
@@ -672,6 +665,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_payment_intent_open: "authenticated",
   neo_payment_intent_status: "authenticated",
   neo_payment_intent_apply: "service_role",
+  neo_payment_intent_claim_dispatch: "authenticated",
   neo_payment_intent_mark_sent: "authenticated",
   neo_bank_statement_import: "authenticated",
   neo_bank_transfer_queue: "authenticated",
@@ -703,7 +697,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_revenue_reconciliation: "authenticated",
   neo_finance_ensure_accounts: "authenticated",
   neo_commitments: "authenticated",
-
 
   // Operational routines added by later phases (housekeeping reconciliation,
   // delivery PINs and dispatch, banquet orders, stock board and counts).

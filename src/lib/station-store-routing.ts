@@ -90,16 +90,18 @@ export function usePropertyStores(branchIdOverride?: string | null) {
   const property = branchIdOverride ?? branchId ?? null;
   return useQuery({
     queryKey: ["kitchen", "property-stores", organizationId, property ?? "all"],
-    enabled: Boolean(organizationId),
+    enabled: Boolean(organizationId && property),
     queryFn: async () => {
       if (!organizationId) throw new Error("Choose a workspace before loading stores.");
+      if (!property) throw new Error("Choose a property before loading stores.");
       let q = supabase
         .from("stock_locations")
         .select("id, name, code, location_type, branch_id, active")
         .eq("organization_id", organizationId)
         .eq("active", true)
+        .eq("is_main", false)
+        .eq("branch_id", property)
         .order("name");
-      if (property) q = q.or(`branch_id.eq.${property},branch_id.is.null`);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as {

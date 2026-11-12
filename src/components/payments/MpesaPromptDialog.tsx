@@ -35,7 +35,7 @@ type Props = {
   onSettled?: () => void;
 };
 
-const TERMINAL = new Set(["success", "failed", "cancelled", "timeout"]);
+const TERMINAL = new Set(["success", "failed", "cancelled", "timeout", "unknown"]);
 
 export function MpesaPromptDialog({
   sourceModule,
@@ -85,9 +85,19 @@ export function MpesaPromptDialog({
   useEffect(() => {
     if (currentStatus && TERMINAL.has(currentStatus)) {
       if (currentStatus === "success") {
-        toast.success(`M-Pesa payment received${status.data?.mpesa_receipt_number ? ` — ${status.data.mpesa_receipt_number}` : ""}`);
+        toast.success(
+          `M-Pesa payment received${status.data?.mpesa_receipt_number ? ` — ${status.data.mpesa_receipt_number}` : ""}`,
+        );
+      } else if (currentStatus === "unknown") {
+        toast.warning(
+          "Safaricom's response is unclear. Do not send another prompt until the existing attempt is checked.",
+        );
       } else {
-        toast.error(status.data?.failure_detail ?? status.data?.result_desc ?? "The customer did not complete the payment.");
+        toast.error(
+          status.data?.failure_detail ??
+            status.data?.result_desc ??
+            "The customer did not complete the payment.",
+        );
       }
       void queryClient.invalidateQueries();
       onSettled?.();
@@ -128,7 +138,8 @@ export function MpesaPromptDialog({
   });
 
   const amountValue = Number(amount);
-  const blocked = !phone.trim() || !(amountValue > 0) || amountValue > balance + 0.005 || send.isPending;
+  const blocked =
+    !phone.trim() || !(amountValue > 0) || amountValue > balance + 0.005 || send.isPending;
 
   // The workspace configuration is the single source of truth: when M-Pesa is
   // not switched on, the action says so up front instead of failing on send,
@@ -141,7 +152,10 @@ export function MpesaPromptDialog({
           <Smartphone className="mr-2 size-4" />
           {setup.data.configured ? "M-Pesa switched off" : "M-Pesa not set up"}
         </Button>
-        <Link to="/admin/payments-mpesa" className="text-[11px] text-muted-foreground underline underline-offset-2">
+        <Link
+          to="/admin/payments-mpesa"
+          className="text-[11px] text-muted-foreground underline underline-offset-2"
+        >
           {setup.data.reason ?? "Open M-Pesa settings"}
         </Link>
       </div>
@@ -160,7 +174,8 @@ export function MpesaPromptDialog({
         <DialogHeader>
           <DialogTitle>Charge to M-Pesa</DialogTitle>
           <DialogDescription>
-            Sends an STK prompt to the customer. The payment stays pending until Safaricom confirms it.
+            Sends an STK prompt to the customer. The payment stays pending until Safaricom confirms
+            it.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -184,27 +199,41 @@ export function MpesaPromptDialog({
               inputMode="decimal"
               disabled={Boolean(transactionId)}
             />
-            <p className="text-xs text-muted-foreground">Outstanding balance {balance.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">
+              Outstanding balance {balance.toFixed(2)}
+            </p>
           </div>
-          {message ? <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs">{message}</p> : null}
+          {message ? (
+            <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs">{message}</p>
+          ) : null}
           {transactionId ? (
             <div className="rounded-lg border border-border p-3 text-xs">
               <p className="font-medium">
                 Provider status: {currentStatus ?? "waiting"}
                 {status.isFetching ? <Loader2 className="ml-2 inline size-3 animate-spin" /> : null}
               </p>
-              {status.data?.mpesa_receipt_number ? <p>Receipt {status.data.mpesa_receipt_number}</p> : null}
-              {status.data?.result_desc ? <p className="text-muted-foreground">{status.data.result_desc}</p> : null}
+              {status.data?.mpesa_receipt_number ? (
+                <p>Receipt {status.data.mpesa_receipt_number}</p>
+              ) : null}
+              {status.data?.result_desc ? (
+                <p className="text-muted-foreground">{status.data.result_desc}</p>
+              ) : null}
             </div>
           ) : null}
         </div>
         <DialogFooter>
           {transactionId ? (
             <>
-              <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
-                {check.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Check status
-              </Button>
+              {currentStatus === "unknown" ? (
+                <p className="self-center text-xs text-muted-foreground">
+                  Check Recent collections before sending another prompt.
+                </p>
+              ) : (
+                <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
+                  {check.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Check status
+                </Button>
+              )}
               <Button onClick={() => setOpen(false)}>Close</Button>
             </>
           ) : (
