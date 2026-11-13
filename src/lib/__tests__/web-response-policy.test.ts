@@ -53,6 +53,7 @@ describe("optional existing Lovable M-Pesa transport", () => {
     ).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
+  it.each(["1ef9d0260286ca208a4e39b86f242b97adf2a388b6d780f95a36143e976bc18c","1029e96261143a6cd861d02888c8ee3c2f5ec1654855449940497f839f6bf169"])("routes exported guest handlers only through the explicit payment gate: %s",async(id)=>{const fetch=upstream(); expect((await forwardLovableMpesaRequest(request(id),enabled,fetch))?.status).toBe(503); expect(fetch).not.toHaveBeenCalled(); expect((await forwardLovableMpesaRequest(request(id),{...enabled,NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED:"true",NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED:"true"},fetch))?.status).toBe(200); expect(fetch).toHaveBeenCalledOnce(); expect(fetch.mock.calls[0]![0]).toBe(`https://horizon-prime-os.lovable.app/_serverFn/${id}`);});
   it("does not loop when the same source is installed on Horizon", async () => {
     const fetch = upstream();
     expect(
@@ -143,6 +144,15 @@ describe("optional existing Lovable M-Pesa transport", () => {
     expect((await forwardLovableMpesaRequest(request(charge), enabled, fetch))?.status).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
+  it("cannot enable collections without the managed callback path", async () => {
+    const fetch = upstream();
+    const result = await forwardLovableMpesaRequest(request(charge), {
+      ...enabled, NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED: "true", NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED: "false",
+    }, fetch);
+    expect(result?.status).toBe(503);
+    expect(await result?.text()).toContain("callbacks must be routed");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("forwards the unchanged protocol and caller JWT only to the fixed original handler", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       new Response("serialized-result", {
@@ -175,7 +185,7 @@ describe("optional existing Lovable M-Pesa transport", () => {
     expect(headers.get("cookie")).toBeNull();
     expect(headers.get("x-service-key")).toBeNull();
     expect(new TextDecoder().decode(init.body as Uint8Array)).toBe('{"serialized":"payload"}');
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
     expect(response?.headers.get("x-tss-serialized")).toBe("true");
     expect(response?.headers.get("set-cookie")).toBeNull();
     expect(response?.headers.get("cache-control")).toBe("private, no-store");
@@ -193,7 +203,7 @@ describe("optional existing Lovable M-Pesa transport", () => {
       (
         await forwardLovableMpesaRequest(
           request(charge),
-          { ...enabled, NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED: "true" },
+          { ...enabled, NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED: "true", NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED: "true" },
           fetch,
         )
       )?.status,
@@ -204,7 +214,7 @@ describe("optional existing Lovable M-Pesa transport", () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValue(new Error("timeout"));
     const response = await forwardLovableMpesaRequest(
       request(charge),
-      { ...enabled, NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED: "true" },
+      { ...enabled, NEO_LOVABLE_BRIDGE_PAYMENTS_ENABLED: "true", NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED: "true" },
       fetch,
     );
     expect(response?.status).toBe(502);

@@ -75,7 +75,17 @@ export const runProviderTest = createServerFn({ method: "POST" })
     let testType = "configuration";
 
     try {
-    if (provider === "daraja") {
+    if (provider === "daraja" && process.env["NEO_LOVABLE_BRIDGE_ENABLED"] === "true") {
+      // Keep this handler's stronger local authority/evidence checks. Only the
+      // credential-bearing OAuth probe uses the existing managed command.
+      const { testManagedSavedMpesaConnection } = await import("@/lib/managed-mpesa-connection-test.server");
+      const { getRequest } = await import("@tanstack/react-start/server");
+      const result = await testManagedSavedMpesaConnection(getRequest());
+      environment = result.environment ?? "unknown";
+      testType = "authentication";
+      status = result.ok === true && result.status === "ok" ? "passed" : "failed";
+      detail = result.detail ?? "The managed backend did not confirm Daraja authentication.";
+    } else if (provider === "daraja") {
       const { loadMpesaCredentials, darajaToken } = await import("@/lib/mpesa.server");
       const creds = await loadMpesaCredentials(organizationId);
       if (!creds) {

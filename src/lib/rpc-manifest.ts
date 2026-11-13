@@ -650,6 +650,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_ai_provider_record_check: "authenticated",
   neo_settings_presence: "authenticated",
   neo_mpesa_settings_get: "authenticated",
+  neo_pos_menu_availability: "authenticated",
   neo_mpesa_settings_save: "authenticated",
   neo_mpesa_record_check: "authenticated",
   neo_mpesa_collection_start: "authenticated",

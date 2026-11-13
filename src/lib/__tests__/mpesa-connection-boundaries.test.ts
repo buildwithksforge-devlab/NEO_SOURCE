@@ -86,7 +86,7 @@ describe("M-Pesa connection dependency boundaries", () => {
     });
     rpc.mockResolvedValue({ data: true, error: null });
     mock.query.mockResolvedValue({ ok: true, data: { ResultCode: "0", ResultDesc: "Confirmed" } });
-    mock.apply.mockResolvedValue({ data: { status: "success" }, error: null });
+    mock.apply.mockResolvedValue({ data: { applied: true, status: "success" }, error: null });
     const reconcile = reconcileMpesaTransaction as unknown as (input: {
       data: { transactionId: string };
       context: typeof context;
@@ -99,6 +99,15 @@ describe("M-Pesa connection dependency boundaries", () => {
       "neo_mpesa_apply_result",
       expect.objectContaining({ _transaction: "txn", _result_code: 0, _source: "status-query" }),
     );
+  });
+  it.each([null, {}, {applied:false,reason:"not found"}, {ok:false,applied:true,status:"success"}])("does not report an unapplied database result as settled: %j",async(result)=>{
+    maybeSingle.mockResolvedValue({data:{source_module:"pos_order",organization_id:"org",checkout_request_id:"checkout"}});
+    rpc.mockResolvedValue({data:true,error:null}); mock.query.mockResolvedValue({ok:true,data:{ResultCode:"0"}}); mock.apply.mockResolvedValue({data:result,error:null});
+    const run=reconcileMpesaTransaction as unknown as (input:any)=>Promise<Result>;expect(await run({data:{transactionId:"txn"},context})).toMatchObject({ok:false,status:"apply-failed"});
+  });
+  it("refuses a status query for a different checkout",async()=>{
+    maybeSingle.mockResolvedValue({data:{source_module:"pos_order",organization_id:"org",checkout_request_id:"checkout"}});rpc.mockResolvedValue({data:true,error:null});mock.query.mockResolvedValue({ok:true,data:{ResultCode:"0",CheckoutRequestID:"other"}});
+    const run=reconcileMpesaTransaction as unknown as (input:any)=>Promise<Result>;expect(await run({data:{transactionId:"txn"},context})).toMatchObject({ok:false,status:"verification-mismatch"});expect(mock.apply).not.toHaveBeenCalled();
   });
   it("tests complete drafts without reading saved secrets or changing saved verification", async () => {
     mock.load.mockRejectedValue(new Error("Invalid API key"));

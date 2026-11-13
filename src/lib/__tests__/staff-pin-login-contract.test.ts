@@ -87,7 +87,7 @@ describe("staff PIN broker request/response behavior", () => {
     const [url, init] = fetch.mock.calls[0]!;
     expect(url).toBe("https://horizon-prime-os.lovable.app/api/public/staff-pin-login");
     expect(init.headers["x-neo-device-token"]).toBe(token);
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
     expect(JSON.parse(init.body)).toEqual({ pin: "123456" });
   });
   it("preserves rejected credentials from the original broker", async () => {
@@ -106,6 +106,15 @@ describe("staff PIN broker request/response behavior", () => {
     const response = await handler({ request: request() });
     expect(response.status).toBe(401);
     expect((await response.json()).error).toBe("credentials");
+  });
+  it("rejects redirects without forwarding the device token or PIN to another host", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, {
+      status: 302, headers: { Location: "https://foreign.invalid" },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    expect((await handler({ request: request() })).status).toBe(502);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![1].redirect).toBe("manual");
   });
   it("refuses a successful HTTP response without a valid login-token/property contract", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ok: true })));

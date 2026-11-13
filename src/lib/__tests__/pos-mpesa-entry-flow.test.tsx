@@ -15,6 +15,8 @@ const mock = vi.hoisted(() => ({
   warning: vi.fn(),
   info: vi.fn(),
   error: vi.fn(),
+  existingAttempt: null as null | { id: string; amount: number },
+  lookupError: null as null | { message: string },
   readiness: {
     isError: false,
     isPending: false,
@@ -61,13 +63,14 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: { id: "txn", status: "pending" }, error: null }),
-        }),
-      }),
-    }),
+    from: () => {
+      let lookup = false;
+      const query: any = { select: () => query, eq: () => query, in: () => query, is: () => query,
+        order: () => { lookup = true; return query; }, limit: () => query,
+        maybeSingle: async () => lookup ? { data: mock.existingAttempt, error: mock.lookupError }
+          : { data: { id: "txn", status: "pending" }, error: null } };
+      return query;
+    },
   },
 }));
 vi.mock("@/components/payments/ReceivingAccountSelect", () => ({
@@ -105,6 +108,8 @@ import { MpesaPromptDialog } from "@/components/payments/MpesaPromptDialog";
 const clients: QueryClient[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.existingAttempt = null; mock.lookupError = null;
+  mock.reconcile.mockResolvedValue({ ok: true, status: "success", detail: "Verified with Safaricom" });
   mock.readiness.isError = false;
   mock.readiness.isPending = false;
   mock.readiness.data = [
@@ -216,6 +221,7 @@ describe("POS payment entry dispatch and readiness", () => {
     choose("mpesa");
     phone();
     const submit = screen.getByRole("button", { name: "Send prompt" });
+    await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
     act(() => {
       submit.click();
       submit.click();
@@ -312,6 +318,7 @@ describe("POS payment entry dispatch and readiness", () => {
     choose("mpesa");
     phone();
     expect(screen.getByRole("heading", { name: "Charge to M-Pesa" })).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send prompt" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Send prompt" }));
     await waitFor(() => expect(mock.charge).toHaveBeenCalledOnce());
     expect(mock.charge).toHaveBeenCalledWith({
@@ -335,6 +342,7 @@ describe("POS payment entry dispatch and readiness", () => {
     mount();
     choose("mpesa");
     phone();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send prompt" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Send prompt" }));
     await waitFor(() => expect(mock.error).toHaveBeenCalledWith("Backend is unavailable"));
     expect(mock.record).not.toHaveBeenCalled();
@@ -427,6 +435,7 @@ describe("POS payment entry dispatch and readiness", () => {
     mount();
     choose("mpesa");
     phone();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send prompt" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Send prompt" }));
     await waitFor(() =>
       expect(mock.warning).toHaveBeenCalledWith("Outcome uncertain; check this attempt."),
@@ -434,5 +443,24 @@ describe("POS payment entry dispatch and readiness", () => {
     expect(mock.success).not.toHaveBeenCalled();
     expect(mock.record).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull();
+  });
+
+  it("reopens an existing pending collection without dispatching another prompt", async () => {
+    mock.existingAttempt = { id: "existing-txn", amount: 51 };
+    mount(<MpesaPromptDialog open sourceModule="pos_order" sourceRecordId="order-1" balance={51} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Check Safaricom status" }));
+    await waitFor(() => expect(mock.reconcile).toHaveBeenCalledWith({ data: { transactionId: "existing-txn" } }));
+    expect(mock.charge).not.toHaveBeenCalled(); expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull();
+  });
+  it("a pending payment-row check cannot send money even if no STK record is found", async () => {
+    mount(<MpesaPromptDialog open recoveryOnly paymentId="payment-1" sourceModule="pos_order" sourceRecordId="order-1" balance={51} />);
+    expect(await screen.findByText(/No STK collection is linked/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull(); expect(mock.charge).not.toHaveBeenCalled();
+  });
+  it("does not enable a new prompt if the existing-attempt lookup fails", async () => {
+    mock.lookupError = { message: "private database failure" };
+    mount(<MpesaPromptDialog open sourceModule="pos_order" sourceRecordId="order-1" balance={51} defaultPhone="0712345678" />);
+    expect(await screen.findByText(/existing payment attempt could not be checked/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Send prompt" }) as HTMLButtonElement).disabled).toBe(true); expect(mock.charge).not.toHaveBeenCalled();
   });
 });

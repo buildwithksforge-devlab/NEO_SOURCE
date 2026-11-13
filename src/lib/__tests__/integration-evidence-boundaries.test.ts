@@ -1,8 +1,10 @@
 import {beforeEach, afterEach, describe, it, expect, vi} from 'vitest';
-const mocks=vi.hoisted(()=>({load:vi.fn(),token:vi.fn()}));
+const mocks=vi.hoisted(()=>({load:vi.fn(),token:vi.fn(),managed:vi.fn()}));
 vi.mock('@tanstack/react-start',()=>({createServerFn:()=>{const b:any={middleware:()=>b,inputValidator:()=>b,handler:(f:any)=>f};return b}}));
 vi.mock('@/integrations/supabase/auth-middleware',()=>({requireSupabaseAuth:{}}));
 vi.mock('@/lib/mpesa.server',()=>({loadMpesaCredentials:mocks.load,darajaToken:mocks.token}));
+vi.mock('@/lib/managed-mpesa-connection-test.server',()=>({testManagedSavedMpesaConnection:mocks.managed}));
+vi.mock('@tanstack/react-start/server',()=>({getRequest:()=>new Request('https://neo-preview.neo-hospitality.workers.dev/_serverFn/test')}));
 import {runProviderTest,testMpesaCallbackEndpoint} from '@/lib/integrations.functions';
 import {requireRecordedProviderTest} from '@/lib/integration-test-evidence';
 let rpc:any;
@@ -13,11 +15,14 @@ beforeEach(()=>{
  rpc=vi.fn(async(name:string,args:any)=>({data:name==='current_org_id'?'org-a':name==='is_org_admin'?true:name==='neo_integration_record_test'?{recorded:true,status:args._status}:false,error:null}));
  vi.stubEnv('LOVABLE_API_KEY','synthetic-secret-do-not-return');
  vi.stubEnv('PUBLIC_SITE_URL','https://example.invalid');
+ vi.stubEnv('NEO_LOVABLE_BRIDGE_ENABLED','false');
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('Invalid callback token',{status:401})));
  mocks.load.mockResolvedValue({environment:'sandbox'});mocks.token.mockResolvedValue({ok:true,data:'synthetic-token'});
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals()});
 describe('integration evidence boundaries',()=>{
+ it('bridges the credential-bearing Daraja check while retaining local authority and saved evidence',async()=>{vi.stubEnv('NEO_LOVABLE_BRIDGE_ENABLED','true');mocks.managed.mockResolvedValue({authorised:true,ok:true,status:'ok',environment:'production',detail:'Daraja issued an access token.'});const r=await invoke('daraja');expect(r).toMatchObject({status:'passed',recorded:true,environment:'production'});expect(mocks.load).not.toHaveBeenCalled();expect(mocks.managed).toHaveBeenCalledOnce();expect(rpc).toHaveBeenCalledWith('neo_integration_record_test',expect.objectContaining({_test_type:'authentication',_status:'passed'}))});
+ it('does not contact the managed backend without integration-test authority',async()=>{vi.stubEnv('NEO_LOVABLE_BRIDGE_ENABLED','true');rpc.mockImplementation(async(n:string)=>({data:n==='current_org_id'?'org-a':false,error:null}));await expect(invoke('daraja')).rejects.toThrow('permission');expect(mocks.managed).not.toHaveBeenCalled()});
  it('does not certify an AI connection from key presence',async()=>{const r=await invoke();expect(r.status).toBe('unsupported');expect(r.recorded).toBe(true);expect(JSON.stringify(r)).not.toContain('synthetic-secret');expect(fetch).not.toHaveBeenCalled()});
  it('refuses a test without an active organisation before provider access',async()=>{rpc.mockResolvedValue({data:null,error:null});await expect(invoke('daraja')).rejects.toThrow('organisation');expect(mocks.load).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled()});
  it('requires edit authority before loading provider credentials',async()=>{rpc.mockImplementation(async(n:string)=>({data:n==='current_org_id'?'org-a':false,error:null}));await expect(invoke('daraja')).rejects.toThrow('permission');expect(mocks.load).not.toHaveBeenCalled()});

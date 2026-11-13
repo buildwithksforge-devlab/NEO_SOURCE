@@ -140,6 +140,11 @@ function Page() {
   function handleSubmit() {
     if (!active || submittingRef.current || pendingConfirmation) return;
 
+    if (!active.deliver_to_location_id) {
+      toast.error("This purchase order has no receiving store. Procurement must assign an active store at this property before you submit the count.");
+      return;
+    }
+
     if (!deliveryNote.trim()) {
       toast.error("Supplier delivery note number is required.");
       return;

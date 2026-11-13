@@ -116,7 +116,7 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
             },
             body: JSON.stringify({ pin }),
             // Do not carry a device credential/PIN to a redirect target.
-            redirect: "error",
+            redirect: "manual",
             signal: controller.signal,
           });
         } catch (error) {
@@ -133,6 +133,10 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
           );
         } finally {
           clearTimeout(timeout);
+        }
+
+        if (upstream.status >= 300 && upstream.status < 400) {
+          return response({ error: "server_error", message: "Staff PIN sign-in is temporarily unavailable." }, 502);
         }
 
         let payload: EdgeResponse;

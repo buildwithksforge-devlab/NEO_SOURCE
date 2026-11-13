@@ -1,3 +1,4 @@
+import { mpesaResultApplied } from "@/lib/mpesa-application-result";
 /**
  * M-Pesa (Daraja) typed RPC.
  *
@@ -605,6 +606,9 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
         detail: query.data.ResultDesc ?? "Safaricom returned no result code yet.",
       };
     }
+    if ((query.data.CheckoutRequestID && query.data.CheckoutRequestID !== row["checkout_request_id"]) || (query.data.MerchantRequestID && row["merchant_request_id"] && query.data.MerchantRequestID !== row["merchant_request_id"])) {
+      return {ok:false,status:"verification-mismatch",detail:"Daraja returned a different transaction reference. No payment was applied."};
+    }
     // 1032/1037 and friends are terminal; anything else non-zero is a decline.
     const { data: applied, error } = await supabaseAdmin.rpc("neo_mpesa_apply_result", {
       _transaction: data.transactionId,
@@ -615,7 +619,7 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
       _payload: query.data as unknown as Record<string, unknown>,
       _source: "status-query",
     });
-    if (error) return { ok: false, status: "apply-failed", detail: error.message };
+    if (error || !mpesaResultApplied(applied, code)) return { ok: false, status: "apply-failed", detail: "The database did not confirm application of this provider result. Keep the existing transaction for reconciliation." };
     return {
       ok: true,
       status: (applied?.status as string) ?? "unknown",

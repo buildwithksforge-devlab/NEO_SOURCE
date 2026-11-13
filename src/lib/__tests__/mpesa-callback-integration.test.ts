@@ -175,6 +175,7 @@ describe("M-Pesa STK callback", () => {
     expect(call.args["_transaction"]).toBe("txn-1");
     expect(call.args["_result_code"]).toBe(0);
     expect(call.args["_receipt"]).toBe("SFG1A2B3C4");
+    expect(call.args["_transaction_date"]).toBe("2026-08-30T09:45:00.000Z");
     expect(call.args["_source"]).toBe("callback");
   });
 
@@ -260,4 +261,7 @@ describe("M-Pesa STK callback", () => {
     expect((await post("tenant-token-1234567890", payload(0))).status).toBe(200);
     expect(rpcCalls).toHaveLength(1);
   });
+  it.each([null,{}, {applied:false,reason:"Transaction not found"}, {applied:true,status:"failed"}, {ok:false,applied:true,status:"success"}])("does not acknowledge an unconfirmed database application %j",async(data)=>{applyResult={data,error:null};expect((await post("tenant-token-1234567890",payload(0))).status).toBe(500);expect(inserts.at(-1)?.row["retryable"]).toBe(true)});
+  it("acknowledges a matching atomic duplicate without creating another receipt",async()=>{applyResult={data:{applied:false,duplicate:true,status:"success"},error:null};expect((await post("tenant-token-1234567890",payload(0))).status).toBe(200);expect(rpcCalls).toHaveLength(1)});
+
 });

@@ -1,4 +1,6 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { requireReceivingReviewResult } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -100,25 +102,28 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return data;
+      return requireReceivingReviewResult(data, payload.countId, payload.decision);
     },
 
-    onSuccess: (result, payload) => {
+    onSuccess: async (result, payload) => {
       if (payload.decision === "approved" && result && typeof result === "object") {
         const grnId = (result as Record<string, unknown>)["grn_id"];
         if (typeof grnId === "string" && grnId) {
           setRecentlyPosted({ grnId, orderNumber: payload.orderNumber });
-          toast.success("Receiving approved, stock updated, and GRN generated.");
+          const postingResult = result["posting_result"] as Record<string, unknown> | undefined;
+          const lifecycle = postingResult?.["lifecycle_result"] as Record<string, unknown> | undefined;
+          const posting = lifecycle?.["posting"] as Record<string, unknown> | undefined;
+          if (posting?.["status"] === "pending-finance")
+            toast.warning("GRN created and stock received. Finance accrual needs attention.");
+          else toast.success("Receiving approved, stock updated, and GRN generated.");
         } else {
-          toast.error("Approval returned without a GRN reference. Check the receiving record.");
+          toast.info("Count approved. A receiving manager must now select Post Approved GRN below; stock has not moved yet.");
         }
       } else {
         toast.success("Receiving review decision recorded.");
       }
 
-      void queryClient.invalidateQueries({
-        queryKey: ["procurement"],
-      });
+      await invalidateSupplyViews(queryClient);
     },
 
     onError: (error: Error) => {
@@ -195,7 +200,7 @@ function Page() {
 
       <SectionCard
         title="Independent receiving review"
-        description="Review the original physical counts. Approval posts accepted quantities to the receiving store and generates the linked GRN atomically."
+        description="Review the original physical counts. Reviewers with receiving posting authority create the GRN on approval. Otherwise, a receiving manager posts the approved count in the section below."
       >
         <div className="mb-4 flex justify-end">
           <Button

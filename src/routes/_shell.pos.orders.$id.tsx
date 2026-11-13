@@ -12,6 +12,7 @@ import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
 import { getPosFiscalStatus } from "@/lib/etims.functions";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { AddItemDialog } from "@/components/pos/AddItemDialog";
+import { StockAwareMenuItem } from "@/components/pos/StockAwareMenuItem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +53,7 @@ import {
   useOpenFolioForStay,
   explainPosStatusError,
   usePosOrder,
+  usePosStockAvailability,
   usePosOrderDiagnostics,
   usePostRoomCharge,
   usePosDiscountPolicies,
@@ -96,6 +98,7 @@ function OrderTerminal() {
   const { id } = Route.useParams();
   const { can } = useAuth();
   const order = usePosOrder(id);
+  const stockOut = usePosStockAvailability(order.data?.branch_id);
   const removeDraftOrder = useRemoveDraftOrder();
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
@@ -187,7 +190,7 @@ function OrderTerminal() {
   const scoped = scopeCatalogueToOutlet(items.data ?? [], outlet);
   const menuRows = scoped.rows.filter(
     (m) =>
-      m.availability === "available" && m.publish_status === "published" &&
+      ["available", "out-of-stock"].includes(m.availability) && m.publish_status === "published" &&
       (category === "all" || m.category_id === category) &&
       (!q || m.name.toLowerCase().includes(q)),
   );
@@ -366,21 +369,28 @@ function OrderTerminal() {
                     />
                   }
                 >
+                  {stockOut.isError ? <p role="status" className="mb-2 text-sm text-muted-foreground">Live stock availability is unavailable. Stock is still checked when sending the order.</p> : null}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {menuRows.map((m) => (
-                      <button
+                      <StockAwareMenuItem
                         key={m.id}
+                        name={m.name}
                         disabled={
                           !can("pos", "orders.create") ||
-                          m.availability !== "available" || m.publish_status !== "published" ||
-                          m.station_missing
+                          m.publish_status !== "published"
                         }
-                        title={
+                        unavailableReason={
                           m.station_missing
                             ? "This item has no production station, so the kitchen would never receive it."
-                            : undefined
+                            : m.availability !== "available" ? stockOut.data?.get(m.id) || "This item is marked out of stock for this property." : null
                         }
-                        onClick={() =>
+                        checkStock={async () => {
+                          if (!data.branch_id) return "This bill has no property assigned, so stock cannot be verified.";
+                          const fresh = await stockOut.refetch();
+                          if (fresh.isError) throw fresh.error;
+                          return fresh.data?.get(m.id) ?? null;
+                        }}
+                        onAvailable={() =>
                           setPendingItem({
                             id: m.id,
                             name: m.name,
@@ -389,7 +399,6 @@ function OrderTerminal() {
                             station_id: m.station_id,
                           })
                         }
-                        className="rounded-xl border border-border bg-card p-3 text-left transition-shadow hover:shadow-lift disabled:opacity-50"
                       >
                         <p className="text-sm font-semibold">{m.name}</p>
                         <p className="text-xs text-muted-foreground">{money(m.base_price)}</p>
@@ -399,7 +408,10 @@ function OrderTerminal() {
                         {m.station_missing ? (
                           <StatusPill tone="destructive">No production station</StatusPill>
                         ) : null}
-                      </button>
+                        {stockOut.data?.has(m.id) && m.availability === "available" ? (
+                          <StatusPill tone="destructive">Out of stock</StatusPill>
+                        ) : null}
+                      </StockAwareMenuItem>
                     ))}
                   </div>
                 </QueryState>
@@ -447,6 +459,9 @@ function OrderTerminal() {
                   </Button>
                 }
               >
+                {Number(data.paid_total ?? 0) > 0 && unsent.length > 0 ? (
+                  <p role="status" className="mb-3 text-sm text-muted-foreground">Payment received. Draft items still need Send; sending checks stock again.</p>
+                ) : null}
                 {unroutable.length > 0 ? (
                   <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
                     <p className="text-sm font-semibold text-destructive">
@@ -716,6 +731,11 @@ function OrderTerminal() {
                           >
                             {titleCase(p.status)}
                           </StatusPill>
+                          {p.method === "mpesa" && (p.status === "pending" || p.status === "initiated") ? (
+                            <MpesaPromptDialog sourceModule="pos_order" sourceRecordId={data.id}
+                              paymentId={p.id} recoveryOnly triggerLabel="Check Safaricom"
+                              balance={balance} initialAmount={Number(p.amount)} onSettled={() => void order.refetch()} />
+                          ) : null}
                           {canManualConfirm &&
                             (p.status === "pending" || p.status === "initiated") ? (
                             <Button
@@ -729,7 +749,7 @@ function OrderTerminal() {
                                 })
                               }
                             >
-                              Confirm
+                              {p.method === "mpesa" ? "Manual verification" : "Confirm"}
                             </Button>
                           ) : null}
                         </span>

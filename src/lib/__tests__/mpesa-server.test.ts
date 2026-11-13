@@ -2,12 +2,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   darajaToken,
   darajaResultCode,
+  darajaTransactionDate,
   loadMpesaCredentials,
   verifyMpesaServerAccess,
   normaliseMsisdn,
   stkPush,
   type MpesaCredentials,
 } from "@/lib/mpesa.server";
+
+describe("Daraja transaction clock normalization", () => {
+  it("converts compact Kenyan time to a valid UTC timestamp", () => {
+    expect(darajaTransactionDate(20261113162136)).toBe("2026-11-13T13:21:36.000Z");
+    expect(darajaTransactionDate("20261113010000")).toBe("2026-11-12T22:00:00.000Z");
+    expect(darajaTransactionDate("20240229000000")).toBe("2024-02-28T21:00:00.000Z");
+  });
+  it.each([null,undefined,"",20261113,"20260230000000","20260229000000","20261301000000","20261113240000","20261113126000","20261113120060",{},Infinity])("does not silently roll an invalid clock into another date: %s", value => {
+    expect(darajaTransactionDate(value)).toBeNull();
+  });
+});
 
 vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: {
@@ -122,7 +134,7 @@ describe("server-side Daraja requests", () => {
   );
   it("identifies a rejected database key separately from Daraja authentication", async () => {
     await expect(loadMpesaCredentials("synthetic-org")).rejects.toThrow(
-      "Update SUPABASE_SERVICE_ROLE_KEY in the server environment; changing M-Pesa credentials will not fix this database connection",
+      "The Lovable-managed payment backend must execute saved-credential operations",
     );
   });
   it("uses production OAuth with Basic Auth and does not echo provider error bodies", async () => {

@@ -151,3 +151,23 @@ export function requireBlindReceiptResult(value: unknown, countId: string): Reco
   if (result["replayed"] !== true) requireGoodsReceiptResult(result["lifecycle_result"]);
   return result;
 }
+
+export function requireReceivingReviewResult(
+  value: unknown,
+  countId: string,
+  decision: "approved" | "rejected",
+): RecordValue {
+  const result = object(value, "The receiving review was not confirmed.");
+  if (result["ok"] !== true || result["count_id"] !== countId)
+    throw new Error("The receiving review does not match this count. Refresh before retrying.");
+  if (decision === "rejected") {
+    if (result["status"] !== "rejected") throw new Error("Receiving rejection was not confirmed.");
+  } else if (result["status"] === "posted") {
+    if (result["stock_posted"] !== true || !uuid(result["grn_id"]))
+      throw new Error("The approved receiving lacks its saved GRN.");
+    requireBlindReceiptResult(result["posting_result"], countId);
+  } else if (result["status"] !== "approved" || result["stock_posted"] !== false) {
+    throw new Error("The receiving approval or posting state was not confirmed.");
+  }
+  return result;
+}

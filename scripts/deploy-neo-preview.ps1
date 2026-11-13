@@ -48,6 +48,10 @@ Write-Host "Generated Worker: $($config.name)"
 # Force the existing original Worker.
 $config.name = $EXPECTED_WORKER
 
+# Runtime settings belong to the existing Worker. A generated build has no
+# vars; deploying it must not erase saved backend routing or provider settings.
+$config | Add-Member -NotePropertyName "keep_vars" -NotePropertyValue $true -Force
+
 # Set the account explicitly.
 if ($config.PSObject.Properties.Name -contains "account_id") {
     $config.account_id = $EXPECTED_ACCOUNT
@@ -75,6 +79,10 @@ if ($verify.name -ne $EXPECTED_WORKER) {
 
 if ($verify.account_id -ne $EXPECTED_ACCOUNT) {
     throw "WRONG CLOUDFLARE ACCOUNT. Deployment blocked."
+}
+
+if ($verify.keep_vars -ne $true) {
+    throw "Runtime variable preservation disabled. Deployment blocked."
 }
 
 # Confirm that the original Worker already exists.

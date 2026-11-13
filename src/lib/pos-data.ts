@@ -24,6 +24,27 @@ import {
 } from "@/lib/pos";
 import { withGuardCapture } from "@/lib/guard-violations";
 
+/** Advisory only: the database stock gate still validates quantities when sending. */
+export function usePosStockAvailability(branchId: string | null | undefined) {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none"],
+    enabled: Boolean(organizationId && branchId),
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await guardedRpc<Array<{ menu_item_id: string; available: boolean; reason: string | null }>>(
+        supabase, "neo_pos_menu_availability", { _branch: branchId },
+      );
+      if (error) throw error;
+      const unavailable = new Map<string, string>();
+      for (const row of data ?? []) {
+        if (row.available === false) unavailable.set(row.menu_item_id, row.reason || "Out of stock");
+      }
+      return unavailable;
+    },
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * Reference data
  * ------------------------------------------------------------------ */

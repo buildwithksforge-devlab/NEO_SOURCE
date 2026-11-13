@@ -80,8 +80,8 @@ export function ApprovedReceivingPosting() {
   if (!canPost) return null;
   return (
     <SectionCard
-      title="Previously Approved Counts Awaiting Posting"
-      description="These are legacy approvals awaiting the older separate posting step. New approvals now update stock and create the linked GRN atomically."
+      title="Approved Counts Awaiting GRN"
+      description="These counts have independent approval but have not yet entered stock. A receiving manager can post them here to create the linked GRN."
     >
       <div className="mb-4 flex justify-end">
         <Button

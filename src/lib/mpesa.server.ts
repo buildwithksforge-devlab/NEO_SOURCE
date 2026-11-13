@@ -91,7 +91,7 @@ export async function loadMpesaCredentials(
   if (error) {
     if (/invalid api key/i.test(error.message)) {
       throw new Error(
-        "The app's Supabase server key is invalid. Update SUPABASE_SERVICE_ROLE_KEY in the server environment; changing M-Pesa credentials will not fix this database connection.",
+        "Privileged M-Pesa execution is unavailable on this host. The Lovable-managed payment backend must execute saved-credential operations; do not retrieve its managed service-role key or retry a payment to repair this connection.",
       );
     }
     throw new Error(error.message);
@@ -327,6 +327,18 @@ export async function stkQuery(
   }
 }
 
+/** Daraja's compact transaction clock is Kenyan local time, not a SQL timestamp. */
+export function darajaTransactionDate(value: unknown): string | null {
+  if (typeof value !== "string" && !(typeof value === "number" && Number.isSafeInteger(value))) return null;
+  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(String(value).trim());
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number) as [number, number, number, number, number, number];
+  if (year < 1970 || month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return null;
+  const clock = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (clock.getUTCFullYear() !== year || clock.getUTCMonth() !== month - 1 || clock.getUTCDate() !== day) return null;
+  return new Date(clock.getTime() - 3 * 60 * 60 * 1000).toISOString();
+}
+
 /** Extracts the fields NEØ stores from an STK callback body. */
 export function readStkCallback(payload: unknown): {
   checkoutRequestId: string | null;
@@ -351,7 +363,7 @@ export function readStkCallback(payload: unknown): {
     resultCode: darajaResultCode(code),
     resultDesc: String(cb?.["ResultDesc"] ?? ""),
     receipt: receipt ? String(receipt) : null,
-    transactionDate: txnDate ? String(txnDate) : null,
+    transactionDate: darajaTransactionDate(txnDate),
     amount: amount === null || amount === undefined ? null : Number(amount),
   };
 }

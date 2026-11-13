@@ -1,3 +1,4 @@
+import { mpesaResultApplied } from "@/lib/mpesa-application-result";
 /**
  * Safaricom Daraja STK callback receiver.
  *
@@ -159,7 +160,7 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
           _source: "callback",
         });
 
-        if (applied.error) {
+        if (applied.error || !mpesaResultApplied(applied.data, verifiedCode)) {
           // Record the failure so it can be reconciled, and let Safaricom retry.
           await admin.from("mpesa_callback_events").insert({
             organization_id: organizationId,
@@ -167,7 +168,7 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
             payload: payload as Record<string, unknown>,
             accepted: false,
             transaction_id: transactionId,
-            detail: `Could not apply result: ${applied.error.message}`,
+            detail: applied.error ? `Could not apply result: ${applied.error.message}` : "Database did not confirm atomic application of the provider result.",
             retryable: true,
           });
           return new Response("Could not apply callback", { status: 500 });

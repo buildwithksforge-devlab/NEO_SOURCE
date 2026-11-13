@@ -1,4 +1,6 @@
 import { protectDynamicResponse } from "./lib/web-response-policy";
+import { forwardManagedMpesaCallback } from "./lib/mpesa-callback-relay";
+import { managedRequestDeadline, managedTransportFailure } from "./lib/managed-request-deadline";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -14,6 +16,9 @@ const LOVABLE_ORIGIN = "https://horizon-prime-os.lovable.app";
 // These production IDs were compared with Horizon's public client on 13 Nov.
 // This is an allowlist of operations, never an arbitrary URL/database proxy.
 const LOVABLE_MPESA_FUNCTIONS = new Map([
+  // Guest handlers are present in the supplied export 25 and retain scoped DB starts.
+  ["1ef9d0260286ca208a4e39b86f242b97adf2a388b6d780f95a36143e976bc18c", "payment"],
+  ["1029e96261143a6cd861d02888c8ee3c2f5ec1654855449940497f839f6bf169", "payment"],
   ["a298d96ac388c4c939b606b376547f88b23dbf95f9c193d59a8926c1baf2f8c0", "settings"],
   ["ad043ee140ba978f053a297c76e78345643b42f3bfd28eee8ad60f618cde9855", "connection"],
   ["9da0afc433195f41243eb2d86b167de79fb5b2707cfbb1bda8088afd3d76f3fd", "payment"],
@@ -63,6 +68,9 @@ export async function forwardLovableMpesaRequest(
       503,
     );
   }
+  if (operation === "payment" && setting("NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED") !== "true") {
+    return fail("Payment callbacks must be routed to the managed backend before forwarding collections.", 503);
+  }
   const contentType = request.headers.get("content-type");
   if (contentType && contentType.split(";")[0]?.trim() !== "application/json") {
     return fail("Only JSON server-function requests are supported.", 415);
@@ -103,13 +111,14 @@ export async function forwardLovableMpesaRequest(
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
+  const deadline = managedRequestDeadline(request.signal);
   try {
-    const upstream = await upstreamFetch(`${LOVABLE_ORIGIN}${url.pathname}`, {
+    const upstream = await upstreamFetch.call(globalThis, `${LOVABLE_ORIGIN}${url.pathname}`, {
       method: "POST",
       headers,
       body: size ? body : null,
-      redirect: "error",
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(45000)]),
+      redirect: "manual",
+      signal: deadline.signal,
     });
     if (upstream.status >= 300 && upstream.status < 400) {
       return fail("The original backend returned an unexpected redirect.", 502);
@@ -133,12 +142,15 @@ export async function forwardLovableMpesaRequest(
         headers: responseHeaders,
       }),
     );
-  } catch {
+  } catch (error) {
+    console.error("Managed M-Pesa transport failed", managedTransportFailure(error));
     // Never retry/fall back to local dispatch: the original may have accepted it.
     return fail(
       "The original backend response was not received. Check the existing attempt before retrying; no automatic retry was made.",
       502,
     );
+  } finally {
+    deadline.dispose();
   }
 }
 
@@ -180,6 +192,11 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const callback = await forwardManagedMpesaCallback(
+        request,
+        env && typeof env === "object" ? (env as Record<string, unknown>) : {},
+      );
+      if (callback) return callback;
       const forwarded = await forwardLovableMpesaRequest(
         request,
         env && typeof env === "object" ? (env as Record<string, unknown>) : {},

@@ -4,7 +4,7 @@ Date: 12 November 2026. **Design only; not implemented or verified from the inde
 
 **13 November local follow-up:** after this investigation the user authorized local code repairs/tests. The generic POS M-Pesa entry and fail-closed provider readiness are being repaired and tracked in [the execution queue](NEO-LAUNCH-EXECUTION-QUEUE-2026-11-13.md). This does not implement the proposed Cloudflare-to-Lovable bridge, change credentials, install migrations or establish live collections.
 
-**13 November clarification:** the bridge below is a fallback design, not a mandatory replacement for the existing direct server implementation. The user reports that Cloudflare runs the local source against the same original database and SQL Editor changes. If a valid privileged key for that project can be provisioned in the Worker runtime, existing server handlers can use it directly. Read-only verification reproduced HTTP 200 for the local public key and HTTP 401 / Invalid API key for the local server key; the deployed Worker credential has not been verified. Shared database updates do not themselves synchronize runtime secrets or install local migrations.
+**13 November superseding clarification:** Lovable has confirmed its managed service-role key is inaccessible. Do not pursue retrieval/provisioning of that key as the solution. Existing read-only evidence of local server-key HTTP401 identifies a privileged execution boundary failure; use verified server execution inside the existing managed backend. See MPESA-MANAGED-EXECUTION-AUDIT-2026-11-13.md for the local repairs and remaining managed-side verification.
 
 ## 13 November: optional relay implemented locally in the existing server entry
 

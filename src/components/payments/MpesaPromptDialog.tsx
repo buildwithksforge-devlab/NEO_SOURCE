@@ -37,6 +37,9 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   initialAmount?: number;
   availabilityBlocked?: boolean;
+  paymentId?: string;
+  recoveryOnly?: boolean;
+  triggerLabel?: string;
 };
 
 const TERMINAL = new Set(["success", "failed", "cancelled", "timeout", "unknown"]);
@@ -52,6 +55,9 @@ export function MpesaPromptDialog({
   onOpenChange,
   initialAmount,
   availabilityBlocked = false,
+  paymentId,
+  recoveryOnly = false,
+  triggerLabel = "M-Pesa prompt",
 }: Props) {
   const charge = useServerFn(chargeWithMpesa);
   const reconcile = useServerFn(reconcileMpesaTransaction);
@@ -68,6 +74,8 @@ export function MpesaPromptDialog({
   );
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [lookupPending, setLookupPending] = useState(true);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const sendLock = useRef(false);
 
   useEffect(() => {
@@ -75,8 +83,33 @@ export function MpesaPromptDialog({
       setTransactionId(null);
       setMessage(null);
       setAmount(balance > 0 ? balance.toFixed(2) : "");
+      setLookupPending(true);
     }
   }, [open, balance]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLookupPending(true); setLookupError(null); setTransactionId(null);
+    void (async () => {
+      try {
+        let query = supabase.from("mpesa_transactions").select("id, amount")
+          .eq("source_record_id", sourceRecordId)
+          .in("source_module", sourceModule === "folio" ? ["folio", "guest_folio"] : ["pos_order"]);
+        query = paymentId ? query.eq("payment_id", paymentId)
+          : query.in("status", ["initiated", "pending", "unknown"]).is("applied_at", null);
+        const result = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (result.error) throw result.error;
+        if (!cancelled && result.data) {
+          setTransactionId(result.data.id); setAmount(Number(result.data.amount).toFixed(2));
+          setMessage("Existing M-Pesa attempt found. Check its Safaricom status; no new prompt was sent.");
+        }
+      } catch {
+        if (!cancelled) setLookupError("The existing payment attempt could not be checked. Close and reopen this dialog; do not send another prompt.");
+      } finally { if (!cancelled) setLookupPending(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [open, sourceModule, sourceRecordId, paymentId]);
 
   const status = useQuery({
     queryKey: ["mpesa-transaction", transactionId],
@@ -151,7 +184,7 @@ export function MpesaPromptDialog({
   });
 
   const check = useMutation({
-    mutationFn: async () => reconcile({ data: { transactionId: transactionId! } }),
+    mutationFn: async (id: string) => reconcile({ data: { transactionId: id } }),
     onSuccess: (result) => {
       setMessage(result.detail || `Status: ${result.status}`);
       void status.refetch();
@@ -164,6 +197,7 @@ export function MpesaPromptDialog({
   const setupReady =
     !availabilityBlocked && !setup.isPending && !setup.isError && setup.data?.ready === true;
   const blocked =
+    recoveryOnly || lookupPending || Boolean(lookupError) ||
     !setupReady ||
     !phone.trim() ||
     !Number.isSafeInteger(amountValue) ||
@@ -202,20 +236,23 @@ export function MpesaPromptDialog({
       {controlledOpen === undefined ? (
         <DialogTrigger asChild>
           <Button size="sm" variant="outline">
-            <Smartphone className="mr-2 size-4" /> M-Pesa prompt
+            <Smartphone className="mr-2 size-4" /> {triggerLabel}
           </Button>
         </DialogTrigger>
       ) : null}
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Charge to M-Pesa</DialogTitle>
+          <DialogTitle>{recoveryOnly ? "M-Pesa payment status" : "Charge to M-Pesa"}</DialogTitle>
           <DialogDescription>
-            Sends an STK prompt to the customer. The payment stays pending until Safaricom confirms
-            it.
+            {recoveryOnly ? "Checks the existing collection with Safaricom. This does not send a prompt or collect money."
+              : "Sends an STK prompt to the customer. The payment stays pending until Safaricom confirms it."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          {lookupPending ? <p role="status" className="text-sm text-muted-foreground">Checking for an existing M-Pesa attempt…</p> : null}
+          {lookupError ? <p role="alert" className="text-sm text-destructive">{lookupError}</p> : null}
+          {recoveryOnly && !lookupPending && !lookupError && !transactionId ? <p role="status" className="text-sm">No STK collection is linked to this payment. No prompt was sent.</p> : null}
           {!setupReady ? (
             <p role="alert" className="text-sm text-destructive">
               {setupMessage}
@@ -229,7 +266,7 @@ export function MpesaPromptDialog({
               onChange={(e) => setPhone(e.target.value)}
               placeholder="07XX XXX XXX"
               inputMode="tel"
-              disabled={Boolean(transactionId) || send.isPending}
+              disabled={recoveryOnly || lookupPending || Boolean(transactionId) || send.isPending}
             />
           </div>
           <div className="grid gap-1.5">
@@ -239,7 +276,7 @@ export function MpesaPromptDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
-              disabled={Boolean(transactionId) || send.isPending}
+              disabled={recoveryOnly || lookupPending || Boolean(transactionId) || send.isPending}
             />
             <p className="text-xs text-muted-foreground">
               Outstanding balance {balance.toFixed(2)}
@@ -271,12 +308,11 @@ export function MpesaPromptDialog({
                 <p className="self-center text-xs text-muted-foreground">
                   Check Recent collections before sending another prompt.
                 </p>
-              ) : (
-                <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
+              ) : null}
+                <Button variant="outline" disabled={check.isPending || lookupPending} onClick={() => { if (transactionId) check.mutate(transactionId); }}>
                   {check.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Check status
+                  Check Safaricom status
                 </Button>
-              )}
               <Button onClick={() => setOpen(false)}>Close</Button>
             </>
           ) : (
@@ -284,7 +320,7 @@ export function MpesaPromptDialog({
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Close
               </Button>
-              <Button
+              {!recoveryOnly ? <Button
                 disabled={blocked}
                 onClick={() => {
                   if (blocked || sendLock.current) return;
@@ -294,7 +330,7 @@ export function MpesaPromptDialog({
               >
                 {send.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Send prompt
-              </Button>
+              </Button> : null}
             </>
           )}
         </DialogFooter>

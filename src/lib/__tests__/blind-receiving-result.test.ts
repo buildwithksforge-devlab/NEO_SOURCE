@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import { requireBlindReceiptResult } from "@/lib/supply-command-result";
+import { requireBlindReceiptResult, requireReceivingReviewResult } from "@/lib/supply-command-result";
 const count = "b6000000-0000-4000-8000-000000000050",
   grn = "b6000000-0000-4000-8000-000000000060";
 const safetyMigration = readFileSync(
@@ -13,6 +13,28 @@ const postingComponent = readFileSync(
   "utf8",
 );
 describe("approved receiving screen evidence", () => {
+  it("recognizes saved independent approval awaiting a receiving manager", () => {
+    const value = { ok: true, count_id: count, status: "approved", stock_posted: false };
+    expect(requireReceivingReviewResult(value, count, "approved")).toEqual(value);
+  });
+  it("verifies the linked GRN and nested stock posting on atomic approval", () => {
+    const value = { ok: true, count_id: count, status: "posted", stock_posted: true, grn_id: grn,
+      posting_result: { ok: true, count_id: count, status: "posted", grn_id: grn,
+        lifecycle_result: { ok: true, receipt_id: grn, grn_number: "GRN-1", posting: { status: "pending-finance" } } } };
+    expect(requireReceivingReviewResult(value, count, "approved")).toEqual(value);
+    expect(() => requireReceivingReviewResult({ ...value, posting_result: {} }, count, "approved")).toThrow();
+  });
+  it.each([
+    { ok: true, count_id: "other", status: "approved", stock_posted: false },
+    { ok: true, count_id: count, status: "approved", stock_posted: true },
+    { ok: true, count_id: count, status: "posted", stock_posted: true, grn_id: "invalid" },
+    { ok: false, count_id: count, status: "rejected" },
+  ])("rejects ambiguous receiving decisions %j", (value) => {
+    expect(() => requireReceivingReviewResult(value, count, "approved")).toThrow();
+  });
+  it("recognizes rejection without pretending a GRN was created", () => {
+    expect(requireReceivingReviewResult({ok:true,count_id:count,status:"rejected"},count,"rejected")["status"]).toBe("rejected");
+  });
   it.each([
     null,
     {},
