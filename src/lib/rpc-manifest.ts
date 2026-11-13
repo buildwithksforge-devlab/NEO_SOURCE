@@ -146,11 +146,9 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_guest_cart_add_item: "authenticated",
   neo_guest_folio_projection: "authenticated",
   neo_guest_payment_availability: "authenticated",
-  neo_guest_folio_mpesa_start: "authenticated",
   neo_guest_room_offers: "authenticated",
   neo_guest_create_booking: "authenticated",
   neo_guest_reservation_position: "authenticated",
-  neo_guest_deposit_pay: "authenticated",
   neo_rider_me: "authenticated",
   neo_rider_transport_jobs: "authenticated",
   neo_rider_transport_advance: "authenticated",
@@ -315,7 +313,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_index_coverage_scan: "authenticated",
   neo_rbac_model_health: "authenticated",
 
-  // Human Resources Ã¢â‚¬â€ staff-account Ã¢â€ â€™ employee-record reconciliation
+  // Human Resources Ã¢â‚¬â€ staff-account Ã¢â€ â€™ employee-record reconciliation
   neo_hr_reconcile_staff: "authenticated",
   neo_hr_leave_sync_entitlements: "authenticated",
 
@@ -476,7 +474,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_menu_assign_station: "authenticated",
   neo_menu_import_batches: "authenticated",
   neo_menu_departments: "authenticated",
-  // Shared property Ã¢â€ â€™ department Ã¢â€ â€™ station Ã¢â€ â€™ worker selector contract.
+  // Shared property Ã¢â€ â€™ department Ã¢â€ â€™ station Ã¢â€ â€™ worker selector contract.
   neo_scoped_departments: "authenticated",
   neo_scoped_stations: "authenticated",
   neo_scoped_workers: "authenticated",
@@ -501,6 +499,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_delivery_department_metrics: "authenticated",
   neo_delivery_rider_candidates: "authenticated",
   neo_delivery_rider_directory: "authenticated",
+  neo_recipe_sheet_save: "authenticated",
+  neo_recipe_activate: "authenticated",
   neo_recipe_location_readiness: "authenticated",
   neo_workforce_summary: "authenticated",
   neo_workforce_people: "authenticated",
@@ -652,12 +652,13 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_mpesa_settings_get: "authenticated",
   neo_mpesa_settings_save: "authenticated",
   neo_mpesa_record_check: "authenticated",
-  neo_mpesa_txn_start: "authenticated",
+  neo_mpesa_collection_start: "authenticated",
+  neo_mpesa_guest_deposit_start: "authenticated",
+  neo_mpesa_claim_dispatch: "service_role",
   neo_delivery_guest_mpesa_start: "authenticated",
   neo_mpesa_can_collect: "authenticated",
   neo_mpesa_collection_status: "authenticated",
   neo_mpesa_apply_result: "service_role",
-  neo_mpesa_retry_callback: "authenticated",
   neo_payment_readiness: "authenticated",
   neo_integration_record_test: "authenticated",
   neo_payment_register: "authenticated",

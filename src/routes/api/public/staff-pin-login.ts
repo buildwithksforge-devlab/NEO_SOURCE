@@ -1,12 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const DEVICE_TOKEN = /^neowd_[0-9a-f]{64}$/;
-const STAFF_PIN_BROKER_URL =
-  "https://horizon-prime-os.lovable.app/api/public/staff-pin-login";
-const CLOUDFLARE_APP_ORIGIN =
-  "https://neo-preview.neo-hospitality.workers.dev";
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STAFF_PIN_BROKER_URL = "https://horizon-prime-os.lovable.app/api/public/staff-pin-login";
+const CLOUDFLARE_APP_ORIGIN = "https://neo-preview.neo-hospitality.workers.dev";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type EdgeResponse = {
   token_hash?: string;
@@ -25,42 +22,31 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function safeText(
-  value: unknown,
-  fallback: string,
-  maximum = 250,
-) {
+function safeText(value: unknown, fallback: string, maximum = 250) {
   if (typeof value !== "string") {
     return fallback;
   }
 
   const cleaned = value.trim();
 
-  return cleaned.length > 0
-    ? cleaned.slice(0, maximum)
-    : fallback;
+  return cleaned.length > 0 ? cleaned.slice(0, maximum) : fallback;
 }
 
-export const Route = createFileRoute(
-  "/api/public/staff-pin-login",
-)({
+export const Route = createFileRoute("/api/public/staff-pin-login")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const authorization =
-          request.headers.get("authorization") ?? "";
+        const authorization = request.headers.get("authorization") ?? "";
 
-        const deviceToken =
-          authorization.startsWith("Bearer ")
-            ? authorization.slice(7).trim()
-            : "";
+        const deviceToken = authorization.startsWith("Bearer ")
+          ? authorization.slice(7).trim()
+          : "";
 
         if (!DEVICE_TOKEN.test(deviceToken)) {
           return response(
             {
               error: "device",
-              message:
-                "This device is not authorised for staff PIN sign-in.",
+              message: "This device is not authorised for staff PIN sign-in.",
             },
             401,
           );
@@ -69,8 +55,7 @@ export const Route = createFileRoute(
         let body: Record<string, unknown>;
 
         try {
-          const raw =
-            await request.text();
+          const raw = await request.text();
 
           if (raw.length > 256) {
             return response(
@@ -82,16 +67,9 @@ export const Route = createFileRoute(
             );
           }
 
-          body =
-            raw.length > 0
-              ? JSON.parse(raw)
-              : {};
+          body = raw.length > 0 ? JSON.parse(raw) : {};
 
-          if (
-            !body ||
-            typeof body !== "object" ||
-            Array.isArray(body)
-          ) {
+          if (!body || typeof body !== "object" || Array.isArray(body)) {
             return response(
               {
                 error: "invalid_request",
@@ -110,8 +88,7 @@ export const Route = createFileRoute(
           );
         }
 
-        const pin =
-          String(body["pin"] ?? "");
+        const pin = String(body["pin"] ?? "");
 
         if (!/^[0-9]{6}$/.test(pin)) {
           return response(
@@ -123,47 +100,34 @@ export const Route = createFileRoute(
           );
         }
 
-        const controller =
-          new AbortController();
+        const controller = new AbortController();
 
-        const timeout =
-          setTimeout(
-            () => controller.abort(),
-            15_000,
-          );
+        const timeout = setTimeout(() => controller.abort(), 15_000);
 
         let upstream: Response;
 
         try {
-          upstream = await fetch(
-            STAFF_PIN_BROKER_URL,
-            {
-              method: "POST",
-              headers: {
-                Origin: CLOUDFLARE_APP_ORIGIN,
-                "Content-Type": "application/json",
-                "x-neo-device-token": deviceToken,
-              },
-              body: JSON.stringify({ pin }),
-              signal: controller.signal,
+          upstream = await fetch(STAFF_PIN_BROKER_URL, {
+            method: "POST",
+            headers: {
+              Origin: CLOUDFLARE_APP_ORIGIN,
+              "Content-Type": "application/json",
+              "x-neo-device-token": deviceToken,
             },
-          );
+            body: JSON.stringify({ pin }),
+            // Do not carry a device credential/PIN to a redirect target.
+            redirect: "error",
+            signal: controller.signal,
+          });
         } catch (error) {
-          console.error(
-            "[staff-pin-login] edge_request_failed",
-            {
-              name:
-                error instanceof Error
-                  ? error.name.slice(0, 80)
-                  : "unknown",
-            },
-          );
+          console.error("[staff-pin-login] edge_request_failed", {
+            name: error instanceof Error ? error.name.slice(0, 80) : "unknown",
+          });
 
           return response(
             {
               error: "server_error",
-              message:
-                "Staff PIN sign-in is temporarily unavailable.",
+              message: "Staff PIN sign-in is temporarily unavailable.",
             },
             502,
           );
@@ -174,30 +138,22 @@ export const Route = createFileRoute(
         let payload: EdgeResponse;
 
         try {
-          const raw =
-            await upstream.text();
+          const raw = await upstream.text();
 
           if (raw.length > 4096) {
             throw new Error("Oversized Edge Function response");
           }
 
-          payload =
-            raw.length > 0
-              ? JSON.parse(raw)
-              : {};
+          payload = raw.length > 0 ? JSON.parse(raw) : {};
         } catch {
-          console.error(
-            "[staff-pin-login] edge_response_invalid",
-            {
-              status: upstream.status,
-            },
-          );
+          console.error("[staff-pin-login] edge_response_invalid", {
+            status: upstream.status,
+          });
 
           return response(
             {
               error: "server_error",
-              message:
-                "Staff PIN sign-in is temporarily unavailable.",
+              message: "Staff PIN sign-in is temporarily unavailable.",
             },
             502,
           );
@@ -206,39 +162,24 @@ export const Route = createFileRoute(
         if (!upstream.ok) {
           return response(
             {
-              error: safeText(
-                payload.error,
-                "server_error",
-                80,
-              ),
-              message: safeText(
-                payload.message,
-                "Staff PIN sign-in is temporarily unavailable.",
-              ),
+              error: safeText(payload.error, "server_error", 80),
+              message: safeText(payload.message, "Staff PIN sign-in is temporarily unavailable."),
             },
             upstream.status,
           );
         }
 
-        const loginToken =
-          String(payload.token_hash ?? "");
+        const loginToken = String(payload.token_hash ?? "");
 
-        const branchId =
-          String(payload.branch_id ?? "");
+        const branchId = String(payload.branch_id ?? "");
 
-        if (
-          loginToken.length === 0 ||
-          !UUID.test(branchId)
-        ) {
-          console.error(
-            "[staff-pin-login] edge_contract_incomplete",
-          );
+        if (loginToken.length === 0 || !UUID.test(branchId)) {
+          console.error("[staff-pin-login] edge_contract_incomplete");
 
           return response(
             {
               error: "server_error",
-              message:
-                "Staff PIN sign-in is temporarily unavailable.",
+              message: "Staff PIN sign-in is temporarily unavailable.",
             },
             502,
           );

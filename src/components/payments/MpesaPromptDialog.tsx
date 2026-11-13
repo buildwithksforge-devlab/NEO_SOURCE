@@ -4,7 +4,7 @@
  * payment is confirmed only when Safaricom's own result arrives, either through
  * the callback or through an explicit status check.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -33,6 +33,10 @@ type Props = {
   defaultPhone?: string | null;
   description?: string;
   onSettled?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialAmount?: number;
+  availabilityBlocked?: boolean;
 };
 
 const TERMINAL = new Set(["success", "failed", "cancelled", "timeout", "unknown"]);
@@ -44,15 +48,27 @@ export function MpesaPromptDialog({
   defaultPhone,
   description,
   onSettled,
+  open: controlledOpen,
+  onOpenChange,
+  initialAmount,
+  availabilityBlocked = false,
 }: Props) {
   const charge = useServerFn(chargeWithMpesa);
   const reconcile = useServerFn(reconcileMpesaTransaction);
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [phone, setPhone] = useState(defaultPhone ?? "");
-  const [amount, setAmount] = useState(balance > 0 ? balance.toFixed(2) : "");
+  const [amount, setAmount] = useState(
+    (initialAmount ?? balance) > 0 ? (initialAmount ?? balance).toFixed(2) : "",
+  );
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const sendLock = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -120,12 +136,18 @@ export function MpesaPromptDialog({
       setMessage(result.detail);
       if (result.ok && result.transactionId) {
         setTransactionId(result.transactionId);
-        toast.success("Prompt sent to the customer's phone");
+        if (result.status === "unknown") toast.warning(result.detail);
+        else if (result.reused) toast.info(result.detail);
+        else
+          toast.success("Safaricom accepted the prompt request. Awaiting customer confirmation.");
       } else {
         toast.error(result.detail);
       }
     },
     onError: (error: Error) => toast.error(error.message),
+    onSettled: () => {
+      sendLock.current = false;
+    },
   });
 
   const check = useMutation({
@@ -138,25 +160,38 @@ export function MpesaPromptDialog({
   });
 
   const amountValue = Number(amount);
+  const setup = useMpesaCollectionStatus();
+  const setupReady =
+    !availabilityBlocked && !setup.isPending && !setup.isError && setup.data?.ready === true;
   const blocked =
-    !phone.trim() || !(amountValue > 0) || amountValue > balance + 0.005 || send.isPending;
+    !setupReady ||
+    !phone.trim() ||
+    !Number.isSafeInteger(amountValue) ||
+    !(amountValue > 0) ||
+    amountValue > balance + 0.005 ||
+    Boolean(transactionId) ||
+    send.isPending;
 
   // The workspace configuration is the single source of truth: when M-Pesa is
   // not switched on, the action says so up front instead of failing on send,
   // and points at the one place it is set up.
-  const setup = useMpesaCollectionStatus();
-  if (setup.data && !setup.data.ready) {
+  const setupMessage = setup.isPending
+    ? "Checking M-Pesa availability…"
+    : setup.isError
+      ? "M-Pesa availability could not be verified. Retry before sending a prompt."
+      : (setup.data?.reason ?? "M-Pesa is not available for this workspace.");
+  if (!setupReady && controlledOpen === undefined) {
     return (
       <div className="inline-flex flex-col gap-1">
-        <Button size="sm" variant="outline" disabled title={setup.data.reason ?? undefined}>
+        <Button size="sm" variant="outline" disabled title={setupMessage}>
           <Smartphone className="mr-2 size-4" />
-          {setup.data.configured ? "M-Pesa switched off" : "M-Pesa not set up"}
+          {setup.isPending ? "Checking M-Pesa…" : "M-Pesa unavailable"}
         </Button>
         <Link
           to="/admin/payments-mpesa"
           className="text-[11px] text-muted-foreground underline underline-offset-2"
         >
-          {setup.data.reason ?? "Open M-Pesa settings"}
+          {setupMessage}
         </Link>
       </div>
     );
@@ -164,11 +199,13 @@ export function MpesaPromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Smartphone className="mr-2 size-4" /> M-Pesa prompt
-        </Button>
-      </DialogTrigger>
+      {controlledOpen === undefined ? (
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline">
+            <Smartphone className="mr-2 size-4" /> M-Pesa prompt
+          </Button>
+        </DialogTrigger>
+      ) : null}
 
       <DialogContent>
         <DialogHeader>
@@ -179,6 +216,11 @@ export function MpesaPromptDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          {!setupReady ? (
+            <p role="alert" className="text-sm text-destructive">
+              {setupMessage}
+            </p>
+          ) : null}
           <div className="grid gap-1.5">
             <Label htmlFor="mpesa-phone">Customer phone</Label>
             <Input
@@ -187,7 +229,7 @@ export function MpesaPromptDialog({
               onChange={(e) => setPhone(e.target.value)}
               placeholder="07XX XXX XXX"
               inputMode="tel"
-              disabled={Boolean(transactionId)}
+              disabled={Boolean(transactionId) || send.isPending}
             />
           </div>
           <div className="grid gap-1.5">
@@ -197,10 +239,11 @@ export function MpesaPromptDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
-              disabled={Boolean(transactionId)}
+              disabled={Boolean(transactionId) || send.isPending}
             />
             <p className="text-xs text-muted-foreground">
               Outstanding balance {balance.toFixed(2)}
+              {" · M-Pesa requires a whole KES amount."}
             </p>
           </div>
           {message ? (
@@ -237,10 +280,22 @@ export function MpesaPromptDialog({
               <Button onClick={() => setOpen(false)}>Close</Button>
             </>
           ) : (
-            <Button disabled={blocked} onClick={() => send.mutate()}>
-              {send.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Send prompt
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+              <Button
+                disabled={blocked}
+                onClick={() => {
+                  if (blocked || sendLock.current) return;
+                  sendLock.current = true;
+                  send.mutate();
+                }}
+              >
+                {send.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Send prompt
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

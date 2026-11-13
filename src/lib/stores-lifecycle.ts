@@ -353,6 +353,17 @@ export function useReceivableOrders() {
 export function outstandingOf(line: Record<string, unknown>): number {
   const ordered = Number(line["quantity"] ?? 0);
   const cancelled = Number(line["cancelled_quantity"] ?? 0);
-  const received = Number(line["received_quantity"] ?? 0);
-  return Math.max(ordered - cancelled - received, 0);
+  // Physical deliveries include goods that were rejected. Only accepted goods
+  // fulfil the order; rejected goods may still need replacing by the supplier.
+  const accepted = Number(
+    line["accepted_quantity"] ??
+      Math.max(
+        Number(line["received_quantity"] ?? 0) -
+          Number(line["rejected_quantity"] ?? 0) -
+          Number(line["damaged_quantity"] ?? 0) -
+          Number(line["returned_quantity"] ?? 0),
+        0,
+      ),
+  );
+  return Math.max(ordered - cancelled - accepted, 0);
 }

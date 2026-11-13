@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { guardedRpc } from "@/lib/rpc-guard";
 import {
   getMpesaSettings,
   saveMpesaSettings,
@@ -131,7 +130,7 @@ function MpesaAdminPage() {
     },
   });
 
-  /** Confirmations the provider sent that could not be posted, awaiting a safe re-apply. */
+  /** Unresolved callbacks require a fresh provider check, never raw payload replay. */
   const failedCallbacks = useQuery({
     queryKey: ["mpesa-failed-callbacks", filterKey],
     enabled: Boolean(settings.data?.authorised),
@@ -150,16 +149,29 @@ function MpesaAdminPage() {
   });
 
   const retryCallback = useMutation({
-    mutationFn: async (eventId: string) => {
-      const { data, error } = await guardedRpc(supabase, "neo_mpesa_retry_callback", {
-        _event: eventId,
-      });
-      if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+    mutationFn: async (event: FailedCallback) => {
+      let transactionId = event.transaction_id;
+      if (!transactionId && event.checkout_request_id) {
+        const { data, error } = await supabase
+          .from("mpesa_transactions")
+          .select("id")
+          .eq("checkout_request_id", event.checkout_request_id)
+          .maybeSingle();
+        if (error) throw new Error(error.message);
+        transactionId = data?.id ?? null;
+      }
+      if (!transactionId)
+        throw new Error(
+          "No matching collection is available. Do not confirm or send another prompt.",
+        );
+      return reconcile({ data: { transactionId } });
     },
     onSuccess: (result) => {
-      if (result["applied"]) toast.success("Payment re-applied to its transaction.");
-      else toast.warning(String(result["reason"] ?? "The callback could not be re-applied."));
+      if (result.ok) toast.info(result.detail || `Provider status: ${result.status}`);
+      else
+        toast.warning(
+          result.detail || "Safaricom could not verify the payment. It remains unresolved.",
+        );
       void failedCallbacks.refetch();
       void transactions.refetch();
     },
@@ -318,7 +330,7 @@ function MpesaAdminPage() {
     "not-configured": { tone: "warning", text: "Not configured" },
     configured: { tone: "warning", text: "Configured — not yet tested" },
     tested: { tone: "info", text: `Tested on ${s.environment ?? "sandbox"}` },
-    "production-ready": { tone: "success", text: "Live and ready" },
+    "production-ready": { tone: "success", text: "Production configured" },
   };
   const stagePill = stage[s.status ?? "not-configured"] ?? stage["not-configured"]!;
 
@@ -357,6 +369,10 @@ function MpesaAdminPage() {
         </ul>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <StatusPill tone={stagePill.tone}>{stagePill.text}</StatusPill>
+          <span>
+            Connection tests verify authentication. A completed payment is needed to verify
+            collection and confirmation.
+          </span>
           {s.status === "tested" && s.environment === "production" && !s.production_ready ? (
             <span>
               Live collections stay off until a published callback address is saved here and
@@ -659,9 +675,9 @@ function MpesaAdminPage() {
                 <Button
                   size="sm"
                   disabled={retryCallback.isPending}
-                  onClick={() => retryCallback.mutate(e.id)}
+                  onClick={() => retryCallback.mutate(e)}
                 >
-                  Re-apply safely
+                  Check with Safaricom
                 </Button>
               </div>
             ))}

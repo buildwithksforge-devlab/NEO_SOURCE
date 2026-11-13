@@ -106,7 +106,10 @@ const payload = (resultCode: number) => ({
       MerchantRequestID: "mr-1",
       CheckoutRequestID: "ws_CO_1",
       ResultCode: resultCode,
-      ResultDesc: resultCode === 0 ? "The service request is processed successfully." : "Request cancelled by user",
+      ResultDesc:
+        resultCode === 0
+          ? "The service request is processed successfully."
+          : "Request cancelled by user",
       CallbackMetadata: {
         Item: [
           { Name: "Amount", Value: 2500 },
@@ -152,12 +155,12 @@ describe("M-Pesa STK callback", () => {
     transactionOwnerOrg = "org-2";
     const res = await post("tenant-token-1234567890", payload(0));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     expect(rpcCalls).toHaveLength(0);
     expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
       organization_id: "org-1",
       accepted: false,
-      retryable: false,
+      retryable: true,
     });
   });
 
@@ -179,6 +182,17 @@ describe("M-Pesa STK callback", () => {
     queryState.resultCode = "1032";
     await post("tenant-token-1234567890", payload(1032));
     expect(rpcCalls[0]!.args["_result_code"]).toBe(1032);
+  });
+
+  it("rejects a successful callback whose amount only matches after rounding", async () => {
+    const body = payload(0);
+    body.Body.stkCallback.CallbackMetadata.Item[0]!.Value = 2500.4;
+    await post("tenant-token-1234567890", body);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: false,
+    });
   });
 
   it("does not apply an unverified callback result", async () => {
@@ -205,6 +219,16 @@ describe("M-Pesa STK callback", () => {
     });
   });
 
+  it("does not post a payment when Daraja returns an empty result code", async () => {
+    queryState.resultCode = "";
+    const res = await post("tenant-token-1234567890", payload(0));
+    expect(res.status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      retryable: true,
+    });
+  });
+
   it("records a retryable audit entry and asks the provider to retry when applying fails", async () => {
     applyResult = { data: null, error: { message: "deadlock detected" } };
     const res = await post("tenant-token-1234567890", payload(0));
@@ -218,14 +242,22 @@ describe("M-Pesa STK callback", () => {
     expect(String(event!.row["detail"])).toContain("deadlock detected");
   });
 
-  it("logs an unmatched confirmation as not retryable and still acknowledges", async () => {
+  it("retains an unmatched confirmation for provider-verified recovery and requests provider retry", async () => {
     const body = payload(0);
     body.Body.stkCallback.CheckoutRequestID = "ws_CO_unknown";
     const res = await post("tenant-token-1234567890", body);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     const event = inserts.find((i) => i.table === "mpesa_callback_events");
-    expect(event!.row["retryable"]).toBe(false);
+    expect(event!.row["retryable"]).toBe(true);
     expect(rpcCalls).toHaveLength(0);
+  });
+  it("applies an early callback only after its transaction tracking becomes available", async () => {
+    transactionOwnerOrg = "not-yet-matched";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    transactionOwnerOrg = "org-1";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(200);
+    expect(rpcCalls).toHaveLength(1);
   });
 });

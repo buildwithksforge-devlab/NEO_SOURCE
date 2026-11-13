@@ -6,6 +6,14 @@ const migration = readFileSync(
   "supabase/migrations/20261112090000_block_virtual_blind_receiving.sql",
   "utf8",
 );
+const atomicReviewMigration = readFileSync(
+  "supabase/migrations/20261112160000_atomic_blind_receiving_review.sql",
+  "utf8",
+).replace(
+  /-- BEGIN REVIEWED CORE RECEIVING REPAIR[\s\S]*?-- END REVIEWED CORE RECEIVING REPAIR/,
+  "",
+);
+// This suite tests virtual-count refusal; the real-core suite tests posting.
 const org = "00000000-0000-4000-8000-000000000001";
 const branch = "00000000-0000-4000-8000-000000000002";
 const actor = "00000000-0000-4000-8000-000000000003";
@@ -20,6 +28,7 @@ describe("blind receiving virtual-only posting guard", () => {
     db = new PGlite();
     await db.exec(`
       CREATE SCHEMA auth;
+      CREATE ROLE authenticated;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
         SELECT nullif(current_setting('neo.test_actor', true), '')::uuid
       $$;
@@ -29,6 +38,7 @@ describe("blind receiving virtual-only posting guard", () => {
       CREATE FUNCTION public.is_org_admin() RETURNS boolean LANGUAGE sql STABLE AS $$
         SELECT true
       $$;
+      CREATE FUNCTION public.has_permission(text,text) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT true $$;
       CREATE FUNCTION public.neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql STABLE AS $$
         SELECT $1 = '${branch}'::uuid
       $$;
@@ -39,6 +49,11 @@ describe("blind receiving virtual-only posting guard", () => {
         branch_id uuid NOT NULL,
         order_number text NOT NULL,
         status text NOT NULL
+      );
+      CREATE TABLE public.stock_items (
+        id uuid PRIMARY KEY,
+        organization_id uuid NOT NULL,
+        name text NOT NULL
       );
       CREATE TABLE public.stock_locations (
         id uuid PRIMARY KEY,
@@ -78,13 +93,21 @@ describe("blind receiving virtual-only posting guard", () => {
         quantity numeric NOT NULL,
         received_quantity numeric NOT NULL DEFAULT 0,
         cancelled_quantity numeric NOT NULL DEFAULT 0,
-        stock_item_id uuid
+        stock_item_id uuid,
+        description text,
+        unit text
+        , accepted_quantity numeric NOT NULL DEFAULT 0
       );
       CREATE TABLE public.goods_receipts (
         id uuid PRIMARY KEY,
         organization_id uuid NOT NULL,
         order_id uuid NOT NULL
       );
+      CREATE TABLE public.goods_receipt_lines (id uuid PRIMARY KEY);
+      GRANT DELETE ON public.purchase_orders,
+        public.purchase_order_lines,
+        public.goods_receipts,
+        public.goods_receipt_lines TO authenticated;
       CREATE FUNCTION public.neo_stores_receive_goods(
         uuid, uuid, jsonb, uuid, text, text, text, text
       ) RETURNS jsonb LANGUAGE plpgsql AS $$
@@ -98,6 +121,7 @@ describe("blind receiving virtual-only posting guard", () => {
       $$;
     `);
     await db.exec(migration);
+    await db.exec(atomicReviewMigration);
     await db.query("SELECT set_config('neo.test_actor', $1, false)", [actor]);
   }, 30_000);
 
@@ -107,6 +131,7 @@ describe("blind receiving virtual-only posting guard", () => {
         public.neo_blind_receiving_counts,
         public.purchase_order_lines,
         public.purchase_orders,
+        public.stock_items,
         public.stock_locations,
         public.goods_receipts;
     `);

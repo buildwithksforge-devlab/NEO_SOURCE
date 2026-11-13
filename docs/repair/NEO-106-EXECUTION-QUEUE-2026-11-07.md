@@ -1,5 +1,7 @@
 # NEØ execution queue
 
+> Current launch work is tracked in [the 13 November execution queue](NEO-LAUNCH-EXECUTION-QUEUE-2026-11-13.md), with individual local repair/test/backend dependencies. The counts below are the older tracked acceptance snapshot, not a fresh count of defects or a declaration that current repairs are deployed.
+
 Updated 12 November 2026. 106 tracked issues; 2 fully verified closed and 104 with some acceptance/repair work still open. This includes repaired code awaiting workflow proof; it is not a count of untouched defects.
 
 | Stage | Count |

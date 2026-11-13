@@ -1,5 +1,7 @@
 # M-Pesa Daraja security audit
 
+**Follow-up:** additional local duplicate-dispatch, amount, status-query and UI corrections are recorded in [Payment reality check](PAYMENT-REALITY-CHECK-2026-11-12.md), under "M-Pesa completion pass". They require the new `20261112150000` migration and matching app deployment. The production-readiness limitation below still applies.
+
 **Audit date:** 12 November 2026  
 **Repository branch:** `repair/neo-waves-20261106`  
 **Scope:** Local source, migrations, tests, and existing repair evidence. No live credentials were read, logged, copied, or changed. No live callback token was rotated; no deployment, production migration, or real-money transaction was performed.

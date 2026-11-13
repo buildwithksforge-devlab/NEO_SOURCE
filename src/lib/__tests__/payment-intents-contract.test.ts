@@ -37,7 +37,7 @@ describe("payment method catalogue", () => {
 
 describe("checkout screens use the one picker", () => {
   const surfaces = [
-    "src/routes/_shell.pos.orders.$id.tsx",
+    "src/components/pos/PosPaymentDialog.tsx",
     "src/components/events/EventBillDialog.tsx",
     "src/components/pms/DepositPanel.tsx",
     "src/components/pms/ReservationActions.tsx",
@@ -68,7 +68,9 @@ describe("provider intents", () => {
   });
 
   it("keeps provider callback bearer tokens hashed and dispatches each intent once", () => {
-    const migration = read("supabase/migrations/20261112140000_provider_payment_dispatch_safety.sql");
+    const migration = read(
+      "supabase/migrations/20261112140000_provider_payment_dispatch_safety.sql",
+    );
     const gateway = read("src/lib/payment-gateway.functions.ts");
     const open = migration.slice(
       migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_open"),
@@ -83,7 +85,9 @@ describe("provider intents", () => {
     expect(migration).toContain("extensions.digest(convert_to(_token, 'UTF8'), 'sha256')");
     expect(apply).toContain("WHERE callback_token = encode(");
     expect(gateway).toContain("neo_payment_intent_claim_dispatch");
-    expect(gateway).toContain("const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`");
+    expect(gateway).toContain(
+      "const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`",
+    );
     expect(gateway).not.toContain("row.callback_token");
   });
 });
