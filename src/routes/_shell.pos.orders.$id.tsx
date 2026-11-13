@@ -99,6 +99,7 @@ function OrderTerminal() {
   const { can } = useAuth();
   const order = usePosOrder(id);
   const stockOut = usePosStockAvailability(order.data?.branch_id);
+  const [stockIssue, setStockIssue] = useState<string | null>(null);
   const removeDraftOrder = useRemoveDraftOrder();
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
@@ -369,12 +370,12 @@ function OrderTerminal() {
                     />
                   }
                 >
-                  {stockOut.isError ? <p role="status" className="mb-2 text-sm text-muted-foreground">Live stock availability is unavailable. Stock is still checked when sending the order.</p> : null}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {menuRows.map((m) => (
                       <StockAwareMenuItem
                         key={m.id}
                         name={m.name}
+                        onUnavailable={(reason) => setStockIssue(`${m.name}: ${reason}`)}
                         disabled={
                           !can("pos", "orders.create") ||
                           m.publish_status !== "published"
@@ -390,15 +391,16 @@ function OrderTerminal() {
                           if (fresh.isError) throw fresh.error;
                           return fresh.data?.get(m.id) ?? null;
                         }}
-                        onAvailable={() =>
+                        onAvailable={() => {
+                          setStockIssue(null);
                           setPendingItem({
                             id: m.id,
                             name: m.name,
                             base_price: m.base_price,
                             tax_rate: m.tax_rate ?? 0,
                             station_id: m.station_id,
-                          })
-                        }
+                          });
+                        }}
                       >
                         <p className="text-sm font-semibold">{m.name}</p>
                         <p className="text-xs text-muted-foreground">{money(m.base_price)}</p>
@@ -452,13 +454,19 @@ function OrderTerminal() {
                   <Button
                     size="sm"
                     disabled={unsent.length === 0 || send.isPending || unroutable.length > 0}
-                    onClick={() => send.mutate(data.id)}
+                    onClick={() => { setStockIssue(null); send.mutate(data.id); }}
                   >
                     <Send className="mr-2 size-4" /> Send{" "}
                     {unsent.length ? `(${unsent.length})` : ""}
                   </Button>
                 }
               >
+                {stockIssue ? (
+                  <div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                    <p className="text-sm font-semibold text-destructive">{stockIssue}</p>
+                    <Button variant="ghost" size="sm" onClick={() => setStockIssue(null)}>Dismiss</Button>
+                  </div>
+                ) : null}
                 {Number(data.paid_total ?? 0) > 0 && unsent.length > 0 ? (
                   <p role="status" className="mb-3 text-sm text-muted-foreground">Payment received. Draft items still need Send; sending checks stock again.</p>
                 ) : null}

@@ -47,6 +47,9 @@ Write-Host "Generated Worker: $($config.name)"
 
 # Force the existing original Worker.
 $config.name = $EXPECTED_WORKER
+# Keep the verified runtime contract. Nitro's local calendar date can already
+# be tomorrow in Nairobi while Cloudflare still rejects it as a future UTC day.
+$config.compatibility_date = "2026-11-13"
 
 # Runtime settings belong to the existing Worker. A generated build has no
 # vars; deploying it must not erase saved backend routing or provider settings.

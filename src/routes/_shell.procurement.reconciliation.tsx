@@ -1,6 +1,8 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
 import { requireReceivingReviewResult } from "@/lib/supply-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -61,6 +63,8 @@ function formatQuantity(value: number) {
 }
 
 function Page() {
+  const { organizationId, user, permissionsLoaded } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [recentlyPosted, setRecentlyPosted] = useState<{
@@ -69,7 +73,8 @@ function Page() {
   } | null>(null);
 
   const queue = useQuery({
-    queryKey: ["procurement", "blind-reconciliation"],
+    queryKey: ["procurement", "blind-reconciliation", organizationId, user?.id, filterKey],
+    enabled: Boolean(organizationId && user && permissionsLoaded),
     queryFn: async (): Promise<ReviewCount[]> => {
       const { data, error } = await guardedRpc(
         db,
@@ -79,7 +84,9 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return Array.isArray(data) ? (data as ReviewCount[]) : [];
+      return Array.isArray(data)
+        ? (data as ReviewCount[]).filter((row) => !branchId || row.branch_id === branchId)
+        : [];
     },
   });
 
