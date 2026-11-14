@@ -130,7 +130,7 @@ function OrderTerminal() {
   const requestVoid = useRequestVoid();
   const reconcile = useReconcileSettlement();
   const confirmManual = useConfirmManualPayment();
-  const canManualConfirm = can("pos", "orders.approve");
+  const canManualConfirm = can("pos", "payments", "manual-confirm");
   const discountPolicies = usePosDiscountPolicies();
   const applyDiscount = useApplyPosDiscount();
   const receiptPrintState = usePosReceiptPrintState(id);
@@ -441,8 +441,7 @@ function OrderTerminal() {
                   ...(choice.instructions ? { instructions: choice.instructions } : {}),
                   ...(choice.allergyNote ? { allergyNote: choice.allergyNote } : {}),
                   ...(choice.modifiers.length ? { modifiers: choice.modifiers } : {}),
-                });
-                setPendingItem(null);
+                }, { onSuccess: () => setPendingItem(null) });
               }}
             />
 

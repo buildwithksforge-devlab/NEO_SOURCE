@@ -137,9 +137,11 @@ export function mapPaymentLifecycle(r: Record<string, unknown>): PaymentLifecycl
 export function balancesGross(p: {
   netRevenue: number;
   tax: number;
+  serviceCharge?: number;
   grossObligation: number;
 }): boolean {
-  return Math.abs(p.netRevenue + p.tax - p.grossObligation) < 0.01;
+  return [p.netRevenue, p.tax, p.serviceCharge ?? 0, p.grossObligation].every(Number.isFinite)
+    && Math.abs(p.netRevenue + p.tax + (p.serviceCharge ?? 0) - p.grossObligation) < 0.005;
 }
 
 /** paid + outstanding = gross. */
@@ -148,7 +150,8 @@ export function balancesSettlement(p: {
   outstanding: number;
   grossObligation: number;
 }): boolean {
-  return Math.abs(p.collected + p.outstanding - p.grossObligation) < 0.01;
+  return [p.collected, p.outstanding, p.grossObligation].every(Number.isFinite)
+    && Math.abs(p.collected + p.outstanding - p.grossObligation) < 0.005;
 }
 
 /** A posted payment journal means the money is recognised — no other reading. */

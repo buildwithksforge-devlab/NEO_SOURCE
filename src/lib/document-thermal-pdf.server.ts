@@ -13,7 +13,8 @@
  * A4 business documents remain in document-pdf.server.ts.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont } from "pdf-lib";
+import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -297,8 +298,7 @@ export async function buildThermalReceiptPdf(
   });
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { regular, bold } = await embedDocumentFonts(pdf);
 
   // 80 mm roll = ~226.77 PDF points.
   const paperWidth = 226.77;

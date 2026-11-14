@@ -12,6 +12,7 @@ const TYPES = new Set([
   "stock_sheet",
   "staff_schedule",
   "task_sheet",
+  "payslip",
 ]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

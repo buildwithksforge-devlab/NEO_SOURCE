@@ -463,7 +463,7 @@ export function PrintersPage() {
             <Input
               value={agentName}
               onChange={(event) => setAgentName(event.target.value)}
-              placeholder="Savanna Crown POS Server"
+              placeholder="Property POS server"
             />
           </div>
 

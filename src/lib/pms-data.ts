@@ -1,4 +1,5 @@
 import { requireFolioCloseResult } from "@/lib/folio-close-result";
+import { requireSavedRecord } from "@/lib/durable-command-result";
 import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
 import {calendarNights} from '@/lib/availability-search';
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -297,7 +298,7 @@ export function useCheckIn() {
         _notes: input.notes,
       });
       if (error) throw error;
-      return data;
+      return requireSavedRecord(data, ["stay_id", "folio_id"], "Check-in did not confirm its saved stay and folio.");
     },
     onSuccess: () => {
       toast.success("Guest checked in — folio opened and housekeeping notified");
@@ -357,8 +358,10 @@ export type CheckInReconciliationRow = {
 };
 
 export function useCheckInReconciliation(branch: string | null) {
+  const { organizationId, user } = useAuth();
   return useQuery({
-    queryKey: ["pms", "checkin-reconciliation", branch],
+    queryKey: ["pms", "checkin-reconciliation", organizationId, user?.id, branch],
+    enabled: Boolean(organizationId && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, 
         "neo_checkin_reconciliation",
@@ -381,7 +384,7 @@ export function useCheckOut() {
         _notes: input.notes,
       });
       if (error) throw error;
-      return data;
+      return requireSavedRecord(data, ["stay_id"], "Check-out did not confirm the saved stay.");
     },
     onSuccess: () => {
       toast.success("Guest checked out — room released for cleaning");

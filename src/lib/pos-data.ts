@@ -1,4 +1,5 @@
 import { requireVoidResult } from "@/lib/pos-void-result";
+import { rejectBusinessFailure, requireSavedRecord } from "@/lib/durable-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
@@ -226,19 +227,20 @@ export function useItemModifierGroups(menuItemId: string | undefined) {
       const { data, error } = await supabase
         .from("menu_item_modifier_groups")
         .select(
-          "display_order, modifier_groups(id, name, required, multi_select, min_select, max_select, modifier_options(id, name, extra_charge, active))",
+          "display_order, modifier_groups(id, name, active, required, multi_select, min_select, max_select, modifier_options(id, name, extra_charge, active))",
         )
         .eq("menu_item_id", menuItemId as string)
         .order("display_order");
       if (error) throw error;
       return (data ?? [])
         .map((r) => (r as { modifier_groups: ModifierGroupWithOptions | null }).modifier_groups)
-        .filter((g): g is ModifierGroupWithOptions => Boolean(g));
+        .filter((g): g is ModifierGroupWithOptions => Boolean(g) && g?.active !== false);
     },
   });
 }
 
 export type ModifierGroupWithOptions = {
+  active?: boolean;
   id: string;
   name: string;
   required: boolean | null;
@@ -633,6 +635,9 @@ export function useAddOrderItem() {
           quantity: input.quantity,
           unit_price: unit,
           modifier_total: modTotal,
+          selection_modifiers: (input.modifiers ?? []).map((m) => ({
+            group_id: m.group_id, option_id: m.option_id,
+          })),
           tax_rate: taxRate,
           tax_amount: taxAmount,
           line_total: total,
@@ -644,21 +649,8 @@ export function useAddOrderItem() {
         .single();
       if (error) throw error;
 
-      if (input.modifiers?.length) {
-        const { error: modErr } = await supabase.from("pos_order_item_modifiers").insert(
-          input.modifiers.map((m) => ({
-            organization_id: ctx.organization_id,
-            order_item_id: data.id,
-            group_id: m.group_id,
-            option_id: m.option_id,
-            group_name: m.group_name,
-            option_name: m.option_name,
-            extra_charge: m.extra_charge,
-          })),
-        );
-        if (modErr) throw modErr;
-      }
-      await recalcOrderTotals(input.orderId);
+      // Database triggers validate catalogue choices, save modifier rows and
+      // recalculate totals in the same transaction as this item insert.
       return data;
     },
     onSuccess: () => {
@@ -674,9 +666,12 @@ export function useRemoveDraftItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ itemId, orderId }: { itemId: string; orderId: string }) => {
-      const { error } = await supabase.from("pos_order_items").delete().eq("id", itemId).eq("status", "draft");
+      const { data, error } = await supabase.from("pos_order_items").delete()
+        .eq("id", itemId).eq("order_id", orderId).eq("status", "draft").select("id");
       if (error) throw error;
-      await recalcOrderTotals(orderId);
+      if (!data || data.length !== 1 || data[0]?.id !== itemId)
+        throw new Error("The draft item was not removed. Refresh the bill before trying again.");
+      // The existing DELETE totals trigger commits totals with the deletion.
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["pos", "order"] });
@@ -800,7 +795,15 @@ export function useSendOrder() {
         _attempt: stableIdempotencyUuid("pos", "send_to_kitchen", [orderId]),
       } as never);
       if (error) throw error;
-      const r = (data ?? {}) as {
+      const saved = requireSavedRecord(data, ["order_id"], "Kitchen dispatch did not confirm the saved order.");
+      if (saved["order_id"] !== orderId)
+        throw new Error("Kitchen dispatch returned a different order.");
+      for (const key of ["tickets_created", "items_created", "items_reused", "unassigned_station"]) {
+        const value = saved[key];
+        if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+          throw new Error("Kitchen dispatch did not return verified routing counts.");
+      }
+      const r = saved as {
         tickets_created?: number;
         items_created?: number;
         items_reused?: number;
@@ -1187,6 +1190,9 @@ export function usePostRoomCharge() {
         _idempotency_key: `pos-room-charge:${orderId}`,
       });
       if (error) throw error;
+      rejectBusinessFailure(data, "The room charge was not posted.");
+      if (typeof data !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(data))
+        throw new Error("The room charge did not return its saved folio line.");
       return data;
     },
     onSuccess: () => {

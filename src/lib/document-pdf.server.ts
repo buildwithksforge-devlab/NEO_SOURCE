@@ -6,7 +6,8 @@
  * service: the database issues the document number, computes the money and
  * enforces property scope. Nothing on this path is recomputed client-side.
  */
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -137,6 +138,55 @@ export async function buildBusinessDocumentPdf(
   const payload = data as unknown as Payload | null;
   if (!payload) throw new Error("This document is not available.");
 
+  // Print the same canonical financial projection as the folio preview.
+  // Stored folio summary columns can lag their underlying ledger; never
+  // silently substitute those columns when the authoritative read fails.
+  if (input.type === "folio_statement") {
+    const { data: result, error: projectionError } = await supabase.rpc(
+      "neo_folio_projection" as never, { _folio: input.id } as never,
+    );
+    if (projectionError) throw new Error(projectionError.message);
+    const projection = result as unknown as Record<string, unknown> | null;
+    if (projection?.["found"] !== true || projection["folio_id"] !== input.id) {
+      throw new Error("The folio financial position could not be verified.");
+    }
+    const amount = (key: string) => {
+      const raw = projection[key];
+      if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw))) {
+        throw new Error(`The folio financial position has an invalid ${key}.`);
+      }
+      return Number(raw);
+    };
+    const outstanding = amount("outstanding");
+    if (Math.abs(amount("net_revenue") + amount("tax") + amount("service_charge") - amount("gross_obligation")) >= 0.005
+      || Math.abs(amount("collected") + outstanding - amount("gross_obligation")) >= 0.005) {
+      throw new Error("The folio financial components do not reconcile. Review the ledger before printing.");
+    }
+    payload.totals = [
+      { label: "Net charges", amount: amount("net_revenue") },
+      { label: "Taxes", amount: amount("tax") },
+      { label: "Service charge", amount: amount("service_charge") },
+      { label: "Gross billed", amount: amount("gross_obligation") },
+      { label: "Collected", amount: amount("collected") },
+      { label: outstanding < 0 ? "Refund due" : "Outstanding", amount: Math.abs(outstanding), emphasis: true },
+    ];
+    const { data: ledgerLines, error: linesError } = await supabase
+      .from("folio_lines")
+      .select("description,category,quantity,unit_price,discount_amount,tax_amount,net_amount,posting_date,status,line_type")
+      .eq("folio_id", input.id)
+      .order("posting_date");
+    if (linesError) throw new Error(linesError.message);
+    payload.lines = (ledgerLines ?? []).filter((line) =>
+      !["void", "voided", "reversed"].includes(line.status ?? "posted") &&
+      !["payment", "deposit", "refund"].includes(line.line_type ?? "charge")
+    ).map((line) => ({
+      description: line.description || line.category || "Charge",
+      quantity: line.quantity, unit_price: line.unit_price,
+      discount: line.discount_amount, tax: line.tax_amount,
+      total: line.net_amount, date: line.posting_date,
+    }));
+  }
+
   const identity = payload.identity ?? {};
   const property = payload.property ?? {};
   const brand = (identity["brand"] ?? {}) as Record<string, unknown>;
@@ -174,8 +224,7 @@ export async function buildBusinessDocumentPdf(
 
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { regular, bold } = await embedDocumentFonts(pdf);
   const [pageWidth, pageHeight]: [number, number] = [595.28, 841.89];
   const margin = 44;
   const contentWidth = pageWidth - margin * 2;
@@ -466,7 +515,7 @@ export async function buildBusinessDocumentPdf(
   // merely restates the emphasised balance, is dropped so the band below is
   // the only place the amount owed is stated.
   const totalsRaw = (Array.isArray(payload.totals) ? payload.totals : []).filter(
-  (total) => total && total.amount !== null && total.amount !== undefined && Number(total.amount) !== 0,
+  (total) => total && total.amount !== null && total.amount !== undefined,
 );
 
 const seenLabels = new Set<string>();

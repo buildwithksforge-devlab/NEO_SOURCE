@@ -30562,6 +30562,7 @@ export type Database = {
           item_name: string
           line_total: number
           menu_item_id: string | null
+          selection_modifiers: Json | null
           modifier_total: number
           normal_selling_price: number | null
           order_id: string
@@ -30596,6 +30597,7 @@ export type Database = {
           item_name: string
           line_total?: number
           menu_item_id?: string | null
+          selection_modifiers?: Json | null
           modifier_total?: number
           normal_selling_price?: number | null
           order_id: string
@@ -30630,6 +30632,7 @@ export type Database = {
           item_name?: string
           line_total?: number
           menu_item_id?: string | null
+          selection_modifiers?: Json | null
           modifier_total?: number
           normal_selling_price?: number | null
           order_id?: string
