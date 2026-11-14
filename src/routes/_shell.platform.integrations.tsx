@@ -1,3 +1,4 @@
+import { requireRecordedProviderTest } from "@/lib/integration-test-evidence";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -92,8 +93,10 @@ function IntegrationCentre() {
   const runCallbackTest = useServerFn(testMpesaCallbackEndpoint);
   const [testing, setTesting] = useState<string | null>(null);
   const test = useMutation({
-    mutationFn: async (input: { providerCode: string; callback?: boolean }) =>
-      input.callback ? runCallbackTest({ data: undefined as never }) : runTest({ data: { providerCode: input.providerCode } }),
+    mutationFn: async (input: { providerCode: string; callback?: boolean }) => {
+      const result = input.callback ? await runCallbackTest({ data: undefined as never }) : await runTest({ data: { providerCode: input.providerCode } });
+      return requireRecordedProviderTest(result, input.callback ? "daraja" : input.providerCode);
+    },
     onSuccess: (result) => {
       if (result.status === "passed") toast.success(result.detail);
       else if (result.status === "unsupported") toast.info(result.detail);

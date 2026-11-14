@@ -33,7 +33,7 @@ export function MobileWorkToday() {
   const needing = attentionItems(all);
   const shown = (needing.length ? needing : orderWork(all)).slice(0, 5);
 
-  if (myWork.isLoading || myWork.data?.authorised === false) return null;
+  if (myWork.isPending || myWork.error || myWork.data?.authorised !== true) return null;
 
   return (
     <section className="mb-4 lg:hidden">

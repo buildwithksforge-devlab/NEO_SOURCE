@@ -1,0 +1,1254 @@
+{
+  "columns": [
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "code",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 3,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "account_group",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "parent_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "false",
+      "column_name": "is_header",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "true",
+      "column_name": "postable",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "true",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "default_tax_code_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "department_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "'{}'::text[]",
+      "column_name": "source_modules",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "chart_of_accounts"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "invoice_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'tax_invoice'::text",
+      "column_name": "document_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "corporate_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 8,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "event_booking_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 9,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "reservation_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "CURRENT_DATE",
+      "column_name": "issue_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "due_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "bill_to_snapshot",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "issuer_snapshot",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "subtotal",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "discount_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "service_charge_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "tax_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 19,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "amount_paid",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 21,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "0",
+      "column_name": "balance",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'draft'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "'not_required'::text",
+      "column_name": "etims_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 24,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 25,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 26,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 27,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": null,
+      "column_name": "issued_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 28,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 29,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 30,
+      "table_name": "invoices"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'general'::text",
+      "column_name": "journal_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "CURRENT_DATE",
+      "column_name": "accounting_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "period_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'manual'::text",
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "source_document_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_document_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "document_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "1",
+      "column_name": "exchange_rate",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "0",
+      "column_name": "total_debit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "0",
+      "column_name": "total_credit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "'draft'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "approval_request_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "reverses_journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 20,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "reversed_by_journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 22,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 23,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 24,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 26,
+      "table_name": "journal_entries"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "journal_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 3,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "1",
+      "column_name": "line_number",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "account_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 6,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "debit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "0",
+      "column_name": "credit",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 9,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "department_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 10,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "cost_centre",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "revenue_centre",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "corporate_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "supplier_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "event_booking_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "payment_method",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": null,
+      "column_name": "tax_code_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "journal_entry_lines"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "receipt_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "folio_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 5,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "reservation_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 7,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "'cash'::text",
+      "column_name": "method",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "external_reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 11,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "paid_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 12,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "'confirmed'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 13,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "received_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "''::text",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "shift_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "station_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "'pms'::text",
+      "column_name": "source_module",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "source_record_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 21,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 22,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "correlation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "posted_journal_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 24,
+      "table_name": "payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "destination_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 25,
+      "table_name": "payments"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "order_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "receipt_number",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 5,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "tendered",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "ordinal_position": 8,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "0",
+      "column_name": "change_due",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "'KES'::text",
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "method",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "external_reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 12,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "provider_status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "provider_payload",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 14,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "'initiated'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 15,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "paid_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 16,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "cashier_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 17,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "shift_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 18,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "verified_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 19,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "verification_note",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 20,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 21,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 23,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 24,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "correlation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 25,
+      "table_name": "pos_payments"
+    },
+    {
+      "column_default": null,
+      "column_name": "destination_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 26,
+      "table_name": "pos_payments"
+    }
+  ],
+  "functions": [
+    {
+      "arguments": "_journal uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.fin_post_journal(_journal uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE j public.journal_entries; p public.accounting_periods; d numeric; c numeric; bad int;\nBEGIN\n  SELECT * INTO j FROM public.journal_entries WHERE id = _journal;\n  IF j.id IS NULL THEN RAISE EXCEPTION 'Journal not found'; END IF;\n  IF j.organization_id <> current_org_id() THEN RAISE EXCEPTION 'Not permitted'; END IF;\n  IF NOT (public.neo_system_posting() OR has_permission('finance','approve') OR is_org_admin()) THEN\n    RAISE EXCEPTION 'You do not have permission to post journals';\n  END IF;\n  IF j.status = 'posted' THEN RETURN jsonb_build_object('ok', true, 'already_posted', true, 'journal_id', j.id); END IF;\n  IF j.status NOT IN ('draft','approved') THEN RAISE EXCEPTION 'Journal cannot be posted from status %', j.status; END IF;\n\n  SELECT COALESCE(sum(debit),0), COALESCE(sum(credit),0) INTO d, c\n    FROM public.journal_entry_lines WHERE journal_id = j.id;\n  IF d = 0 AND c = 0 THEN RAISE EXCEPTION 'Journal has no lines'; END IF;\n  IF d <> c THEN RAISE EXCEPTION 'Journal is not balanced (debit % vs credit %)', d, c; END IF;\n\n  SELECT count(*) INTO bad FROM public.journal_entry_lines l\n    JOIN public.chart_of_accounts a ON a.id = l.account_id\n    WHERE l.journal_id = j.id AND (a.active = false OR a.postable = false OR a.is_header = true);\n  IF bad > 0 THEN RAISE EXCEPTION 'Journal references inactive or non-postable accounts'; END IF;\n\n  SELECT * INTO p FROM public.fin_period_for(j.organization_id, j.accounting_date);\n  IF p.id IS NULL THEN RAISE EXCEPTION 'No accounting period covers %', j.accounting_date; END IF;\n  IF p.status NOT IN ('open') AND NOT (p.status = 'soft_closed' AND j.journal_type = 'adjustment') THEN\n    RAISE EXCEPTION 'Accounting period % is %', p.name, p.status;\n  END IF;\n\n  IF j.journal_type <> 'reversal' AND j.source_document_id IS NOT NULL AND EXISTS (\n      SELECT 1 FROM public.journal_entries x\n      WHERE x.organization_id = j.organization_id AND x.id <> j.id\n        AND x.source_document_type = j.source_document_type\n        AND x.source_document_id = j.source_document_id\n        AND x.status = 'posted' AND x.journal_type <> 'reversal'\n        AND x.reversed_by_journal_id IS NULL) THEN\n    RAISE EXCEPTION 'This source document has already been posted';\n  END IF;\n\n  UPDATE public.journal_entries\n    SET status='posted', total_debit=d, total_credit=c, period_id=p.id,\n        posted_by=auth.uid(), posted_at=now()\n    WHERE id = j.id;\n\n  RETURN jsonb_build_object('ok', true, 'journal_id', j.id, 'total', d, 'period', p.name);\nEND $function$\n",
+      "definition_md5": "4162e3e7a44d05a75389087945abe2b2",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "jsonb",
+      "security_definer": true,
+      "signature": "fin_post_journal(uuid)"
+    },
+    {
+      "arguments": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.my_customer_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT id FROM public.customers WHERE auth_user_id = auth.uid() LIMIT 1;\n$function$\n",
+      "definition_md5": "e21f0f70b524a8b3e73b59106482a99f",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "uuid",
+      "security_definer": true,
+      "signature": "my_customer_id()"
+    },
+    {
+      "arguments": "_org uuid, _branch uuid, _account uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_assert_financial_account(_org uuid, _branch uuid, _account uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE b public.bank_accounts;\nBEGIN\n  IF _account IS NULL THEN RETURN NULL; END IF;\n  SELECT * INTO b FROM public.bank_accounts WHERE id = _account AND organization_id = _org;\n  IF b.id IS NULL THEN\n    RAISE EXCEPTION 'That receiving account does not belong to this workspace';\n  END IF;\n  IF NOT coalesce(b.active, true) THEN\n    RAISE EXCEPTION 'The receiving account % is no longer in use', b.name;\n  END IF;\n  IF b.branch_id IS NOT NULL AND _branch IS NOT NULL AND b.branch_id <> _branch THEN\n    RAISE EXCEPTION 'The receiving account % belongs to another property', b.name;\n  END IF;\n  RETURN b.id;\nEND $function$\n",
+      "definition_md5": "477d1f2c64b1aa31fd590f555b5017e8",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "uuid",
+      "security_definer": true,
+      "signature": "neo_assert_financial_account(uuid,uuid,uuid)"
+    },
+    {
+      "arguments": "_org uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_delivery_can_record_payment(_org uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT auth.uid() IS NOT NULL\n     AND _org IS NOT NULL\n     AND _org IS NOT DISTINCT FROM public.current_org_id()\n     AND COALESCE((\n          public.has_permission('finance','payments','create')\n       OR public.has_permission('finance','invoices','create')\n       OR public.has_permission('finance','approve')\n       OR public.has_permission('finance','collections','collect_payment')\n       OR public.has_permission('finance','collections','settle_bill')\n       OR public.has_permission('finance','collections','issue_receipt')\n       OR public.is_org_admin_for(_org)\n     ), false);\n$function$\n",
+      "definition_md5": "127eb1f024c7f840fe6e9a61816d325d",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "neo_delivery_can_record_payment(uuid)"
+    },
+    {
+      "arguments": "_order uuid, _amount numeric, _method text DEFAULT 'cash'::text, _entry_type text DEFAULT 'payment'::text, _reference text DEFAULT NULL::text, _reason text DEFAULT NULL::text, _account uuid DEFAULT NULL::uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_delivery_record_payment(_order uuid, _amount numeric, _method text DEFAULT 'cash'::text, _entry_type text DEFAULT 'payment'::text, _reference text DEFAULT NULL::text, _reason text DEFAULT NULL::text, _account uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  o public.delivery_orders;\n  inv public.invoices;\n  org uuid;\n  v_method text := lower(nullif(btrim(coalesce(_method, '')), ''));\n  v_entry text := lower(coalesce(nullif(btrim(_entry_type), ''), 'payment'));\n  v_amount numeric := round(coalesce(_amount, 0)::numeric, 2);\n  v_debit uuid; v_ar uuid; v_receipt text; v_payment uuid; v_journal uuid; v_jnum text;\n  v_shift uuid;\n  v_key text; v_balance numeric; acct uuid;\nBEGIN\n  IF v_entry NOT IN ('deposit','payment') THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'bad_entry_type',\n      'detail', 'Record either a deposit or a payment.');\n  END IF;\n  IF v_method IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'no_method',\n      'detail', 'Choose how the money was received.');\n  END IF;\n  IF v_amount <= 0 THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'bad_amount',\n      'detail', 'The amount must be greater than zero.');\n  END IF;\n\n  SELECT * INTO o FROM public.delivery_orders WHERE id = _order FOR UPDATE;\n  IF o.id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found'); END IF;\n  org := o.organization_id;\n  IF org <> public.current_org_id() THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found');\n  END IF;\n  IF NOT public.neo_delivery_can_record_payment(org) THEN\n    RAISE EXCEPTION 'Permission to record a payment is required.' USING ERRCODE = '42501';\n  END IF;\n  IF NOT public.neo_branch_in_scope(o.branch_id) THEN\n    RAISE EXCEPTION 'That order is outside your access scope.' USING ERRCODE = '42501';\n  END IF;\n\n  acct := public.neo_assert_financial_account(org, o.branch_id, _account);\n\n  SELECT * INTO inv FROM public.invoices\n   WHERE organization_id = org AND notes LIKE '%delivery-order:' || _order::text || '%'\n   ORDER BY created_at LIMIT 1\n   FOR UPDATE;\n  IF inv.id IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'not_billed',\n      'detail', 'Raise the invoice for this delivery before recording money against it.');\n  END IF;\n\n  -- neo_delivery_payment_retry_v1\n  v_key := 'delivery-payment:' || _order::text || ':' || v_entry || ':'\n           || coalesce(nullif(btrim(coalesce(_reference,'')), ''), v_amount::text);\n\n  SELECT id INTO v_payment FROM public.payments\n   WHERE organization_id = org AND idempotency_key = v_key LIMIT 1;\n\n  IF v_payment IS NOT NULL THEN\n    IF NOT EXISTS (\n      SELECT 1\n      FROM public.payments existing_payment\n      WHERE existing_payment.id = v_payment\n        AND existing_payment.organization_id = org\n        AND existing_payment.source_record_id = _order\n        AND existing_payment.amount = v_amount\n        AND existing_payment.method = v_method\n        AND existing_payment.destination_account_id\n            IS NOT DISTINCT FROM acct\n    ) THEN\n      RETURN jsonb_build_object(\n        'ok', false,\n        'reason', 'idempotency_conflict',\n        'detail', 'This reference already belongs to different payment details.'\n      );\n    END IF;\n\n    RETURN jsonb_build_object('ok', true, 'already_recorded', true, 'payment_id', v_payment);\n  END IF;\n\n  v_balance := round(coalesce(inv.balance, 0)::numeric, 2);\n  IF v_balance <= 0 THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'nothing_outstanding',\n      'detail', 'This delivery invoice is already settled.');\n  END IF;\n  IF v_amount > v_balance THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'amount_exceeds_balance',\n      'detail', 'That is more than the outstanding balance on this delivery invoice.',\n      'balance', v_balance);\n  END IF;\n\n  SELECT a.id INTO v_debit FROM public.chart_of_accounts a\n   WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)\n     AND a.code = public.neo_gl_account_code(org, v_method, acct)\n   LIMIT 1;\n  IF v_debit IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'no_settlement_account',\n      'detail', 'No money account is configured for that payment method.');\n  END IF;\n\n  SELECT a.id INTO v_ar FROM public.chart_of_accounts a\n   WHERE a.organization_id = org AND a.active AND coalesce(a.postable, true)\n     AND a.name ILIKE 'Accounts Receivable'\n   ORDER BY a.code LIMIT 1;\n  IF v_ar IS NULL THEN\n    RETURN jsonb_build_object('ok', false, 'reason', 'no_receivable_account',\n      'detail', 'This property has no Accounts Receivable account.');\n  END IF;\n\n\n  -- neo_delivery_till_journal_v1\n  v_shift := NULL;\n\n  IF v_method = 'cash' THEN\n    SELECT s.id INTO v_shift\n    FROM public.pos_shifts s\n    WHERE s.organization_id = org\n      AND s.branch_id = o.branch_id\n      AND s.cashier_id = auth.uid()\n      AND s.status = 'open'\n    ORDER BY s.opened_at DESC, s.id\n    LIMIT 1\n    FOR UPDATE;\n\n    IF v_shift IS NULL THEN\n      RAISE EXCEPTION\n        'Open your cashier shift at this property before recording cash'\n        USING ERRCODE = '23514';\n    END IF;\n  END IF;\n\n  v_receipt := public.next_document_number('receipt', NULL, o.branch_id);\n\n  INSERT INTO public.payments (organization_id, branch_id, receipt_number, customer_id, amount,\n    currency, method, external_reference, status, received_by, notes, source_module,\n    source_record_id, idempotency_key, destination_account_id, shift_id)\n  VALUES (org, o.branch_id, v_receipt, o.customer_id, v_amount,\n    coalesce(o.currency,'KES'), v_method, nullif(btrim(coalesce(_reference,'')), ''),\n    'confirmed', auth.uid(),\n    initcap(v_entry) || ' for delivery order ' || o.order_number || ' · invoice ' || inv.invoice_number\n      || coalesce(' · ' || nullif(btrim(coalesce(_reason,'')), ''), ''),\n    'delivery', _order, v_key, acct, v_shift)\n  RETURNING id INTO v_payment;\n\n  v_jnum := public.next_document_number('journal');\n  INSERT INTO public.journal_entries (organization_id, branch_id, journal_number, journal_type,\n    accounting_date, source_module, source_document_type, source_document_id, document_number,\n    idempotency_key, description, currency, created_by, status)\n  VALUES (org, o.branch_id, v_jnum, 'automatic', CURRENT_DATE, 'delivery', 'delivery_payment',\n    v_payment, v_receipt, v_key,\n    initcap(v_entry) || ' received on delivery order ' || o.order_number\n      || ' against invoice ' || inv.invoice_number\n      || coalesce(' — ' || nullif(btrim(coalesce(_reason,'')), ''), ''),\n    coalesce(o.currency,'KES'), auth.uid(), 'draft')\n  RETURNING id INTO v_journal;\n\n  INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,\n    description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)\n  VALUES (org, v_journal, 1, v_debit, initcap(v_entry) || ' ' || v_receipt, v_amount, 0,\n    o.branch_id, o.customer_id, 'delivery', v_method);\n\n  INSERT INTO public.journal_entry_lines (organization_id, journal_id, line_number, account_id,\n    description, debit, credit, branch_id, customer_id, revenue_centre, payment_method)\n  VALUES (org, v_journal, 2, v_ar, 'Settlement of ' || inv.invoice_number, 0, v_amount,\n    o.branch_id, o.customer_id, 'delivery', v_method);\n\n  PERFORM public.fin_post_journal(v_journal);\n\n  UPDATE public.payments SET posted_journal_id = v_journal, updated_at = now()\n   WHERE id = v_payment;\n\n  UPDATE public.invoices\n     SET amount_paid = round(coalesce(amount_paid,0) + v_amount, 2),\n         balance = round(coalesce(balance,0) - v_amount, 2),\n         status = CASE WHEN round(coalesce(balance,0) - v_amount, 2) <= 0 THEN 'paid' ELSE status END,\n         updated_at = now()\n   WHERE id = inv.id\n   RETURNING balance INTO v_balance;\n\n  IF v_balance <= 0 THEN\n    UPDATE public.delivery_orders\n       SET payment_status = 'paid',\n           payment_method = coalesce(payment_method, v_method),\n           updated_at = now()\n     WHERE id = _order;\n  ELSIF v_entry = 'deposit' THEN\n    UPDATE public.delivery_orders\n       SET payment_status = 'partially-paid', updated_at = now()\n     WHERE id = _order\n       AND lower(coalesce(payment_status,'')) NOT IN ('paid','refunded');\n  END IF;\n\n  INSERT INTO public.audit_logs (organization_id, branch_id, user_id, user_name, action, module,\n    record_id, previous_value, new_value, reason)\n  VALUES (org, o.branch_id, auth.uid(),\n    coalesce((SELECT full_name FROM public.profiles WHERE id = auth.uid()), ''),\n    'delivery.payment.recorded', 'delivery', o.order_number,\n    jsonb_build_object('invoice', inv.invoice_number, 'balance_before', inv.balance),\n    jsonb_build_object('entry_type', v_entry, 'amount', v_amount, 'method', v_method,\n      'receipt', v_receipt, 'journal', v_jnum, 'balance_after', v_balance,\n      'destination_account_id', acct),\n    nullif(btrim(coalesce(_reason,'')), ''));\n\n  RETURN jsonb_build_object('ok', true, 'payment_id', v_payment, 'receipt_number', v_receipt,\n    'journal_id', v_journal, 'journal_number', v_jnum, 'amount', v_amount,\n    'entry_type', v_entry, 'invoice_number', inv.invoice_number, 'balance', v_balance,\n    'destination_account_id', acct);\nEND;\n$function$\n",
+      "definition_md5": "cda68d658709e2269ad12fc1d52dae79",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "jsonb",
+      "security_definer": true,
+      "signature": "neo_delivery_record_payment(uuid,numeric,text,text,text,text,uuid)"
+    },
+    {
+      "arguments": "_org uuid, _method text, _account uuid DEFAULT NULL::uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_gl_account_code(_org uuid, _method text, _account uuid DEFAULT NULL::uuid)\n RETURNS text\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_code text;\n  v_method text := lower(coalesce(replace(_method, '-', '_'), ''));\nBEGIN\n  IF _org IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  -- Card proceeds belong in Card Clearing until the acquirer actually\n  -- settles them into the nominated bank account.\n  --\n  -- Keep _account on the source payment for later settlement/reconciliation,\n  -- but deliberately do not use it as the sale-side debit account.\n  IF v_method IN ('card', 'card_terminal', 'credit_card', 'debit_card') THEN\n    RETURN public.neo_gl_settlement_code_for(_org, _method);\n  END IF;\n\n  -- Other recorded tenders retain the existing destination-account behaviour.\n  -- For example, a bank transfer already received into a specific bank account\n  -- may post directly to that account.\n  IF _account IS NOT NULL THEN\n    SELECT a.code\n      INTO v_code\n      FROM public.bank_accounts b\n      JOIN public.chart_of_accounts a\n        ON a.id = b.gl_account_id\n     WHERE b.id = _account\n       AND b.organization_id = _org\n       AND a.organization_id = _org\n       AND coalesce(b.active, true)\n       AND a.active\n       AND coalesce(a.postable, true)\n       AND coalesce(a.is_header, false) = false;\n\n    IF v_code IS NOT NULL THEN\n      RETURN v_code;\n    END IF;\n  END IF;\n\n  RETURN public.neo_gl_settlement_code_for(_org, _method);\nEND\n$function$\n",
+      "definition_md5": "dd75cc1b6856b7f84ea16b946a83ff51",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "text",
+      "security_definer": true,
+      "signature": "neo_gl_account_code(uuid,text,uuid)"
+    },
+    {
+      "arguments": "_org uuid, _method text, _account uuid DEFAULT NULL::uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_gl_cash_code(_org uuid, _method text, _account uuid DEFAULT NULL::uuid)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT public.neo_gl_account_code(_org, _method, _account)\n$function$\n",
+      "definition_md5": "c64b806f2c06ab2c865c35ef350f3f79",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "text",
+      "security_definer": true,
+      "signature": "neo_gl_cash_code(uuid,text,uuid)"
+    },
+    {
+      "arguments": "_doc_type text, _prefix text DEFAULT NULL::text, _branch uuid DEFAULT NULL::uuid, _org_override uuid DEFAULT NULL::uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.next_document_number(_doc_type text, _prefix text DEFAULT NULL::text, _branch uuid DEFAULT NULL::uuid, _org_override uuid DEFAULT NULL::uuid)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := coalesce(_org_override, public.current_org_id(), public.my_customer_org_id(),\n                        (SELECT b.organization_id FROM public.branches b WHERE b.id = _branch));\n  _year int := extract(year from now())::int;\n  _pfx text := upper(coalesce(nullif(_prefix,''), left(regexp_replace(_doc_type,'[^A-Za-z]','','g'), 3)));\n  _code text;\n  _row public.number_sequences;\n  _number text;\n  _guard int := 0;\nBEGIN\n  IF _org IS NULL THEN\n    RAISE EXCEPTION 'No active organization for the current user';\n  END IF;\n\n  -- neo_document_number_tenant_guard_v1\n  IF COALESCE(auth.role(), '') <> 'service_role'\n     AND (\n       auth.uid() IS NOT NULL\n       OR COALESCE(auth.role(), '') IN ('anon', 'authenticated')\n     )\n  THEN\n    IF auth.uid() IS NULL\n       OR NOT (\n         COALESCE(_org = public.current_org_id(), false)\n         OR EXISTS (\n           SELECT 1\n           FROM public.customers c\n           WHERE c.organization_id = _org\n             AND c.auth_user_id = auth.uid()\n         )\n       )\n    THEN\n      RAISE EXCEPTION\n        'Not authorised to allocate document numbers for this organisation'\n        USING ERRCODE = '42501';\n    END IF;\n  END IF;\n\n\n  IF _branch IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM public.branches WHERE id = _branch AND organization_id = _org\n  ) THEN\n    RAISE EXCEPTION 'Property does not belong to the active organization';\n  END IF;\n\n  LOOP\n    _guard := _guard + 1;\n    IF _guard > 50 THEN\n      RAISE EXCEPTION 'Unable to allocate a unique % reference', _doc_type;\n    END IF;\n\n    INSERT INTO public.number_sequences (organization_id, doc_type, branch_id, prefix, year, padding, next_number)\n    VALUES (_org, _doc_type, _branch, _pfx, _year, 6, 1)\n    ON CONFLICT (organization_id, doc_type, coalesce(branch_id, '00000000-0000-0000-0000-000000000000'::uuid))\n    DO UPDATE SET\n      next_number = CASE WHEN public.number_sequences.year = _year\n                         THEN public.number_sequences.next_number + 1 ELSE 1 END,\n      year = _year,\n      updated_at = now()\n    RETURNING * INTO _row;\n\n    _code := NULL;\n    IF _row.branch_id IS NOT NULL THEN\n      SELECT upper(nullif(btrim(code), '')) INTO _code FROM public.branches WHERE id = _row.branch_id;\n    END IF;\n\n    _number := _row.prefix\n      || CASE WHEN _code IS NULL THEN '' ELSE '-' || _code END\n      || '-' || _row.year::text\n      || '-' || lpad(_row.next_number::text, greatest(_row.padding, 4), '0');\n\n    BEGIN\n      INSERT INTO public.issued_document_numbers\n        (organization_id, branch_id, doc_type, document_number, year, source, status, issued_by)\n      VALUES (_org, _branch, _doc_type, _number, _year, 'generated', 'issued', auth.uid());\n      RETURN _number;\n    EXCEPTION WHEN unique_violation THEN\n      CONTINUE;\n    END;\n  END LOOP;\nEND;\n$function$\n",
+      "definition_md5": "97d4255981971bd2965649afdbf913ba",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "returns": "text",
+      "security_definer": true,
+      "signature": "next_document_number(text,text,uuid,uuid)"
+    }
+  ]
+}

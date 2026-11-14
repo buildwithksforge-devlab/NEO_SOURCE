@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 10,
+  "scope": "Synthetic own-user subscriptions, RLS and queue leases only; no real notification sent."
+}

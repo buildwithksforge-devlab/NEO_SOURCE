@@ -18,6 +18,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PlatformConsoleRouteImport } from './routes/platform-console'
 import { Route as SessionExpiredRouteImport } from './routes/session-expired'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StationScreenRouteImport } from './routes/station-screen'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as ShellAiInsightsRouteImport } from './routes/_shell.ai-insights'
 import { Route as ShellAnalyticsRouteImport } from './routes/_shell.analytics'
@@ -29,6 +30,7 @@ import { Route as ShellComplimentaryRouteImport } from './routes/_shell.complime
 import { Route as ShellCreditAccountsRouteImport } from './routes/_shell.credit-accounts'
 import { Route as ShellCrmRouteImport } from './routes/_shell.crm'
 import { Route as ShellDepartmentsRouteImport } from './routes/_shell.departments'
+import { Route as ShellDeviceAuthorisationRouteImport } from './routes/_shell.device-authorisation'
 import { Route as ShellEventsRouteImport } from './routes/_shell.events'
 import { Route as ShellFinanceRouteImport } from './routes/_shell.finance'
 import { Route as ShellFrontOfficeRouteImport } from './routes/_shell.front-office'
@@ -47,6 +49,8 @@ import { Route as ShellPastryRouteImport } from './routes/_shell.pastry'
 import { Route as ShellPlatformRouteImport } from './routes/_shell.platform'
 import { Route as ShellPosRouteImport } from './routes/_shell.pos'
 import { Route as ShellProcurementRouteImport } from './routes/_shell.procurement'
+import { Route as ShellProductionDisplaysRouteImport } from './routes/_shell.production-displays'
+import { Route as ShellProductionOverviewRouteImport } from './routes/_shell.production-overview'
 import { Route as ShellProfileRouteImport } from './routes/_shell.profile'
 import { Route as ShellRatesRouteImport } from './routes/_shell.rates'
 import { Route as ShellReportsRouteImport } from './routes/_shell.reports'
@@ -56,6 +60,7 @@ import { Route as ShellRoomsRouteImport } from './routes/_shell.rooms'
 import { Route as ShellSecurityRouteImport } from './routes/_shell.security'
 import { Route as ShellSettingsRouteImport } from './routes/_shell.settings'
 import { Route as ShellStaffBoardRouteImport } from './routes/_shell.staff-board'
+import { Route as ShellStaffDisplayCodeRouteImport } from './routes/_shell.staff-display-code'
 import { Route as ShellStationStockRouteImport } from './routes/_shell.station-stock'
 import { Route as ShellStationsRouteImport } from './routes/_shell.stations'
 import { Route as ShellStaysRouteImport } from './routes/_shell.stays'
@@ -97,6 +102,7 @@ import { Route as AdminPartnerAccessRouteImport } from './routes/admin.partner-a
 import { Route as AdminPartnerBillingRouteImport } from './routes/admin.partner-billing'
 import { Route as AdminPartnerMessagesRouteImport } from './routes/admin.partner-messages'
 import { Route as AdminPaymentsMpesaRouteImport } from './routes/admin.payments-mpesa'
+import { Route as AdminPrintersRouteImport } from './routes/admin.printers'
 import { Route as AdminProcurementPolicyRouteImport } from './routes/admin.procurement-policy'
 import { Route as AdminPublicExperienceRouteImport } from './routes/admin.public-experience'
 import { Route as AdminRegionalRouteImport } from './routes/admin.regional'
@@ -133,11 +139,13 @@ import { Route as ShellAutomationRulesRouteImport } from './routes/_shell.automa
 import { Route as ShellAutomationSettingsRouteImport } from './routes/_shell.automation.settings'
 import { Route as ShellAutomationTemplatesRouteImport } from './routes/_shell.automation.templates'
 import { Route as ShellBarIndexRouteImport } from './routes/_shell.bar.index'
+import { Route as ShellBarDisplayRouteImport } from './routes/_shell.bar.display'
 import { Route as ShellBarMenuRouteImport } from './routes/_shell.bar.menu'
 import { Route as ShellBarQueueRouteImport } from './routes/_shell.bar.queue'
 import { Route as ShellBarRequisitionsRouteImport } from './routes/_shell.bar.requisitions'
 import { Route as ShellBarSellRouteImport } from './routes/_shell.bar.sell'
 import { Route as ShellBarWastageRouteImport } from './routes/_shell.bar.wastage'
+import { Route as ShellCoffeeDisplayRouteImport } from './routes/_shell.coffee.display'
 import { Route as ShellCrmIndexRouteImport } from './routes/_shell.crm.index'
 import { Route as ShellCrmCommunicationsRouteImport } from './routes/_shell.crm.communications'
 import { Route as ShellCrmCorporateRouteImport } from './routes/_shell.crm.corporate'
@@ -245,6 +253,7 @@ import { Route as ShellInventoryTransfersRouteImport } from './routes/_shell.inv
 import { Route as ShellInventoryWeeklyReportRouteImport } from './routes/_shell.inventory.weekly-report'
 import { Route as ShellKitchenIndexRouteImport } from './routes/_shell.kitchen.index'
 import { Route as ShellKitchenDashboardRouteImport } from './routes/_shell.kitchen.dashboard'
+import { Route as ShellKitchenDisplayRouteImport } from './routes/_shell.kitchen.display'
 import { Route as ShellKitchenMyStationRouteImport } from './routes/_shell.kitchen.my-station'
 import { Route as ShellKitchenNeedsRouteImport } from './routes/_shell.kitchen.needs'
 import { Route as ShellKitchenOperationsRouteImport } from './routes/_shell.kitchen.operations'
@@ -294,6 +303,7 @@ import { Route as ShellMarketingTasksRouteImport } from './routes/_shell.marketi
 import { Route as ShellMarketingTemplatesRouteImport } from './routes/_shell.marketing.templates'
 import { Route as ShellPastryIndexRouteImport } from './routes/_shell.pastry.index'
 import { Route as ShellPastryCustomCakesRouteImport } from './routes/_shell.pastry.custom-cakes'
+import { Route as ShellPastryDisplayRouteImport } from './routes/_shell.pastry.display'
 import { Route as ShellPastryMyProductionRouteImport } from './routes/_shell.pastry.my-production'
 import { Route as ShellPastryNeedsRouteImport } from './routes/_shell.pastry.needs'
 import { Route as ShellPastryProductionRouteImport } from './routes/_shell.pastry.production'
@@ -359,6 +369,7 @@ import { Route as ShellSecurityPatrolsRouteImport } from './routes/_shell.securi
 import { Route as ShellSecurityPostsRouteImport } from './routes/_shell.security.posts'
 import { Route as ShellSecurityVisitorsRouteImport } from './routes/_shell.security.visitors'
 import { Route as ApiInternalWorkerPushRouteImport } from './routes/api/internal/worker-push'
+import { Route as ApiPublicStaffPinLoginRouteImport } from './routes/api/public/staff-pin-login'
 import { Route as DeliveryHotelSlugIndexRouteImport } from './routes/delivery.$hotelSlug.index'
 import { Route as DeliveryHotelSlugCartRouteImport } from './routes/delivery.$hotelSlug.cart'
 import { Route as DeliveryHotelSlugCheckoutRouteImport } from './routes/delivery.$hotelSlug.checkout'
@@ -396,6 +407,7 @@ import { Route as ShellPmsReservationsIdRouteImport } from './routes/_shell.pms.
 import { Route as ShellPmsReservationsNewRouteImport } from './routes/_shell.pms.reservations.new'
 import { Route as ShellPosOrdersIndexRouteImport } from './routes/_shell.pos.orders.index'
 import { Route as ShellPosOrdersIdRouteImport } from './routes/_shell.pos.orders.$id'
+import { Route as ApiPublicPrintAgentActionRouteImport } from './routes/api/public/print-agent.$action'
 import { Route as DeliveryHotelSlugTrackOrderReferenceRouteImport } from './routes/delivery.$hotelSlug.track.$orderReference'
 import { Route as GuestHotelSlugOrdersOrderReferenceRouteImport } from './routes/guest.$hotelSlug.orders_.$orderReference'
 import { Route as GuestHotelSlugReservationsReservationReferenceRouteImport } from './routes/guest.$hotelSlug.reservations.$reservationReference'
@@ -447,6 +459,11 @@ const SessionExpiredRoute = SessionExpiredRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StationScreenRoute = StationScreenRouteImport.update({
+  id: '/station-screen',
+  path: '/station-screen',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnauthorizedRoute = UnauthorizedRouteImport.update({
@@ -504,6 +521,12 @@ const ShellDepartmentsRoute = ShellDepartmentsRouteImport.update({
   path: '/departments',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellDeviceAuthorisationRoute =
+  ShellDeviceAuthorisationRouteImport.update({
+    id: '/device-authorisation',
+    path: '/device-authorisation',
+    getParentRoute: () => ShellRoute,
+  } as any)
 const ShellEventsRoute = ShellEventsRouteImport.update({
   id: '/events',
   path: '/events',
@@ -594,6 +617,16 @@ const ShellProcurementRoute = ShellProcurementRouteImport.update({
   path: '/procurement',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellProductionDisplaysRoute = ShellProductionDisplaysRouteImport.update({
+  id: '/production-displays',
+  path: '/production-displays',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellProductionOverviewRoute = ShellProductionOverviewRouteImport.update({
+  id: '/production-overview',
+  path: '/production-overview',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellProfileRoute = ShellProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -637,6 +670,11 @@ const ShellSettingsRoute = ShellSettingsRouteImport.update({
 const ShellStaffBoardRoute = ShellStaffBoardRouteImport.update({
   id: '/staff-board',
   path: '/staff-board',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellStaffDisplayCodeRoute = ShellStaffDisplayCodeRouteImport.update({
+  id: '/staff-display-code',
+  path: '/staff-display-code',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellStationStockRoute = ShellStationStockRouteImport.update({
@@ -847,6 +885,11 @@ const AdminPaymentsMpesaRoute = AdminPaymentsMpesaRouteImport.update({
   path: '/payments-mpesa',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPrintersRoute = AdminPrintersRouteImport.update({
+  id: '/printers',
+  path: '/printers',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProcurementPolicyRoute = AdminProcurementPolicyRouteImport.update({
   id: '/procurement-policy',
   path: '/procurement-policy',
@@ -1030,6 +1073,11 @@ const ShellBarIndexRoute = ShellBarIndexRouteImport.update({
   path: '/bar/',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellBarDisplayRoute = ShellBarDisplayRouteImport.update({
+  id: '/bar/display',
+  path: '/bar/display',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellBarMenuRoute = ShellBarMenuRouteImport.update({
   id: '/bar/menu',
   path: '/bar/menu',
@@ -1053,6 +1101,11 @@ const ShellBarSellRoute = ShellBarSellRouteImport.update({
 const ShellBarWastageRoute = ShellBarWastageRouteImport.update({
   id: '/bar/wastage',
   path: '/bar/wastage',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellCoffeeDisplayRoute = ShellCoffeeDisplayRouteImport.update({
+  id: '/coffee/display',
+  path: '/coffee/display',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellCrmIndexRoute = ShellCrmIndexRouteImport.update({
@@ -1608,6 +1661,11 @@ const ShellKitchenDashboardRoute = ShellKitchenDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => ShellKitchenRoute,
 } as any)
+const ShellKitchenDisplayRoute = ShellKitchenDisplayRouteImport.update({
+  id: '/display',
+  path: '/display',
+  getParentRoute: () => ShellKitchenRoute,
+} as any)
 const ShellKitchenMyStationRoute = ShellKitchenMyStationRouteImport.update({
   id: '/my-station',
   path: '/my-station',
@@ -1857,6 +1915,11 @@ const ShellPastryIndexRoute = ShellPastryIndexRouteImport.update({
 const ShellPastryCustomCakesRoute = ShellPastryCustomCakesRouteImport.update({
   id: '/custom-cakes',
   path: '/custom-cakes',
+  getParentRoute: () => ShellPastryRoute,
+} as any)
+const ShellPastryDisplayRoute = ShellPastryDisplayRouteImport.update({
+  id: '/display',
+  path: '/display',
   getParentRoute: () => ShellPastryRoute,
 } as any)
 const ShellPastryMyProductionRoute = ShellPastryMyProductionRouteImport.update({
@@ -2196,6 +2259,11 @@ const ApiInternalWorkerPushRoute = ApiInternalWorkerPushRouteImport.update({
   path: '/api/internal/worker-push',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStaffPinLoginRoute = ApiPublicStaffPinLoginRouteImport.update({
+  id: '/api/public/staff-pin-login',
+  path: '/api/public/staff-pin-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeliveryHotelSlugIndexRoute = DeliveryHotelSlugIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -2388,6 +2456,12 @@ const ShellPosOrdersIdRoute = ShellPosOrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => ShellPosRoute,
 } as any)
+const ApiPublicPrintAgentActionRoute =
+  ApiPublicPrintAgentActionRouteImport.update({
+    id: '/api/public/print-agent/$action',
+    path: '/api/public/print-agent/$action',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DeliveryHotelSlugTrackOrderReferenceRoute =
   DeliveryHotelSlugTrackOrderReferenceRouteImport.update({
     id: '/track/$orderReference',
@@ -2446,6 +2520,7 @@ export interface FileRoutesByFullPath {
   '/platform-console': typeof PlatformConsoleRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/station-screen': typeof StationScreenRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/ai-insights': typeof ShellAiInsightsRoute
   '/analytics': typeof ShellAnalyticsRouteWithChildren
@@ -2457,6 +2532,7 @@ export interface FileRoutesByFullPath {
   '/credit-accounts': typeof ShellCreditAccountsRoute
   '/crm': typeof ShellCrmRouteWithChildren
   '/departments': typeof ShellDepartmentsRoute
+  '/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/events': typeof ShellEventsRouteWithChildren
   '/finance': typeof ShellFinanceRouteWithChildren
   '/front-office': typeof ShellFrontOfficeRoute
@@ -2475,6 +2551,8 @@ export interface FileRoutesByFullPath {
   '/platform': typeof ShellPlatformRouteWithChildren
   '/pos': typeof ShellPosRouteWithChildren
   '/procurement': typeof ShellProcurementRouteWithChildren
+  '/production-displays': typeof ShellProductionDisplaysRoute
+  '/production-overview': typeof ShellProductionOverviewRoute
   '/profile': typeof ShellProfileRoute
   '/rates': typeof ShellRatesRoute
   '/reports': typeof ShellReportsRoute
@@ -2484,6 +2562,7 @@ export interface FileRoutesByFullPath {
   '/security': typeof ShellSecurityRouteWithChildren
   '/settings': typeof ShellSettingsRoute
   '/staff-board': typeof ShellStaffBoardRoute
+  '/staff-display-code': typeof ShellStaffDisplayCodeRoute
   '/station-stock': typeof ShellStationStockRoute
   '/stations': typeof ShellStationsRoute
   '/stays': typeof ShellStaysRoute
@@ -2525,6 +2604,7 @@ export interface FileRoutesByFullPath {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -2558,11 +2638,13 @@ export interface FileRoutesByFullPath {
   '/automation/rules': typeof ShellAutomationRulesRoute
   '/automation/settings': typeof ShellAutomationSettingsRoute
   '/automation/templates': typeof ShellAutomationTemplatesRoute
+  '/bar/display': typeof ShellBarDisplayRoute
   '/bar/menu': typeof ShellBarMenuRoute
   '/bar/queue': typeof ShellBarQueueRoute
   '/bar/requisitions': typeof ShellBarRequisitionsRoute
   '/bar/sell': typeof ShellBarSellRoute
   '/bar/wastage': typeof ShellBarWastageRoute
+  '/coffee/display': typeof ShellCoffeeDisplayRoute
   '/crm/communications': typeof ShellCrmCommunicationsRoute
   '/crm/corporate': typeof ShellCrmCorporateRoute
   '/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -2662,6 +2744,7 @@ export interface FileRoutesByFullPath {
   '/inventory/transfers': typeof ShellInventoryTransfersRoute
   '/inventory/weekly-report': typeof ShellInventoryWeeklyReportRoute
   '/kitchen/dashboard': typeof ShellKitchenDashboardRoute
+  '/kitchen/display': typeof ShellKitchenDisplayRoute
   '/kitchen/my-station': typeof ShellKitchenMyStationRoute
   '/kitchen/needs': typeof ShellKitchenNeedsRoute
   '/kitchen/operations': typeof ShellKitchenOperationsRoute
@@ -2707,6 +2790,7 @@ export interface FileRoutesByFullPath {
   '/marketing/tasks': typeof ShellMarketingTasksRoute
   '/marketing/templates': typeof ShellMarketingTemplatesRoute
   '/pastry/custom-cakes': typeof ShellPastryCustomCakesRoute
+  '/pastry/display': typeof ShellPastryDisplayRoute
   '/pastry/my-production': typeof ShellPastryMyProductionRoute
   '/pastry/needs': typeof ShellPastryNeedsRoute
   '/pastry/production': typeof ShellPastryProductionRoute
@@ -2767,6 +2851,7 @@ export interface FileRoutesByFullPath {
   '/security/posts': typeof ShellSecurityPostsRoute
   '/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -2817,6 +2902,7 @@ export interface FileRoutesByFullPath {
   '/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -2842,6 +2928,7 @@ export interface FileRoutesByTo {
   '/platform-console': typeof PlatformConsoleRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/station-screen': typeof StationScreenRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/ai-insights': typeof ShellAiInsightsRoute
   '/approvals': typeof ShellApprovalsRoute
@@ -2850,11 +2937,14 @@ export interface FileRoutesByTo {
   '/complimentary': typeof ShellComplimentaryRoute
   '/credit-accounts': typeof ShellCreditAccountsRoute
   '/departments': typeof ShellDepartmentsRoute
+  '/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/front-office': typeof ShellFrontOfficeRoute
   '/guests': typeof ShellGuestsRoute
   '/my-engagement': typeof ShellMyEngagementRoute
   '/my-work': typeof ShellMyWorkRoute
   '/notifications': typeof ShellNotificationsRoute
+  '/production-displays': typeof ShellProductionDisplaysRoute
+  '/production-overview': typeof ShellProductionOverviewRoute
   '/profile': typeof ShellProfileRoute
   '/rates': typeof ShellRatesRoute
   '/reports': typeof ShellReportsRoute
@@ -2863,6 +2953,7 @@ export interface FileRoutesByTo {
   '/rooms': typeof ShellRoomsRoute
   '/settings': typeof ShellSettingsRoute
   '/staff-board': typeof ShellStaffBoardRoute
+  '/staff-display-code': typeof ShellStaffDisplayCodeRoute
   '/station-stock': typeof ShellStationStockRoute
   '/stations': typeof ShellStationsRoute
   '/stays': typeof ShellStaysRoute
@@ -2904,6 +2995,7 @@ export interface FileRoutesByTo {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -2935,11 +3027,13 @@ export interface FileRoutesByTo {
   '/automation/rules': typeof ShellAutomationRulesRoute
   '/automation/settings': typeof ShellAutomationSettingsRoute
   '/automation/templates': typeof ShellAutomationTemplatesRoute
+  '/bar/display': typeof ShellBarDisplayRoute
   '/bar/menu': typeof ShellBarMenuRoute
   '/bar/queue': typeof ShellBarQueueRoute
   '/bar/requisitions': typeof ShellBarRequisitionsRoute
   '/bar/sell': typeof ShellBarSellRoute
   '/bar/wastage': typeof ShellBarWastageRoute
+  '/coffee/display': typeof ShellCoffeeDisplayRoute
   '/crm/communications': typeof ShellCrmCommunicationsRoute
   '/crm/corporate': typeof ShellCrmCorporateRoute
   '/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -3039,6 +3133,7 @@ export interface FileRoutesByTo {
   '/inventory/transfers': typeof ShellInventoryTransfersRoute
   '/inventory/weekly-report': typeof ShellInventoryWeeklyReportRoute
   '/kitchen/dashboard': typeof ShellKitchenDashboardRoute
+  '/kitchen/display': typeof ShellKitchenDisplayRoute
   '/kitchen/my-station': typeof ShellKitchenMyStationRoute
   '/kitchen/needs': typeof ShellKitchenNeedsRoute
   '/kitchen/operations': typeof ShellKitchenOperationsRoute
@@ -3084,6 +3179,7 @@ export interface FileRoutesByTo {
   '/marketing/tasks': typeof ShellMarketingTasksRoute
   '/marketing/templates': typeof ShellMarketingTemplatesRoute
   '/pastry/custom-cakes': typeof ShellPastryCustomCakesRoute
+  '/pastry/display': typeof ShellPastryDisplayRoute
   '/pastry/my-production': typeof ShellPastryMyProductionRoute
   '/pastry/needs': typeof ShellPastryNeedsRoute
   '/pastry/production': typeof ShellPastryProductionRoute
@@ -3144,6 +3240,7 @@ export interface FileRoutesByTo {
   '/security/posts': typeof ShellSecurityPostsRoute
   '/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -3194,6 +3291,7 @@ export interface FileRoutesByTo {
   '/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -3221,6 +3319,7 @@ export interface FileRoutesById {
   '/platform-console': typeof PlatformConsoleRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/station-screen': typeof StationScreenRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/_shell/ai-insights': typeof ShellAiInsightsRoute
   '/_shell/analytics': typeof ShellAnalyticsRouteWithChildren
@@ -3232,6 +3331,7 @@ export interface FileRoutesById {
   '/_shell/credit-accounts': typeof ShellCreditAccountsRoute
   '/_shell/crm': typeof ShellCrmRouteWithChildren
   '/_shell/departments': typeof ShellDepartmentsRoute
+  '/_shell/device-authorisation': typeof ShellDeviceAuthorisationRoute
   '/_shell/events': typeof ShellEventsRouteWithChildren
   '/_shell/finance': typeof ShellFinanceRouteWithChildren
   '/_shell/front-office': typeof ShellFrontOfficeRoute
@@ -3250,6 +3350,8 @@ export interface FileRoutesById {
   '/_shell/platform': typeof ShellPlatformRouteWithChildren
   '/_shell/pos': typeof ShellPosRouteWithChildren
   '/_shell/procurement': typeof ShellProcurementRouteWithChildren
+  '/_shell/production-displays': typeof ShellProductionDisplaysRoute
+  '/_shell/production-overview': typeof ShellProductionOverviewRoute
   '/_shell/profile': typeof ShellProfileRoute
   '/_shell/rates': typeof ShellRatesRoute
   '/_shell/reports': typeof ShellReportsRoute
@@ -3259,6 +3361,7 @@ export interface FileRoutesById {
   '/_shell/security': typeof ShellSecurityRouteWithChildren
   '/_shell/settings': typeof ShellSettingsRoute
   '/_shell/staff-board': typeof ShellStaffBoardRoute
+  '/_shell/staff-display-code': typeof ShellStaffDisplayCodeRoute
   '/_shell/station-stock': typeof ShellStationStockRoute
   '/_shell/stations': typeof ShellStationsRoute
   '/_shell/stays': typeof ShellStaysRoute
@@ -3300,6 +3403,7 @@ export interface FileRoutesById {
   '/admin/partner-billing': typeof AdminPartnerBillingRoute
   '/admin/partner-messages': typeof AdminPartnerMessagesRoute
   '/admin/payments-mpesa': typeof AdminPaymentsMpesaRoute
+  '/admin/printers': typeof AdminPrintersRoute
   '/admin/procurement-policy': typeof AdminProcurementPolicyRoute
   '/admin/public-experience': typeof AdminPublicExperienceRoute
   '/admin/regional': typeof AdminRegionalRoute
@@ -3333,11 +3437,13 @@ export interface FileRoutesById {
   '/_shell/automation/rules': typeof ShellAutomationRulesRoute
   '/_shell/automation/settings': typeof ShellAutomationSettingsRoute
   '/_shell/automation/templates': typeof ShellAutomationTemplatesRoute
+  '/_shell/bar/display': typeof ShellBarDisplayRoute
   '/_shell/bar/menu': typeof ShellBarMenuRoute
   '/_shell/bar/queue': typeof ShellBarQueueRoute
   '/_shell/bar/requisitions': typeof ShellBarRequisitionsRoute
   '/_shell/bar/sell': typeof ShellBarSellRoute
   '/_shell/bar/wastage': typeof ShellBarWastageRoute
+  '/_shell/coffee/display': typeof ShellCoffeeDisplayRoute
   '/_shell/crm/communications': typeof ShellCrmCommunicationsRoute
   '/_shell/crm/corporate': typeof ShellCrmCorporateRoute
   '/_shell/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -3437,6 +3543,7 @@ export interface FileRoutesById {
   '/_shell/inventory/transfers': typeof ShellInventoryTransfersRoute
   '/_shell/inventory/weekly-report': typeof ShellInventoryWeeklyReportRoute
   '/_shell/kitchen/dashboard': typeof ShellKitchenDashboardRoute
+  '/_shell/kitchen/display': typeof ShellKitchenDisplayRoute
   '/_shell/kitchen/my-station': typeof ShellKitchenMyStationRoute
   '/_shell/kitchen/needs': typeof ShellKitchenNeedsRoute
   '/_shell/kitchen/operations': typeof ShellKitchenOperationsRoute
@@ -3482,6 +3589,7 @@ export interface FileRoutesById {
   '/_shell/marketing/tasks': typeof ShellMarketingTasksRoute
   '/_shell/marketing/templates': typeof ShellMarketingTemplatesRoute
   '/_shell/pastry/custom-cakes': typeof ShellPastryCustomCakesRoute
+  '/_shell/pastry/display': typeof ShellPastryDisplayRoute
   '/_shell/pastry/my-production': typeof ShellPastryMyProductionRoute
   '/_shell/pastry/needs': typeof ShellPastryNeedsRoute
   '/_shell/pastry/production': typeof ShellPastryProductionRoute
@@ -3542,6 +3650,7 @@ export interface FileRoutesById {
   '/_shell/security/posts': typeof ShellSecurityPostsRoute
   '/_shell/security/visitors': typeof ShellSecurityVisitorsRoute
   '/api/internal/worker-push': typeof ApiInternalWorkerPushRoute
+  '/api/public/staff-pin-login': typeof ApiPublicStaffPinLoginRoute
   '/delivery/$hotelSlug/cart': typeof DeliveryHotelSlugCartRoute
   '/delivery/$hotelSlug/checkout': typeof DeliveryHotelSlugCheckoutRoute
   '/delivery/$hotelSlug/orders': typeof DeliveryHotelSlugOrdersRoute
@@ -3592,6 +3701,7 @@ export interface FileRoutesById {
   '/_shell/pms/reservations/$id': typeof ShellPmsReservationsIdRoute
   '/_shell/pms/reservations/new': typeof ShellPmsReservationsNewRoute
   '/_shell/pos/orders/$id': typeof ShellPosOrdersIdRoute
+  '/api/public/print-agent/$action': typeof ApiPublicPrintAgentActionRoute
   '/delivery/$hotelSlug/track/$orderReference': typeof DeliveryHotelSlugTrackOrderReferenceRoute
   '/guest/$hotelSlug/orders_/$orderReference': typeof GuestHotelSlugOrdersOrderReferenceRoute
   '/guest/$hotelSlug/reservations/$reservationReference': typeof GuestHotelSlugReservationsReservationReferenceRoute
@@ -3619,6 +3729,7 @@ export interface FileRouteTypes {
     | '/platform-console'
     | '/session-expired'
     | '/sitemap.xml'
+    | '/station-screen'
     | '/unauthorized'
     | '/ai-insights'
     | '/analytics'
@@ -3630,6 +3741,7 @@ export interface FileRouteTypes {
     | '/credit-accounts'
     | '/crm'
     | '/departments'
+    | '/device-authorisation'
     | '/events'
     | '/finance'
     | '/front-office'
@@ -3648,6 +3760,8 @@ export interface FileRouteTypes {
     | '/platform'
     | '/pos'
     | '/procurement'
+    | '/production-displays'
+    | '/production-overview'
     | '/profile'
     | '/rates'
     | '/reports'
@@ -3657,6 +3771,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/settings'
     | '/staff-board'
+    | '/staff-display-code'
     | '/station-stock'
     | '/stations'
     | '/stays'
@@ -3698,6 +3813,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -3731,11 +3847,13 @@ export interface FileRouteTypes {
     | '/automation/rules'
     | '/automation/settings'
     | '/automation/templates'
+    | '/bar/display'
     | '/bar/menu'
     | '/bar/queue'
     | '/bar/requisitions'
     | '/bar/sell'
     | '/bar/wastage'
+    | '/coffee/display'
     | '/crm/communications'
     | '/crm/corporate'
     | '/crm/duplicates'
@@ -3835,6 +3953,7 @@ export interface FileRouteTypes {
     | '/inventory/transfers'
     | '/inventory/weekly-report'
     | '/kitchen/dashboard'
+    | '/kitchen/display'
     | '/kitchen/my-station'
     | '/kitchen/needs'
     | '/kitchen/operations'
@@ -3880,6 +3999,7 @@ export interface FileRouteTypes {
     | '/marketing/tasks'
     | '/marketing/templates'
     | '/pastry/custom-cakes'
+    | '/pastry/display'
     | '/pastry/my-production'
     | '/pastry/needs'
     | '/pastry/production'
@@ -3940,6 +4060,7 @@ export interface FileRouteTypes {
     | '/security/posts'
     | '/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -3990,6 +4111,7 @@ export interface FileRouteTypes {
     | '/pms/reservations/$id'
     | '/pms/reservations/new'
     | '/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4015,6 +4137,7 @@ export interface FileRouteTypes {
     | '/platform-console'
     | '/session-expired'
     | '/sitemap.xml'
+    | '/station-screen'
     | '/unauthorized'
     | '/ai-insights'
     | '/approvals'
@@ -4023,11 +4146,14 @@ export interface FileRouteTypes {
     | '/complimentary'
     | '/credit-accounts'
     | '/departments'
+    | '/device-authorisation'
     | '/front-office'
     | '/guests'
     | '/my-engagement'
     | '/my-work'
     | '/notifications'
+    | '/production-displays'
+    | '/production-overview'
     | '/profile'
     | '/rates'
     | '/reports'
@@ -4036,6 +4162,7 @@ export interface FileRouteTypes {
     | '/rooms'
     | '/settings'
     | '/staff-board'
+    | '/staff-display-code'
     | '/station-stock'
     | '/stations'
     | '/stays'
@@ -4077,6 +4204,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -4108,11 +4236,13 @@ export interface FileRouteTypes {
     | '/automation/rules'
     | '/automation/settings'
     | '/automation/templates'
+    | '/bar/display'
     | '/bar/menu'
     | '/bar/queue'
     | '/bar/requisitions'
     | '/bar/sell'
     | '/bar/wastage'
+    | '/coffee/display'
     | '/crm/communications'
     | '/crm/corporate'
     | '/crm/duplicates'
@@ -4212,6 +4342,7 @@ export interface FileRouteTypes {
     | '/inventory/transfers'
     | '/inventory/weekly-report'
     | '/kitchen/dashboard'
+    | '/kitchen/display'
     | '/kitchen/my-station'
     | '/kitchen/needs'
     | '/kitchen/operations'
@@ -4257,6 +4388,7 @@ export interface FileRouteTypes {
     | '/marketing/tasks'
     | '/marketing/templates'
     | '/pastry/custom-cakes'
+    | '/pastry/display'
     | '/pastry/my-production'
     | '/pastry/needs'
     | '/pastry/production'
@@ -4317,6 +4449,7 @@ export interface FileRouteTypes {
     | '/security/posts'
     | '/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -4367,6 +4500,7 @@ export interface FileRouteTypes {
     | '/pms/reservations/$id'
     | '/pms/reservations/new'
     | '/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4393,6 +4527,7 @@ export interface FileRouteTypes {
     | '/platform-console'
     | '/session-expired'
     | '/sitemap.xml'
+    | '/station-screen'
     | '/unauthorized'
     | '/_shell/ai-insights'
     | '/_shell/analytics'
@@ -4404,6 +4539,7 @@ export interface FileRouteTypes {
     | '/_shell/credit-accounts'
     | '/_shell/crm'
     | '/_shell/departments'
+    | '/_shell/device-authorisation'
     | '/_shell/events'
     | '/_shell/finance'
     | '/_shell/front-office'
@@ -4422,6 +4558,8 @@ export interface FileRouteTypes {
     | '/_shell/platform'
     | '/_shell/pos'
     | '/_shell/procurement'
+    | '/_shell/production-displays'
+    | '/_shell/production-overview'
     | '/_shell/profile'
     | '/_shell/rates'
     | '/_shell/reports'
@@ -4431,6 +4569,7 @@ export interface FileRouteTypes {
     | '/_shell/security'
     | '/_shell/settings'
     | '/_shell/staff-board'
+    | '/_shell/staff-display-code'
     | '/_shell/station-stock'
     | '/_shell/stations'
     | '/_shell/stays'
@@ -4472,6 +4611,7 @@ export interface FileRouteTypes {
     | '/admin/partner-billing'
     | '/admin/partner-messages'
     | '/admin/payments-mpesa'
+    | '/admin/printers'
     | '/admin/procurement-policy'
     | '/admin/public-experience'
     | '/admin/regional'
@@ -4505,11 +4645,13 @@ export interface FileRouteTypes {
     | '/_shell/automation/rules'
     | '/_shell/automation/settings'
     | '/_shell/automation/templates'
+    | '/_shell/bar/display'
     | '/_shell/bar/menu'
     | '/_shell/bar/queue'
     | '/_shell/bar/requisitions'
     | '/_shell/bar/sell'
     | '/_shell/bar/wastage'
+    | '/_shell/coffee/display'
     | '/_shell/crm/communications'
     | '/_shell/crm/corporate'
     | '/_shell/crm/duplicates'
@@ -4609,6 +4751,7 @@ export interface FileRouteTypes {
     | '/_shell/inventory/transfers'
     | '/_shell/inventory/weekly-report'
     | '/_shell/kitchen/dashboard'
+    | '/_shell/kitchen/display'
     | '/_shell/kitchen/my-station'
     | '/_shell/kitchen/needs'
     | '/_shell/kitchen/operations'
@@ -4654,6 +4797,7 @@ export interface FileRouteTypes {
     | '/_shell/marketing/tasks'
     | '/_shell/marketing/templates'
     | '/_shell/pastry/custom-cakes'
+    | '/_shell/pastry/display'
     | '/_shell/pastry/my-production'
     | '/_shell/pastry/needs'
     | '/_shell/pastry/production'
@@ -4714,6 +4858,7 @@ export interface FileRouteTypes {
     | '/_shell/security/posts'
     | '/_shell/security/visitors'
     | '/api/internal/worker-push'
+    | '/api/public/staff-pin-login'
     | '/delivery/$hotelSlug/cart'
     | '/delivery/$hotelSlug/checkout'
     | '/delivery/$hotelSlug/orders'
@@ -4764,6 +4909,7 @@ export interface FileRouteTypes {
     | '/_shell/pms/reservations/$id'
     | '/_shell/pms/reservations/new'
     | '/_shell/pos/orders/$id'
+    | '/api/public/print-agent/$action'
     | '/delivery/$hotelSlug/track/$orderReference'
     | '/guest/$hotelSlug/orders_/$orderReference'
     | '/guest/$hotelSlug/reservations/$reservationReference'
@@ -4791,6 +4937,7 @@ export interface RootRouteChildren {
   PlatformConsoleRoute: typeof PlatformConsoleRoute
   SessionExpiredRoute: typeof SessionExpiredRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StationScreenRoute: typeof StationScreenRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
   DeliveryHotelSlugRoute: typeof DeliveryHotelSlugRouteWithChildren
   GuestHotelSlugRoute: typeof GuestHotelSlugRouteWithChildren
@@ -4804,6 +4951,8 @@ export interface RootRouteChildren {
   RiderIndexRoute: typeof RiderIndexRoute
   StartIndexRoute: typeof StartIndexRoute
   ApiInternalWorkerPushRoute: typeof ApiInternalWorkerPushRoute
+  ApiPublicStaffPinLoginRoute: typeof ApiPublicStaffPinLoginRoute
+  ApiPublicPrintAgentActionRoute: typeof ApiPublicPrintAgentActionRoute
   ApiPublicDeliveryCallbackTokenRoute: typeof ApiPublicDeliveryCallbackTokenRoute
   ApiPublicDeliverySimulatorCourierRoute: typeof ApiPublicDeliverySimulatorCourierRoute
   ApiPublicMpesaCallbackTokenRoute: typeof ApiPublicMpesaCallbackTokenRoute
@@ -4874,6 +5023,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/station-screen': {
+      id: '/station-screen'
+      path: '/station-screen'
+      fullPath: '/station-screen'
+      preLoaderRoute: typeof StationScreenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/unauthorized': {
@@ -4951,6 +5107,13 @@ declare module '@tanstack/react-router' {
       path: '/departments'
       fullPath: '/departments'
       preLoaderRoute: typeof ShellDepartmentsRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/device-authorisation': {
+      id: '/_shell/device-authorisation'
+      path: '/device-authorisation'
+      fullPath: '/device-authorisation'
+      preLoaderRoute: typeof ShellDeviceAuthorisationRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/events': {
@@ -5079,6 +5242,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellProcurementRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/production-displays': {
+      id: '/_shell/production-displays'
+      path: '/production-displays'
+      fullPath: '/production-displays'
+      preLoaderRoute: typeof ShellProductionDisplaysRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/production-overview': {
+      id: '/_shell/production-overview'
+      path: '/production-overview'
+      fullPath: '/production-overview'
+      preLoaderRoute: typeof ShellProductionOverviewRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/profile': {
       id: '/_shell/profile'
       path: '/profile'
@@ -5140,6 +5317,13 @@ declare module '@tanstack/react-router' {
       path: '/staff-board'
       fullPath: '/staff-board'
       preLoaderRoute: typeof ShellStaffBoardRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/staff-display-code': {
+      id: '/_shell/staff-display-code'
+      path: '/staff-display-code'
+      fullPath: '/staff-display-code'
+      preLoaderRoute: typeof ShellStaffDisplayCodeRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/station-stock': {
@@ -5429,6 +5613,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPaymentsMpesaRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/printers': {
+      id: '/admin/printers'
+      path: '/printers'
+      fullPath: '/admin/printers'
+      preLoaderRoute: typeof AdminPrintersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/procurement-policy': {
       id: '/admin/procurement-policy'
       path: '/procurement-policy'
@@ -5681,6 +5872,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellBarIndexRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/bar/display': {
+      id: '/_shell/bar/display'
+      path: '/bar/display'
+      fullPath: '/bar/display'
+      preLoaderRoute: typeof ShellBarDisplayRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/bar/menu': {
       id: '/_shell/bar/menu'
       path: '/bar/menu'
@@ -5714,6 +5912,13 @@ declare module '@tanstack/react-router' {
       path: '/bar/wastage'
       fullPath: '/bar/wastage'
       preLoaderRoute: typeof ShellBarWastageRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/coffee/display': {
+      id: '/_shell/coffee/display'
+      path: '/coffee/display'
+      fullPath: '/coffee/display'
+      preLoaderRoute: typeof ShellCoffeeDisplayRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/crm/': {
@@ -6465,6 +6670,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellKitchenDashboardRouteImport
       parentRoute: typeof ShellKitchenRoute
     }
+    '/_shell/kitchen/display': {
+      id: '/_shell/kitchen/display'
+      path: '/display'
+      fullPath: '/kitchen/display'
+      preLoaderRoute: typeof ShellKitchenDisplayRouteImport
+      parentRoute: typeof ShellKitchenRoute
+    }
     '/_shell/kitchen/my-station': {
       id: '/_shell/kitchen/my-station'
       path: '/my-station'
@@ -6806,6 +7018,13 @@ declare module '@tanstack/react-router' {
       path: '/custom-cakes'
       fullPath: '/pastry/custom-cakes'
       preLoaderRoute: typeof ShellPastryCustomCakesRouteImport
+      parentRoute: typeof ShellPastryRoute
+    }
+    '/_shell/pastry/display': {
+      id: '/_shell/pastry/display'
+      path: '/display'
+      fullPath: '/pastry/display'
+      preLoaderRoute: typeof ShellPastryDisplayRouteImport
       parentRoute: typeof ShellPastryRoute
     }
     '/_shell/pastry/my-production': {
@@ -7263,6 +7482,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiInternalWorkerPushRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/staff-pin-login': {
+      id: '/api/public/staff-pin-login'
+      path: '/api/public/staff-pin-login'
+      fullPath: '/api/public/staff-pin-login'
+      preLoaderRoute: typeof ApiPublicStaffPinLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/delivery/$hotelSlug/': {
       id: '/delivery/$hotelSlug/'
       path: '/'
@@ -7521,6 +7747,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/pos/orders/$id'
       preLoaderRoute: typeof ShellPosOrdersIdRouteImport
       parentRoute: typeof ShellPosRoute
+    }
+    '/api/public/print-agent/$action': {
+      id: '/api/public/print-agent/$action'
+      path: '/api/public/print-agent/$action'
+      fullPath: '/api/public/print-agent/$action'
+      preLoaderRoute: typeof ApiPublicPrintAgentActionRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/delivery/$hotelSlug/track/$orderReference': {
       id: '/delivery/$hotelSlug/track/$orderReference'
@@ -7891,6 +8124,7 @@ const ShellInventoryRouteWithChildren = ShellInventoryRoute._addFileChildren(
 
 interface ShellKitchenRouteChildren {
   ShellKitchenDashboardRoute: typeof ShellKitchenDashboardRoute
+  ShellKitchenDisplayRoute: typeof ShellKitchenDisplayRoute
   ShellKitchenMyStationRoute: typeof ShellKitchenMyStationRoute
   ShellKitchenNeedsRoute: typeof ShellKitchenNeedsRoute
   ShellKitchenOperationsRoute: typeof ShellKitchenOperationsRoute
@@ -7911,6 +8145,7 @@ interface ShellKitchenRouteChildren {
 
 const ShellKitchenRouteChildren: ShellKitchenRouteChildren = {
   ShellKitchenDashboardRoute: ShellKitchenDashboardRoute,
+  ShellKitchenDisplayRoute: ShellKitchenDisplayRoute,
   ShellKitchenMyStationRoute: ShellKitchenMyStationRoute,
   ShellKitchenNeedsRoute: ShellKitchenNeedsRoute,
   ShellKitchenOperationsRoute: ShellKitchenOperationsRoute,
@@ -8026,6 +8261,7 @@ const ShellMarketingRouteWithChildren = ShellMarketingRoute._addFileChildren(
 
 interface ShellPastryRouteChildren {
   ShellPastryCustomCakesRoute: typeof ShellPastryCustomCakesRoute
+  ShellPastryDisplayRoute: typeof ShellPastryDisplayRoute
   ShellPastryMyProductionRoute: typeof ShellPastryMyProductionRoute
   ShellPastryNeedsRoute: typeof ShellPastryNeedsRoute
   ShellPastryProductionRoute: typeof ShellPastryProductionRoute
@@ -8037,6 +8273,7 @@ interface ShellPastryRouteChildren {
 
 const ShellPastryRouteChildren: ShellPastryRouteChildren = {
   ShellPastryCustomCakesRoute: ShellPastryCustomCakesRoute,
+  ShellPastryDisplayRoute: ShellPastryDisplayRoute,
   ShellPastryMyProductionRoute: ShellPastryMyProductionRoute,
   ShellPastryNeedsRoute: ShellPastryNeedsRoute,
   ShellPastryProductionRoute: ShellPastryProductionRoute,
@@ -8188,6 +8425,7 @@ interface ShellRouteChildren {
   ShellCreditAccountsRoute: typeof ShellCreditAccountsRoute
   ShellCrmRoute: typeof ShellCrmRouteWithChildren
   ShellDepartmentsRoute: typeof ShellDepartmentsRoute
+  ShellDeviceAuthorisationRoute: typeof ShellDeviceAuthorisationRoute
   ShellEventsRoute: typeof ShellEventsRouteWithChildren
   ShellFinanceRoute: typeof ShellFinanceRouteWithChildren
   ShellFrontOfficeRoute: typeof ShellFrontOfficeRoute
@@ -8206,6 +8444,8 @@ interface ShellRouteChildren {
   ShellPlatformRoute: typeof ShellPlatformRouteWithChildren
   ShellPosRoute: typeof ShellPosRouteWithChildren
   ShellProcurementRoute: typeof ShellProcurementRouteWithChildren
+  ShellProductionDisplaysRoute: typeof ShellProductionDisplaysRoute
+  ShellProductionOverviewRoute: typeof ShellProductionOverviewRoute
   ShellProfileRoute: typeof ShellProfileRoute
   ShellRatesRoute: typeof ShellRatesRoute
   ShellReportsRoute: typeof ShellReportsRoute
@@ -8215,17 +8455,20 @@ interface ShellRouteChildren {
   ShellSecurityRoute: typeof ShellSecurityRouteWithChildren
   ShellSettingsRoute: typeof ShellSettingsRoute
   ShellStaffBoardRoute: typeof ShellStaffBoardRoute
+  ShellStaffDisplayCodeRoute: typeof ShellStaffDisplayCodeRoute
   ShellStationStockRoute: typeof ShellStationStockRoute
   ShellStationsRoute: typeof ShellStationsRoute
   ShellStaysRoute: typeof ShellStaysRoute
   ShellTasksRoute: typeof ShellTasksRoute
   ShellUsersRoute: typeof ShellUsersRoute
   ShellWorkspaceRoute: typeof ShellWorkspaceRoute
+  ShellBarDisplayRoute: typeof ShellBarDisplayRoute
   ShellBarMenuRoute: typeof ShellBarMenuRoute
   ShellBarQueueRoute: typeof ShellBarQueueRoute
   ShellBarRequisitionsRoute: typeof ShellBarRequisitionsRoute
   ShellBarSellRoute: typeof ShellBarSellRoute
   ShellBarWastageRoute: typeof ShellBarWastageRoute
+  ShellCoffeeDisplayRoute: typeof ShellCoffeeDisplayRoute
   ShellDashboardsKeyRoute: typeof ShellDashboardsKeyRoute
   ShellDeliveryMaintenanceRoute: typeof ShellDeliveryMaintenanceRoute
   ShellDeliveryQueueRoute: typeof ShellDeliveryQueueRoute
@@ -8270,6 +8513,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellCreditAccountsRoute: ShellCreditAccountsRoute,
   ShellCrmRoute: ShellCrmRouteWithChildren,
   ShellDepartmentsRoute: ShellDepartmentsRoute,
+  ShellDeviceAuthorisationRoute: ShellDeviceAuthorisationRoute,
   ShellEventsRoute: ShellEventsRouteWithChildren,
   ShellFinanceRoute: ShellFinanceRouteWithChildren,
   ShellFrontOfficeRoute: ShellFrontOfficeRoute,
@@ -8288,6 +8532,8 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellPlatformRoute: ShellPlatformRouteWithChildren,
   ShellPosRoute: ShellPosRouteWithChildren,
   ShellProcurementRoute: ShellProcurementRouteWithChildren,
+  ShellProductionDisplaysRoute: ShellProductionDisplaysRoute,
+  ShellProductionOverviewRoute: ShellProductionOverviewRoute,
   ShellProfileRoute: ShellProfileRoute,
   ShellRatesRoute: ShellRatesRoute,
   ShellReportsRoute: ShellReportsRoute,
@@ -8297,17 +8543,20 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellSecurityRoute: ShellSecurityRouteWithChildren,
   ShellSettingsRoute: ShellSettingsRoute,
   ShellStaffBoardRoute: ShellStaffBoardRoute,
+  ShellStaffDisplayCodeRoute: ShellStaffDisplayCodeRoute,
   ShellStationStockRoute: ShellStationStockRoute,
   ShellStationsRoute: ShellStationsRoute,
   ShellStaysRoute: ShellStaysRoute,
   ShellTasksRoute: ShellTasksRoute,
   ShellUsersRoute: ShellUsersRoute,
   ShellWorkspaceRoute: ShellWorkspaceRoute,
+  ShellBarDisplayRoute: ShellBarDisplayRoute,
   ShellBarMenuRoute: ShellBarMenuRoute,
   ShellBarQueueRoute: ShellBarQueueRoute,
   ShellBarRequisitionsRoute: ShellBarRequisitionsRoute,
   ShellBarSellRoute: ShellBarSellRoute,
   ShellBarWastageRoute: ShellBarWastageRoute,
+  ShellCoffeeDisplayRoute: ShellCoffeeDisplayRoute,
   ShellDashboardsKeyRoute: ShellDashboardsKeyRoute,
   ShellDeliveryMaintenanceRoute: ShellDeliveryMaintenanceRoute,
   ShellDeliveryQueueRoute: ShellDeliveryQueueRoute,
@@ -8379,6 +8628,7 @@ interface AdminRouteChildren {
   AdminPartnerBillingRoute: typeof AdminPartnerBillingRoute
   AdminPartnerMessagesRoute: typeof AdminPartnerMessagesRoute
   AdminPaymentsMpesaRoute: typeof AdminPaymentsMpesaRoute
+  AdminPrintersRoute: typeof AdminPrintersRoute
   AdminProcurementPolicyRoute: typeof AdminProcurementPolicyRoute
   AdminPublicExperienceRoute: typeof AdminPublicExperienceRoute
   AdminRegionalRoute: typeof AdminRegionalRoute
@@ -8428,6 +8678,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPartnerBillingRoute: AdminPartnerBillingRoute,
   AdminPartnerMessagesRoute: AdminPartnerMessagesRoute,
   AdminPaymentsMpesaRoute: AdminPaymentsMpesaRoute,
+  AdminPrintersRoute: AdminPrintersRoute,
   AdminProcurementPolicyRoute: AdminProcurementPolicyRoute,
   AdminPublicExperienceRoute: AdminPublicExperienceRoute,
   AdminRegionalRoute: AdminRegionalRoute,
@@ -8539,6 +8790,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlatformConsoleRoute: PlatformConsoleRoute,
   SessionExpiredRoute: SessionExpiredRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StationScreenRoute: StationScreenRoute,
   UnauthorizedRoute: UnauthorizedRoute,
   DeliveryHotelSlugRoute: DeliveryHotelSlugRouteWithChildren,
   GuestHotelSlugRoute: GuestHotelSlugRouteWithChildren,
@@ -8552,6 +8804,8 @@ const rootRouteChildren: RootRouteChildren = {
   RiderIndexRoute: RiderIndexRoute,
   StartIndexRoute: StartIndexRoute,
   ApiInternalWorkerPushRoute: ApiInternalWorkerPushRoute,
+  ApiPublicStaffPinLoginRoute: ApiPublicStaffPinLoginRoute,
+  ApiPublicPrintAgentActionRoute: ApiPublicPrintAgentActionRoute,
   ApiPublicDeliveryCallbackTokenRoute: ApiPublicDeliveryCallbackTokenRoute,
   ApiPublicDeliverySimulatorCourierRoute:
     ApiPublicDeliverySimulatorCourierRoute,

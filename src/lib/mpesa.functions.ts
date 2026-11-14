@@ -1,3 +1,4 @@
+import { mpesaResultApplied } from "@/lib/mpesa-application-result";
 /**
  * M-Pesa (Daraja) typed RPC.
  *
@@ -11,9 +12,90 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Rpc = {
-  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: { message: string } | null }>;
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: any; error: { message: string } | null }>;
   from: (t: string) => any;
 };
+
+async function holdExistingMpesaDispatch(
+  client: Rpc,
+  transactionId: string,
+  organizationId: string,
+): Promise<StkChargeResult | null> {
+  const { data, error } = await client.rpc("neo_mpesa_claim_dispatch", {
+    _transaction: transactionId,
+    _organization: organizationId,
+  });
+  if (error || typeof data?.claimed !== "boolean") {
+    return {
+      ok: false,
+      status: "dispatch-blocked",
+      detail:
+        "The payment could not be safely dispatched. Check the server connection and payment migration installation before retrying.",
+      transactionId,
+    };
+  }
+  if (data.claimed) return null;
+  return {
+    ok: true,
+    status: data.status === "initiated" ? "pending" : String(data.status ?? "unknown"),
+    detail:
+      "This payment attempt already exists. No additional prompt was sent. Check its collection status before retrying.",
+    transactionId,
+    reused: true,
+  };
+}
+
+function existingMpesaCollection(started: Record<string, any>): StkChargeResult {
+  return {
+    ok: true,
+    status: started["status"] === "unknown" ? "unknown" : "pending",
+    detail:
+      "A collection is already in progress. No additional prompt was sent. Check the existing attempt before retrying.",
+    transactionId: String(started["transaction_id"]),
+    amount: Number(started["amount"]),
+    reused: true,
+  };
+}
+
+async function recordMpesaPrompt(
+  client: Rpc,
+  transactionId: string,
+  fields: Record<string, unknown>,
+): Promise<StkChargeResult | null> {
+  const { error } = await client
+    .from("mpesa_transactions")
+    .update(fields)
+    .eq("id", transactionId)
+    .is("applied_at", null);
+  if (!error) return null;
+  return {
+    ok: true,
+    status: "unknown",
+    transactionId,
+    detail:
+      "Safaricom accepted the request but its tracking details could not be saved. Do not send another prompt; check the phone and Recent collections.",
+  };
+}
+
+async function retainAmbiguousMpesaPrompt(
+  client: Rpc,
+  transactionId: string,
+  detail: string,
+): Promise<void> {
+  const { error } = await client
+    .from("mpesa_transactions")
+    .update({
+      status: "unknown",
+      result_desc: detail,
+      failure_detail: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", transactionId);
+  if (error) throw new Error(`Could not retain the ambiguous M-Pesa prompt: ${error.message}`);
+}
 
 export type MpesaSettings = {
   authorised: boolean;
@@ -67,12 +149,12 @@ async function requestOrigin(): Promise<string> {
 async function baseUrl(fromSettings: string | null | undefined): Promise<string> {
   const configured = (fromSettings ?? "").trim().replace(/\/+$/, "");
   if (configured) return configured;
-  const env = (process.env["PUBLIC_SITE_URL"] ?? process.env["SITE_URL"] ?? "").trim().replace(/\/+$/, "");
+  const env = (process.env["PUBLIC_SITE_URL"] ?? process.env["SITE_URL"] ?? "")
+    .trim()
+    .replace(/\/+$/, "");
   if (env) return env.replace(/\/+$/, "");
   return (await requestOrigin()).replace(/\/+$/, "");
 }
-
-
 
 import { checkCallbackBase, isTemporaryHost } from "./mpesa-callback";
 export { checkCallbackBase, isTemporaryHost };
@@ -82,7 +164,11 @@ function callbackUrl(base: string, token: string): string {
 }
 
 async function organisationOf(client: Rpc, userId: string): Promise<string | null> {
-  const profile = await client.from("profiles").select("organization_id").eq("id", userId).maybeSingle();
+  const profile = await client
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", userId)
+    .maybeSingle();
   return (profile?.data?.organization_id as string | undefined) ?? null;
 }
 
@@ -99,7 +185,10 @@ export const getMpesaSettings = createServerFn({ method: "POST" })
     const url = base && settings.callback_token ? callbackUrl(base, settings.callback_token) : null;
     const temporary = Boolean(url) && isTemporaryHost(url as string);
     const credentialsStored = Boolean(
-      settings.short_code && settings.has_consumer_key && settings.has_consumer_secret && settings.has_passkey,
+      settings.short_code &&
+      settings.has_consumer_key &&
+      settings.has_consumer_secret &&
+      settings.has_passkey,
     );
     const tested = settings.last_check_status === "ok";
     return {
@@ -112,7 +201,10 @@ export const getMpesaSettings = createServerFn({ method: "POST" })
         ? "not-configured"
         : !tested
           ? "configured"
-          : settings.environment === "production" && settings.enabled && configuredBase && !temporary
+          : settings.environment === "production" &&
+              settings.enabled &&
+              configuredBase &&
+              !temporary
             ? "production-ready"
             : "tested",
       production_ready:
@@ -127,33 +219,37 @@ export const getMpesaSettings = createServerFn({ method: "POST" })
 
 export const saveMpesaSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    environment: string;
-    shortCode?: string | null;
-    partyB?: string | null;
-    accountReference?: string | null;
-    transactionType?: string | null;
-    consumerKey?: string | null;
-    consumerSecret?: string | null;
-    passkey?: string | null;
-    callbackBaseUrl?: string | null;
-    enabled?: boolean;
-    clearSecrets?: boolean;
-    rotateToken?: boolean;
-  }) => ({
-    environment: String(input?.environment ?? "sandbox").trim(),
-    shortCode: input?.shortCode ? String(input.shortCode).trim() : null,
-    partyB: input?.partyB ? String(input.partyB).trim() : null,
-    accountReference: input?.accountReference ? String(input.accountReference).trim() : null,
-    transactionType: input?.transactionType ? String(input.transactionType).trim() : "CustomerPayBillOnline",
-    consumerKey: input?.consumerKey ? String(input.consumerKey).trim() : null,
-    consumerSecret: input?.consumerSecret ? String(input.consumerSecret).trim() : null,
-    passkey: input?.passkey ? String(input.passkey).trim() : null,
-    callbackBaseUrl: input?.callbackBaseUrl ? String(input.callbackBaseUrl).trim() : null,
-    enabled: Boolean(input?.enabled),
-    clearSecrets: Boolean(input?.clearSecrets),
-    rotateToken: Boolean(input?.rotateToken),
-  }))
+  .inputValidator(
+    (input: {
+      environment: string;
+      shortCode?: string | null;
+      partyB?: string | null;
+      accountReference?: string | null;
+      transactionType?: string | null;
+      consumerKey?: string | null;
+      consumerSecret?: string | null;
+      passkey?: string | null;
+      callbackBaseUrl?: string | null;
+      enabled?: boolean;
+      clearSecrets?: boolean;
+      rotateToken?: boolean;
+    }) => ({
+      environment: String(input?.environment ?? "sandbox").trim(),
+      shortCode: input?.shortCode ? String(input.shortCode).trim() : null,
+      partyB: input?.partyB ? String(input.partyB).trim() : null,
+      accountReference: input?.accountReference ? String(input.accountReference).trim() : null,
+      transactionType: input?.transactionType
+        ? String(input.transactionType).trim()
+        : "CustomerPayBillOnline",
+      consumerKey: input?.consumerKey ? String(input.consumerKey).trim() : null,
+      consumerSecret: input?.consumerSecret ? String(input.consumerSecret).trim() : null,
+      passkey: input?.passkey ? String(input.passkey).trim() : null,
+      callbackBaseUrl: input?.callbackBaseUrl ? String(input.callbackBaseUrl).trim() : null,
+      enabled: Boolean(input?.enabled),
+      clearSecrets: Boolean(input?.clearSecrets),
+      rotateToken: Boolean(input?.rotateToken),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const client = context.supabase as unknown as Rpc;
 
@@ -203,40 +299,94 @@ export const saveMpesaSettings = createServerFn({ method: "POST" })
 /** Proves the stored credentials can obtain a Daraja access token. */
 export const testMpesaConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator(
+    (input?: {
+      environment?: string;
+      consumerKey?: string | null;
+      consumerSecret?: string | null;
+    }) => ({
+      environment:
+        input?.environment === "production"
+          ? ("production" as const)
+          : input?.environment === "sandbox"
+            ? ("sandbox" as const)
+            : null,
+      consumerKey: input?.consumerKey ? String(input.consumerKey).trim() : null,
+      consumerSecret: input?.consumerSecret ? String(input.consumerSecret).trim() : null,
+    }),
+  )
+  .handler(async ({ data, context }) => {
     const client = context.supabase as unknown as Rpc;
     const { data: settings, error } = await client.rpc("neo_mpesa_settings_get");
     if (error) throw new Error(error.message);
     if (!settings?.authorised) {
-      return { authorised: false as const, ok: false, status: "unauthorised", detail: settings?.reason ?? "Not permitted." };
+      return {
+        authorised: false as const,
+        ok: false,
+        status: "unauthorised",
+        detail: settings?.reason ?? "Not permitted.",
+      };
     }
 
     const organizationId = await organisationOf(client, context.userId);
     if (!organizationId) {
-      return { authorised: true as const, ok: false, status: "no-organisation", detail: "No organisation is linked to this account." };
+      return {
+        authorised: true as const,
+        ok: false,
+        status: "no-organisation",
+        detail: "No organisation is linked to this account.",
+      };
     }
 
-    const { loadMpesaCredentials, darajaToken } = await import("@/lib/mpesa.server");
-    const creds = await loadMpesaCredentials(organizationId);
-    if (!creds) {
-      const detail = "Paybill/till, consumer key, consumer secret and passkey are all required before testing.";
-      await client.rpc("neo_mpesa_record_check", { _status: "incomplete", _detail: detail });
+    const { darajaToken, loadMpesaCredentials } = await import("@/lib/mpesa.server");
+    // A complete draft OAuth test needs no privileged database read. Keep it
+    // usable when saved-secret access is unavailable, and never record a draft
+    // result as verification of the saved configuration.
+    const completeDraft = Boolean(data.consumerKey && data.consumerSecret);
+    const saved = completeDraft ? null : await loadMpesaCredentials(organizationId);
+    const environment = data.environment ?? saved?.environment ?? settings.environment ?? "sandbox";
+    const environmentChanged = Boolean(saved && environment !== saved.environment);
+    if (environmentChanged && (!data.consumerKey || !data.consumerSecret)) {
+      return {
+        authorised: true as const,
+        ok: false,
+        status: "credentials-required",
+        detail:
+          "Enter the Consumer Key and Consumer Secret for the selected environment before testing.",
+      };
+    }
+
+    const consumerKey = data.consumerKey ?? saved?.consumerKey;
+    const consumerSecret = data.consumerSecret ?? saved?.consumerSecret;
+    if (!consumerKey || !consumerSecret) {
+      const detail =
+        "Enter the Consumer Key and Consumer Secret before testing. The test does not save them.";
       return { authorised: true as const, ok: false, status: "incomplete", detail };
     }
 
     const started = Date.now();
-    const result = await darajaToken(creds);
+    const result = await darajaToken({ environment, consumerKey, consumerSecret });
     const detail = result.ok ? "Daraja issued an access token." : result.detail;
-    await client.rpc("neo_mpesa_record_check", {
-      _status: result.ok ? "ok" : result.status,
-      _detail: detail,
-    });
+    const usingSavedConfiguration = Boolean(
+      saved &&
+      !environmentChanged &&
+      (data.consumerKey === null || data.consumerKey === saved.consumerKey) &&
+      (data.consumerSecret === null || data.consumerSecret === saved.consumerSecret),
+    );
+    if (usingSavedConfiguration) {
+      await client.rpc("neo_mpesa_record_check", {
+        _status: result.ok ? "ok" : result.status,
+        _detail: detail,
+      });
+    }
     return {
       authorised: true as const,
       ok: result.ok,
       status: result.ok ? "ok" : result.status,
-      detail,
-      environment: creds.environment,
+      detail: usingSavedConfiguration
+        ? detail
+        : `${detail} This draft test did not save or change settings.`,
+      environment,
       duration_ms: Date.now() - started,
     };
   });
@@ -256,6 +406,8 @@ export type StkChargeResult = {
   transactionId?: string | undefined;
   checkoutRequestId?: string | undefined;
   customerMessage?: string | undefined;
+  reused?: boolean;
+  amount?: number;
 };
 
 /**
@@ -275,87 +427,66 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<StkChargeResult> => {
     const client = context.supabase as unknown as Rpc;
     if (!data.sourceRecordId) return { ok: false, status: "invalid", detail: "Nothing to charge." };
-    if (!(data.amount > 0)) return { ok: false, status: "invalid", detail: "Enter an amount greater than zero." };
+    if (!(data.amount > 0))
+      return { ok: false, status: "invalid", detail: "Enter an amount greater than zero." };
 
     const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
     const msisdn = normaliseMsisdn(data.msisdn);
-    if (!msisdn) return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
+    if (!msisdn)
+      return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
 
     const organizationId = await organisationOf(client, context.userId);
-    if (!organizationId) return { ok: false, status: "no-organisation", detail: "No organisation is linked to this account." };
+    if (!organizationId)
+      return {
+        ok: false,
+        status: "no-organisation",
+        detail: "No organisation is linked to this account.",
+      };
 
     const creds = await loadMpesaCredentials(organizationId);
     if (!creds || !creds.enabled) {
-      return { ok: false, status: "not-configured", detail: "M-Pesa is not configured or is switched off for this workspace." };
+      return {
+        ok: false,
+        status: "not-configured",
+        detail: "M-Pesa is not configured or is switched off for this workspace.",
+      };
     }
     const base = await baseUrl(creds.callbackBaseUrl);
     if (!base) {
-      return { ok: false, status: "no-callback", detail: "Set the public callback base URL in M-Pesa settings first." };
+      return {
+        ok: false,
+        status: "no-callback",
+        detail: "Set the public callback base URL in M-Pesa settings first.",
+      };
     }
 
-    // 1. Pending payment through the module's existing authority checks.
-    const providerReference = `STK-${crypto.randomUUID().slice(0, 12).toUpperCase()}`;
-    let paymentId: string | null = null;
-    let paymentTable: "pos_payments" | "payments";
-    let branchId: string | null = null;
-    let accountReference = creds.accountReference ?? "NEO";
-
-    if (data.sourceModule === "pos_order") {
-      paymentTable = "pos_payments";
-      const order = await client.from("pos_orders").select("id, branch_id, order_number").eq("id", data.sourceRecordId).maybeSingle();
-      if (!order?.data) return { ok: false, status: "not-found", detail: "Bill not found." };
-      branchId = (order.data.branch_id as string | null) ?? null;
-      accountReference = String(order.data.order_number ?? accountReference);
-      const { data: attempt, error } = await client.rpc("pos_record_payment_attempt", {
-        _order_id: data.sourceRecordId,
-        _amount: data.amount,
-        _method: "mpesa",
-        _tendered: null,
-        _reference: providerReference,
-        _shift_id: null,
-        _idempotency_key: `mpesa:${providerReference}`,
-        _manual_confirm: false,
-        _note: null,
-      });
-      if (error) return { ok: false, status: "rejected", detail: error.message };
-      paymentId = (attempt?.payment_id as string | undefined) ?? null;
-    } else {
-      paymentTable = "payments";
-      const folio = await client.from("folios").select("id, branch_id, folio_number").eq("id", data.sourceRecordId).maybeSingle();
-      if (!folio?.data) return { ok: false, status: "not-found", detail: "Folio not found." };
-      branchId = (folio.data.branch_id as string | null) ?? null;
-      accountReference = String(folio.data.folio_number ?? accountReference);
-      const { data: payment, error } = await client.rpc("pms_record_payment", {
-        _folio: data.sourceRecordId,
-        _amount: data.amount,
-        _method: "mpesa",
-        _reference: providerReference,
-        _notes: "M-Pesa STK prompt sent to guest",
-        // The provider reference is the collection intent: a re-sent prompt
-        // reuses the same receipt instead of opening a second one.
-        _intent_key: `mpesa:${providerReference}`,
-      });
-      if (error) return { ok: false, status: "rejected", detail: error.message };
-      paymentId = (payment as string | null) ?? null;
-    }
-
-    // 2. Ledger row for the prompt.
-    const { data: transactionId, error: txnError } = await client.rpc("neo_mpesa_txn_start", {
+    // Create/reuse the payment and provider transaction in one locked operation.
+    const { data: started, error } = await client.rpc("neo_mpesa_collection_start", {
       _source_module: data.sourceModule,
       _source_record: data.sourceRecordId,
-      _payment_table: paymentTable,
-      _payment_id: paymentId,
-      _branch: branchId,
       _msisdn: msisdn,
       _amount: data.amount,
-      _account_reference: accountReference,
-      _description: data.description ?? "NEO payment",
+      _description: data.description,
     });
-    if (txnError) return { ok: false, status: "rejected", detail: txnError.message };
+    if (error || !started?.transaction_id)
+      return {
+        ok: false,
+        status: "rejected",
+        detail: error?.message ?? "Payment creation was not confirmed.",
+      };
+    if (started.reused) return existingMpesaCollection(started);
+    const transactionId = String(started["transaction_id"]);
+    const accountReference = String(started.account_reference ?? creds.accountReference ?? "NEO");
 
     // 3. Push the prompt, then record what the provider said.
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = admin as unknown as Rpc;
+    const held = await holdExistingMpesaDispatch(
+      supabaseAdmin,
+      transactionId,
+      creds.organizationId,
+    );
+    if (held) return held;
     const push = await stkPush(creds, {
       msisdn,
       amount: data.amount,
@@ -365,6 +496,15 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
     });
 
     if (!push.ok) {
+      if (push.status === "ambiguous") {
+        await retainAmbiguousMpesaPrompt(supabaseAdmin, String(transactionId), push.detail);
+        return {
+          ok: true,
+          status: "unknown",
+          detail: push.detail,
+          transactionId: transactionId as string,
+        };
+      }
       await supabaseAdmin.rpc("neo_mpesa_apply_result", {
         _transaction: transactionId,
         _result_code: -1,
@@ -374,25 +514,29 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
         _payload: { error: push.detail, status: push.status },
         _source: "push-error",
       });
-      return { ok: false, status: push.status, detail: push.detail, transactionId: transactionId as string };
+      return {
+        ok: false,
+        status: push.status,
+        detail: push.detail,
+        transactionId: transactionId as string,
+      };
     }
 
-    await supabaseAdmin
-      .from("mpesa_transactions")
-      .update({
-        status: "pending",
-        merchant_request_id: push.data.MerchantRequestID ?? null,
-        checkout_request_id: push.data.CheckoutRequestID ?? null,
-        raw_request: push.data.request,
-        result_desc: push.data.CustomerMessage ?? push.data.ResponseDescription ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transactionId);
+    const tracking = await recordMpesaPrompt(supabaseAdmin, transactionId, {
+      status: "pending",
+      merchant_request_id: push.data.MerchantRequestID ?? null,
+      checkout_request_id: push.data.CheckoutRequestID ?? null,
+      raw_request: push.data.request,
+      result_desc: push.data.CustomerMessage ?? push.data.ResponseDescription ?? null,
+      updated_at: new Date().toISOString(),
+    });
+    if (tracking) return tracking;
 
     return {
       ok: true,
       status: "pending",
-      detail: push.data.CustomerMessage ?? "Prompt sent. Ask the customer to enter their M-Pesa PIN.",
+      detail:
+        push.data.CustomerMessage ?? "Prompt sent. Ask the customer to enter their M-Pesa PIN.",
       transactionId: transactionId as string,
       checkoutRequestId: push.data.CheckoutRequestID ?? undefined,
       customerMessage: push.data.CustomerMessage ?? undefined,
@@ -402,27 +546,47 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
 /** Asks Daraja for the current state of a prompt and applies the outcome. */
 export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { transactionId: string }) => ({ transactionId: String(input?.transactionId ?? "").trim() }))
+  .inputValidator((input: { transactionId: string }) => ({
+    transactionId: String(input?.transactionId ?? "").trim(),
+  }))
   .handler(async ({ data, context }) => {
     const client = context.supabase as unknown as Rpc;
-    if (!data.transactionId) return { ok: false, status: "invalid", detail: "No transaction supplied." };
+    if (!data.transactionId)
+      return { ok: false, status: "invalid", detail: "No transaction supplied." };
 
-    const existing = await client.from("mpesa_transactions").select("*").eq("id", data.transactionId).maybeSingle();
+    const existing = await client
+      .from("mpesa_transactions")
+      .select("*")
+      .eq("id", data.transactionId)
+      .maybeSingle();
     const row = existing?.data as Record<string, any> | null;
     if (!row) return { ok: false, status: "not-found", detail: "Transaction not visible to you." };
-    if (!(await client.rpc("neo_mpesa_can_collect", { _source_module: row["source_module"] })).data) {
+    if (
+      !(await client.rpc("neo_mpesa_can_collect", { _source_module: row["source_module"] })).data
+    ) {
       return { ok: false, status: "unauthorised", detail: "You cannot reconcile this payment." };
     }
     if (row["applied_at"]) {
-      return { ok: true, status: row["status"] as string, detail: "Already reconciled.", duplicate: true };
+      return {
+        ok: true,
+        status: row["status"] as string,
+        detail: "Already reconciled.",
+        duplicate: true,
+      };
     }
     if (!row["checkout_request_id"]) {
-      return { ok: false, status: "no-reference", detail: "The prompt never reached Safaricom, so there is nothing to query." };
+      return {
+        ok: false,
+        status: "no-reference",
+        detail:
+          "No Safaricom checkout reference was saved, so this attempt cannot be queried automatically. Check the phone and Recent collections before sending another prompt.",
+      };
     }
 
-    const { loadMpesaCredentials, stkQuery } = await import("@/lib/mpesa.server");
+    const { loadMpesaCredentials, stkQuery, darajaResultCode } = await import("@/lib/mpesa.server");
     const creds = await loadMpesaCredentials(row["organization_id"] as string);
-    if (!creds) return { ok: false, status: "not-configured", detail: "M-Pesa credentials are incomplete." };
+    if (!creds)
+      return { ok: false, status: "not-configured", detail: "M-Pesa credentials are incomplete." };
 
     const query = await stkQuery(creds, String(row["checkout_request_id"]));
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
@@ -434,9 +598,16 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
 
     if (!query.ok) return { ok: false, status: query.status, detail: query.detail };
 
-    const code = query.data.ResultCode === undefined ? null : Number(query.data.ResultCode);
+    const code = darajaResultCode(query.data.ResultCode);
     if (code === null) {
-      return { ok: false, status: "unknown", detail: query.data.ResultDesc ?? "Safaricom returned no result code yet." };
+      return {
+        ok: false,
+        status: "unknown",
+        detail: query.data.ResultDesc ?? "Safaricom returned no result code yet.",
+      };
+    }
+    if ((query.data.CheckoutRequestID && query.data.CheckoutRequestID !== row["checkout_request_id"]) || (query.data.MerchantRequestID && row["merchant_request_id"] && query.data.MerchantRequestID !== row["merchant_request_id"])) {
+      return {ok:false,status:"verification-mismatch",detail:"Daraja returned a different transaction reference. No payment was applied."};
     }
     // 1032/1037 and friends are terminal; anything else non-zero is a decline.
     const { data: applied, error } = await supabaseAdmin.rpc("neo_mpesa_apply_result", {
@@ -448,8 +619,12 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
       _payload: query.data as unknown as Record<string, unknown>,
       _source: "status-query",
     });
-    if (error) return { ok: false, status: "apply-failed", detail: error.message };
-    return { ok: true, status: (applied?.status as string) ?? "unknown", detail: query.data.ResultDesc ?? "" };
+    if (error || !mpesaResultApplied(applied, code)) return { ok: false, status: "apply-failed", detail: "The database did not confirm application of this provider result. Keep the existing transaction for reconciliation." };
+    return {
+      ok: true,
+      status: (applied?.status as string) ?? "unknown",
+      detail: query.data.ResultDesc ?? "",
+    };
   });
 
 export type DeliveryChargeResult = {
@@ -480,22 +655,32 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
 
     const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
     const msisdn = normaliseMsisdn(data.msisdn);
-    if (!msisdn) return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
+    if (!msisdn)
+      return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
 
+    const { verifyMpesaServerAccess } = await import("@/lib/mpesa.server");
+    await verifyMpesaServerAccess();
     const { data: started, error } = await client.rpc("neo_delivery_guest_mpesa_start", {
       _order: data.orderId,
       _msisdn: msisdn,
     });
     if (error) return { ok: false, status: "rejected", detail: error.message };
-    if (started?.already_paid) return { ok: true, status: "paid", detail: "This order is already paid." };
+    if (started?.already_paid)
+      return { ok: true, status: "paid", detail: "This order is already paid." };
     if (!started?.transaction_id) {
-      return { ok: false, status: "no-balance", detail: "There is nothing left to pay on this order." };
+      return {
+        ok: false,
+        status: started?.pending ? "pending" : "no-balance",
+        detail: started?.pending
+          ? "A collection is already pending for this order. Check its status before sending another prompt."
+          : "There is nothing left to pay on this order.",
+      };
     }
 
     const creds = await loadMpesaCredentials(String(started.organization_id));
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = admin as unknown as Rpc;
-    const transactionId = String(started.transaction_id);
+    const transactionId = String(started["transaction_id"]);
 
     const fail = async (status: string, detail: string): Promise<DeliveryChargeResult> => {
       await supabaseAdmin.rpc("neo_mpesa_apply_result", {
@@ -518,26 +703,36 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
       return fail("no-callback", "M-Pesa is not fully set up for this property yet.");
     }
 
+    const held = await holdExistingMpesaDispatch(
+      supabaseAdmin,
+      transactionId,
+      creds.organizationId,
+    );
+    if (held) return held;
     const push = await stkPush(creds, {
       msisdn,
-      amount: Number(started.amount),
+      amount: Number(started["amount"]),
       accountReference: String(started.account_reference ?? "NEO"),
       description: "Delivery order",
       callbackUrl: callbackUrl(base, creds.callbackToken),
     });
-    if (!push.ok) return fail(push.status, push.detail);
+    if (!push.ok) {
+      if (push.status === "ambiguous") {
+        await retainAmbiguousMpesaPrompt(supabaseAdmin, transactionId, push.detail);
+        return { ok: true, status: "unknown", detail: push.detail, transactionId };
+      }
+      return fail(push.status, push.detail);
+    }
 
-    await supabaseAdmin
-      .from("mpesa_transactions")
-      .update({
-        status: "pending",
-        merchant_request_id: push.data.MerchantRequestID ?? null,
-        checkout_request_id: push.data.CheckoutRequestID ?? null,
-        raw_request: push.data.request,
-        result_desc: push.data.CustomerMessage ?? push.data.ResponseDescription ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transactionId);
+    const tracking = await recordMpesaPrompt(supabaseAdmin, transactionId, {
+      status: "pending",
+      merchant_request_id: push.data.MerchantRequestID ?? null,
+      checkout_request_id: push.data.CheckoutRequestID ?? null,
+      raw_request: push.data.request,
+      result_desc: push.data.CustomerMessage ?? push.data.ResponseDescription ?? null,
+      updated_at: new Date().toISOString(),
+    });
+    if (tracking) return tracking;
 
     return {
       ok: true,
@@ -550,34 +745,181 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
 /** Guest-owned folio M-Pesa checkout. Opens the pending payment in DB, then actually dispatches STK. */
 export const chargeGuestFolioWithMpesa = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { organizationId: string; folioId: string; msisdn: string; amount?: number }) => ({
-    organizationId: String(input?.organizationId ?? ""), folioId: String(input?.folioId ?? ""), msisdn: String(input?.msisdn ?? ""), amount: input?.amount,
-  }))
+  .inputValidator(
+    (input: { organizationId: string; folioId: string; msisdn: string; amount?: number }) => ({
+      organizationId: String(input?.organizationId ?? ""),
+      folioId: String(input?.folioId ?? ""),
+      msisdn: String(input?.msisdn ?? ""),
+      amount: input?.amount,
+    }),
+  )
   .handler(async ({ data, context }): Promise<DeliveryChargeResult> => {
-    const client=context.supabase as unknown as Rpc;
-    const { loadMpesaCredentials, normaliseMsisdn, stkPush }=await import("@/lib/mpesa.server");
-    const msisdn=normaliseMsisdn(data.msisdn); if(!msisdn) return {ok:false,status:"invalid",detail:"Enter a valid Kenyan mobile number."};
-    const {data:started,error}=await client.rpc("neo_guest_folio_mpesa_start",{_org:data.organizationId,_folio:data.folioId,_msisdn:msisdn,_amount:data.amount??null});
-    if(error||!started?.transaction_id) return {ok:false,status:"rejected",detail:error?.message??"The payment could not be started."};
-    const creds=await loadMpesaCredentials(data.organizationId); const transactionId=String(started.transaction_id);
-    const {supabaseAdmin:admin}=await import("@/integrations/supabase/client.server"); const supabaseAdmin=admin as unknown as Rpc;
-    const fail=async(status:string,detail:string)=>{await supabaseAdmin.rpc("neo_mpesa_apply_result",{_transaction:transactionId,_result_code:-1,_result_desc:detail,_receipt:null,_transaction_date:null,_payload:{error:detail,status},_source:"push-error"});return {ok:false,status,detail,transactionId};};
-    if(!creds||!creds.enabled) return fail("not-configured","M-Pesa is not available for this property right now.");
-    const base=await baseUrl(creds.callbackBaseUrl); if(!base) return fail("no-callback","M-Pesa is not fully set up for this property yet.");
-    const push=await stkPush(creds,{msisdn,amount:Number(started.amount),accountReference:String(started.folio_number??"FOLIO"),description:"Guest folio",callbackUrl:callbackUrl(base,creds.callbackToken)});
-    if(!push.ok) return fail(push.status,push.detail);
-    await supabaseAdmin.from("mpesa_transactions").update({merchant_request_id:push.data.MerchantRequestID,checkout_request_id:push.data.CheckoutRequestID,status:"pending",updated_at:new Date().toISOString()}).eq("id",transactionId);
-    return {ok:true,status:"pending",detail:"Payment request sent. Approve it on your phone.",transactionId};
+    const client = context.supabase as unknown as Rpc;
+    const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
+    const msisdn = normaliseMsisdn(data.msisdn);
+    if (!msisdn)
+      return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
+    const { verifyMpesaServerAccess } = await import("@/lib/mpesa.server");
+    await verifyMpesaServerAccess();
+    const { data: started, error } = await client.rpc("neo_mpesa_collection_start", {
+      _source_module: "guest_folio",
+      _organization: data.organizationId,
+      _source_record: data.folioId,
+      _msisdn: msisdn,
+      _amount: data.amount ?? null,
+    });
+    if (error || !started?.transaction_id)
+      return {
+        ok: false,
+        status: "rejected",
+        detail: error?.message ?? "The payment could not be started.",
+      };
+    if (started.reused) return existingMpesaCollection(started);
+    const creds = await loadMpesaCredentials(data.organizationId);
+    const transactionId = String(started["transaction_id"]);
+    const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = admin as unknown as Rpc;
+    const fail = async (status: string, detail: string) => {
+      await supabaseAdmin.rpc("neo_mpesa_apply_result", {
+        _transaction: transactionId,
+        _result_code: -1,
+        _result_desc: detail,
+        _receipt: null,
+        _transaction_date: null,
+        _payload: { error: detail, status },
+        _source: "push-error",
+      });
+      return { ok: false, status, detail, transactionId };
+    };
+    if (!creds || !creds.enabled)
+      return fail("not-configured", "M-Pesa is not available for this property right now.");
+    const base = await baseUrl(creds.callbackBaseUrl);
+    if (!base) return fail("no-callback", "M-Pesa is not fully set up for this property yet.");
+    const held = await holdExistingMpesaDispatch(
+      supabaseAdmin,
+      transactionId,
+      creds.organizationId,
+    );
+    if (held) return held;
+    const push = await stkPush(creds, {
+      msisdn,
+      amount: Number(started["amount"]),
+      accountReference: String(started.folio_number ?? "FOLIO"),
+      description: "Guest folio",
+      callbackUrl: callbackUrl(base, creds.callbackToken),
+    });
+    if (!push.ok) {
+      if (push.status === "ambiguous") {
+        await retainAmbiguousMpesaPrompt(supabaseAdmin, transactionId, push.detail);
+        return { ok: true, status: "unknown", detail: push.detail, transactionId };
+      }
+      return fail(push.status, push.detail);
+    }
+    const tracking = await recordMpesaPrompt(supabaseAdmin, transactionId, {
+      merchant_request_id: push.data.MerchantRequestID,
+      checkout_request_id: push.data.CheckoutRequestID,
+      status: "pending",
+      updated_at: new Date().toISOString(),
+    });
+    if (tracking) return tracking;
+    return {
+      ok: true,
+      status: "pending",
+      detail: "Payment request sent. Approve it on your phone.",
+      transactionId,
+    };
   });
 
 /** Booking deposit equivalent: fixes the old UI which created a DB transaction but never sent STK. */
 export const chargeGuestDepositWithMpesa = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input:{organizationId:string;reference:string;msisdn:string;amount?:number})=>({organizationId:String(input?.organizationId??""),reference:String(input?.reference??""),msisdn:String(input?.msisdn??""),amount:input?.amount}))
-  .handler(async({data,context}):Promise<DeliveryChargeResult>=>{
-    const client=context.supabase as unknown as Rpc; const {loadMpesaCredentials,normaliseMsisdn,stkPush}=await import("@/lib/mpesa.server"); const msisdn=normaliseMsisdn(data.msisdn); if(!msisdn)return{ok:false,status:"invalid",detail:"Enter a valid Kenyan mobile number."};
-    const {data:started,error}=await client.rpc("neo_guest_deposit_pay",{_org:data.organizationId,_reference:data.reference,_msisdn:msisdn,_amount:data.amount??null}); if(error||!started?.transaction_id)return{ok:false,status:"rejected",detail:error?.message??"The deposit could not be started."};
-    const creds=await loadMpesaCredentials(data.organizationId); const transactionId=String(started.transaction_id); const {supabaseAdmin:admin}=await import("@/integrations/supabase/client.server"); const supabaseAdmin=admin as unknown as Rpc;
-    const fail=async(status:string,detail:string)=>{await supabaseAdmin.rpc("neo_mpesa_apply_result",{_transaction:transactionId,_result_code:-1,_result_desc:detail,_receipt:null,_transaction_date:null,_payload:{error:detail,status},_source:"push-error"});return{ok:false,status,detail,transactionId};}; if(!creds||!creds.enabled)return fail("not-configured","M-Pesa is not available for this property right now."); const base=await baseUrl(creds.callbackBaseUrl); if(!base)return fail("no-callback","M-Pesa is not fully set up for this property yet.");
-    const push=await stkPush(creds,{msisdn,amount:Number(started.amount),accountReference:data.reference,description:"Booking deposit",callbackUrl:callbackUrl(base,creds.callbackToken)}); if(!push.ok)return fail(push.status,push.detail); await supabaseAdmin.from("mpesa_transactions").update({merchant_request_id:push.data.MerchantRequestID,checkout_request_id:push.data.CheckoutRequestID,status:"pending",updated_at:new Date().toISOString()}).eq("id",transactionId); return{ok:true,status:"pending",detail:"Payment request sent. Approve it on your phone.",transactionId,amount:Number(started.amount)};
+  .inputValidator(
+    (input: { organizationId: string; reference: string; msisdn: string; amount?: number }) => ({
+      organizationId: String(input?.organizationId ?? ""),
+      reference: String(input?.reference ?? ""),
+      msisdn: String(input?.msisdn ?? ""),
+      amount: input?.amount,
+    }),
+  )
+  .handler(async ({ data, context }): Promise<DeliveryChargeResult> => {
+    const client = context.supabase as unknown as Rpc;
+    const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
+    const msisdn = normaliseMsisdn(data.msisdn);
+    if (!msisdn)
+      return { ok: false, status: "invalid", detail: "Enter a valid Kenyan mobile number." };
+    const { verifyMpesaServerAccess } = await import("@/lib/mpesa.server");
+    await verifyMpesaServerAccess();
+    const { data: started, error } = await client.rpc("neo_mpesa_guest_deposit_start", {
+      _org: data.organizationId,
+      _reference: data.reference,
+      _msisdn: msisdn,
+      _amount: data.amount ?? null,
+    });
+    if (error || !started?.transaction_id)
+      return {
+        ok: false,
+        status: "rejected",
+        detail: error?.message ?? "The deposit could not be started.",
+      };
+    if (started.reused) return existingMpesaCollection(started);
+    const creds = await loadMpesaCredentials(data.organizationId);
+    const transactionId = String(started["transaction_id"]);
+    const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = admin as unknown as Rpc;
+    const fail = async (status: string, detail: string) => {
+      await supabaseAdmin.rpc("neo_mpesa_apply_result", {
+        _transaction: transactionId,
+        _result_code: -1,
+        _result_desc: detail,
+        _receipt: null,
+        _transaction_date: null,
+        _payload: { error: detail, status },
+        _source: "push-error",
+      });
+      return { ok: false, status, detail, transactionId };
+    };
+    if (!creds || !creds.enabled)
+      return fail("not-configured", "M-Pesa is not available for this property right now.");
+    const base = await baseUrl(creds.callbackBaseUrl);
+    if (!base) return fail("no-callback", "M-Pesa is not fully set up for this property yet.");
+    const held = await holdExistingMpesaDispatch(
+      supabaseAdmin,
+      transactionId,
+      creds.organizationId,
+    );
+    if (held) return held;
+    const push = await stkPush(creds, {
+      msisdn,
+      amount: Number(started["amount"]),
+      accountReference: data.reference,
+      description: "Booking deposit",
+      callbackUrl: callbackUrl(base, creds.callbackToken),
+    });
+    if (!push.ok) {
+      if (push.status === "ambiguous") {
+        await retainAmbiguousMpesaPrompt(supabaseAdmin, transactionId, push.detail);
+        return {
+          ok: true,
+          status: "unknown",
+          detail: push.detail,
+          transactionId,
+          amount: Number(started["amount"]),
+        };
+      }
+      return fail(push.status, push.detail);
+    }
+    const tracking = await recordMpesaPrompt(supabaseAdmin, transactionId, {
+      merchant_request_id: push.data.MerchantRequestID,
+      checkout_request_id: push.data.CheckoutRequestID,
+      status: "pending",
+      updated_at: new Date().toISOString(),
+    });
+    if (tracking) return tracking;
+    return {
+      ok: true,
+      status: "pending",
+      detail: "Payment request sent. Approve it on your phone.",
+      transactionId,
+      amount: Number(started["amount"]),
+    };
   });

@@ -51,10 +51,10 @@ function GuestSignInPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="account">
       <div className="mx-auto w-full max-w-md py-6">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           {heading}
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Your stay, orders and charges with {ws.hotel_name} are kept private to your account.
         </p>
         <div className="neo-rider-card mt-5 p-5 sm:p-6">

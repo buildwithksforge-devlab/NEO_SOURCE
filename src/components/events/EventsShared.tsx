@@ -1,3 +1,5 @@
+import {recordFieldsError} from '@/lib/record-field-validation';
+import {propertyDateTimeToIso} from '@/lib/property-clock';
 import {
   Children,
   cloneElement,
@@ -109,6 +111,9 @@ export type FieldSpec = {
   placeholder?: string;
   required?: boolean;
   span?: boolean;
+  min?: number;
+  max?: number;
+  step?: number | "any";
 };
 
 /**
@@ -173,11 +178,12 @@ export function RecordForm({
   onValuesChange,
   draftKey,
   validate,
+  timeZone,
 }: {
   fields: FieldSpec[];
   initial?: Record<string, unknown>;
   submitLabel: string;
-  onSubmit: (values: Record<string, unknown>) => void;
+  onSubmit: (values: Record<string, unknown>) => void | Promise<unknown>;
   busy?: boolean;
   /** Lets a caller narrow dependent choices, e.g. invoices belonging to the chosen supplier. */
   onValuesChange?: (values: Record<string, unknown>) => void;
@@ -185,6 +191,7 @@ export function RecordForm({
   draftKey?: string;
   /** Returns a message when the record cannot yet be saved. */
   validate?: (values: Record<string, unknown>) => string | null;
+  timeZone?: string | null;
 }) {
   // Typed text, dates and times live in the fields themselves. Nothing React
   // does in the background — a refreshed list, a re-render caused by choosing
@@ -195,6 +202,8 @@ export function RecordForm({
   const valuesRef = useRef<Record<string, unknown>>({ ...opening });
   const [choices, setChoices] = useState<Record<string, unknown>>({ ...opening });
   const [problem, setProblem] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submissionLock = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   /** Everything currently on screen, fields first. */
@@ -237,14 +246,26 @@ export function RecordForm({
     <form
       ref={formRef}
       className="space-y-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
+        if (busy || submissionLock.current) return;
         const onScreen = readAll();
-        const message = validate?.(onScreen) ?? null;
+        const message = recordFieldsError(fields, onScreen) ?? validate?.(onScreen) ?? null;
         setProblem(message);
         if (message) return;
-        if (draftKey) clearFormDraft(draftKey);
-        onSubmit(onScreen);
+        try {
+          const payload = { ...onScreen };
+          if (timeZone !== undefined) for (const field of fields) {
+            if (field.type === "datetime-local") payload[field.name] = propertyDateTimeToIso(String(payload[field.name] ?? ""), timeZone);
+          }
+          submissionLock.current = true;
+          setSubmitting(true);
+          const submission = onSubmit(payload);
+          if (submission) await submission;
+          if (draftKey) clearFormDraft(draftKey);
+        } catch (error) {
+          setProblem(error instanceof Error ? error.message : "The record could not be saved.");
+        } finally { submissionLock.current = false; setSubmitting(false); }
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -292,6 +313,9 @@ export function RecordForm({
               <Input
                 id={`f-${f.name}`}
                 type={f.type ?? "text"}
+                min={f.min}
+                max={f.max}
+                step={f.step}
                 defaultValue={String(opening[f.name] ?? "")}
                 placeholder={f.placeholder ?? ""}
                 required={f.required ?? false}
@@ -304,12 +328,13 @@ export function RecordForm({
           </div>
         ))}
       </div>
+      {timeZone !== undefined ? <p className="text-xs text-muted-foreground">{timeZone ? `Times are in ${timeZone}.` : "Property timezone unavailable. Choose a property or refresh before saving times."}</p> : null}
       {problem ? (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {problem}
         </p>
       ) : null}
-      <Button type="submit" disabled={busy ?? false}>
+      <Button type="submit" disabled={Boolean(busy || submitting)}>
         {submitLabel}
       </Button>
     </form>

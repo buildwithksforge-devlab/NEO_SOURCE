@@ -1,3 +1,6 @@
+import {toast} from 'sonner';
+import {propertyDateTimeToIso} from '@/lib/property-clock';
+import {usePropertyClock} from '@/lib/use-property-clock';
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
@@ -68,12 +71,6 @@ export const Route = createFileRoute("/_shell/pastry/production")({
   ),
 });
 
-function toIso(local: string) {
-  if (!local.trim()) return null;
-  const d = new Date(local);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 function PastryProductionPage() {
   const { can } = useAuth();
   const mayPlan = can("kitchen", "pastry-schedule", "create");
@@ -84,6 +81,7 @@ function PastryProductionPage() {
   const activePlan =
     (plans.data ?? []).find((p) => String(p["id"]) === planId) ?? (plans.data ?? [])[0] ?? null;
   const activeId = activePlan ? String(activePlan["id"]) : null;
+  const {timeZone} = usePropertyClock(activePlan?.["branch_id"] ? String(activePlan["branch_id"]) : null);
 
   const items = usePastryProductionItems(activeId);
   const staff = usePastryStaff();
@@ -175,7 +173,7 @@ function PastryProductionPage() {
                         produced {pastryNum(r["produced_quantity"])} · sold{" "}
                         {pastryNum(r["sold_quantity"])} · wasted {pastryNum(r["wasted_quantity"])}
                       </p>
-                      <DueLabel value={r["due_at"] as string | null} />
+                      <DueLabel value={r["due_at"] as string | null} timeZone={timeZone ?? "UTC"} />
                       {r["special_instructions"] ? (
                         <p className="mt-1 text-xs text-muted-foreground">
                           {pastryStr(r["special_instructions"])}
@@ -287,7 +285,7 @@ function PastryProductionPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="pastry-due">Due</Label>
+                <Label htmlFor="pastry-due">Due{timeZone ? ` (${timeZone})` : " — property timezone unavailable"}</Label>
                 <Input
                   id="pastry-due"
                   type="datetime-local"
@@ -326,22 +324,24 @@ function PastryProductionPage() {
               Cancel
             </Button>
             <Button
-              disabled={!activeId || !product.trim() || addItem.isPending}
+              disabled={!activeId || !product.trim() || !timeZone || !Number.isFinite(Number(quantity)) || Number(quantity) <= 0 || addItem.isPending}
               onClick={async () => {
-                if (!activeId) return;
+                if (!activeId || !timeZone) return;
+                try {
                 await addItem.mutateAsync({
                   planId: activeId,
                   product: product.trim(),
-                  quantity: Number(quantity) || 1,
+                  quantity: Number(quantity),
                   unit,
                   assigneeId: assignee || null,
-                  dueAt: toIso(due),
+                  dueAt: propertyDateTimeToIso(due, timeZone),
                   instructions: instructions.trim(),
                 });
                 setProduct("");
                 setInstructions("");
                 setDue("");
                 setOpen(false);
+                } catch (error) { toast.error(error instanceof Error ? error.message : "Could not add the production item."); }
               }}
             >
               Add to plan

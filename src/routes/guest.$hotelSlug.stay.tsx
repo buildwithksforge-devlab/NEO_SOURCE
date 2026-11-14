@@ -48,10 +48,10 @@ function MyStayPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="stay">
       <section>
-        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
+        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
           My stay
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Your booking with {ws.hotel_name}, the room you are in and what has been charged.
         </p>
       </section>
@@ -64,7 +64,7 @@ function MyStayPage() {
         />
       ) : stays.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : (stays.data?.length ?? 0) === 0 ? (
         <GuestSection
@@ -83,10 +83,10 @@ function MyStayPage() {
               <li key={String(s["reservation_id"] ?? s["confirmation_number"])} className="rounded-xl border border-black/5 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {String(s["confirmation_number"] ?? "")}
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {String(s["arrival_date"] ?? "")} → {String(s["departure_date"] ?? "")}
                       {s["room_number"] ? ` · Room ${String(s["room_number"])}` : ""}
                       {s["status"] ? ` · ${String(s["status"])}` : ""}
@@ -94,7 +94,7 @@ function MyStayPage() {
                   </div>
                   <div className="text-right">
                     {s["balance"] === undefined ? null : (
-                      <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(s["balance"])}
                       </p>
                     )}
@@ -102,7 +102,7 @@ function MyStayPage() {
                       to="/guest/$hotelSlug/folio"
                       params={{ hotelSlug }}
                       className="text-xs font-medium"
-                      style={{ color: ws.primary_color }}
+                      style={{ color: "var(--pa-accent-ink)" }}
                     >
                       View charges
                     </Link>
@@ -166,12 +166,12 @@ function MyStayPage() {
                 type="submit"
                 disabled={verify.isPending || !reference.trim() || !detail.trim()}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: ws.primary_color || brandFallback.primary }}
+                style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
               >
                 {verify.isPending ? "Checking…" : "Link my booking"}
               </button>
               {message ? (
-                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                <p className="mt-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {message}
                 </p>
               ) : null}

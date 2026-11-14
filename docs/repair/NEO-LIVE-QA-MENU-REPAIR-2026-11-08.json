@@ -1,0 +1,7 @@
+{
+  "diagnostic_version": "two-confirmed-qa-menu-postcheck-v1",
+  "public_channels_clear": true,
+  "read_only": "on",
+  "scope": "Two exact QA products only; no deletion, price change, financial posting or historical transaction change.",
+  "two_exact_items_unpublished": true
+}

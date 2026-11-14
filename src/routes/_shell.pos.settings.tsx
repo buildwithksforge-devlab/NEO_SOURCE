@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { EmptyState, IntegrationStatus, PosGuard, QueryState } from "@/components/pos/PosShared";
-import { RecordDialog } from "./_shell.pos.floor";
+import { PosGuard } from "@/components/pos/PosShared";
 import { DEFAULT_POS_SETTINGS, type PosSettings } from "@/lib/pos";
-import {
-  usePosSettings,
-  usePrinterProfiles,
-  useSavePosSettings,
-  useSaveRecord,
-  useStations,
-} from "@/lib/pos-data";
+import { usePosSettings, useSavePosSettings } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/_shell/pos/settings")({
   head: () => ({
@@ -23,13 +16,13 @@ export const Route = createFileRoute("/_shell/pos/settings")({
       {
         name: "description",
         content:
-          "Service charge, tax, tipping, printer profiles and the real connection state of payment providers.",
+          "Service charge, tax and receipt rules, with links to central printer configuration and verified integration readiness.",
       },
       { property: "og:title", content: "POS Settings — NEØ" },
       {
         property: "og:description",
         content:
-          "Service charge, tax, tipping, printer profiles and the real connection state of payment providers.",
+          "Service charge, tax and receipt rules, with links to central printer configuration and verified integration readiness.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -45,12 +38,7 @@ export const Route = createFileRoute("/_shell/pos/settings")({
 function SettingsPage() {
   const query = usePosSettings();
   const save = useSavePosSettings();
-  const printers = usePrinterProfiles();
-  const stations = useStations();
-  const savePrinter = useSaveRecord("printer_profiles");
   const [form, setForm] = useState<PosSettings>(DEFAULT_POS_SETTINGS);
-  const [printerDialog, setPrinterDialog] = useState(false);
-
   useEffect(() => {
     if (query.data) setForm(query.data.settings);
   }, [query.data]);
@@ -116,90 +104,29 @@ function SettingsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Integrations"
-          description="Nothing here is simulated — a provider is only 'connected' once real credentials are configured."
+          title="Integration readiness"
+          description="View saved provider configuration and verified results in the Integration Centre."
         >
-          <div className="space-y-3">
-            <IntegrationStatus
-              label="M-Pesa / mobile money"
-              status="not-configured"
-              detail="Mobile money payments are recorded as pending and are never auto-confirmed until a verified provider callback is received."
-              steps={[
-                "Provide provider credentials",
-                "Enable the payment callback endpoint",
-                "Confirm a live test transaction",
-              ]}
-            />
-            <IntegrationStatus
-              label="Card terminal"
-              status="not-configured"
-              detail="Card settlements are captured with their reference and stay pending until the acquirer confirms them."
-            />
-            <IntegrationStatus
-              label="Guest room folio posting"
-              status="connected"
-              detail="Room charges post directly to an open folio for in-house guests, with duplicate protection."
-            />
-            <IntegrationStatus
-              label="Kitchen Display System"
-              status="connected"
-              detail="Station tickets update live over the realtime channel."
-            />
-          </div>
+          <p className="mb-3 text-sm text-muted-foreground">
+            A configured module or saved provider name does not prove a payment callback, guest
+            folio posting or live station connection. Review its recorded evidence before treating
+            it as ready.
+          </p>
+          <Button variant="outline" asChild>
+            <Link to="/platform/integrations">Review integration readiness</Link>
+          </Button>
         </SectionCard>
       </div>
 
       <SectionCard
         className="mt-6"
-        title="Printer profiles"
-        description="Where receipts and station tickets are printed."
-        actions={
-          <Button size="sm" variant="outline" onClick={() => setPrinterDialog(true)}>
-            Add printer
-          </Button>
-        }
+        title="Printer configuration"
+        description="Printer discovery, property/station assignments and the print queue are managed in the Configuration Centre."
       >
-        <QueryState
-          isLoading={printers.isLoading}
-          error={printers.error}
-          isEmpty={(printers.data ?? []).length === 0}
-          empty={
-            <EmptyState
-              title="No printers configured"
-              description="Add a printer profile per station or cashier point."
-            />
-          }
-        >
-          <ul className="space-y-2 text-sm">
-            {(printers.data ?? []).map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3">
-                <span>{p.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {p.operational_stations?.name ?? "General"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </QueryState>
+        <Button variant="outline" asChild>
+          <Link to="/admin/printers">Open printer configuration</Link>
+        </Button>
       </SectionCard>
-
-      <RecordDialog
-        open={printerDialog}
-        onOpenChange={setPrinterDialog}
-        title="Add printer profile"
-        fields={[
-          { name: "name", label: "Printer name", required: true },
-          { name: "connection_target", label: "Address or device identifier" },
-        ]}
-        selects={[
-          {
-            name: "station_id",
-            label: "Station",
-            options: (stations.data ?? []).map((s) => ({ value: s.id, label: s.name })),
-          },
-        ]}
-        onSubmit={(values) => savePrinter.mutate({ values })}
-      />
     </div>
   );
 }

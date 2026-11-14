@@ -79,9 +79,12 @@ export function AddItemDialog({
     return out;
   }, [groups.data, picked]);
 
-  const missingRequired = (groups.data ?? []).filter(
-    (g) => g.required && (picked[g.id] ?? []).length === 0,
-  );
+  const missingRequired = (groups.data ?? []).filter((g) => {
+    const count = (picked[g.id] ?? []).length;
+    return count < Math.max(g.min_select ?? 0, g.required ? 1 : 0)
+      || ((g.max_select ?? 0) > 0 && count > (g.max_select ?? 0))
+      || (!g.multi_select && count > 1);
+  });
 
   const toggle = (group: { id: string; multi_select: boolean | null }, optionId: string) =>
     setPicked((prev) => {
@@ -168,17 +171,18 @@ export function AddItemDialog({
 
           {missingRequired.length ? (
             <p className="text-xs text-destructive">
-              Choose an option for {missingRequired.map((g) => g.name).join(", ")}.
+              Check the required choices and selection limits for {missingRequired.map((g) => g.name).join(", ")}.
             </p>
           ) : null}
+          {groups.isError ? <p role="alert" className="text-sm text-destructive">Item choices could not be loaded. Refresh before adding this item.</p> : null}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            disabled={busy || missingRequired.length > 0}
+            disabled={busy || groups.isPending || groups.isError || missingRequired.length > 0 || !Number.isFinite(quantity) || quantity <= 0}
             onClick={() =>
               onConfirm({
                 quantity,

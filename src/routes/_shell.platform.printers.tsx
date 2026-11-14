@@ -1,30 +1,50 @@
+import { ErrorState, LoadingState } from "@/components/common/StateSystem";
+import { PageHeader } from "@/components/common/DataDisplay";
+import { PrinterDiscoveryPanel } from "@/components/settings/PrinterDiscoveryPanel";
 /**
- * Integration Centre — Printers.
- *
- * Printers are declared here, assigned to a property and a department (Front
- * Office, Kitchen, Bar), given a backup printer and retry settings, and
- * monitored through the live print queue. A test print is queued like any
- * other job; the operator records whether paper actually came out, so the
- * health shown here is always an observed result and never an assumption.
+ * Integration Centre — physical printer configuration and queue monitoring.
  */
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { Printer as PrinterIcon, RefreshCcw } from "lucide-react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Check, Copy, KeyRound, Printer as PrinterIcon, RefreshCcw } from "lucide-react";
 import { SectionCard, TableScroll } from "@/components/common/DataDisplay";
-import { AccessDenied, EmptyState, TonePill, TruthNotice, formatDateTime, humanise } from "@/components/platform/PlatformShared";
+import {
+  AccessDenied,
+  EmptyState,
+  TonePill,
+  TruthNotice,
+  formatDateTime,
+  humanise,
+} from "@/components/platform/PlatformShared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from "@/lib/auth";
 import { useBranches } from "@/lib/branches";
 import { useDepartmentsLite } from "@/lib/frontdesk-ops";
 import {
   usePrinters,
   usePrintJobs,
+  usePrinterStations,
+  usePrintAgents,
   useQueuePrint,
-  useRecordPrintResult,
+  useRegisterPrintAgent,
+  useRevokePrintAgent,
   useRetryPrintJob,
   useSavePrinter,
   type Printer,
@@ -33,21 +53,19 @@ import {
 export const Route = createFileRoute("/_shell/platform/printers")({
   head: () => ({
     meta: [
-      { title: "Printers & Print Queue — Integration Centre" },
+      {
+        title: "Printers & Print Queue — Configuration Centre",
+      },
       {
         name: "description",
         content:
-          "Declare receipt and ticket printers, assign them to a property and department, set retries and a backup printer, run a test print and monitor the live print queue.",
+          "Configure property printers, pair trusted print agents and monitor observed delivery outcomes.",
       },
-      { property: "og:title", content: "Printers & Print Queue — Integration Centre" },
-      {
-        property: "og:description",
-        content: "Printer assignment, test prints, retries, failover and queue monitoring with observed results only.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
     ],
   }),
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/printers" });
+  },
   component: PrintersPage,
 });
 
@@ -65,85 +83,338 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> 
   cancelled: "neutral",
 };
 
-function PrintersPage() {
-  const { organizationId, can } = useAuth();
-  const canManage = can("integrations", "edit") || can("restaurant", "edit");
+const PRINTER_ROLES = [
+  {
+    value: "receipt",
+    label: "POS receipt",
+  },
+  {
+    value: "kitchen",
+    label: "Main Kitchen",
+  },
+  {
+    value: "coffee",
+    label: "Coffee Station",
+  },
+  {
+    value: "bar",
+    label: "Bar",
+  },
+  {
+    value: "pastry",
+    label: "Pastry",
+  },
+  {
+    value: "production",
+    label: "Other production station",
+  },
+] as const;
+
+const CONNECTION_TYPES = [
+  {
+    value: "network",
+    label: "Network TCP/IP",
+  },
+  {
+    value: "windows",
+    label: "Windows installed printer",
+  },
+] as const;
+
+function tokenHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function createAgentToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return `neopc_${tokenHex(bytes)}`;
+}
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+
+  return tokenHex(new Uint8Array(digest));
+}
+
+export function PrintersPage() {
+  const { organizationId, can, isAdmin } = useAuth();
+
+  const canManage = isAdmin || can("integrations", "edit") || can("pos", "settings", "manage");
 
   const printers = usePrinters(organizationId);
   const jobs = usePrintJobs(organizationId);
   const branches = useBranches();
   const departments = useDepartmentsLite();
+  const stations = usePrinterStations(organizationId);
+  const agents = usePrintAgents(organizationId);
 
   const savePrinter = useSavePrinter();
   const queuePrint = useQueuePrint();
-  const recordResult = useRecordPrintResult();
   const retryJob = useRetryPrintJob();
+  const registerAgent = useRegisterPrintAgent();
+  const revokeAgent = useRevokePrintAgent();
 
-  const [failureNote, setFailureNote] = useState("");
   const [newName, setNewName] = useState("");
-  const [newBranch, setNewBranch] = useState<string>("");
-  const [newDepartment, setNewDepartment] = useState<string>("");
+  const [newBranch, setNewBranch] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newStation, setNewStation] = useState("");
+  const [newRole, setNewRole] = useState("receipt");
+  const [newConnection, setNewConnection] = useState("network");
   const [newAddress, setNewAddress] = useState("");
 
+  const [agentName, setAgentName] = useState("");
+  const [agentBranch, setAgentBranch] = useState("");
+  const [oneTimeToken, setOneTimeToken] = useState("");
+  const [copied, setCopied] = useState(false);
+
   const printerList = printers.data ?? [];
-  const byId = useMemo(() => {
-    const map: Record<string, Printer> = {};
-    for (const p of printerList) map[p.id] = p;
-    return map;
+  const stationList = stations.data ?? [];
+  const branchList = branches.data ?? [];
+
+  const printerById = useMemo(() => {
+    const result: Record<string, Printer> = {};
+
+    for (const printer of printerList) {
+      result[printer.id] = printer;
+    }
+
+    return result;
   }, [printerList]);
+
+  const branchName = useMemo(() => {
+    const result: Record<string, string> = {};
+
+    for (const branch of branchList) {
+      result[branch.id] = branch.name;
+    }
+
+    return result;
+  }, [branchList]);
+
+  const stationName = useMemo(() => {
+    const result: Record<string, string> = {};
+
+    for (const station of stationList) {
+      result[station.id] = station.name;
+    }
+
+    return result;
+  }, [stationList]);
+
+  const stationsForNewPrinter = stationList.filter(
+    (station) => !newBranch || station.branch_id === newBranch,
+  );
+
+  const requiresStation = newRole !== "receipt";
+
+  const printerReady =
+    newName.trim().length > 0 &&
+    Boolean(newBranch) &&
+    Boolean(newAddress.trim()) &&
+    (!requiresStation || (Boolean(newDepartment) && Boolean(newStation)));
 
   if (!canManage) {
     return (
       <AccessDenied
         title="Printer setup is not enabled for your role"
-        body="Assigning printers and clearing the print queue needs the integration centre or point-of-sale settings permission."
+        body="Printer configuration and agent pairing require integration or POS settings authority."
       />
     );
   }
 
+  const setupQueries = [printers, jobs, branches, departments, stations, agents];
+  const failedQuery = setupQueries.find((query) => query.isError);
+  if (failedQuery)
+    return (
+      <ErrorState
+        error={failedQuery.error}
+        onRetry={() => {
+          void Promise.all(setupQueries.map((query) => query.refetch()));
+        }}
+      />
+    );
+  if (setupQueries.some((query) => query.isLoading))
+    return <LoadingState rows={3} />;
+
+  const pairAgent = async () => {
+    if (!agentName.trim() || !agentBranch) {
+      return;
+    }
+
+    const rawToken = createAgentToken();
+    const tokenHash = await sha256(rawToken);
+
+    await registerAgent.mutateAsync({
+      branch: agentBranch,
+      name: agentName.trim(),
+      tokenHash,
+    });
+
+    setOneTimeToken(rawToken);
+    setAgentName("");
+    setCopied(false);
+  };
+
   return (
     <div className="space-y-6">
+      <PageHeader
+        eyebrow="Configuration Centre · Integrations"
+        title="Printers & Print Queue"
+        description="Discover printers through your local property computer, configure routing and review recorded delivery outcomes."
+      />
+      <PrinterDiscoveryPanel
+        agents={agents.data ?? []}
+        onChoose={(printer, branch) => {
+          setNewName(printer.name);
+          setNewBranch(branch);
+          setNewStation("");
+          setNewDepartment("");
+          setNewConnection(printer.connection_type);
+          setNewAddress(printer.address);
+        }}
+      />
       <TruthNotice>
-        A printer is only shown as working after a real job succeeded on it. Queueing a job does not print it: a
-        printing agent, or the person who ran the test, records what actually happened.
+        A queued job is not proof that paper came out. The property print agent records whether the
+        operating system or network printer accepted the job. Final live UAT still requires a person
+        to confirm the physical receipt or ticket.
       </TruthNotice>
 
-      <SectionCard title="Add a printer" description="Give it a name, the property it sits in and where it is reachable.">
+      <SectionCard
+        title="Add a physical printer"
+        description="Assign the exact property, department, station, role and connection used by this printer."
+      >
         <div className="grid gap-3 md:grid-cols-4">
           <div>
             <Label>Name</Label>
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Front Office receipt" />
+            <Input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Main Kitchen printer"
+            />
           </div>
+
           <div>
             <Label>Property</Label>
-            <Select value={newBranch} onValueChange={setNewBranch}>
-              <SelectTrigger><SelectValue placeholder="Select property" /></SelectTrigger>
+            <Select
+              value={newBranch}
+              onValueChange={(value) => {
+                setNewBranch(value);
+                setNewStation("");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select property" />
+              </SelectTrigger>
               <SelectContent>
-                {(branches.data ?? []).map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                {branchList.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <div>
             <Label>Department</Label>
             <Select value={newDepartment} onValueChange={setNewDepartment}>
-              <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
               <SelectContent>
-                {(departments.data ?? []).map((d: { id: string; name: string }) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                {(departments.data ?? []).map((department: { id: string; name: string }) => (
+                  <SelectItem key={department.id} value={department.id}>
+                    {department.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <div>
-            <Label>Address</Label>
-            <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="192.168.1.50:9100" />
+            <Label>Printer role</Label>
+            <Select
+              value={newRole}
+              onValueChange={(value) => {
+                setNewRole(value);
+
+                if (value === "receipt") {
+                  setNewStation("");
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRINTER_ROLES.map((role) => (
+                  <SelectItem key={role.value} value={role.value}>
+                    {role.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Production station</Label>
+            <Select
+              value={newStation || "none"}
+              disabled={newRole === "receipt" || !newBranch}
+              onValueChange={(value) => setNewStation(value === "none" ? "" : value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select station" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not applicable</SelectItem>
+
+                {stationsForNewPrinter.map((station) => (
+                  <SelectItem key={station.id} value={station.id}>
+                    {station.name}
+                    {station.code ? ` · ${station.code}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Connection</Label>
+            <Select value={newConnection} onValueChange={setNewConnection}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONNECTION_TYPES.map((connection) => (
+                  <SelectItem key={connection.value} value={connection.value}>
+                    {connection.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="md:col-span-2">
+            <Label>
+              {newConnection === "network" ? "IP address and port" : "Windows printer name"}
+            </Label>
+            <Input
+              value={newAddress}
+              onChange={(event) => setNewAddress(event.target.value)}
+              placeholder={
+                newConnection === "network" ? "192.168.1.50:9100" : "EPSON TM-T20III Receipt"
+              }
+            />
           </div>
         </div>
+
         <div className="mt-3">
           <Button
-            disabled={!newName.trim() || !newBranch || savePrinter.isPending}
+            disabled={!printerReady || savePrinter.isPending}
             onClick={() =>
               savePrinter.mutate(
                 {
@@ -151,207 +422,494 @@ function PrintersPage() {
                   name: newName.trim(),
                   branch_id: newBranch,
                   department_id: newDepartment || null,
-                  address: newAddress.trim() || null,
+                  station_id: newStation || null,
+                  printer_role: newRole,
+                  connection_type: newConnection,
+                  address: newAddress.trim(),
+                  status: "not-configured",
+                  health_status: "unknown",
                   active: true,
                 },
                 {
                   onSuccess: () => {
                     setNewName("");
-                    setNewAddress("");
                     setNewDepartment("");
+                    setNewStation("");
+                    setNewAddress("");
                   },
                 },
               )
             }
           >
-            <PrinterIcon className="mr-2 h-4 w-4" /> Add printer
+            <PrinterIcon className="mr-2 size-4" />
+            Add physical printer
           </Button>
         </div>
       </SectionCard>
 
-      <SectionCard title="Printers" description="Assignment, retries, backup printer and last observed result.">
-        {printerList.length === 0 ? (
-          <EmptyState title="No printers declared yet" body="Add the first printer above." />
-        ) : (
-          <TableScroll><Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Printer</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Retries</TableHead>
-                <TableHead>Backup printer</TableHead>
-                <TableHead>Health</TableHead>
-                <TableHead className="text-right">Test print</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {printerList.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.address ?? "No address recorded"}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={p.department_id ?? "none"}
-                      onValueChange={(v) =>
-                        savePrinter.mutate({ id: p.id, department_id: v === "none" ? null : v })
-                      }
-                    >
-                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Not assigned</SelectItem>
-                        {(departments.data ?? []).map((d: { id: string; name: string }) => (
-                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="w-20"
-                      defaultValue={p.retry_limit}
-                      onBlur={(e) => {
-                        const value = Number(e.target.value);
-                        if (Number.isFinite(value) && value >= 1 && value !== p.retry_limit) {
-                          savePrinter.mutate({ id: p.id, retry_limit: Math.round(value) });
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={p.fallback_printer_id ?? "none"}
-                      onValueChange={(v) =>
-                        savePrinter.mutate({ id: p.id, fallback_printer_id: v === "none" ? null : v })
-                      }
-                    >
-                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No backup</SelectItem>
-                        {printerList
-                          .filter((other) => other.id !== p.id)
-                          .map((other) => (
-                            <SelectItem key={other.id} value={other.id}>{other.name}</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <TonePill tone={HEALTH_TONE[p.health_status] ?? "neutral"}>{humanise(p.health_status)}</TonePill>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {p.last_success_at
-                        ? `Last printed ${formatDateTime(p.last_success_at)}`
-                        : p.last_failure_at
-                          ? `Last failed ${formatDateTime(p.last_failure_at)}`
-                          : "No print recorded"}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
+      <SectionCard
+        title="Pair this property computer"
+        description="Generate a one-time secret for the Windows computer that can reach these printers. The raw secret is never stored in NEØ."
+      >
+        <div className="mb-4 space-y-2 rounded-md border p-4">
+          <p className="font-medium">Install the Windows print agent</p>
+          <p className="text-sm text-muted-foreground">Download and extract the Windows package. Run Install Print Agent, then open NEO Print Agent. Generate the pairing configuration below and import it into the agent. Assign a physical Windows or network printer to this computer. Keep the agent running; it sends receipts and production tickets to the printer and reports the result to NEØ.</p>
+          <Button asChild variant="outline"><a href="/downloads/NEO-Print-Agent-Windows.zip" download>Download Windows print agent</a></Button>
+          <p className="text-xs text-muted-foreground">Windows 10/11 with .NET Framework 4.8. PDF and OneNote queues are for document testing and do not confirm paper output. A Windows handoff confirms delivery to the driver, not that paper emerged.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <Label>Computer name</Label>
+            <Input
+              value={agentName}
+              onChange={(event) => setAgentName(event.target.value)}
+              placeholder="Property POS server"
+            />
+          </div>
+
+          <div>
+            <Label>Property</Label>
+            <Select value={agentBranch} onValueChange={setAgentBranch}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select property" />
+              </SelectTrigger>
+              <SelectContent>
+                {branchList.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end">
+            <Button
+              disabled={!agentName.trim() || !agentBranch || registerAgent.isPending}
+              onClick={() => void pairAgent()}
+            >
+              <KeyRound className="mr-2 size-4" />
+              Generate agent secret
+            </Button>
+          </div>
+        </div>
+
+        {oneTimeToken ? (
+          <div className="mt-4 space-y-2 rounded-md border border-warning/40 bg-warning/5 p-4">
+            <p className="font-medium">Copy this secret now</p>
+            <p className="text-sm text-muted-foreground">
+              It is shown once. Download the configuration and use Import pairing configuration in the Windows agent.
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const config = {
+                  apiBase: `${window.location.origin}/api/public/print-agent`,
+                  token: oneTimeToken,
+                  pollMilliseconds: 2500,
+                  refreshPrintersMilliseconds: 60000,
+                  printerIds: [],
+                };
+                const url = URL.createObjectURL(
+                  new Blob([JSON.stringify(config, null, 2)], { type: "application/json" }),
+                );
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "neo-print-agent.json";
+                link.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download agent configuration
+            </Button>
+            <div className="flex gap-2">
+              <Input readOnly value={oneTimeToken} className="font-mono text-xs" />
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText(oneTimeToken);
+
+                  setCopied(true);
+
+                  window.setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 space-y-2">
+          {(agents.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No property computer is paired yet.</p>
+          ) : (
+            (agents.data ?? []).map((agent) => (
+              <div
+                key={agent.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+              >
+                <div>
+                  <p className="font-medium">{agent.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {agent.branch_id
+                      ? (branchName[agent.branch_id] ?? "Unknown property")
+                      : "All properties"}
+                    {" · "}
+                    {agent.last_seen_at
+                      ? `Last seen ${formatDateTime(agent.last_seen_at)}`
+                      : "Never connected"}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <TonePill tone={agent.active ? "success" : "neutral"}>
+                    {agent.active ? "Active" : "Revoked"}
+                  </TonePill>
+
+                  {agent.active ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={queuePrint.isPending}
-                      onClick={() =>
-                        queuePrint.mutate({
-                          printer: p.id,
-                          documentType: "test",
-                          title: `Test print — ${p.name}`,
-                          payload: { lines: ["NEO test print", p.name] },
-                        })
-                      }
+                      disabled={revokeAgent.isPending}
+                      onClick={() => revokeAgent.mutate(agent.id)}
                     >
-                      Queue test print
+                      Revoke
                     </Button>
-                  </TableCell>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Configured printers"
+        description="Printer role and station determine which POS tickets may reach each device."
+      >
+        {printerList.length === 0 ? (
+          <EmptyState
+            title="No printers declared yet"
+            body="Add the first physical printer above."
+          />
+        ) : (
+          <TableScroll>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Printer</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Station</TableHead>
+                  <TableHead>Connection</TableHead>
+                  <TableHead>Retries</TableHead>
+                  <TableHead>Backup</TableHead>
+                  <TableHead>Health</TableHead>
+                  <TableHead className="text-right">Test</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table></TableScroll>
+              </TableHeader>
+
+              <TableBody>
+                {printerList.map((printer) => {
+                  const compatibleBackups = printerList.filter(
+                    (candidate) =>
+                      candidate.id !== printer.id &&
+                      candidate.active &&
+                      candidate.branch_id === printer.branch_id &&
+                      candidate.department_id === printer.department_id &&
+                      candidate.station_id === printer.station_id &&
+                      candidate.printer_role === printer.printer_role,
+                  );
+
+                  const printerStations = stationList.filter(
+                    (station) => station.branch_id === printer.branch_id,
+                  );
+
+                  return (
+                    <TableRow key={printer.id}>
+                      <TableCell>
+                        <div className="font-medium">{printer.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {printer.branch_id
+                            ? (branchName[printer.branch_id] ?? "Unknown property")
+                            : "No property"}
+                        </div>
+                        <Input
+                          className="mt-2 min-w-52"
+                          defaultValue={printer.address ?? ""}
+                          onBlur={(event) => {
+                            const value = event.target.value.trim();
+
+                            if (value && value !== printer.address) {
+                              savePrinter.mutate({
+                                id: printer.id,
+                                address: value,
+                              });
+                            }
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Select
+                          value={printer.printer_role ?? "receipt"}
+                          onValueChange={(value) =>
+                            savePrinter.mutate({
+                              id: printer.id,
+                              printer_role: value,
+                              station_id: value === "receipt" ? null : printer.station_id,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRINTER_ROLES.map((role) => (
+                              <SelectItem key={role.value} value={role.value}>
+                                {role.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      <TableCell>
+                        <Select
+                          value={printer.station_id ?? "none"}
+                          disabled={printer.printer_role === "receipt"}
+                          onValueChange={(value) =>
+                            savePrinter.mutate({
+                              id: printer.id,
+                              station_id: value === "none" ? null : value,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-44">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Not assigned</SelectItem>
+                            {printerStations.map((station) => (
+                              <SelectItem key={station.id} value={station.id}>
+                                {station.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      <TableCell>
+                        <Select
+                          value={printer.connection_type ?? "network"}
+                          onValueChange={(value) =>
+                            savePrinter.mutate({
+                              id: printer.id,
+                              connection_type: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-44">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {printer.connection_type &&
+                            !CONNECTION_TYPES.some(
+                              (item) => item.value === printer.connection_type,
+                            ) ? (
+                              <SelectItem value={printer.connection_type} disabled>
+                                Review legacy connection: {printer.connection_type}
+                              </SelectItem>
+                            ) : null}
+                            {CONNECTION_TYPES.map((connection) => (
+                              <SelectItem key={connection.value} value={connection.value}>
+                                {connection.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min={1}
+                          className="w-20"
+                          defaultValue={printer.retry_limit}
+                          onBlur={(event) => {
+                            const value = Number(event.target.value);
+
+                            if (
+                              Number.isFinite(value) &&
+                              value >= 1 &&
+                              value !== printer.retry_limit
+                            ) {
+                              savePrinter.mutate({
+                                id: printer.id,
+                                retry_limit: Math.round(value),
+                              });
+                            }
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Select
+                          value={printer.fallback_printer_id ?? "none"}
+                          onValueChange={(value) =>
+                            savePrinter.mutate({
+                              id: printer.id,
+                              fallback_printer_id: value === "none" ? null : value,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-44">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No backup</SelectItem>
+
+                            {compatibleBackups.map((candidate) => (
+                              <SelectItem key={candidate.id} value={candidate.id}>
+                                {candidate.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      <TableCell>
+                        <TonePill tone={HEALTH_TONE[printer.health_status] ?? "neutral"}>
+                          {humanise(printer.health_status)}
+                        </TonePill>
+
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {printer.last_success_at
+                            ? `Last accepted ${formatDateTime(printer.last_success_at)}`
+                            : printer.last_failure_at
+                              ? `Last failed ${formatDateTime(printer.last_failure_at)}`
+                              : "No result yet"}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            queuePrint.isPending ||
+                            !printer.address ||
+                            !CONNECTION_TYPES.some((item) => item.value === printer.connection_type)
+                          }
+                          onClick={() =>
+                            queuePrint.mutate({
+                              printer: printer.id,
+                              documentType: "test",
+                              title: `Test print — ${printer.name}`,
+                              payload: {
+                                lines: [
+                                  "NEO TEST PRINT",
+                                  printer.name,
+                                  branchName[printer.branch_id ?? ""] ?? "",
+                                  stationName[printer.station_id ?? ""] ?? "",
+                                  new Date().toISOString(),
+                                ],
+                              },
+                            })
+                          }
+                        >
+                          Queue test
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableScroll>
         )}
       </SectionCard>
 
       <SectionCard
         title="Print queue"
-        description="Every queued job, its attempts, and whether it fell over to the backup printer."
+        description="Agent-reported status, retries and same-station failover."
       >
-        <div className="mb-3 max-w-md">
-          <Label>Failure note (used when recording a failure)</Label>
-          <Input
-            value={failureNote}
-            onChange={(e) => setFailureNote(e.target.value)}
-            placeholder="e.g. printer offline, out of paper"
-          />
-        </div>
         {(jobs.data ?? []).length === 0 ? (
-          <EmptyState title="Nothing in the queue" body="Queued receipts, tickets and test prints appear here." />
+          <EmptyState
+            title="Nothing in the queue"
+            body="Queued receipts, production tickets and test prints appear here."
+          />
         ) : (
-          <TableScroll><Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Job</TableHead>
-                <TableHead>Printer</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Attempts</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(jobs.data ?? []).map((j) => (
-                <TableRow key={j.id}>
-                  <TableCell>
-                    <div className="font-medium">{j.title ?? humanise(j.document_type)}</div>
-                    <div className="text-xs text-muted-foreground">{formatDateTime(j.created_at)}</div>
-                  </TableCell>
-                  <TableCell>
-                    {byId[j.printer_id]?.name ?? "Unknown"}
-                    {j.failed_over ? <div className="text-xs text-warning">Moved to backup printer</div> : null}
-                  </TableCell>
-                  <TableCell>
-                    <TonePill tone={STATUS_TONE[j.status] ?? "neutral"}>{humanise(j.status)}</TonePill>
-                    {j.last_error ? <div className="text-xs text-muted-foreground">{j.last_error}</div> : null}
-                  </TableCell>
-                  <TableCell>
-                    {j.attempts} / {j.max_attempts}
-                  </TableCell>
-                  <TableCell className="space-x-2 text-right">
-                    {j.status === "queued" || j.status === "printing" ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={recordResult.isPending}
-                          onClick={() => recordResult.mutate({ job: j.id, success: true })}
-                        >
-                          It printed
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={recordResult.isPending}
-                          onClick={() =>
-                            recordResult.mutate({
-                              job: j.id,
-                              success: false,
-                              error: failureNote.trim() || "Reported as not printed",
-                            })
-                          }
-                        >
-                          It failed
-                        </Button>
-                      </>
-                    ) : j.status === "failed" ? (
-                      <Button size="sm" variant="outline" disabled={retryJob.isPending} onClick={() => retryJob.mutate(j.id)}>
-                        <RefreshCcw className="mr-2 h-3 w-3" /> Retry
-                      </Button>
-                    ) : null}
-                  </TableCell>
+          <TableScroll>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job</TableHead>
+                  <TableHead>Printer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Attempts</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table></TableScroll>
+              </TableHeader>
+
+              <TableBody>
+                {(jobs.data ?? []).map((job) => (
+                  <TableRow key={job.id}>
+                    <TableCell>
+                      <div className="font-medium">{job.title ?? humanise(job.document_type)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDateTime(job.created_at)}
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      {printerById[job.printer_id]?.name ?? "Unknown"}
+
+                      {job.failed_over ? (
+                        <div className="text-xs text-warning">Moved to compatible backup</div>
+                      ) : null}
+                    </TableCell>
+
+                    <TableCell>
+                      <TonePill tone={STATUS_TONE[job.status] ?? "neutral"}>
+                        {humanise(job.status)}
+                      </TonePill>
+
+                      {job.last_error ? (
+                        <div className="max-w-80 text-xs text-muted-foreground">
+                          {job.last_error}
+                        </div>
+                      ) : null}
+                    </TableCell>
+
+                    <TableCell>
+                      {job.attempts} / {job.max_attempts}
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      {job.status === "failed" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={retryJob.isPending}
+                          onClick={() => retryJob.mutate(job.id)}
+                        >
+                          <RefreshCcw className="mr-2 size-3" />
+                          Review and retry
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Agent managed</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableScroll>
         )}
       </SectionCard>
     </div>

@@ -7,9 +7,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter, useWriteBranchId } from "@/lib/branch-filter";
 import { useDataScope } from "@/lib/data-scope";
-import { DEFAULT_KITCHEN_SETTINGS, nextRequestNumber, type KitchenSettings, type Row } from "@/lib/kitchen";
+import {
+  DEFAULT_KITCHEN_SETTINGS,
+  nextRequestNumber,
+  type KitchenSettings,
+  type Row,
+} from "@/lib/kitchen";
 import { useScopedWorkerOptions } from "@/lib/scoped-options";
-import { bindMenuItemConsumption } from "@/lib/recipe-master";
 
 const sel = (s: string): string => s;
 
@@ -37,7 +41,11 @@ export function useKitchenStations() {
     queryFn: async () => {
       let q = supabase
         .from("operational_stations")
-        .select(sel("id, name, code, station_type, department_id, branch_id, supervisor_user_id, status, active, sort_order"))
+        .select(
+          sel(
+            "id, name, code, station_type, department_id, branch_id, supervisor_user_id, status, active, sort_order",
+          ),
+        )
         .eq("active", true)
         .order("sort_order")
         .order("name");
@@ -73,7 +81,11 @@ export function useRoutingRules() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("station_routing_rules")
-        .select(sel("*, operational_stations!station_routing_rules_station_id_fkey(name), menu_items(name), menu_categories(name)"))
+        .select(
+          sel(
+            "*, operational_stations!station_routing_rules_station_id_fkey(name), menu_items(name), menu_categories(name)",
+          ),
+        )
         .order("priority");
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
@@ -168,8 +180,7 @@ export function usePreparationTargets() {
           .from("preparation_targets")
           .select(sel("*, operational_stations(name), menu_items(name)")),
         "preparation_targets",
-      )
-        .order("created_at", { ascending: false });
+      ).order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -183,7 +194,11 @@ export function useSavePreparationTarget() {
     mutationFn: async (target: Record<string, unknown>) => {
       const { error } = await supabase
         .from("preparation_targets")
-        .upsert({ ...target, organization_id: ctx.organization_id, created_by: ctx.userId } as never);
+        .upsert({
+          ...target,
+          organization_id: ctx.organization_id,
+          created_by: ctx.userId,
+        } as never);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -195,7 +210,7 @@ export function useSavePreparationTarget() {
 }
 
 /* ------------------------------------------------------------------ *
- * Live queue — reuses Phase 7 station_tickets / station_ticket_items
+ * Live queue â€” reuses Phase 7 station_tickets / station_ticket_items
  * ------------------------------------------------------------------ */
 
 const TICKET_SELECT = sel(
@@ -208,11 +223,21 @@ export function useKitchenQueue(stationId: string | "all", statuses?: string[]) 
   const { applyScope, scopeKey } = useDataScope();
   const { organizationId } = useCtx();
   return useQuery({
-    queryKey: ["kitchen", "queue", organizationId, stationId, statuses?.join(",") ?? "live", scopeKey],
+    queryKey: [
+      "kitchen",
+      "queue",
+      organizationId,
+      stationId,
+      statuses?.join(",") ?? "live",
+      scopeKey,
+    ],
     enabled: Boolean(organizationId),
     refetchInterval: 20_000,
     queryFn: async () => {
-      let q = applyScope(supabase.from("station_tickets").select(TICKET_SELECT), "station_tickets").order("received_at");
+      let q = applyScope(
+        supabase.from("station_tickets").select(TICKET_SELECT),
+        "station_tickets",
+      ).order("received_at");
       if (stationId !== "all") q = q.eq("station_id", stationId);
       if (statuses?.length) q = q.in("status", statuses);
       else q = q.not("status", "in", "(cancelled,completed,served)");
@@ -239,11 +264,19 @@ export function useTicketHistory(ticketId?: string) {
   });
 }
 
-/** Server-enforced item transition — the database validates the move and rolls the ticket up. */
+/** Server-enforced item transition â€” the database validates the move and rolls the ticket up. */
 export function useItemTransition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ itemId, status, reason }: { itemId: string; status: string; reason?: string }) => {
+    mutationFn: async ({
+      itemId,
+      status,
+      reason,
+    }: {
+      itemId: string;
+      status: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(supabase, "kitchen_item_transition", {
         _ticket_item_id: itemId,
         _to_status: status,
@@ -283,7 +316,15 @@ export function usePrioritizeTicket() {
   const qc = useQueryClient();
   const ctx = useCtx();
   return useMutation({
-    mutationFn: async ({ ticketId, priority, reason }: { ticketId: string; priority: string; reason: string }) => {
+    mutationFn: async ({
+      ticketId,
+      priority,
+      reason,
+    }: {
+      ticketId: string;
+      priority: string;
+      reason: string;
+    }) => {
       const { error } = await supabase
         .from("station_tickets")
         .update({ priority, priority_reason: reason, prioritized_by: ctx.userId } as never)
@@ -339,11 +380,18 @@ export function useAssignChef() {
   });
 }
 
-
 export function useReassignStation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ ticketId, stationId, reason }: { ticketId: string; stationId: string; reason: string }) => {
+    mutationFn: async ({
+      ticketId,
+      stationId,
+      reason,
+    }: {
+      ticketId: string;
+      stationId: string;
+      reason: string;
+    }) => {
       const { error } = await supabase
         .from("station_tickets")
         .update({ station_id: stationId, routing_note: reason } as never)
@@ -364,7 +412,10 @@ export function useClarifications(status?: string) {
     queryKey: ["kitchen", "clarifications", organizationId, status ?? "all"],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      let q = supabase.from("ticket_clarifications").select(sel("*")).order("created_at", { ascending: false });
+      let q = supabase
+        .from("ticket_clarifications")
+        .select(sel("*"))
+        .order("created_at", { ascending: false });
       if (status) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
@@ -443,10 +494,15 @@ export function useRecipes() {
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await applyTo(
-        supabase.from("recipes").select(sel("*, menu_items(name), operational_stations(name), recipe_ingredients!recipe_ingredients_recipe_id_fkey(*)")),
+        supabase
+          .from("recipes")
+          .select(
+            sel(
+              "*, menu_items(name), operational_stations(name), recipe_ingredients!recipe_ingredients_recipe_id_fkey(*)",
+            ),
+          ),
         "recipes",
-      )
-        .order("created_at", { ascending: false });
+      ).order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -460,7 +516,11 @@ export function useSaveRecipe() {
     mutationFn: async (recipe: Record<string, unknown>) => {
       const { error } = await supabase
         .from("recipes")
-        .upsert({ ...recipe, organization_id: ctx.organization_id, created_by: ctx.userId } as never);
+        .upsert({
+          ...recipe,
+          organization_id: ctx.organization_id,
+          created_by: ctx.userId,
+        } as never);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -474,37 +534,15 @@ export function useSaveRecipe() {
 /** Approving activates a new version; the previous active version is superseded, never rewritten. */
 export function useApproveRecipe() {
   const qc = useQueryClient();
-  const ctx = useCtx();
   return useMutation({
     mutationFn: async ({ recipeId, menuItemId }: { recipeId: string; menuItemId: string }) => {
-      const { error: supErr } = await supabase
-        .from("recipes")
-        .update({ status: "superseded" } as never)
-        .eq("menu_item_id", menuItemId)
-        .eq("status", "active");
-      if (supErr) throw supErr;
-      const { error } = await supabase
-        .from("recipes")
-        .update({
-          status: "active",
-          approved_by: ctx.userId,
-          approved_at: new Date().toISOString(),
-        } as never)
-        .eq("id", recipeId);
-      if (error) throw error;
-      // Approval is the moment the recipe becomes the menu item's way of
-      // consuming stock — the item is bound here, never by a separate step.
-      const { data: recipe } = await supabase
-        .from("recipes")
-        .select("recipe_type, output_stock_item_id")
-        .eq("id", recipeId)
-        .maybeSingle();
-      const recipeType = String((recipe as Record<string, unknown> | null)?.["recipe_type"] ?? "menu_item");
-      await bindMenuItemConsumption(
-        menuItemId,
-        recipeType === "direct_sale" ? "direct_sale" : "menu_item",
-        (recipe as Record<string, unknown> | null)?.["output_stock_item_id"] as string | null,
-      );
+      const { data, error } = await guardedRpc(supabase, "neo_recipe_activate", {
+        _recipe: recipeId,
+        _menu_item: menuItemId || null,
+      });
+      if (error) throw new Error(error.message);
+      if (!(data as { recipe_id?: string } | null)?.recipe_id)
+        throw new Error("Recipe approval was not confirmed.");
     },
     onSuccess: () => {
       toast.success("Recipe version approved and activated.");
@@ -591,10 +629,7 @@ export function useSaveBatch() {
           return 0;
         }
 
-        if (
-          typeof value !== "number" &&
-          typeof value !== "string"
-        ) {
+        if (typeof value !== "number" && typeof value !== "string") {
           throw new Error(`${label} must be a number.`);
         }
 
@@ -611,20 +646,11 @@ export function useSaveBatch() {
         return quantity;
       };
 
-      const planned = parseQuantity(
-        row["planned_quantity"],
-        "Planned quantity",
-      );
+      const planned = parseQuantity(row["planned_quantity"], "Planned quantity");
 
-      const produced = parseQuantity(
-        row["actual_quantity"],
-        "Gross quantity produced",
-      );
+      const produced = parseQuantity(row["actual_quantity"], "Gross quantity produced");
 
-      const waste = parseQuantity(
-        row["waste_quantity"],
-        "Waste quantity",
-      );
+      const waste = parseQuantity(row["waste_quantity"], "Waste quantity");
 
       const status = String(row["status"] ?? "planned")
         .trim()
@@ -635,23 +661,14 @@ export function useSaveBatch() {
       }
 
       if (waste > produced) {
-        throw new Error(
-          "Waste quantity cannot be greater than the gross quantity produced.",
-        );
+        throw new Error("Waste quantity cannot be greater than the gross quantity produced.");
       }
 
       if (
-        [
-          "completed",
-          "partially-used",
-          "fully-used",
-          "closed",
-        ].includes(status) &&
+        ["completed", "partially-used", "fully-used", "closed"].includes(status) &&
         produced <= 0
       ) {
-        throw new Error(
-          "Record the gross quantity produced before completing the batch.",
-        );
+        throw new Error("Record the gross quantity produced before completing the batch.");
       }
 
       const payload = {
@@ -662,9 +679,7 @@ export function useSaveBatch() {
         created_by: ctx.userId,
       };
 
-      const { error } = await supabase
-        .from("production_batches")
-        .upsert(payload as never);
+      const { error } = await supabase.from("production_batches").upsert(payload as never);
 
       if (error) throw error;
     },
@@ -706,7 +721,9 @@ export function usePostProductionBatch() {
       if (error) throw new Error(error.message);
       const result = (data ?? {}) as { ok?: boolean; reason?: string };
       if (result.ok !== true) {
-        throw new Error(BATCH_POST_REASONS[result.reason ?? ""] ?? "That batch could not be posted.");
+        throw new Error(
+          BATCH_POST_REASONS[result.reason ?? ""] ?? "That batch could not be posted.",
+        );
       }
       return result as { ok: true; reason?: string; ingredient_lines?: number; produced?: number };
     },
@@ -714,7 +731,7 @@ export function usePostProductionBatch() {
       toast.success(
         result.reason === "already_posted"
           ? "This production batch was already recorded."
-          : `Posted to stock — ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
+          : `Posted to stock â€” ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
       void qc.invalidateQueries({ queryKey: ["inventory"] });
@@ -772,28 +789,22 @@ export function useSaveIngredientRequest() {
       const attemptId = String(row["submission_attempt_id"] ?? "").trim();
 
       if (!attemptId) {
-        throw new Error(
-          "A submission attempt ID is required. Please reopen the request form.",
-        );
+        throw new Error("A submission attempt ID is required. Please reopen the request form.");
       }
 
-      const { data, error } = await guardedRpc(
-        supabase,
-        "neo_kitchen_ingredient_request_create",
-        {
-          _branch: ctx.branch_id,
-          _request: {
-            submission_attempt_id: attemptId,
-            ingredient_name: name,
-            station_id: row["station_id"] || null,
-            required_by: row["required_by"] || null,
-            quantity,
-            unit: String(row["unit"] ?? "").trim() || "unit",
-            priority: String(row["priority"] ?? "normal"),
-            reason: String(row["reason"] ?? "").trim() || null,
-          },
+      const { data, error } = await guardedRpc(supabase, "neo_kitchen_ingredient_request_create", {
+        _branch: ctx.branch_id,
+        _request: {
+          submission_attempt_id: attemptId,
+          ingredient_name: name,
+          station_id: row["station_id"] || null,
+          required_by: row["required_by"] || null,
+          quantity,
+          unit: String(row["unit"] ?? "").trim() || "unit",
+          priority: String(row["priority"] ?? "normal"),
+          reason: String(row["reason"] ?? "").trim() || null,
         },
-      );
+      });
 
       if (error) throw new Error(error.message);
 
@@ -811,7 +822,8 @@ export function useSaveIngredientRequest() {
       }
 
       return result as Row;
-    },    onSuccess: (data) => {
+    },
+    onSuccess: (data) => {
       const number = String((data as Row)?.["request_number"] ?? "");
       toast.success(number ? `Request sent to Stores as ${number}` : "Request sent to Stores.");
       void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });
@@ -821,7 +833,6 @@ export function useSaveIngredientRequest() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 export function useUpdateRequestStatus() {
   const qc = useQueryClient();
@@ -921,7 +932,15 @@ export function useReviewWaste() {
   const qc = useQueryClient();
   const ctx = useCtx();
   return useMutation({
-    mutationFn: async ({ id, action, comment }: { id: string; action: "approved" | "rejected"; comment?: string }) => {
+    mutationFn: async ({
+      id,
+      action,
+      comment,
+    }: {
+      id: string;
+      action: "approved" | "rejected";
+      comment?: string;
+    }) => {
       const { error } = await supabase
         .from("waste_records")
         .update({
@@ -950,7 +969,7 @@ export function useReviewWaste() {
 
 /**
  * Take an approved waste record off stock. The database decides the store, the
- * cost and whether it has already been posted — posting twice is refused there,
+ * cost and whether it has already been posted â€” posting twice is refused there,
  * not here, so a double click cannot double-deduct.
  */
 export function usePostWasteToStock() {
@@ -963,14 +982,15 @@ export function usePostWasteToStock() {
       });
       if (error) throw error;
       const result = (data ?? {}) as { ok?: boolean; reason?: string };
-      if (!result.ok) throw new Error(String(result.reason ?? "Could not post this waste to stock."));
+      if (!result.ok)
+        throw new Error(String(result.reason ?? "Could not post this waste to stock."));
       return result;
     },
     onSuccess: (result) => {
       toast.success(
         (result as { reason?: string }).reason === "already_posted"
           ? "This waste was already taken off stock."
-          : "Waste posted — stock reduced.",
+          : "Waste posted â€” stock reduced.",
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
       void qc.invalidateQueries({ queryKey: ["inventory"] });
@@ -1234,7 +1254,11 @@ export function useKitchenMenuItems() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
-        .select(sel("id, name, availability, category_id, station_id, prep_minutes, menu_categories(name)"))
+        .select(
+          sel(
+            "id, name, availability, category_id, station_id, prep_minutes, menu_categories(name)",
+          ),
+        )
         .order("name");
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
@@ -1246,7 +1270,10 @@ export function useSetMenuAvailability() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, availability }: { id: string; availability: string }) => {
-      const { error } = await supabase.from("menu_items").update({ availability } as never).eq("id", id);
+      const { error } = await supabase
+        .from("menu_items")
+        .update({ availability } as never)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -1276,7 +1303,10 @@ export function useKitchenAiInsights() {
 }
 
 export function useKitchenStaff() {
-  return useScopedWorkerOptions({ departmentKey: "main-kitchen", jobTitlePattern: "chef|cook|kitchen|steward" });
+  return useScopedWorkerOptions({
+    departmentKey: "main-kitchen",
+    jobTitlePattern: "chef|cook|kitchen|steward",
+  });
 }
 
 /** One realtime channel for every kitchen surface, torn down on unmount. */
@@ -1290,7 +1320,10 @@ export function useKitchenRealtime() {
         void qc.invalidateQueries({ queryKey: ["kitchen", "metrics"] });
       },
     },
-    { table: "station_ticket_items", onChange: () => void qc.invalidateQueries({ queryKey: ["kitchen", "queue"] }) },
+    {
+      table: "station_ticket_items",
+      onChange: () => void qc.invalidateQueries({ queryKey: ["kitchen", "queue"] }),
+    },
     {
       table: "ticket_clarifications",
       onChange: () => void qc.invalidateQueries({ queryKey: ["kitchen", "clarifications"] }),
@@ -1340,10 +1373,16 @@ export function useRoutingCoverage() {
 
   const ruleRows = (rules.data ?? []) as Row[];
   const routedCategoryIds = new Set(
-    ruleRows.map((r) => r["category_id"]).filter(Boolean).map(String),
+    ruleRows
+      .map((r) => r["category_id"])
+      .filter(Boolean)
+      .map(String),
   );
   const routedItemIds = new Set(
-    ruleRows.map((r) => r["menu_item_id"]).filter(Boolean).map(String),
+    ruleRows
+      .map((r) => r["menu_item_id"])
+      .filter(Boolean)
+      .map(String),
   );
 
   const categoryRows = (categories.data ?? []) as Row[];
@@ -1391,7 +1430,7 @@ export function useRoutingCoverage() {
  *
  * A sold dish only deducts stock when its station resolves to a stock
  * location. Without that binding the recipe engine returns "no-location"
- * and the sale leaves the store untouched — which is why a ticket could
+ * and the sale leaves the store untouched â€” which is why a ticket could
  * post a zero-value consumption line. These read and write the binding
  * itself; nothing is guessed on the workspace's behalf.
  * ------------------------------------------------------------------ */
@@ -1411,8 +1450,8 @@ export type StationStoreRow = {
 };
 
 /**
- * Every outlet that prepares something — grill, hot kitchen, coffee station,
- * bar — needs its own supply store for the selected property. This reads the
+ * Every outlet that prepares something â€” grill, hot kitchen, coffee station,
+ * bar â€” needs its own supply store for the selected property. This reads the
  * same resolver the consumption service uses, so the screen and the deduction
  * can never disagree.
  */
@@ -1471,27 +1510,21 @@ export function useConsumptionStores() {
  */
 export function useAssignStationStore() {
   const qc = useQueryClient();
-  const { organizationId } = useCtx();
   return useMutation({
     mutationFn: async ({
       stationId,
       locationId,
-      branchId,
     }: {
       stationId: string;
       locationId: string;
       branchId?: string | null;
     }) => {
-      const { error } = await supabase.from("station_consumption_stores").upsert(
-        {
-          organization_id: organizationId,
-          station_id: stationId,
-          location_id: locationId,
-          branch_id: branchId ?? null,
-        } as never,
-        { onConflict: "station_id" },
-      );
-      if (error) throw error;
+      const { error } = await guardedRpc(supabase as never, "neo_station_store_set", {
+        _station: stationId,
+        _location: locationId,
+        _reason: "Assigned from Kitchen settings",
+      });
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Supply store set for this station.");
@@ -1500,4 +1533,3 @@ export function useAssignStationStore() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
-

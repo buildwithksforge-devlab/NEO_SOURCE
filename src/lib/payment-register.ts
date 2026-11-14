@@ -1,11 +1,12 @@
+import {VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
+import {useAuth} from '@/lib/auth';
+import {parsePaymentRegister} from '@/lib/payment-register-contract';
 /**
  * The one payment register.
  *
- * Every act of collection — folio payment, till payment, event payment or
- * deposit, and every M-Pesa request — is mirrored by the database into
- * `payment_attempts` the moment it is created or changes. This module reads
- * that register and nothing else, so no screen has to know which module a
- * payment came from to say honestly what stage it has reached.
+ * The database register combines saved payment attempts with source deposits,
+ * deduplicating linked collections. No screen needs to manufacture a payment
+ * row to show money already collected.
  *
  * The stages are deliberately distinct: a request that was *sent* is never the
  * same thing as money *received*, and money received is not the same thing as
@@ -85,9 +86,13 @@ export function usePaymentRegister(input: {
   to?: string | null;
   state?: PaymentState | null;
 }) {
+  const {organizationId,user,phase,permissions,access,permissionsLoaded,accessLoaded}=useAuth();
+  const authority=JSON.stringify({permissions:[...permissions].sort(),scope:access.accessScope,branches:[...access.branchIds].sort(),departments:[...access.departmentIds].sort(),stations:[...access.stationIds].sort(),roles:[...access.roleIds].sort()});
   const branch = input.branchId && input.branchId !== "all" ? input.branchId : null;
   return useQuery<PaymentAttempt[]>({
-    queryKey: ["payment-register", branch, input.from, input.to, input.state ?? null],
+    ...VISIBLE_VIEW_REFRESH,
+    queryKey: ["payment-register", organizationId, user?.id, authority, branch, input.from, input.to, input.state ?? null],
+    enabled: phase === "ready" && permissionsLoaded && accessLoaded && Boolean(organizationId && user?.id),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_payment_register", {
         _branch: branch,
@@ -97,7 +102,7 @@ export function usePaymentRegister(input: {
         _limit: 1000,
       });
       if (error) throw new Error(error.message);
-      return (data ?? []) as PaymentAttempt[];
+      return parsePaymentRegister(data);
     },
   });
 }

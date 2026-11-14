@@ -1,0 +1,10 @@
+{
+  "date": "2026-11-07",
+  "diagnostic_version": "revenue-definition-difference-v1",
+  "actual_md5": "851f91742ef2f87d5641def2d8eaacc3",
+  "expected_md5": "18b839422b51de507a25fbea284f9417",
+  "original_definition_still_installed": true,
+  "matches_after_cr_removal": false,
+  "retained_helpers_unchanged": true,
+  "status": "Reporting replacement NOT confirmed installed; original definition proven present. Combined apply-and-verify script 78 prepared."
+}

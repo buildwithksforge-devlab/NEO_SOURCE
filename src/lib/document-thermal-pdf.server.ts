@@ -13,7 +13,8 @@
  * A4 business documents remain in document-pdf.server.ts.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont } from "pdf-lib";
+import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -297,8 +298,7 @@ export async function buildThermalReceiptPdf(
   });
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { regular, bold } = await embedDocumentFonts(pdf);
 
   // 80 mm roll = ~226.77 PDF points.
   const paperWidth = 226.77;
@@ -311,18 +311,24 @@ export async function buildThermalReceiptPdf(
   const muted = rgb(0.35, 0.35, 0.35);
   const rule = rgb(0.2, 0.2, 0.2);
 
-  const estimateMetaHeight = (
-    entries: readonly (readonly [string, string])[],
-  ) =>
-    entries.reduce((height, [label, value]) => {
-      const available = contentWidth - 60;
-      const wrapped = wrap(value, regular, 7.6, available);
-      return height + Math.max(1, wrapped.length) * 9 + 2;
-    }, 0);
+  const pairLines = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number) => {
+    const valueWidth = Math.min(contentWidth * 0.55, Math.max(60, valueFont.widthOfTextAtSize(value, valueSize)));
+    return {
+      labels: wrap(label, labelFont, labelSize, contentWidth - valueWidth - 8),
+      values: wrap(value, valueFont, valueSize, valueWidth),
+      lineHeight: Math.max(labelSize, valueSize) + 3,
+    };
+  };
+  const pairHeight = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number) => {
+    const pair = pairLines(label, value, labelFont, valueFont, labelSize, valueSize);
+    return Math.max(1, pair.labels.length, pair.values.length) * pair.lineHeight;
+  };
+  const estimateMetaHeight = (entries: readonly (readonly [string, string])[]) =>
+    entries.reduce((height, [label, value]) => height + pairHeight(label + ":", value, bold, regular, 7.3, 7.6), 0);
 
   const estimateLineHeight = (line: ReceiptLine) => {
     const description = clean(line.description) || "Item";
-    const descriptionLines = wrap(description, regular, 8.5, itemWidth);
+    const descriptionLines = wrap(description, bold, 8.5, itemWidth);
 
     const detailParts: string[] = [];
     const quantity = qty(line.quantity);
@@ -340,7 +346,7 @@ export async function buildThermalReceiptPdf(
     const note = clean(line.note);
     if (note) detailParts.push(note);
 
-    const detailHeight = detailParts.length * 9;
+    const detailHeight = detailParts.reduce((height, part) => height + wrap(part, regular, 7.1, contentWidth - 5).length * 9, 0);
 
     return Math.max(1, descriptionLines.length) * 10 + detailHeight + 7;
   };
@@ -362,7 +368,7 @@ export async function buildThermalReceiptPdf(
   estimatedHeight += 34;
 
   if (document.date) estimatedHeight += 11;
-  if (partyName) estimatedHeight += 11;
+  if (partyName) estimatedHeight += pairHeight(clean(payload.party?.label) || "Guest:", partyName, bold, regular, 7.5, 7.5);
 
   estimatedHeight += estimateMetaHeight(topMeta);
 
@@ -374,7 +380,11 @@ export async function buildThermalReceiptPdf(
 
   estimatedHeight += 18;
 
-  estimatedHeight += Math.max(1, totals.length) * 13;
+  estimatedHeight += totals.reduce((height, total) => {
+    const label = clean(total.label), value = money(total.amount, currency);
+    const emph = Boolean(total.emphasis) || /^(total|amount due|balance due|grand total)$/i.test(label);
+    return height + pairHeight(emph ? label.toUpperCase() : label, value, emph ? bold : regular, bold, emph ? 10 : 8, emph ? 10 : 8) + (emph ? 24 : 0);
+  }, 0);
   estimatedHeight += 22;
 
   if (fiscalMeta.length) {
@@ -474,7 +484,7 @@ export async function buildThermalReceiptPdf(
       });
     }
 
-    y -= 7;
+    y -= 10;
   };
 
   const drawWrappedCentered = (
@@ -490,42 +500,21 @@ export async function buildThermalReceiptPdf(
     }
   };
 
-  const drawMetaEntries = (
-    entries: readonly (readonly [string, string])[],
-  ) => {
-    for (const [label, value] of entries) {
-      const labelText = `${label}:`;
-      const labelWidth = Math.min(
-        58,
-        bold.widthOfTextAtSize(labelText, 7.3) + 4,
-      );
-
-      const valueWidth = contentWidth - labelWidth;
-      const wrapped = wrap(value, regular, 7.6, valueWidth);
-
-      drawLeft(labelText, margin, 7.3, bold, muted);
-
-      if (!wrapped.length) {
-        y -= 10;
-        continue;
-      }
-
-      wrapped.forEach((part, index) => {
-        if (index > 0) {
-          y -= 9;
-        }
-
-        page.drawText(part, {
-          x: margin + labelWidth,
-          y,
-          size: 7.6,
-          font: regular,
-          color: black,
-        });
-      });
-
-      y -= 10;
-    }
+  const drawPair = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number, labelColor = black) => {
+    const pair = pairLines(label, value, labelFont, valueFont, labelSize, valueSize);
+    const top = y;
+    pair.labels.forEach((part, index) => {
+      y = top - index * pair.lineHeight;
+      drawLeft(part, margin, labelSize, labelFont, labelColor);
+    });
+    pair.values.forEach((part, index) => {
+      y = top - index * pair.lineHeight;
+      drawRight(part, paperWidth - margin, valueSize, valueFont);
+    });
+    y = top - Math.max(1, pair.labels.length, pair.values.length) * pair.lineHeight;
+  };
+  const drawMetaEntries = (entries: readonly (readonly [string, string])[]) => {
+    for (const [label, value] of entries) drawPair(label + ":", value, bold, regular, 7.3, 7.6, muted);
   };
 
   // ----------------------------------------------------------------
@@ -571,15 +560,11 @@ export async function buildThermalReceiptPdf(
   const receiptDate = dateTime(document.date);
 
   if (receiptDate) {
-    drawLeft("Date:", margin, 7.5, bold, muted);
-    drawRight(receiptDate, paperWidth - margin, 7.5, regular);
-    y -= 10;
+    drawPair("Date:", receiptDate, bold, regular, 7.5, 7.5, muted);
   }
 
   if (partyName) {
-    drawLeft(clean(payload.party?.label) || "Guest:", margin, 7.5, bold, muted);
-    drawRight(partyName, paperWidth - margin, 7.5, regular);
-    y -= 10;
+    drawPair(clean(payload.party?.label) || "Guest:", partyName, bold, regular, 7.5, 7.5, muted);
   }
 
   if (topMeta.length) {
@@ -603,7 +588,7 @@ export async function buildThermalReceiptPdf(
     const description = clean(line.description) || "Item";
     const amount = money(line.total, currency);
 
-    const descriptionLines = wrap(description, regular, 8.5, itemWidth);
+    const descriptionLines = wrap(description, bold, 8.5, itemWidth);
 
     const rowTop = y;
 
@@ -687,32 +672,15 @@ export async function buildThermalReceiptPdf(
       /^(total|amount due|balance due|grand total)$/i.test(label);
 
     if (emphasised) {
+      // Reserve a separate band above and below the entire wrapped total row.
       y -= 2;
-
-      page.drawLine({
-        start: { x: margin, y: y + 5 },
-        end: { x: paperWidth - margin, y: y + 5 },
-        thickness: 1.2,
-        color: black,
-      });
-
-      drawLeft(label.toUpperCase(), margin, 10, bold);
-      drawRight(value, paperWidth - margin, 10, bold);
-
-      y -= 14;
-
-      page.drawLine({
-        start: { x: margin, y: y + 5 },
-        end: { x: paperWidth - margin, y: y + 5 },
-        thickness: 1.2,
-        color: black,
-      });
-
-      y -= 5;
+      page.drawLine({start: {x: margin, y: y + 3}, end: {x: paperWidth - margin, y: y + 3}, thickness: 1.2, color: black});
+      y -= 10;
+      drawPair(label.toUpperCase(), value, bold, bold, 10, 10);
+      page.drawLine({start: {x: margin, y: y + 1}, end: {x: paperWidth - margin, y: y + 1}, thickness: 1.2, color: black});
+      y -= 10;
     } else {
-      drawLeft(label, margin, 8, regular);
-      drawRight(value, paperWidth - margin, 8, bold);
-      y -= 11;
+      drawPair(label, value, regular, bold, 8, 8);
     }
   }
 

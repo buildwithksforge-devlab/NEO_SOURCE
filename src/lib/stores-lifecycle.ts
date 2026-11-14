@@ -1,3 +1,5 @@
+import { requireGoodsReceiptResult } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 /**
  * Stores â†” Procurement lifecycle.
  *
@@ -8,6 +10,7 @@
  * a second document or a second stock movement.
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireSavedRecord } from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,11 +46,7 @@ export type IssueLineInput = { stock_item_id: string; quantity: number; unit?: s
 
 function useLifecycleInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["procurement"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-    void qc.invalidateQueries({ queryKey: ["reconciliation"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 function replayNote(data: LifecycleResult, message: string) {
@@ -69,8 +68,9 @@ export function useSubmitRequisition() {
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       replayNote(data, `Requisition ${String(data["request_number"] ?? "")} sent for approval`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -97,8 +97,9 @@ export function useDecideRequisition() {
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(`Requisition ${String(data["status"] ?? "updated")}`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -125,8 +126,9 @@ export function useCreateOrderFromRequest() {
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       replayNote(data, `Purchase order ${String(data["order_number"] ?? "")} raised`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -144,8 +146,9 @@ export function useApproveOrder() {
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Purchase order approved");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -167,8 +170,9 @@ export function useSetRequestLinePrice() {
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Estimated price saved");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -200,14 +204,18 @@ export function useReceiveGoods() {
         _supplier_invoice: input.supplierInvoiceNumber ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as LifecycleResult;
+      return requireGoodsReceiptResult(data) as LifecycleResult;
     },
     onSuccess: (data) => {
-      invalidate();
-      replayNote(
-        data,
-        `${String(data["grn_number"] ?? "Delivery")} received${data["partial"] === true ? " (partial)" : ""} and posted to stock`,
-      );
+      const refresh = invalidate();
+      if ((data["posting"] as LifecycleResult)?.["status"] === "pending-finance")
+        toast.warning("Goods received into stock; Finance accrual still needs attention.");
+      else
+        replayNote(
+          data,
+          `${String(data["grn_number"] ?? "Delivery")} received${data["partial"] === true ? " (partial)" : ""} and posted to stock`,
+        );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -226,6 +234,18 @@ export function useStoreIssue() {
       reason: string;
       direction: "issue" | "return";
     }) => {
+      if (!input.locationId?.trim() || !input.attemptKey?.trim() || !input.reason?.trim())
+        throw new Error("Choose a store, provide a reason and retain the submission reference.");
+      if (!["issue", "return"].includes(input.direction))
+        throw new Error("Choose issue or return.");
+      if (
+        !input.lines.length ||
+        input.lines.some(
+          (line) =>
+            !line.stock_item_id?.trim() || !Number.isFinite(line.quantity) || line.quantity <= 0,
+        )
+      )
+        throw new Error("Every stock line needs an item and finite positive quantity.");
       const { data, error } = await guardedRpc(db, "neo_stores_issue", {
         _location: input.locationId,
         _lines: input.lines,
@@ -235,11 +255,41 @@ export function useStoreIssue() {
         _direction: input.direction,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as LifecycleResult;
+      const saved = requireSavedRecord(
+        data,
+        ["direction", "location_id"],
+        "The stock movement was not confirmed.",
+      );
+      if (
+        saved["ok"] !== true ||
+        saved["direction"] !== input.direction ||
+        saved["location_id"] !== input.locationId ||
+        saved["lines"] !== input.lines.length ||
+        !Array.isArray(saved["movements"]) ||
+        saved["movements"].length !== input.lines.length ||
+        saved["movements"].some(
+          (id) =>
+            typeof id !== "string" ||
+            !id.trim() ||
+            ["null", "undefined"].includes(id.trim().toLowerCase()),
+        )
+      )
+        throw new Error("The server did not confirm all requested stock movements.");
+      return saved;
     },
     onSuccess: (data) => {
-      invalidate();
-      replayNote(data, data["direction"] === "return" ? "Return posted to stock" : "Issue posted from stock");
+      const refresh = invalidate();
+      if (
+        Number(data["value"]) > 0 &&
+        (typeof data["journal_id"] !== "string" || !data["journal_id"])
+      )
+        toast.warning("Stock movement saved; Finance journal still needs attention.");
+      else
+        replayNote(
+          data,
+          data["direction"] === "return" ? "Return posted to stock" : "Issue posted from stock",
+        );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -252,14 +302,17 @@ export function useLowStockScan() {
   const { organizationId } = useAuth();
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await guardedRpc(db, "neo_stores_low_stock_scan", { _branch: branchId ?? null });
+      const { data, error } = await guardedRpc(db, "neo_stores_low_stock_scan", {
+        _branch: branchId ?? null,
+      });
       if (error) throw new Error(error.message);
       return (data ?? {}) as LifecycleResult;
     },
     onSuccess: (data) => {
       const found = Number(data["items_below_minimum"] ?? 0);
       if (found === 0) toast.success("Nothing is below its minimum level");
-      else toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum â€” buyers notified`);
+      else
+        toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum â€” buyers notified`);
     },
     onError: (e: Error) => toast.error(e.message),
     meta: { organizationId },
@@ -277,20 +330,14 @@ export function useReceivableOrders() {
     queryKey: ["procurement", "blind-receiving", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(
-        db,
-        "neo_blind_receiving_orders",
-        {},
-      );
+      const { data, error } = await guardedRpc(db, "neo_blind_receiving_orders", {});
 
       if (error) throw new Error(error.message);
 
       const rows = Array.isArray(data) ? data : [];
 
       return rows
-        .filter((order: any) =>
-          !branchId || order.branch_id === branchId
-        )
+        .filter((order: any) => !branchId || order.branch_id === branchId)
         .map((order: any) => ({
           id: order.id,
           order_number: order.order_number,
@@ -306,6 +353,17 @@ export function useReceivableOrders() {
 export function outstandingOf(line: Record<string, unknown>): number {
   const ordered = Number(line["quantity"] ?? 0);
   const cancelled = Number(line["cancelled_quantity"] ?? 0);
-  const received = Number(line["received_quantity"] ?? 0);
-  return Math.max(ordered - cancelled - received, 0);
+  // Physical deliveries include goods that were rejected. Only accepted goods
+  // fulfil the order; rejected goods may still need replacing by the supplier.
+  const accepted = Number(
+    line["accepted_quantity"] ??
+      Math.max(
+        Number(line["received_quantity"] ?? 0) -
+          Number(line["rejected_quantity"] ?? 0) -
+          Number(line["damaged_quantity"] ?? 0) -
+          Number(line["returned_quantity"] ?? 0),
+        0,
+      ),
+  );
+  return Math.max(ordered - cancelled - accepted, 0);
 }

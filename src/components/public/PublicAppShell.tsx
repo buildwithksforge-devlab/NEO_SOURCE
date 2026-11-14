@@ -1,3 +1,4 @@
+import { primaryInk } from "@/lib/public-palette";
 import { createContext, useContext, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -24,7 +25,6 @@ export function PublicCreatorCredit({ className = "" }: { className?: string }) 
     </a>
   );
 }
-
 
 const WorkspaceContext = createContext<PublicWorkspace | null>(null);
 
@@ -69,14 +69,7 @@ export function PoweredByNeo({ tone = "muted" }: { tone?: "muted" | "light" }) {
   );
 }
 
-
-export function BrandMark({
-  workspace,
-  size = 40,
-}: {
-  workspace: PublicWorkspace;
-  size?: number;
-}) {
+export function BrandMark({ workspace, size = 40 }: { workspace: PublicWorkspace; size?: number }) {
   const label = workspace.hotel_name || workspace.app_name || "Workspace";
   if (workspace.logo_url) {
     return (
@@ -96,6 +89,7 @@ export function BrandMark({
         height: size,
         borderRadius: buttonRadius(workspace.button_style),
         background: workspace.primary_color || brandFallback.primary,
+        color: primaryInk(workspace.primary_color || brandFallback.primary),
         fontSize: size * 0.38,
       }}
       aria-hidden
@@ -125,14 +119,14 @@ export function PublicAppShell({
 
   const brand = (
     <span className="flex min-w-0 items-center gap-3">
-      <span className="shrink-0"><BrandMark workspace={ws} /></span>
+      <span className="shrink-0">
+        <BrandMark workspace={ws} />
+      </span>
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="truncate text-sm font-semibold text-white">
           {ws.hotel_name || ws.app_name}
         </span>
-        <span className="truncate text-xs text-white/75">
-          {ws.app_name}
-        </span>
+        <span className="truncate text-xs text-white/75">{ws.app_name}</span>
       </span>
     </span>
   );
@@ -153,7 +147,7 @@ export function PublicAppShell({
       <header className="neo-pub-header">
         <div className="neo-public-wrap grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4">
           {homeTo ? (
-             <Link to={homeTo.to} params={homeTo.params ?? {}} className="min-w-0 overflow-hidden">
+            <Link to={homeTo.to} params={homeTo.params ?? {}} className="min-w-0 overflow-hidden">
               {brand}
             </Link>
           ) : (
@@ -212,8 +206,11 @@ export function BrandButton({
       style={{
         borderRadius: buttonRadius(ws.button_style),
         background: variant === "solid" ? primary : "transparent",
-        color: variant === "solid" ? "#ffffff" : primary,
-        border: `1px solid ${primary}`,
+        color: variant === "solid" ? primaryInk(primary) : "var(--pa-accent-ink, " + primary + ")",
+        border:
+          variant === "solid"
+            ? `1px solid ${primary}`
+            : "1px solid var(--pa-accent-ink, " + primary + ")",
       }}
     >
       {children}
@@ -226,9 +223,7 @@ export function WorkspaceNotFound({ appLabel }: { appLabel: string }) {
   return (
     <div className="neo-public-app flex min-h-screen flex-col items-center justify-center px-6 text-center">
       <div className="neo-public-panel w-full max-w-md p-9">
-        <h1 className="neo-public-title text-white">
-          Hotel workspace not found
-        </h1>
+        <h1 className="neo-public-title text-white">Hotel workspace not found</h1>
         <p className="neo-public-copy mt-3 text-sm text-white/80">
           This {appLabel} link is not active. Check the address with the hotel, or scan their
           official QR code again.
@@ -259,10 +254,13 @@ export function PublicEmptyState({
   return (
     <div className="grid min-w-0 items-center gap-3 rounded-2xl border border-dashed border-black/10 bg-white/60 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-5">
       <div className="min-w-0">
-        <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           {title}
         </p>
-        <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+        <p
+          className="neo-public-copy mt-1 text-sm"
+          style={{ color: "var(--guest-muted, #52627A)" }}
+        >
           {description}
         </p>
       </div>

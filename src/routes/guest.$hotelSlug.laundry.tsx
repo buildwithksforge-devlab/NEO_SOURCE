@@ -119,10 +119,10 @@ function GuestLaundryPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           <Shirt className="size-6" aria-hidden /> Laundry
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Your items go straight to this hotel's laundry team and follow their normal washing, quality-check and
           return process.
         </p>
@@ -130,7 +130,7 @@ function GuestLaundryPage() {
 
       {offering.isLoading ? (
         <div className="flex justify-center py-8">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : !offering.data?.enabled ? (
         <GuestSection title="Not available yet">
@@ -156,10 +156,10 @@ function GuestLaundryPage() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-black/5 p-3"
                 >
                   <div>
-                    <p className="text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                       {item.name}
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {item.service_type} · {money(express && item.express_price > 0 ? item.express_price : item.normal_price)} ·{" "}
                       {item.turnaround_hours}h
                     </p>
@@ -197,7 +197,7 @@ function GuestLaundryPage() {
                       className="rounded-full border px-3 py-1.5 text-xs font-medium"
                       style={{
                         borderColor: handover === mode ? ws.primary_color : "rgba(0,0,0,0.1)",
-                        color: handover === mode ? ws.primary_color : brandFallback.steel,
+                        color: handover === mode ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                       }}
                     >
                       {handoverLabels[mode]}
@@ -205,14 +205,14 @@ function GuestLaundryPage() {
                   ))}
               </div>
 
-              <label className="flex items-center gap-2 text-sm" style={{ color: brandFallback.secondary }}>
+              <label className="flex items-center gap-2 text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
                 <input type="checkbox" checked={express} onChange={(e) => setExpress(e.target.checked)} />
                 Express service
               </label>
 
               {activeStays.length > 0 ? (
                 <div>
-                  <p className="text-xs font-medium" style={{ color: brandFallback.steel }}>
+                  <p className="text-xs font-medium" style={{ color: "var(--guest-muted, #52627A)" }}>
                     Charge to a stay
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -222,7 +222,7 @@ function GuestLaundryPage() {
                       className="rounded-full border px-3 py-1.5 text-xs"
                       style={{
                         borderColor: reservationId === "" ? ws.primary_color : "rgba(0,0,0,0.1)",
-                        color: reservationId === "" ? ws.primary_color : brandFallback.steel,
+                        color: reservationId === "" ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                       }}
                     >
                       Pay at the hotel
@@ -237,7 +237,7 @@ function GuestLaundryPage() {
                           className="rounded-full border px-3 py-1.5 text-xs"
                           style={{
                             borderColor: reservationId === id ? ws.primary_color : "rgba(0,0,0,0.1)",
-                            color: reservationId === id ? ws.primary_color : brandFallback.steel,
+                            color: reservationId === id ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                           }}
                         >
                           Room {String(stay["room_number"] ?? "—")} · {String(stay["confirmation_number"])}
@@ -256,7 +256,7 @@ function GuestLaundryPage() {
               />
 
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                   Estimated {money(estimate)}
                 </p>
                 <BrandButton onClick={() => void submit()} disabled={place.isPending || chosen.length === 0}>
@@ -272,7 +272,7 @@ function GuestLaundryPage() {
       <GuestSection title="My laundry">
         {mine.isLoading ? (
           <div className="flex justify-center py-6">
-            <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+            <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
           </div>
         ) : (mine.data?.length ?? 0) === 0 ? (
           <PublicEmptyState title="Nothing sent yet" description="Laundry you send will be tracked here." />
@@ -280,10 +280,10 @@ function GuestLaundryPage() {
           <ul className="space-y-2">
             {(mine.data ?? []).map((order) => (
               <li key={String(order["id"])} className="rounded-xl border border-black/5 p-3">
-                <p className="text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                <p className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(order["laundry_number"] ?? "Laundry order")} · {money(order["total"])}
                 </p>
-                <p className="text-xs" style={{ color: brandFallback.steel }}>
+                <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {laundryStatusLabels[String(order["status"])] ?? String(order["status"])} ·{" "}
                   {String(order["payment_intent"]) === "charge_to_room" ? "Charged to your room" : "Payable at the hotel"} ·{" "}
                   {new Date(String(order["requested_at"])).toLocaleString()}

@@ -1,10 +1,14 @@
+import { useAuth } from "@/lib/auth";
+import { isSchemaMismatch } from "@/lib/query-telemetry";
+import { isPermissionDeniedError } from "@/lib/rpc-telemetry";
+import { parseGoLiveReadiness, parseMenuValidationRows, ReadinessContractError } from "@/lib/go-live-contract";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 
 const db = supabase as unknown as {
-  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
 };
 
 /** Readiness verdicts used across the go-live surface. */
@@ -41,20 +45,25 @@ export const readinessLabels: Record<ReadinessStatus, string> = {
  * station, employee → rider, event → billing, finance periods, approvals) and
  * is scoped to the active property selection.
  */
+function useReadinessScope() {
+  const { organizationId, user, phase, permissions, access, permissionsLoaded, accessLoaded } = useAuth();
+  const authority = JSON.stringify({ permissions: [...permissions].sort(), scope: access.accessScope,
+    branches: [...access.branchIds].sort(), departments: [...access.departmentIds].sort(), stations: [...access.stationIds].sort(), roles: [...access.roleIds].sort() });
+  return { identity: [organizationId, user?.id ?? null, authority], enabled: phase === "ready" && permissionsLoaded && accessLoaded && Boolean(organizationId && user?.id) };
+}
+const retryReadiness = (failures: number, error: Error) => failures < 2 && !(error instanceof ReadinessContractError) && !isSchemaMismatch(error) && !isPermissionDeniedError(error);
+
 export function useGoLiveReadiness() {
   const { branchId, filterKey } = useActivePropertyFilter();
+  const scope = useReadinessScope();
   return useQuery({
-    queryKey: ["go-live", "readiness", filterKey],
+    queryKey: ["go-live", "readiness", ...scope.identity, filterKey],
+    enabled: scope.enabled,
+    retry: retryReadiness,
     queryFn: async (): Promise<GoLiveReadiness> => {
       const { data, error } = await guardedRpc(db, "neo_go_live_readiness", { _branch: branchId });
-      if (error) throw new Error(error.message);
-      const payload = (data ?? {}) as Partial<GoLiveReadiness>;
-      return {
-        branch_id: payload.branch_id ?? null,
-        generated_at: payload.generated_at ?? new Date().toISOString(),
-        status: payload.status ?? "unknown",
-        checks: Array.isArray(payload.checks) ? payload.checks : [],
-      };
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      return parseGoLiveReadiness(data, branchId);
     },
     // Readiness is re-evaluated on its own while the screen is open.
     refetchInterval: 2 * 60 * 1000,
@@ -101,15 +110,15 @@ export const menuIssueLabels: Record<string, string> = {
 
 export function useMenuValidationStates() {
   const { branchId, filterKey } = useActivePropertyFilter();
+  const scope = useReadinessScope();
   return useQuery({
-    queryKey: ["go-live", "menu-validation", filterKey],
+    queryKey: ["go-live", "menu-validation", ...scope.identity, filterKey],
+    enabled: scope.enabled,
+    retry: retryReadiness,
     queryFn: async (): Promise<MenuValidationRow[]> => {
       const { data, error } = await guardedRpc(db, "neo_menu_validation_states", { _branch: branchId });
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as MenuValidationRow[]).map((row) => ({
-        ...row,
-        issues: Array.isArray(row.issues) ? row.issues : [],
-      }));
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      return parseMenuValidationRows(data, branchId);
     },
     refetchInterval: 2 * 60 * 1000,
     refetchIntervalInBackground: false,

@@ -1,0 +1,424 @@
+﻿
+========================================
+FILE: supabase/migrations/20261022130500_event_stock_need_booking_link.sql
+========================================
+   1: -- E03: Link event stock needs to their originating booking.
+   2: -- New Events-specific RPC; other department RPC signatures are unchanged.
+   3: 
+   4: ALTER TABLE public.department_stock_needs
+   5: ADD COLUMN IF NOT EXISTS event_booking_id uuid
+   6: REFERENCES public.event_bookings(id) ON DELETE SET NULL;
+   7: 
+   8: CREATE INDEX IF NOT EXISTS idx_event_stock_needs_booking
+   9: ON public.department_stock_needs(organization_id, event_booking_id)
+  10: WHERE event_booking_id IS NOT NULL;
+  11: 
+  12: CREATE OR REPLACE FUNCTION public.neo_event_stock_need_create(
+  13:     _booking uuid,
+  14:     _item text,
+  15:     _quantity numeric,
+  16:     _unit text DEFAULT 'unit',
+  17:     _priority text DEFAULT 'normal',
+  18:     _notes text DEFAULT NULL
+  19: )
+  20: RETURNS uuid
+  21: LANGUAGE plpgsql
+  22: SECURITY DEFINER
+  23: SET search_path = public
+  24: AS $function$
+  25: DECLARE
+  26:     v_org uuid := public.current_org_id();
+  27:     v_booking public.event_bookings;
+  28:     v_id uuid;
+  29:     v_department uuid;
+  30: BEGIN
+  31:     IF auth.uid() IS NULL
+  32:        OR v_org IS NULL
+  33:        OR public.is_active_staff() IS NOT TRUE THEN
+  34:         RAISE EXCEPTION 'Only active staff can report event stock needs';
+  35:     END IF;
+  36: 
+  37:     IF public.has_permission('events', 'stock_needs', 'create')
+  38:        IS NOT TRUE THEN
+  39:         RAISE EXCEPTION
+  40:           'You are not permitted to report Events stock needs';
+  41:     END IF;
+  42: 
+  43:     SELECT *
+  44:       INTO v_booking
+  45:       FROM public.event_bookings
+  46:      WHERE id = _booking
+  47:        AND organization_id = v_org;
+  48: 
+  49:     IF NOT FOUND THEN
+  50:         RAISE EXCEPTION 'Event booking not found';
+  51:     END IF;
+  52: 
+  53:     IF v_booking.branch_id IS NULL
+  54:        OR NOT (v_booking.branch_id = ANY(public.current_branch_ids())) THEN
+  55:         RAISE EXCEPTION 'The event is outside your property access';
+  56:     END IF;
+  57: 
+  58:     IF v_booking.status IN ('cancelled', 'closed') THEN
+  59:         RAISE EXCEPTION 'Stock cannot be requested for a closed or cancelled event';
+  60:     END IF;
+  61: 
+  62:     IF coalesce(btrim(_item), '') = '' THEN
+  63:         RAISE EXCEPTION 'Describe the item needed';
+  64:     END IF;
+  65: 
+  66:     IF _quantity IS NULL OR _quantity <= 0 THEN
+  67:         RAISE EXCEPTION 'Quantity must be greater than zero';
+  68:     END IF;
+  69: 
+  70:     SELECT p.department_id
+  71:       INTO v_department
+  72:       FROM public.profiles p
+  73:      WHERE p.id = auth.uid();
+  74: 
+  75:     INSERT INTO public.department_stock_needs (
+  76:         organization_id,
+  77:         branch_id,
+  78:         department_id,
+  79:         module,
+  80:         event_booking_id,
+  81:         item,
+  82:         quantity,
+  83:         unit,
+  84:         priority,
+  85:         notes,
+  86:         requested_by
+  87:     )
+  88:     VALUES (
+  89:         v_org,
+  90:         v_booking.branch_id,
+  91:         v_department,
+  92:         'events',
+  93:         v_booking.id,
+  94:         btrim(_item),
+  95:         _quantity,
+  96:         coalesce(nullif(btrim(_unit), ''), 'unit'),
+  97:         coalesce(nullif(btrim(_priority), ''), 'normal'),
+  98:         nullif(btrim(_notes), ''),
+  99:         auth.uid()
+ 100:     )
+ 101:     RETURNING id INTO v_id;
+ 102: 
+ 103:     RETURN v_id;
+ 104: END;
+ 105: $function$;
+ 106: 
+ 107: REVOKE ALL ON FUNCTION
+ 108: public.neo_event_stock_need_create(uuid,text,numeric,text,text,text)
+ 109: FROM PUBLIC;
+ 110: 
+ 111: GRANT EXECUTE ON FUNCTION
+ 112: public.neo_event_stock_need_create(uuid,text,numeric,text,text,text)
+ 113: TO authenticated;
+
+========================================
+FILE: supabase/migrations/20261022131000_event_stock_requisition_handoff.sql
+========================================
+   1: -- NEÃ˜ E04: Events stock need -> Stores requisition
+   2: -- New function; existing shared requisition functions remain unchanged.
+   3: -- Creates no records until explicitly invoked by an authorised user.
+   4: 
+   5: CREATE OR REPLACE FUNCTION public.neo_event_stock_need_to_requisition(
+   6:     _need uuid
+   7: )
+   8: RETURNS jsonb
+   9: LANGUAGE plpgsql
+  10: SECURITY DEFINER
+  11: SET search_path = public
+  12: AS $function$
+  13: DECLARE
+  14:     v_org uuid := public.current_org_id();
+  15:     v_need public.department_stock_needs;
+  16:     v_req uuid;
+  17:     v_number text;
+  18: BEGIN
+  19: 
+  20:     IF auth.uid() IS NULL
+  21:        OR v_org IS NULL
+  22:        OR public.is_active_staff() IS NOT TRUE THEN
+  23:         RAISE EXCEPTION 'An active staff session is required';
+  24:     END IF;
+  25: 
+  26:     -- Only authorised Events managers may raise this requisition.
+  27:     IF public.has_permission('events', 'stock_needs', 'approve')
+  28:        IS NOT TRUE THEN
+  29:         RAISE EXCEPTION
+  30:           'Only an authorised Events Manager can requisition stock';
+  31:     END IF;
+  32: 
+  33:     -- Lock the originating need to prevent concurrent duplication.
+  34:     SELECT *
+  35:       INTO v_need
+  36:       FROM public.department_stock_needs
+  37:      WHERE id = _need
+  38:        AND organization_id = v_org
+  39:        AND module = 'events'
+  40:      FOR UPDATE;
+  41: 
+  42:     IF NOT FOUND THEN
+  43:         RAISE EXCEPTION 'Event stock need not found';
+  44:     END IF;
+  45: 
+  46:     IF v_need.branch_id IS NULL
+  47:        OR NOT (v_need.branch_id = ANY(public.current_branch_ids())) THEN
+  48:         RAISE EXCEPTION 'The stock need is outside your property access';
+  49:     END IF;
+  50: 
+  51:     -- E04: Every new Events requisition must belong to a real,
+  52:     -- active booking in the same organization and property.
+  53:     IF v_need.event_booking_id IS NULL THEN
+  54:         RAISE EXCEPTION
+  55:           'Select an event booking before requisitioning supplies';
+  56:     END IF;
+  57: 
+  58:     IF NOT EXISTS (
+  59:         SELECT 1
+  60:         FROM public.event_bookings b
+  61:         WHERE b.id = v_need.event_booking_id
+  62:           AND b.organization_id = v_org
+  63:           AND b.branch_id = v_need.branch_id
+  64:           AND lower(coalesce(b.status, '')) NOT IN (
+  65:               'cancelled',
+  66:               'closed',
+  67:               'completed',
+  68:               'no-show'
+  69:           )
+  70:     ) THEN
+  71:         RAISE EXCEPTION
+  72:           'The originating event is invalid, closed, or belongs to another property';
+  73:     END IF;
+  74: 
+  75:     -- Return a previously linked requisition without creating another.
+  76:     IF v_need.requisition_id IS NOT NULL THEN
+  77: 
+  78:         SELECT id, request_number
+  79:           INTO v_req, v_number
+  80:           FROM public.internal_requisitions
+  81:          WHERE id = v_need.requisition_id
+  82:            AND organization_id = v_org
+  83:            AND branch_id = v_need.branch_id
+  84:            AND department_id IS NOT DISTINCT FROM v_need.department_id
+  85:            AND event_booking_id = v_need.event_booking_id;
+  86: 
+  87:         IF v_req IS NULL THEN
+  88:             RAISE EXCEPTION
+  89:               'The stock need references an invalid requisition';
+  90:         END IF;
+  91: 
+  92:         RETURN jsonb_build_object(
+  93:             'ok', true,
+  94:             'already_exists', true,
+  95:             'requisition_id', v_req,
+  96:             'request_number', v_number,
+  97:             'status', 'requisitioned'
+  98:         );
+  99:     END IF;
+ 100: 
+ 101:     IF v_need.status NOT IN ('pending', 'acknowledged') THEN
+ 102:         RAISE EXCEPTION
+ 103:           'Only pending or acknowledged stock needs can be requisitioned';
+ 104:     END IF;
+ 105: 
+ 106:     IF coalesce(v_need.quantity, 0) <= 0 THEN
+ 107:         RAISE EXCEPTION 'Requested quantity must be greater than zero';
+ 108:     END IF;
+ 109: 
+ 110:     v_number :=
+ 111:         'REQ-' ||
+ 112:         to_char(now(), 'YYMMDD') ||
+ 113:         '-' ||
+ 114:         upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 5));
+ 115: 
+ 116:     -- New requisitions require supervisor approval.
+ 117:     -- The creator is never recorded as their own approver.
+ 118:     INSERT INTO public.internal_requisitions (
+ 119:         organization_id,
+ 120:         branch_id,
+ 121:         request_number,
+ 122:         department_id,
+ 123:         event_booking_id,
+ 124:         fulfilment_model,
+ 125:         requested_by,
+ 126:         request_date,
+ 127:         priority,
+ 128:         reason,
+ 129:         status
+ 130:     )
+ 131:     VALUES (
+ 132:         v_org,
+ 133:         v_need.branch_id,
+ 134:         v_number,
+ 135:         v_need.department_id,
+ 136:         v_need.event_booking_id,
+ 137:         'stores-issue',
+ 138:         auth.uid(),
+ 139:         current_date,
+ 140:         coalesce(v_need.priority, 'normal'),
+ 141:         'Events stock need: ' || v_need.item ||
+ 142:           ' (Need ' || v_need.id::text || ')',
+ 143:         'pending-supervisor'
+ 144:     )
+ 145:     RETURNING id INTO v_req;
+ 146: 
+ 147:     INSERT INTO public.internal_requisition_lines (
+ 148:         organization_id,
+ 149:         requisition_id,
+ 150:         description,
+ 151:         unit,
+ 152:         quantity_requested,
+ 153:         notes
+ 154:     )
+ 155:     VALUES (
+ 156:         v_org,
+ 157:         v_req,
+ 158:         v_need.item,
+ 159:         coalesce(v_need.unit, 'unit'),
+ 160:         v_need.quantity,
+ 161:         v_need.notes
+ 162:     );
+ 163: 
+ 164:     UPDATE public.department_stock_needs
+ 165:        SET status = 'requisitioned',
+ 166:            requisition_id = v_req,
+ 167:            reviewed_by = auth.uid(),
+ 168:            reviewed_at = now(),
+ 169:            updated_at = now()
+ 170:      WHERE id = v_need.id
+ 171:        AND organization_id = v_org;
+ 172: 
+ 173:     PERFORM public.neo_notify(
+ 174:         v_org,
+ 175:         NULL,
+ 176:         v_need.branch_id,
+ 177:         'operational-alert',
+ 178:         'Events requisition awaiting approval - ' || v_number,
+ 179:         'An Events stock need has been submitted to Stores.',
+ 180:         '/inventory/requisitions',
+ 181:         coalesce(v_need.priority, 'normal'),
+ 182:         true,
+ 183:         'stores',
+ 184:         v_req,
+ 185:         'stores.requisition_raised',
+ 186:         'req:' || v_req::text || ':raised'
+ 187:     );
+ 188: 
+ 189:     RETURN jsonb_build_object(
+ 190:         'ok', true,
+ 191:         'already_exists', false,
+ 192:         'need_id', v_need.id,
+ 193:         'requisition_id', v_req,
+ 194:         'request_number', v_number,
+ 195:         'status', 'pending-supervisor',
+ 196:         'lines', 1
+ 197:     );
+ 198: 
+ 199: END;
+ 200: $function$;
+ 201: 
+ 202: REVOKE ALL ON FUNCTION
+ 203: public.neo_event_stock_need_to_requisition(uuid)
+ 204: FROM PUBLIC;
+ 205: 
+ 206: GRANT EXECUTE ON FUNCTION
+ 207: public.neo_event_stock_need_to_requisition(uuid)
+ 208: TO authenticated;
+
+========================================
+FILE: src/lib/sales-events-department.ts
+========================================
+ 395:     },
+ 396:     onError: (e: Error) => toast.error(e.message),
+ 397:   });
+ 398: }
+ 399: 
+ 400: /* ------------------------------------------------------------------ *
+ 401:  * Supply needs â€” reported by banqueting, requisitioned by the manager
+ 402:  * ------------------------------------------------------------------ */
+ 403: 
+ 404: export function useEventStockNeeds(status = "all") {
+ 405:   const { organizationId, branchId } = useSalesEventsContext();
+ 406:   return useQuery({
+ 407:     queryKey: ["sales-events", "stock-needs", organizationId, branchId, status],
+ 408:     enabled: Boolean(organizationId),
+ 409:     queryFn: async () => {
+ 410:       let q = db
+ 411:         .from("department_stock_needs")
+ 412:         .select("*")
+ 413:         .eq("module", "events")
+ 414:         .order("created_at", { ascending: false })
+ 415:         .limit(200);
+ 416:       if (branchId) q = q.eq("branch_id", branchId);
+ 417:       q = applyStockNeedStatus(q, status);
+ 418:       const { data, error } = await q;
+ 419:       if (error) throw new Error(error.message);
+ 420:       return (data ?? []) as SevRow[];
+ 421:     },
+ 422:   });
+ 423: }
+ 424: 
+ 425: export function useReportEventStockNeed() {
+ 426:   const invalidate = useSevInvalidate();
+ 427:   const { branchId } = useSalesEventsContext();
+ 428:   return useMutation({
+ 429:     mutationFn: async (input: {
+ 430:       bookingId: string;
+ 431:       item: string;
+ 432:       quantity: number;
+ 433:       unit?: string;
+ 434:       priority?: string;
+ 435:       notes?: string;
+ 436:     }) => {
+ 437:       if (!input.item.trim()) throw new Error("Name the item needed");
+ 438:       const { data, error } = await guardedRpc(db, "neo_event_stock_need_create", {
+ 439:         _booking: input.bookingId,
+ 440:         _item: input.item.trim(),
+ 441:         _quantity: input.quantity,
+ 442:         _unit: input.unit ?? "unit",
+ 443:         _priority: input.priority ?? "normal",
+ 444:         _notes: input.notes ?? null,
+ 445:       });
+ 446:       if (error) throw new Error(error.message);
+ 447:       return data as string;
+ 448:     },
+ 449:     onSuccess: () => {
+ 450:       invalidate();
+ 451:       toast.success("Need sent to the Sales & Events Manager");
+ 452:     },
+ 453:     onError: (e: Error) => toast.error(e.message),
+ 454:   });
+ 455: }
+ 456: 
+ 457: export function useReviewEventStockNeed() {
+ 458:   const invalidate = useSevInvalidate();
+ 459:   return useMutation({
+ 460:     mutationFn: async (input: {
+ 461:       needId: string;
+ 462:       decision: "acknowledge" | "requisition" | "decline" | "close";
+ 463:       notes?: string;
+ 464:     }) => {
+ 465:       const { data, error } =
+ 466:         input.decision === "requisition"
+ 467:           ? await guardedRpc(db, "neo_event_stock_need_to_requisition", {
+ 468:               _need: input.needId,
+ 469:             })
+ 470:           : await guardedRpc(db, "neo_department_stock_need_review", {
+ 471:               _need: input.needId,
+ 472:               _decision: input.decision,
+ 473:               _notes: input.notes ?? null,
+ 474:               _requisition: null,
+ 475:             });
+ 476:       if (error) throw new Error(error.message);
+ 477:       return (data ?? {}) as SevRow;
+ 478:     },
+ 479:     onSuccess: (data) => {
+ 480:       invalidate();
+ 481:       toast.success(`Supply need ${sevStr(data["status"], "reviewed")}`);
+ 482:     },
+ 483:     onError: (e: Error) => toast.error(e.message),
+ 484:   });
+ 485: }

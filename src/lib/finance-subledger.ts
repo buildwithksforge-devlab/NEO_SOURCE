@@ -122,7 +122,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function journalTotals(journal: Pick<JournalRecord, "lines">) {
   const debit = round2(journal.lines.reduce((s, l) => s + (l.debit ?? 0), 0));
   const credit = round2(journal.lines.reduce((s, l) => s + (l.credit ?? 0), 0));
-  return { debit, credit, balanced: debit === credit && debit > 0 };
+  const validLines = journal.lines.length > 0 && journal.lines.every((line) => {
+    const d = line.debit ?? 0;
+    const c = line.credit ?? 0;
+    return Number.isFinite(d) && Number.isFinite(c) && d >= 0 && c >= 0
+      && !(d > 0 && c > 0)
+      && Number.isSafeInteger(Math.round(d * 100))
+      && Number.isSafeInteger(Math.round(c * 100))
+      && Math.abs(d - round2(d)) < 0.0000001
+      && Math.abs(c - round2(c)) < 0.0000001;
+  });
+  return { debit, credit, balanced: validLines && Number.isFinite(debit) && Number.isFinite(credit)
+    && debit === credit && debit > 0 };
 }
 
 export function journalBalanced(journal: Pick<JournalRecord, "lines">) {

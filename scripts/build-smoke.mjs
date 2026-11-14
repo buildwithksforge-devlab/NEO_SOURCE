@@ -22,7 +22,7 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = process.cwd();
 // TanStack Start/Nitro emits the deployable application under `.output`.
@@ -102,7 +102,7 @@ async function scanBundles() {
  */
 async function smokeRoutes() {
   const entry = path.join(DIST, "server", "index.mjs");
-  const mod = await import(`file://${entry}`);
+  const mod = await import(pathToFileURL(entry).href);
   const handler = mod.default ?? mod;
   if (typeof handler.fetch !== "function") throw new Error("built server exposes no fetch handler");
 
@@ -118,14 +118,24 @@ async function smokeRoutes() {
       throw new Error(`${route} rendered a module-load interop crash`);
     }
     if (res.status < 400 && !/<html/i.test(body)) throw new Error(`${route} rendered no document`);
-    console.log(`  ✓ ${route} → HTTP ${res.status}`);
+    const cache = res.headers.get("cache-control") ?? "";
+    if (!cache.includes("private") || !cache.includes("no-store")) {
+      throw new Error(`${route} does not protect the dynamic document from shared caching`);
+    }
+    if (!/name="neo-build-id"\s+content="[a-f0-9]{16}"/.test(body)) {
+      throw new Error(`${route} has no actual-source build identity`);
+    }
+    if (/fonts\.(?:googleapis|gstatic)\.com/.test(body)) {
+      throw new Error(`${route} still loads a remote Google font resource`);
+    }
+    console.log(`  ✓ ${route} → HTTP ${res.status}; private/no-store, source identity, local fonts`);
   }
 }
 
 async function main() {
   if (!SKIP_BUILD) {
     console.log("→ production build");
-    await run("npx", ["vite", "build"]);
+    await run(process.execPath, [path.join(ROOT, "node_modules", "vite", "bin", "vite.js"), "build"]);
   }
 
   console.log("→ scanning bundles for ESM/CommonJS interop crashes");

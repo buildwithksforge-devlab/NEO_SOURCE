@@ -23,15 +23,21 @@ export type ReceivingAccount = {
  * delivery, receivables and supplier payments — reads this one list so the
  * receipt, the journal, the ledger balance and the reports all agree.
  */
-export function useReceivingAccounts() {
+export function useReceivingAccounts(explicitBranchId?: string | null) {
   const { branchId, filterKey } = useActivePropertyFilter();
   const { organizationId } = useAuth();
+  const effectiveBranch = explicitBranchId === undefined ? branchId : explicitBranchId;
   return useQuery({
-    queryKey: ["finance", "receiving-accounts", organizationId, filterKey],
+    queryKey: [
+      "finance",
+      "receiving-accounts",
+      organizationId,
+      explicitBranchId === undefined ? filterKey : ["explicit", explicitBranchId],
+    ],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_financial_accounts", {
-        _branch: branchId ?? null,
+        _branch: effectiveBranch ?? null,
       });
       if (error) throw error;
       return (data ?? []) as ReceivingAccount[];

@@ -1,0 +1,20 @@
+{
+  "diagnostic_version": "personal-phone-alert-connection-v1",
+  "definitions_match": true,
+  "device_policies_present": true,
+  "definition_checks": [
+    {
+      "signature": "public.neo_claim_worker_push(integer)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_enqueue_personal_push()",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_worker_push_test()",
+      "matches": true
+    }
+  ],
+  "evidence": "User Results JSON confirms all three definitions and five device policies."
+}

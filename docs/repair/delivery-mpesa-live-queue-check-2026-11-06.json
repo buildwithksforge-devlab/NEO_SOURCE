@@ -1,0 +1,18 @@
+{
+  "observedAtUtc": "2026-11-06T19:31:41.1941362Z",
+  "method": "Read-only Windows browser UI through computer-use skill",
+  "url": "https://neo-preview.neo-hospitality.workers.dev/finance/payments",
+  "property": "Savanna Crown Nairobi",
+  "role": "Owner / Director",
+  "panel": "M-PESA Till — Delivery Payment Verification",
+  "result": "No customer-submitted M-PESA Till references are awaiting Finance verification.",
+  "missingFunctionErrorVisible": false,
+  "claimsSubmitted": 0,
+  "paymentsApproved": 0,
+  "operationalDataChanged": false,
+  "scope": "Authenticated queue read and empty-state rendering only; not merchant/payment/STK end-to-end certification",
+  "followupSourceDefects": [
+    "Workspace entrance href uses JSON-quoted home value",
+    "Floating multiplication rejects valid verified decimal amounts"
+  ]
+}

@@ -37,14 +37,15 @@ describe("prepared batch sale inventory contract", () => {
       .filter((name) => name.endsWith(".sql"))
       .sort();
 
-    const all = files
-      .map((name) =>
-        fs.readFileSync(path.join(ROOT, "supabase", "migrations", name), "utf8"),
-      )
-      .join("\n");
-
-    expect(all).toContain("batch_component_log_only");
-    expect(all).toContain("batch_operational_consumption");
-    expect(all).toContain("batch_canonical_recipe_consumption");
+    // Preserve the same history-wide existence checks without concatenating
+    // every migration into one large string on Windows.
+    const markers = ["batch_component_log_only", "batch_operational_consumption", "batch_canonical_recipe_consumption"];
+    const missing = new Set(markers);
+    for (const name of files.reverse()) {
+      const sql = migration(name);
+      for (const marker of missing) if (sql.includes(marker)) missing.delete(marker);
+      if (missing.size === 0) break;
+    }
+    expect([...missing]).toEqual([]);
   }, 30_000);
 });

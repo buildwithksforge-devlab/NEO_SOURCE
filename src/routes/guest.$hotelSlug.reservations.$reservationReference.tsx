@@ -61,13 +61,13 @@ function ReservationDetail() {
 
   return (
     <PublicAppShell homeTo={{ to: "/guest/$hotelSlug", params: { hotelSlug } }}>
-      <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+      <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         Reservation {reservationReference}
       </h1>
 
       {reservation.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : !reservation.data ? (
         <div className="mt-4">
@@ -120,7 +120,7 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
 
   return (
     <section className="neo-rider-card mt-4 space-y-3 p-5 text-sm">
-      <h2 className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+      <h2 className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         Deposit
       </h2>
       <Detail label="Deposit required" value={money(p.required)} />
@@ -128,10 +128,10 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
       <Detail label="Still to pay" value={money(outstanding)} />
 
       {outstanding <= 0 ? (
-        <p style={{ color: brandFallback.steel }}>Your deposit is settled in full. Thank you.</p>
+        <p style={{ color: "var(--guest-muted, #52627A)" }}>Your deposit is settled in full. Thank you.</p>
       ) : p.can_pay_online ? (
         <div className="space-y-2">
-          <label className="block" style={{ color: brandFallback.steel }} htmlFor="deposit-phone">
+          <label className="block" style={{ color: "var(--guest-muted, #52627A)" }} htmlFor="deposit-phone">
             Mobile number for the payment prompt
           </label>
           <Input
@@ -160,7 +160,7 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
           </BrandButton>
         </div>
       ) : (
-        <p style={{ color: brandFallback.steel }}>
+        <p style={{ color: "var(--guest-muted, #52627A)" }}>
           Mobile payment is not available for this property yet — the deposit can be settled at the
           front desk on arrival.
         </p>
@@ -172,8 +172,8 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between border-b border-black/5 pb-2 last:border-0">
-      <span style={{ color: brandFallback.steel }}>{label}</span>
-      <span className="font-medium" style={{ color: brandFallback.secondary }}>
+      <span style={{ color: "var(--guest-muted, #52627A)" }}>{label}</span>
+      <span className="font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
         {value}
       </span>
     </div>

@@ -1,0 +1,84 @@
+﻿NEO RELEASE DECISIONS
+Date: 2026-10-26
+
+========================================
+A. CONFIRMED CLOUD RESTORATION WORK
+========================================
+
+P1.1 EVENTS TO STORES
+Source:
+NEO_P11_EVENTS_REQUISITION_DEPLOYMENT_REVIEW.sql
+
+Status:
+Missing cloud RPCs and booking-link column identified.
+Pending dependency and deployment review.
+
+
+P1.5B GUEST LAUNDRY
+Source:
+NEO_P15B_GUEST_LAUNDRY_RESTORATION_REVIEW.sql
+
+Status:
+Missing cloud synchronization identified.
+Existing posting triggers must be reconciled before deployment.
+
+
+========================================
+B. LOCAL CORRECTIONS REQUIRING REVIEW
+========================================
+
+20261026100000_s01_events_payment_idempotency.sql
+20261026110000_p02_reservation_deposit_atomicity.sql
+20261026120000_p03_active_stay_occupancy_guard.sql
+20261026130000_p04_pos_terminal_settlement_closure.sql
+20261026140000_p12_kds_transition_lock.sql
+20261026143000_p14_direct_stock_recipe_guard.sql
+
+
+========================================
+C. EXCLUDE FROM CURRENT RELEASE
+========================================
+
+20261026141000_p12_kds_reconciliation_guard.sql
+
+Reason:
+Potentially aborts complete reconciliation.
+
+
+20261026142000_p13_kitchen_station_authority.sql
+
+Reason:
+Unverified permissions may block operational users.
+
+
+20261026144000_p15_guest_laundry_sync_consolidation.sql
+
+Reason:
+Target trigger absent from the connected cloud database.
+
+
+========================================
+D. EXISTING CORRECTIONS TO PRESERVE
+========================================
+
+20261025120000_o05_laundry_order_status_sync.sql
+20261025130000_o06_linen_numeric_discrepancy.sql
+20261025140000_o07_maintenance_verification_closure.sql
+
+
+========================================
+E. REMAINING RELEASE REQUIREMENTS
+========================================
+
+1. Review Delivery handoff source.
+2. Verify actual deployed Finance and POS contracts.
+3. Validate approved SQL against current cloud schema.
+4. Run TypeScript checks and automated tests.
+5. Deploy approved changes in controlled order.
+6. Certify complete hotel workflow using
+   Savanna Crown Nairobi test records.
+7. Confirm Mawimbi Jiko pilot readiness.
+
+IMPORTANT:
+No migration in this manifest is automatically
+approved for production execution.

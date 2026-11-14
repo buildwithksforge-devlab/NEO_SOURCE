@@ -1,13 +1,12 @@
 /**
- * Sends a canonical business document to a configured printer.
+ * Queues a canonical business document for the trusted property print agent.
  *
- * NEØ never claims a document printed. The job is queued against a real
- * printer profile; whoever is standing at the printer confirms whether paper
- * came out. A failure retries on the same printer and, once the retry limit is
- * reached, fails over to the configured backup — all recorded on the job.
+ * Only printers matching the document's property and requested role are shown.
+ * The local print agent records delivery outcomes; browser users cannot mark
+ * queued jobs as successfully printed.
  */
 import { useMemo, useState } from "react";
-import { Loader2, Printer } from "lucide-react";
+import { CheckCircle2, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,15 +24,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
-import { usePrinters, useQueuePrint, useRecordPrintResult } from "@/lib/printing";
+import { usePrinters, useQueuePrint, usePrintJobDelivery } from "@/lib/printing";
 import type { BusinessDocumentType } from "@/components/common/DocumentPrintButton";
+import type { Printer as PrinterProfile } from "@/lib/printing";
+
+function roleMatches(printer: PrinterProfile, requestedRole: string | undefined): boolean {
+  if (!requestedRole) return true;
+
+  const configured = String(printer.printer_role ?? "").toLowerCase();
+  const requested = requestedRole.toLowerCase();
+
+  if (requested === "restaurant") {
+    return ["restaurant", "receipt", "pos"].includes(configured);
+  }
+
+  return configured === requested;
+}
 
 export function SendToPrinterButton({
   type,
   id,
   documentNumber,
+  branchId,
   role,
   label = "Send to printer",
 }: {
@@ -41,48 +54,73 @@ export function SendToPrinterButton({
   id: string | null | undefined;
   /** Shown on the job so an operator recognises it at the printer. */
   documentNumber?: string | null;
-  /** Printer role preferred for this document, e.g. "front_office". */
+  /** Exact property that owns the document being printed. */
+  branchId?: string | null;
+  /** Required printer role, e.g. restaurant, receipt or front_office. */
   role?: string;
   label?: string;
 }) {
   const { organizationId, can, isAdmin } = useAuth();
   const printers = usePrinters(organizationId);
   const queue = useQueuePrint();
-  const record = useRecordPrintResult();
+
   const [open, setOpen] = useState(false);
-  const [printer, setPrinter] = useState<string>("");
+  const [printer, setPrinter] = useState("");
   const [job, setJob] = useState<string | null>(null);
-  const [failure, setFailure] = useState("");
+  const delivery = usePrintJobDelivery(job, organizationId);
 
   const available = useMemo(
-    () => (printers.data ?? []).filter((p) => p.active),
-    [printers.data],
-  );
-  const preferred = useMemo(
-    () => available.find((p) => (role ? p.printer_role === role : false)) ?? available[0],
-    [available, role],
+    () =>
+      (printers.data ?? []).filter(
+        (candidate) =>
+          candidate.active &&
+          (!branchId || candidate.branch_id === branchId) &&
+          roleMatches(candidate, role),
+      ),
+    [branchId, printers.data, role],
   );
 
+  const preferred = available[0] ?? null;
+
   if (!id) return null;
-  if (!(isAdmin || can("pos", "receipts", "print") || can("front-office", "print"))) return null;
+
+  if (!(
+    isAdmin ||
+    can("pos", "receipts", "print") ||
+    (type === "pos_receipt" && can("restaurant", "orders", "create")) ||
+    can("front-office", "print")
+  )) {
+    return null;
+  }
 
   const reset = () => {
     setOpen(false);
+    setPrinter("");
     setJob(null);
-    setFailure("");
   };
 
   const send = () => {
     const target = printer || preferred?.id;
+
     if (!target) return;
+
     queue.mutate(
       {
         printer: target,
         documentType: type,
         title: documentNumber ? `${type} ${documentNumber}` : type,
-        payload: { document_type: type, document_id: id, document_number: documentNumber ?? null },
+        payload: {
+          document_type: type,
+          document_id: id,
+          document_number: documentNumber ?? null,
+          branch_id: branchId ?? null,
+        },
       },
-      { onSuccess: (created) => setJob(String(created)) },
+      {
+        onSuccess: (created) => {
+          setJob(String(created));
+        },
+      },
     );
   };
 
@@ -93,23 +131,59 @@ export function SendToPrinterButton({
         {label}
       </Button>
 
-      <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : reset())}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (next) setOpen(true);
+          else reset();
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send to a printer</DialogTitle>
             <DialogDescription>
               {job
-                ? "The job is queued. Confirm what actually happened at the printer — NEØ does not assume it printed."
-                : "Choose the printer this document should come out of."}
+                ? "Queued for the trusted property print agent. The queue will update automatically after the printer transport reports its outcome."
+                : "Choose a compatible printer at this document's property."}
             </DialogDescription>
           </DialogHeader>
 
-          {available.length === 0 ? (
+          {job ? (
+            <div className="flex items-start gap-3 rounded-md border p-4">
+              {delivery.data?.status === "completed" ? (
+                <CheckCircle2 className="mt-0.5 size-5 text-success" />
+              ) : (
+                <Printer className="mt-0.5 size-5" />
+              )}
+              <div>
+                <p className="font-medium">
+                  {delivery.data?.status === "completed"
+                    ? "Delivered to printer transport"
+                    : delivery.data?.status === "failed"
+                      ? "Printer needs attention"
+                      : delivery.data?.status === "printing"
+                        ? "Sending to printer"
+                        : "Print job queued"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Job {job}.{" "}
+                  {delivery.data?.status === "completed"
+                    ? "The agent reports successful handoff. Check the printer for paper output."
+                    : (delivery.data?.last_error ??
+                      "Waiting for the paired property computer. If it confirms nothing printed, NEØ can retry or use the configured same-station backup.")}
+                  {delivery.isError
+                    ? " The latest outcome could not be loaded; check the print queue before retrying."
+                    : ""}
+                </p>
+              </div>
+            </div>
+          ) : available.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No printer is configured for this workspace yet. Add one in Administration → Printers,
-              assign it to a department, then come back.
+              No active printer matches this property and printer role. Configure the printer's
+              property, role, station and connection in Configuration Centre → Integrations →
+              Printers & Print Queue.
             </p>
-          ) : !job ? (
+          ) : (
             <div className="space-y-2">
               <Label>Printer</Label>
               <Select value={printer || preferred?.id || ""} onValueChange={setPrinter}>
@@ -117,55 +191,28 @@ export function SendToPrinterButton({
                   <SelectValue placeholder="Select a printer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {available.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                      {p.printer_role ? ` · ${p.printer_role.replace(/_/g, " ")}` : ""}
-                      {p.health_status && p.health_status !== "healthy" ? ` · ${p.health_status}` : ""}
+                  {available.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                      {candidate.printer_role
+                        ? ` · ${candidate.printer_role.replace(/_/g, " ")}`
+                        : ""}
+                      {candidate.health_status !== "online" ? ` · ${candidate.health_status}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          ) : (
-            <div className="space-y-2">
-              <Label>If it did not print, what went wrong?</Label>
-              <Textarea
-                value={failure}
-                onChange={(event) => setFailure(event.target.value)}
-                placeholder="Out of paper, printer offline, jammed…"
-                rows={3}
-              />
-            </div>
           )}
 
           <DialogFooter>
-            {!job ? (
+            {job ? (
+              <Button onClick={reset}>Close</Button>
+            ) : (
               <Button disabled={available.length === 0 || queue.isPending} onClick={send}>
                 {queue.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Queue the print
               </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={record.isPending || failure.trim().length === 0}
-                  onClick={() =>
-                    record.mutate(
-                      { job, success: false, error: failure.trim() },
-                      { onSuccess: reset },
-                    )
-                  }
-                >
-                  It did not print
-                </Button>
-                <Button
-                  disabled={record.isPending}
-                  onClick={() => record.mutate({ job, success: true }, { onSuccess: reset })}
-                >
-                  It printed
-                </Button>
-              </>
             )}
           </DialogFooter>
         </DialogContent>

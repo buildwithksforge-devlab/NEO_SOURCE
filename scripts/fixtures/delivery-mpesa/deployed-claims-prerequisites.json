@@ -1,0 +1,435 @@
+{
+  "columns": [
+    {
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 1,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 2,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "branch_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 3,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "pos_order_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 4,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "customer_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "ordinal_position": 5,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "auth_user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 6,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "order_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 7,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "order_channel",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 8,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "fulfilment_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 9,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "contact_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 10,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "contact_phone",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 11,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "address_snapshot",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 12,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "zone_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 13,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "latitude",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "ordinal_position": 14,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "longitude",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "ordinal_position": 15,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "subtotal",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 16,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "tax_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 17,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "discount_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 18,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "delivery_fee",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 19,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "tip_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 20,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "grand_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 21,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "currency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 22,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "payment_method",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 23,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "payment_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 24,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "promo_code",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 25,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "promotion_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 26,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "scheduled_for",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 27,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "requested_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 28,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "estimated_prep_minutes",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "ordinal_position": 29,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "estimated_delivery_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 30,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "order_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 31,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "kitchen_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 32,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "dispatch_status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "ordinal_position": 33,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "rider_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 34,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "accepted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 35,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "ready_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 36,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "collected_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 37,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "delivered_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 38,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "cancelled_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 39,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "cancellation_reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 40,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "rejection_reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 41,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "packaging_checklist",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "ordinal_position": 42,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "packaging_completed_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "ordinal_position": 43,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 44,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "allergy_note",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 45,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "ordinal_position": 46,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 47,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "ordinal_position": 48,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "service_charge_total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "ordinal_position": 49,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "intake_idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 50,
+      "table_name": "delivery_orders"
+    },
+    {
+      "column_name": "intake_request_hash",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "ordinal_position": 51,
+      "table_name": "delivery_orders"
+    }
+  ],
+  "functions": [
+    {
+      "arguments": "",
+      "definition": "CREATE OR REPLACE FUNCTION public.current_org_id()\n RETURNS uuid\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare c text; v uuid;\nbegin\n  c := public.neo_ctx_read('org');\n  if c is not null then return case when c = 'n' then null else substr(c,2)::uuid end; end if;\n  SELECT COALESCE(\n    (SELECT p.active_organization_id FROM public.profiles p\n      WHERE p.id = auth.uid()\n        AND p.account_type IN ('staff','platform_admin')\n        AND p.account_status = 'active'\n        AND p.active_organization_id IS NOT NULL\n        AND EXISTS (\n          SELECT 1 FROM public.organization_memberships m\n           WHERE m.user_id = p.id\n             AND m.organization_id = p.active_organization_id\n             AND m.status = 'active'\n        )),\n    (SELECT organization_id FROM public.profiles\n      WHERE id = auth.uid()\n        AND account_type IN ('staff','platform_admin')\n        AND account_status = 'active'),\n    CASE WHEN auth.uid() IS NULL\n      THEN nullif(current_setting('neo.system_org', true), '')::uuid END\n  ) into v;\n  perform public.neo_ctx_write('org', case when v is null then 'n' else 'v'||v::text end);\n  return v;\nend $function$\n",
+      "definition_md5": "71272f28f7dea5f8225eddd184456944",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "current_org_id",
+      "returns": "uuid",
+      "security_definer": true,
+      "signature": "current_org_id()"
+    },
+    {
+      "arguments": "_order uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.customer_owns_delivery(_order uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.delivery_orders d\n    WHERE d.id = _order AND d.customer_id = public.my_customer_id()\n  );\n$function$\n",
+      "definition_md5": "10c0570ad50be94f488acf8a0a3f3d12",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "customer_owns_delivery",
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "customer_owns_delivery(uuid)"
+    },
+    {
+      "arguments": "_module text, _feature text, _action text",
+      "definition": "CREATE OR REPLACE FUNCTION public.has_permission(_module text, _feature text, _action text)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare c text; v boolean;\nbegin\n  c := public.neo_ctx_read('p.'||md5(_module||'|'||coalesce(_feature,'*')||'|'||_action));\n  if c is not null then return c = 't'; end if;\n  WITH want AS (\n    SELECT c.module, c.feature, c.action, public.permission_action_class(c.action) AS action_class\n    FROM public.canonical_permission(_module, _feature, _action) c\n  ), held AS (\n    SELECT c.module, c.feature, c.action, public.permission_action_class(c.action) AS action_class, 'deny'::text AS effect\n    FROM public.user_permissions up JOIN public.permissions p ON p.id=up.permission_id,\n         LATERAL public.canonical_permission(p.module,p.feature,p.action) c\n    WHERE up.user_id=auth.uid() AND up.effect='deny' AND up.organization_id=public.current_org_id()\n    UNION ALL\n    SELECT c.module,c.feature,c.action,public.permission_action_class(c.action),'grant'\n    FROM public.user_roles ur\n    JOIN public.roles r ON r.id=ur.role_id AND r.active,\n         LATERAL public.role_permission_ids(r.id) rpi\n    JOIN public.permissions p ON p.id=rpi.permission_id,\n         LATERAL public.canonical_permission(p.module,p.feature,p.action) c\n    WHERE ur.user_id=auth.uid() AND ur.organization_id=public.current_org_id()\n      AND r.organization_id=public.current_org_id()\n    UNION ALL\n    SELECT c.module,c.feature,c.action,public.permission_action_class(c.action),'grant'\n    FROM public.user_permissions up JOIN public.permissions p ON p.id=up.permission_id,\n         LATERAL public.canonical_permission(p.module,p.feature,p.action) c\n    WHERE up.user_id=auth.uid() AND up.effect='grant' AND up.organization_id=public.current_org_id()\n  )\n  SELECT CASE\n    WHEN NOT public.is_active_staff() THEN false\n    WHEN public.is_org_admin() THEN true\n    WHEN EXISTS (\n      SELECT 1 FROM held h,want w WHERE h.effect='deny' AND h.module=w.module\n        AND (w.feature='*' OR h.feature IN (w.feature,'*'))\n        AND (h.action=w.action OR h.action_class=w.action_class)\n    ) THEN false\n    ELSE EXISTS (\n      SELECT 1 FROM held h,want w WHERE h.effect='grant' AND h.module=w.module\n        AND (w.feature='*' OR h.feature IN (w.feature,'*'))\n        AND (h.action=w.action OR h.action_class=w.action_class)\n    )\n  END into v;\n  perform public.neo_ctx_write('p.'||md5(_module||'|'||coalesce(_feature,'*')||'|'||_action), case when v then 't' else 'f' end);\n  return v;\nend $function$\n",
+      "definition_md5": "58c4dcfb9abe02bc7e46e0b02c027c31",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "has_permission",
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "has_permission(text,text,text)"
+    },
+    {
+      "arguments": "_module text, _action text",
+      "definition": "CREATE OR REPLACE FUNCTION public.has_permission(_module text, _action text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ SELECT public.has_permission(_module, '*', _action) $function$\n",
+      "definition_md5": "cf18d773f535cc8660bf4ad1a7f6f010",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "has_permission",
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "has_permission(text,text)"
+    },
+    {
+      "arguments": "_org uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_org_admin_for(_org uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT _org IS NOT NULL\n     AND _org = public.current_org_id()\n     AND public.is_org_admin();\n$function$\n",
+      "definition_md5": "4fa0bc2f4eb4ab5add02c84c5e51b419",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "is_org_admin_for",
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "is_org_admin_for(uuid)"
+    },
+    {
+      "arguments": "_branch uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_branch_in_scope(_branch uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT CASE\n    WHEN public.current_access_scope() IN ('organisation','technical') THEN true\n    ELSE _branch IS NULL OR _branch = ANY (public.current_branch_ids())\n  END;\n$function$\n",
+      "definition_md5": "073af6634a1614993b8a1c0061643270",
+      "function_settings": [
+        "search_path=public"
+      ],
+      "name": "neo_branch_in_scope",
+      "returns": "boolean",
+      "security_definer": true,
+      "signature": "neo_branch_in_scope(uuid)"
+    }
+  ]
+}

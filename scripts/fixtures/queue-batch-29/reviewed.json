@@ -1,0 +1,14 @@
+[
+  {
+    "signature": "neo_supplier_invoice_accept(uuid,text)",
+    "md5": "c0d761ed24f0d9c51d76bf9673dbb0e7"
+  },
+  {
+    "signature": "inventory_post_stock_take(uuid)",
+    "md5": "320ae11b896a340f9969bc7064ac3c5a"
+  },
+  {
+    "signature": "neo_stores_issue(uuid,jsonb,uuid,uuid,text,text)",
+    "md5": "2cde096a47ff1adcd880fbc36d2b9352"
+  }
+]

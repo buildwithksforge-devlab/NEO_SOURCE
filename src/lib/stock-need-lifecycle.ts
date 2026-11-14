@@ -1,3 +1,4 @@
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 /**
  * Stock need lifecycle.
  *
@@ -30,12 +31,7 @@ export function newNeedAttemptKey(): string {
 
 function useNeedsInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["stock-needs"] });
-    void qc.invalidateQueries({ queryKey: ["stores-department"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-    void qc.invalidateQueries({ queryKey: ["procurement"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 /** Every reported or system-raised need for the selected property. */
@@ -77,8 +73,9 @@ export function useLinkNeedItem() {
       return (data ?? {}) as Record<string, unknown>;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Need linked to a stock item.");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -110,22 +107,19 @@ export function useFulfilNeed() {
 
       if (result["ok"] === false) {
         throw new Error(
-          String(
-            result["detail"] ??
-              result["reason"] ??
-              "The operation was rejected.",
-          ),
+          String(result["detail"] ?? result["reason"] ?? "The operation was rejected."),
         );
       }
 
       return result;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       if (data["replayed"] === true) toast.info("Already issued — showing the original result.");
       else if (String(data["status"] ?? "") === "requisitioned")
         toast.success("Issued in full — the need is closed.");
       else toast.success("Part of the need was issued; the balance is still outstanding.");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -150,24 +144,21 @@ export function useRouteNeedToProcurement() {
 
       if (result["ok"] === false) {
         throw new Error(
-          String(
-            result["detail"] ??
-              result["reason"] ??
-              "The operation was rejected.",
-          ),
+          String(result["detail"] ?? result["reason"] ?? "The operation was rejected."),
         );
       }
 
       return result;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       if (data["duplicate"] === true)
         toast.info("A purchase request is already open for this need.");
       else
         toast.success(
           `Routed to Procurement as ${String(data["request_number"] ?? "a purchase request")}.`,
         );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

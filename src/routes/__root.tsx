@@ -1,3 +1,8 @@
+import { buildInfo } from "@/lib/build-info";
+import {
+  AppInstallationProvider,
+  APP_INSTALL_CAPTURE_SCRIPT,
+} from "@/components/app/AppInstallation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -46,7 +51,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -87,7 +92,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
+      { name: "neo-build-id", content: buildInfo.sourceId },
       { charSet: "utf-8" },
+      { name: "neo-build-id", content: buildInfo.sourceId },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "NEØ — Next-Generation Enterprise Operations" },
       {
@@ -118,19 +125,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Instrument+Serif&display=swap",
-      },
       { rel: "icon", href: "/favicon.ico?v=neo-3", sizes: "any" },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg?v=neo-3" },
       { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png?v=neo-3" },
       { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png?v=neo-3" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png?v=neo-3" },
-      { rel: "manifest", href: "/site.webmanifest?v=neo-3" },
-
+      { rel: "manifest", href: `/site.webmanifest?build=${buildInfo.sourceId}` },
     ],
   }),
   shellComponent: RootShell,
@@ -144,6 +144,7 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: APP_INSTALL_CAPTURE_SCRIPT }} />
         {/* Applies the cached tenant palette before the first paint. */}
         <script dangerouslySetInnerHTML={{ __html: BRAND_BOOT_SCRIPT }} />
         <style dangerouslySetInnerHTML={{ __html: LAUNCH_SPLASH_STYLES }} />
@@ -213,10 +214,12 @@ function RootComponent() {
       <TenantProvider>
         <AuthProvider>
           <SessionProvider>
-            <LaunchGate />
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
-            <Toaster richColors position="top-right" />
+            <AppInstallationProvider>
+              <LaunchGate />
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+              <Toaster richColors position="top-right" />
+            </AppInstallationProvider>
           </SessionProvider>
         </AuthProvider>
       </TenantProvider>

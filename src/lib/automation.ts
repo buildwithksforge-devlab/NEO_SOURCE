@@ -1,3 +1,5 @@
+import {useAuth} from "@/lib/auth";
+import {readViewAccess, VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
 /**
  * Phase 6 — Automation & Communication vocabulary and data layer.
  *
@@ -219,14 +221,17 @@ export function statusTone(status: string): "success" | "warning" | "destructive
 /* Data hooks                                                          */
 /* ------------------------------------------------------------------ */
 
-function tenantQuery<T>(key: unknown[], run: () => Promise<T>, enabled = true) {
-  return { queryKey: key, queryFn: run, enabled };
+function useTenantQuery<T>(key: unknown[], run: () => Promise<T>, enabled = true) {
+  const auth=useAuth();
+  const {identity, ready}=readViewAccess(auth);
+  const live=['events','runs','communication-log','providers','failures','scheduled','escalation-events','feedback-invitations'].includes(String(key[1]));
+  return { queryKey: [...key, auth.organizationId, identity], queryFn: run, enabled: enabled && ready, ...VISIBLE_VIEW_REFRESH, refetchInterval: live ? 15_000 : false as const };
 }
 
 export function useWorkflows() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "workflows", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("workflow_definitions").select("*"), "workflow_definitions")
         .order("created_at", { ascending: false });
@@ -239,7 +244,7 @@ export function useWorkflows() {
 export function useWorkflow(id: string) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "workflow", id, filterKey],
       async () => {
         const [def, versions, runs] = await Promise.all([
@@ -258,7 +263,7 @@ export function useWorkflow(id: string) {
 export function useDomainEvents(limit = 100) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "events", limit, filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("domain_events").select("*"), "domain_events")
         .order("occurred_at", { ascending: false })
@@ -272,7 +277,7 @@ export function useDomainEvents(limit = 100) {
 export function useWorkflowRuns(limit = 50) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "runs", limit, filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("workflow_runs").select("*, workflow_definitions(name)"), "workflow_runs")
         .order("started_at", { ascending: false })
@@ -286,7 +291,7 @@ export function useWorkflowRuns(limit = 50) {
 export function useMessageTemplates() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "templates", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("message_templates").select("*"), "message_templates").order("name");
       if (error) throw error;
@@ -298,7 +303,7 @@ export function useMessageTemplates() {
 export function useCommunicationQueue() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "queue", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("communication_queue").select("*, customers(full_name)"), "communication_queue")
         .order("created_at", { ascending: false })
@@ -311,7 +316,7 @@ export function useCommunicationQueue() {
 
 export function useProviderConnections() {
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "providers"], async () => {
       const { data, error } = await supabase.from("provider_connections").select("*").order("provider");
       if (error) throw error;
@@ -323,7 +328,7 @@ export function useProviderConnections() {
 export function useWorkflowFailures() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "failures", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("workflow_failures").select("*, workflow_definitions(name)"), "workflow_failures")
         .order("last_failed_at", { ascending: false })
@@ -337,7 +342,7 @@ export function useWorkflowFailures() {
 export function useScheduledActions() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "scheduled", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("scheduled_actions").select("*"), "scheduled_actions")
         .order("scheduled_for", { ascending: true })
@@ -351,7 +356,7 @@ export function useScheduledActions() {
 export function useEscalationPolicies() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "escalation-policies", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("escalation_policies").select("*"), "escalation_policies").order("name");
       if (error) throw error;
@@ -363,7 +368,7 @@ export function useEscalationPolicies() {
 export function useEscalationEvents() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "escalation-events", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("escalation_events").select("*"), "escalation_events")
         .order("created_at", { ascending: false })
@@ -377,7 +382,7 @@ export function useEscalationEvents() {
 export function useTaskAssignmentRules() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "task-rules", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("task_assignment_rules").select("*"), "task_assignment_rules").order("name");
       if (error) throw error;
@@ -389,7 +394,7 @@ export function useTaskAssignmentRules() {
 export function useFeedbackRules() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "feedback-rules", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("feedback_automation_rules").select("*"), "feedback_automation_rules").order("name");
       if (error) throw error;
@@ -401,7 +406,7 @@ export function useFeedbackRules() {
 export function useFeedbackInvitations() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "feedback-invitations", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("feedback_invitations").select("*, customers(full_name)"), "feedback_invitations")
         .order("created_at", { ascending: false })
@@ -415,7 +420,7 @@ export function useFeedbackInvitations() {
 export function useNotificationRules() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "notification-rules", filterKey], async () => {
       const { data, error } = await applyTo(supabase.from("notification_rules").select("*"), "notification_rules").order("name");
       if (error) throw error;
@@ -426,7 +431,7 @@ export function useNotificationRules() {
 
 export function useAutomationSettings(organizationId: string | null) {
   return useQuery(
-    tenantQuery(
+    useTenantQuery(
       ["automation", "settings", organizationId],
       async () => {
         const { data, error } = await supabase.from("automation_settings").select("*").maybeSingle();
@@ -440,5 +445,5 @@ export function useAutomationSettings(organizationId: string | null) {
 
 export function useAutomationRefresh() {
   const qc = useQueryClient();
-  return () => void qc.invalidateQueries({ queryKey: ["automation"] });
+  return () => Promise.all(['automation','provider-credential-summary','email-provider-connections','outbound-release-status','neo-intelligence','neo-outbox-health','neo-outbox-failures'].map(key=>qc.invalidateQueries({queryKey:[key]}))).then(()=>undefined);
 }

@@ -1,3 +1,5 @@
+import { savedGuestBooking } from '@/lib/mutation-evidence';
+import { calendarNights } from '@/lib/guest-presentation';
 /**
  * Guest self-service booking.
  *
@@ -43,13 +45,7 @@ export type OfferSearch = {
   children: number;
 };
 
-export function nightsBetween(arrival: string, departure: string) {
-  if (!arrival || !departure) return 0;
-  const a = Date.parse(`${arrival}T00:00:00Z`);
-  const d = Date.parse(`${departure}T00:00:00Z`);
-  if (Number.isNaN(a) || Number.isNaN(d) || d <= a) return 0;
-  return Math.round((d - a) / 86_400_000);
-}
+export const nightsBetween = calendarNights;
 
 export function useRoomOffers(search: OfferSearch, enabled: boolean) {
   const valid = Boolean(
@@ -107,13 +103,7 @@ export function useCreateGuestBooking(organizationId: string) {
         _intent_key: input.intentKey,
       });
       if (error) throw new Error(error.message);
-      return data as {
-        ok: boolean;
-        idempotent: boolean;
-        id: string;
-        confirmation_number: string;
-        total_amount: number;
-      };
+      return savedGuestBooking(data);
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["guest-reservations", organizationId] });

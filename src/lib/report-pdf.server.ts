@@ -1,4 +1,5 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { embedDocumentFonts } from "./document-fonts.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -129,8 +130,7 @@ export async function buildManagementReportPdf(
   const currency = String((factPayload["scope"] as Record<string, unknown> | undefined)?.["currency"] ?? regional["currency"] ?? "");
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { regular, bold } = await embedDocumentFonts(pdf);
   const pageSize: [number, number] = [595.28, 841.89];
   const margin = 48;
   const primary = colour(primaryHex);

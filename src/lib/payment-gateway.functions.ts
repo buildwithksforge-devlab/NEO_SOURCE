@@ -54,7 +54,6 @@ type AttemptRow = {
   reference: string | null;
   state: string;
   environment: string | null;
-  callback_token: string | null;
 };
 
 type ConnectionRow = {
@@ -103,7 +102,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     const { data: attempt } = await supabase
       .from("payment_attempts")
       .select(
-        "id, organization_id, branch_id, method, provider_code, amount, currency, reference, state, environment, callback_token",
+        "id, organization_id, branch_id, method, provider_code, amount, currency, reference, state, environment",
       )
       .eq("payment_table", "payment_intents")
       .eq("payment_id", data.intentId)
@@ -144,8 +143,12 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     }
 
     const base = callbackBase();
-    if (!base || !row.callback_token) {
-      return { ok: false, reason: "callback_unavailable", detail: "This request has no answer address." };
+    if (!base) {
+      return {
+        ok: false,
+        reason: "callback_unavailable",
+        detail: "This request has no answer address.",
+      };
     }
 
     const secretName = String(config["secret_name"] ?? "").trim();
@@ -167,6 +170,41 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       };
     }
 
+    const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+    const { data: claim, error: claimError } = await (
+      supabase as unknown as {
+        rpc: (
+          name: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("neo_payment_intent_claim_dispatch", {
+      _intent: data.intentId,
+      _token: callbackToken,
+    });
+    if (claimError) {
+      return {
+        ok: false,
+        reason: "dispatch_claim_failed",
+        detail: "The payment request could not be safely started.",
+      };
+    }
+    const claimResult = (claim ?? {}) as { ok?: boolean; claimed?: boolean; state?: string };
+    if (!claimResult.ok) {
+      return {
+        ok: false,
+        reason: "dispatch_claim_failed",
+        detail: "The payment request could not be safely started.",
+      };
+    }
+    if (!claimResult.claimed) {
+      return {
+        ok: true,
+        state: claimResult.state ?? "pending",
+        detail: "This payment request is already being sent. No second request was made.",
+      };
+    }
+
     const payload = {
       intent_id: data.intentId,
       amount: Number(row.amount),
@@ -175,7 +213,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       method: row.method,
       terminal_id: config["terminal_id"] ?? null,
       merchant_id: config["merchant_id"] ?? null,
-      callback_url: `${base}/api/public/payments/callback/${row.callback_token}`,
+      callback_url: `${base}/api/public/payments/callback/${callbackToken}`,
       environment: row.environment ?? connection.environment ?? "sandbox",
     };
 
@@ -209,7 +247,12 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
           detail: `The processor refused the request (${res.status}).`,
           failed: true,
         });
-        return { ok: false, reason: "provider_rejected", detail: `Processor returned ${res.status}.`, state: "failed" };
+        return {
+          ok: false,
+          reason: "provider_rejected",
+          detail: `Processor returned ${res.status}.`,
+          state: "failed",
+        };
       }
     } catch (e) {
       const detail = e instanceof Error ? e.message : "The processor could not be reached.";
@@ -224,10 +267,13 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     if (TERMINAL_OUTCOMES.has(status)) {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const admin = supabaseAdmin as unknown as {
-        rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+        rpc: (
+          fn: string,
+          args?: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: unknown }>;
       };
       await admin.rpc("neo_payment_intent_apply", {
-        _token: row.callback_token,
+        _token: callbackToken,
         _outcome: status,
         _provider_reference: answer.reference ?? undefined,
         _detail: answer.message ?? null,
@@ -250,7 +296,11 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     if (qrPayload || qrImageUrl) {
       await supabase.rpc("neo_payment_intent_set_provider_payload", {
         _intent: data.intentId,
-        _payload: { qr_payload: qrPayload, qr_image_url: qrImageUrl, reference: answer.reference ?? null },
+        _payload: {
+          qr_payload: qrPayload,
+          qr_image_url: qrImageUrl,
+          reference: answer.reference ?? null,
+        },
       });
     }
 

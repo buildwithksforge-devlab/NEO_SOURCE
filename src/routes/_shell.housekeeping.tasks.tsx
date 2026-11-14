@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -156,14 +157,10 @@ function Page() {
       if (scope === "mine" && j["assignee_id"] !== user?.id) return false;
       if (
         status === "open" &&
-        [
-          "completed",
-          "inspected",
-          "closed",
-          "cancelled",
-          "superseded",
-        ].includes(
-          String(j["status"] ?? "").trim().toLowerCase(),
+        ["completed", "inspected", "closed", "cancelled", "superseded"].includes(
+          String(j["status"] ?? "")
+            .trim()
+            .toLowerCase(),
         )
       )
         return false;
@@ -353,7 +350,8 @@ function Page() {
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {list.map((job) => {
-            const activityAt = job["started_at"] ?? job["due_at"] ?? job["updated_at"] ?? job["created_at"];
+            const activityAt =
+              job["started_at"] ?? job["due_at"] ?? job["updated_at"] ?? job["created_at"];
             const activityTime = activityAt ? new Date(String(activityAt)).getTime() : Number.NaN;
             const isStale =
               !["completed", "cancelled"].includes(String(job["status"])) &&
@@ -430,8 +428,8 @@ function Page() {
                         </Button>
                         {!job["assignee_id"] ? (
                           <p className="text-xs text-muted-foreground">
-                            Assign an attendant before cleaning starts, so the room
-                            shows who is working on it.
+                            Assign an attendant before cleaning starts, so the room shows who is
+                            working on it.
                           </p>
                         ) : null}
                       </>
@@ -462,39 +460,41 @@ function Page() {
       </QueryState>
 
       <Dialog open={Boolean(active)} onOpenChange={(v) => !v && setActive(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[90dvh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Cleaning checklist</DialogTitle>
           </DialogHeader>
-          <SectionCard
-            title={
-              active?.["template_name"]
-                ? `${String(active["template_name"])}${active["template_version"] ? ` · v${String(active["template_version"])}` : ""}`
-                : "Room checklist"
-            }
-            description="Every step must be marked done, or flagged with a reason. The supervisor sees both."
-          >
-            <CleaningChecklistForm
-              lines={activeLines}
-              entries={entries}
-              onChange={(label, entry) => setEntries((prev) => ({ ...prev, [label]: entry }))}
-            />
-          </SectionCard>
-          <div>
-            <Label>Notes / defects</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Anything the supervisor should know"
-            />
-          </div>
-          {!checklistReady ? (
-            <p className="text-xs text-muted-foreground">
-              {unanswered.length > 0
-                ? `${unanswered.length} checklist ${unanswered.length === 1 ? "step is" : "steps are"} still unanswered.`
-                : `Give a reason for: ${outstanding.join(", ")}.`}
-            </p>
-          ) : null}
+          <DialogBody className="min-w-0 space-y-4">
+            <SectionCard
+              title={
+                active?.["template_name"]
+                  ? `${String(active["template_name"])}${active["template_version"] ? ` · v${String(active["template_version"])}` : ""}`
+                  : "Room checklist"
+              }
+              description="Every step must be marked done, or flagged with a reason. The supervisor sees both."
+            >
+              <CleaningChecklistForm
+                lines={activeLines}
+                entries={entries}
+                onChange={(label, entry) => setEntries((prev) => ({ ...prev, [label]: entry }))}
+              />
+            </SectionCard>
+            <div>
+              <Label>Notes / defects</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Anything the supervisor should know"
+              />
+            </div>
+            {!checklistReady ? (
+              <p className="text-xs text-muted-foreground">
+                {unanswered.length > 0
+                  ? `${unanswered.length} checklist ${unanswered.length === 1 ? "step is" : "steps are"} still unanswered.`
+                  : `Give a reason for: ${outstanding.join(", ")}.`}
+              </p>
+            ) : null}
+          </DialogBody>
           <DialogFooter>
             <Button
               disabled={completeJob.isPending || !checklistReady}
@@ -523,7 +523,6 @@ function Page() {
     </OpsGuard>
   );
 }
-
 
 /**
  * Tasks left open for more than a day. Where real evidence exists — a passed
@@ -554,9 +553,7 @@ function StaleReconciliation() {
 
   const needsReason = action === "cancel" || action === "replace";
   const submitDisabled =
-    resolve.isPending ||
-    (needsReason && !reason.trim()) ||
-    (action === "reassign" && !assignee);
+    resolve.isPending || (needsReason && !reason.trim()) || (action === "reassign" && !assignee);
 
   return (
     <SectionCard
@@ -576,7 +573,11 @@ function StaleReconciliation() {
         isLoading={stale.isLoading}
         error={stale.error}
         isEmpty={rows.length === 0}
-        empty={<p className="py-4 text-sm text-muted-foreground">No cleaning task has been left open past a day.</p>}
+        empty={
+          <p className="py-4 text-sm text-muted-foreground">
+            No cleaning task has been left open past a day.
+          </p>
+        }
       >
         <ul className="divide-y divide-border text-sm">
           {rows.map((row) => (
@@ -642,7 +643,9 @@ function StaleReconciliation() {
             </div>
             {(action === "reassign" || action === "replace") && (
               <div>
-                <Label>{action === "reassign" ? "New owner" : "Assign the replacement to (optional)"}</Label>
+                <Label>
+                  {action === "reassign" ? "New owner" : "Assign the replacement to (optional)"}
+                </Label>
                 <Select value={assignee} onValueChange={setAssignee}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a housekeeper" />
@@ -690,4 +693,3 @@ function StaleReconciliation() {
     </SectionCard>
   );
 }
-

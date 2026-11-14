@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countDeliveryStages,
+  deliveryPaymentSettled,
   resolveDeliveryStage,
   type DeliveryStageInput,
 } from "@/lib/delivery";
@@ -20,6 +21,20 @@ const base: DeliveryStageInput = {
 };
 
 describe("delivery stage resolver", () => {
+  it.each(["paid", "settled", "captured", "completed", " Paid "])(
+    "recognizes %s as settled so another collection is not offered",
+    (status) => {
+      expect(deliveryPaymentSettled(status)).toBe(true);
+    },
+  );
+
+  it.each(["unpaid", "pending", "partial", "", null, undefined])(
+    "keeps %s eligible for payment collection",
+    (status) => {
+      expect(deliveryPaymentSettled(status)).toBe(false);
+    },
+  );
+
   it("walks a delivery through every stage", () => {
     let order = { ...base };
     expect(resolveDeliveryStage(order)).toBe("intake");

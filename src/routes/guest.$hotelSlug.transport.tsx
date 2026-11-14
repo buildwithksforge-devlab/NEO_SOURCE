@@ -83,10 +83,10 @@ function TransportPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           Transport & transfers
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Airport, station and excursion transfers arranged by {ws.hotel_name}. Prices shown are the property's own —
           nothing is estimated for you.
         </p>
@@ -99,7 +99,7 @@ function TransportPage() {
           <GuestSection title="Available transfers">
             {products.isLoading ? (
               <div className="flex justify-center py-6">
-                <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+                <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
               </div>
             ) : (products.data?.length ?? 0) === 0 ? (
               <PublicEmptyState
@@ -120,17 +120,17 @@ function TransportPage() {
                         style={{ borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.08)" }}
                       >
                         <span className="flex size-11 items-center justify-center rounded-lg bg-black/5">
-                          <Car className="size-5" style={{ color: brandFallback.steel }} aria-hidden />
+                          <Car className="size-5" style={{ color: "var(--guest-muted, #52627A)" }} aria-hidden />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                          <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                             {String(p["name"])}
                           </span>
-                          <span className="block truncate text-xs" style={{ color: brandFallback.steel }}>
+                          <span className="block truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                             {String(p["description"] ?? "")}
                           </span>
                         </span>
-                        <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                        <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                           {p["base_price"] == null
                             ? "On request"
                             : money(p["base_price"], String(p["currency"] ?? "KES"))}
@@ -208,7 +208,7 @@ function TransportPage() {
                 onClick={() => void submit()}
                 disabled={request.isPending || preview}
                 className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: ws.primary_color || brandFallback.primary }}
+                style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
               >
                 {request.isPending ? "Sending…" : preview ? "Preview only" : "Send request"}
               </button>
@@ -223,19 +223,19 @@ function TransportPage() {
                 {(requests.data ?? []).map((r) => (
                   <li key={String(r["id"])} className="rounded-xl border border-black/5 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {String(r["request_number"])}
                       </span>
-                      <span className="text-xs font-medium" style={{ color: ws.primary_color }}>
+                      <span className="text-xs font-medium" style={{ color: "var(--pa-accent-ink)" }}>
                         {transportStatusLabels[String(r["status"])] ?? String(r["status"])}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {new Date(String(r["pickup_at"])).toLocaleString()} · {String(r["pickup_point"])} →{" "}
                       {String(r["destination"])}
                     </p>
                     {r["quoted_amount"] != null ? (
-                      <p className="mt-1 text-xs font-medium" style={{ color: brandFallback.secondary }}>
+                      <p className="mt-1 text-xs font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                         Quoted {money(r["quoted_amount"], String(r["currency"] ?? "KES"))}
                       </p>
                     ) : null}
@@ -253,7 +253,7 @@ function TransportPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium" style={{ color: brandFallback.steel }}>
+      <span className="mb-1 block text-xs font-medium" style={{ color: "var(--guest-muted, #52627A)" }}>
         {label}
       </span>
       {children}

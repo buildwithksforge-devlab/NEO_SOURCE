@@ -1,0 +1,15 @@
+{
+  "diagnostic_version": "event-payment-attempt-connection-v1",
+  "definitions_match": true,
+  "definition_checks": [
+    {
+      "signature": "public.neo_event_billing_record_payment(uuid,numeric,text,text,text,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_event_billing_record_payment(uuid,numeric,text,text,text,text,uuid,text)",
+      "matches": true
+    }
+  ],
+  "evidence": "User Results JSON confirms both deployed definitions."
+}

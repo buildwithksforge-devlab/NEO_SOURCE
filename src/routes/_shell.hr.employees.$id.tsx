@@ -1,3 +1,4 @@
+import { DeleteIncorrectEmployeeButton } from "@/components/hr/DeleteIncorrectEmployeeButton";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, CalendarPlus } from "lucide-react";
@@ -203,6 +204,7 @@ function EmployeeProfile() {
               ].join(" · ")}
               actions={
                 <div className="flex flex-wrap items-center gap-2">
+                  <DeleteIncorrectEmployeeButton id={id} number={String(e["employee_number"])} name={String(e["full_name"])} linkedProfile={Boolean(e["profile_id"])} />
                   <HrBadge
                     value={labelFor(EMPLOYMENT_STATUSES, e["employment_status"])}
                     tone={toneFor(EMPLOYMENT_STATUSES, e["employment_status"])}

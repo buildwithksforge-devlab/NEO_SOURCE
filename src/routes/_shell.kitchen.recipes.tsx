@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
@@ -27,6 +27,7 @@ import {
   RecipeEngineError,
   expandRecipeToStock,
   perUnitPreview,
+  prepareRecipeSheet,
 } from "@/lib/recipe-engine";
 import {
   IngredientRows,
@@ -36,7 +37,6 @@ import {
 } from "@/components/kitchen/IngredientRows";
 import {
   directStockMapping,
-  useCreateMenuItemForRecipe,
   recipeMap,
   toRecipeRecord,
   useRecipeCatalogue,
@@ -45,6 +45,10 @@ import {
   useSaveRecipeMaster,
   useSetRecipeStation,
 } from "@/lib/recipe-master";
+import { readWorkbook, downloadCsv } from "@/lib/onboarding/parse";
+import type { SheetTable } from "@/lib/onboarding/engine";
+import { Input } from "@/components/ui/input";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 // Recipes read the same canonical station → store projection Kitchen Settings
 // and the consumption resolver use, so a recipe can never show a store the
 // till would not actually deduct from.
@@ -76,12 +80,220 @@ export const Route = createFileRoute("/_shell/kitchen/recipes")({
   ),
 });
 
+function RecipeSheetImport({
+  menuItems,
+  stockItems,
+  subRecipes,
+  stations,
+  canImport,
+}: {
+  menuItems: Row[];
+  stockItems: Row[];
+  subRecipes: Row[];
+  stations: Row[];
+  canImport: boolean;
+}) {
+  const { branchId, filterKey } = useActivePropertyFilter();
+  const scope = useRef(filterKey);
+  scope.current = filterKey;
+  const save = useSaveRecipeMaster();
+  const [sheets, setSheets] = useState<SheetTable[]>([]);
+  const [sheetIndex, setSheetIndex] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState("");
+  const [results, setResults] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setSheets([]);
+    setSheetIndex(0);
+    setResults({});
+    setIssue("");
+  }, [filterKey]);
+  const selected = sheets[sheetIndex];
+  const groups = useMemo(
+    () => prepareRecipeSheet(selected?.rows ?? [], { menuItems, stockItems, subRecipes, stations }),
+    [selected, menuItems, stockItems, subRecipes, stations],
+  );
+  if (!canImport) return null;
+  return (
+    <section id="recipe-import">
+      <SectionCard
+        title="Import recipe sheets"
+        description="One row per ingredient. Repeat the recipe code or dish name on each row. Review each dish, then save complete drafts for approval."
+      >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadCsv(
+                  "neo-recipe-sheet.csv",
+                  "recipe_code,recipe_name,menu_item,recipe_type,yield_quantity,yield_unit,ingredient,quantity,unit,waste_allowance,station,component_type,output_stock_item\n",
+                )
+              }
+            >
+              Download template
+            </Button>
+            <Input
+              type="file"
+              aria-label="Recipe spreadsheet"
+              accept=".csv,.tsv,.xlsx,.xls"
+              disabled={busy}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const scopeAtStart = scope.current;
+                setIssue("");
+                setResults({});
+                setSheets([]);
+                setBusy(true);
+                try {
+                  if (file.size > 20 * 1024 * 1024)
+                    throw new Error("Choose a recipe workbook smaller than 20 MB.");
+                  const read = await readWorkbook(file);
+                  if (!read.length) throw new Error("No readable ingredient rows were found.");
+                  if (read.some((s) => s.rows.length > 10000))
+                    throw new Error(
+                      "Split sheets larger than 10,000 ingredient rows before importing.",
+                    );
+                  if (scope.current === scopeAtStart) {
+                    setSheets(read);
+                    setSheetIndex(0);
+                  }
+                } catch (error) {
+                  if (scope.current === scopeAtStart)
+                    setIssue(
+                      error instanceof Error ? error.message : "The workbook could not be read.",
+                    );
+                } finally {
+                  setBusy(false);
+                  event.target.value = "";
+                }
+              }}
+            />
+          </div>
+          {sheets.length > 1 ? (
+            <Select
+              value={String(sheetIndex)}
+              disabled={busy}
+              onValueChange={(value) => {
+                setSheetIndex(Number(value));
+                setResults({});
+              }}
+            >
+              <SelectTrigger aria-label="Recipe workbook sheet">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sheets.map((sheet, index) => (
+                  <SelectItem key={index} value={String(index)}>
+                    {sheet.sheet}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Menu items and components must match an existing in-scope name, code or ID exactly.
+            Unknown or ambiguous values are shown below. Each dish saves in one transaction;
+            approval remains separate and moves no stock.
+          </p>
+          {issue ? (
+            <p role="alert" className="text-sm text-destructive">
+              {issue}
+            </p>
+          ) : null}
+          {groups.length ? (
+            <>
+              <div className="max-h-80 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="p-2">Dish / batch</th>
+                      <th className="p-2">Ingredients</th>
+                      <th className="p-2">Review</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups.map((group) => (
+                      <tr key={group.key} className="border-t border-border">
+                        <td className="p-2">
+                          {group.recipe.name}
+                          <p className="text-xs text-muted-foreground">
+                            Rows {group.rowNumbers.join(", ")}
+                          </p>
+                        </td>
+                        <td className="p-2">{group.recipe.components.length}</td>
+                        <td className="p-2">
+                          {group.errors.length ? (
+                            <ul className="text-destructive">
+                              {group.errors.map((error) => (
+                                <li key={error}>{error}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span>{results[group.key] ?? "Ready as a complete draft"}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Button
+                disabled={busy || !groups.some((group) => !group.errors.length)}
+                onClick={async () => {
+                  const expectedScope = scope.current;
+                  const targetBranch = branchId;
+                  setBusy(true);
+                  setIssue("");
+                  try {
+                    for (const group of groups.filter((g) => !g.errors.length)) {
+                      if (scope.current !== expectedScope) break;
+                      try {
+                        const id = await save.mutateAsync({
+                          ...group.recipe,
+                          branchId: targetBranch,
+                        });
+                        if (scope.current === expectedScope)
+                          setResults((current) => ({
+                            ...current,
+                            [group.key]: `Draft saved (${id.slice(0, 8)}); awaiting approval`,
+                          }));
+                      } catch (error) {
+                        if (scope.current === expectedScope)
+                          setResults((current) => ({
+                            ...current,
+                            [group.key]:
+                              error instanceof Error
+                                ? error.message
+                                : "This complete dish was not saved.",
+                          }));
+                      }
+                    }
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? "Saving / reading…" : "Save reviewed dishes as drafts"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Invalid dishes are not saved. Fix their rows and upload again; unchanged imported
+                dishes reuse their saved result. Existing approved recipes are preserved.
+              </p>
+            </>
+          ) : null}
+        </div>
+      </SectionCard>
+    </section>
+  );
+}
+
 function Page() {
   const { can } = useAuth();
   const catalogue = useRecipeCatalogue();
   const menuItems = useKitchenMenuItems();
   const menuCategories = useMenuCategories();
-  const createMenuItem = useCreateMenuItemForRecipe();
   const stations = useKitchenStations();
   const stockItems = useStockItems();
   const saveRecipe = useSaveRecipeMaster();
@@ -93,7 +305,9 @@ function Page() {
 
   const rows = (catalogue.data ?? []) as Row[];
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [newRecipeRows, setNewRecipeRows] = useState<IngredientDraft[]>(() => [emptyIngredientRow()]);
+  const [newRecipeRows, setNewRecipeRows] = useState<IngredientDraft[]>(() => [
+    emptyIngredientRow(),
+  ]);
   const [addRows, setAddRows] = useState<IngredientDraft[]>(() => [emptyIngredientRow()]);
 
   const canCreate = can("kitchen", "recipes.create");
@@ -130,8 +344,7 @@ function Page() {
       ? (subRecipeOptions.find((o) => o.value === row.subRecipeId)?.label ?? "Sub-recipe")
       : (stockOptions.find((o) => o.value === row.stockItemId)?.label ?? "Stock item");
 
-  const isBlank = (row: IngredientDraft) =>
-    !row.stockItemId && !row.subRecipeId && !row.quantity;
+  const isBlank = (row: IngredientDraft) => !row.stockItemId && !row.subRecipeId && !row.quantity;
 
   const toComponentInput = (row: IngredientDraft) => ({
     componentType: row.componentType,
@@ -144,7 +357,12 @@ function Page() {
   });
 
   const recipeFields = [
-    { name: "name", label: "Recipe name", required: true, placeholder: "As printed on the kitchen card" },
+    {
+      name: "name",
+      label: "Recipe name",
+      required: true,
+      placeholder: "As printed on the kitchen card",
+    },
     { name: "recipe_code", label: "Recipe code", placeholder: "e.g. BEV-CAP-01" },
     {
       name: "recipe_type",
@@ -238,7 +456,10 @@ function Page() {
                   subRecipeOptions={subRecipeOptions}
                 />
               }
-              extraInvalid={!rowsAreValid(newRecipeRows.filter((r) => !isBlank(r))) && newRecipeRows.some((r) => !isBlank(r))}
+              extraInvalid={
+                !rowsAreValid(newRecipeRows.filter((r) => !isBlank(r))) &&
+                newRecipeRows.some((r) => !isBlank(r))
+              }
               onOpenChange={(open) => {
                 if (!open) setNewRecipeRows([emptyIngredientRow()]);
               }}
@@ -251,18 +472,8 @@ function Page() {
                       ? ("direct_sale" as const)
                       : ("menu_item" as const);
                 const stationId = (values["station_id"] as string) ?? null;
-                // Menu item first, recipe second, binding last: when no existing
-                // item is chosen, create it here from the price and category
-                // entered on this form, then carry its id into the recipe.
-                let menuItemId = (values["menu_item_id"] as string) ?? null;
-                if (recipeType !== "sub_recipe" && !menuItemId) {
-                  menuItemId = await createMenuItem.mutateAsync({
-                    name: String(values["name"] ?? ""),
-                    categoryId: String(values["new_menu_item_category"] ?? ""),
-                    price: Number(values["new_menu_item_price"] ?? 0),
-                    stationId,
-                  });
-                }
+                const menuItemId = (values["menu_item_id"] as string) || null;
+                const sheet = newRecipeRows.filter((r) => !isBlank(r));
                 const recipeId = await saveRecipe.mutateAsync({
                   name: String(values["name"] ?? ""),
                   recipeCode: (values["recipe_code"] as string) ?? null,
@@ -277,14 +488,16 @@ function Page() {
                     : null,
                   preparationSteps: (values["preparation_steps"] as string) ?? null,
                   status: "draft",
+                  components: sheet.map(toComponentInput),
+                  ...(!menuItemId && recipeType !== "sub_recipe"
+                    ? {
+                        newMenuItem: {
+                          categoryId: String(values["new_menu_item_category"] ?? ""),
+                          price: Number(values["new_menu_item_price"] ?? 0),
+                        },
+                      }
+                    : {}),
                 });
-                const sheet = newRecipeRows.filter((r) => !isBlank(r));
-                if (recipeId && sheet.length > 0) {
-                  await saveComponents.mutateAsync({
-                    recipeId,
-                    rows: sheet.map(toComponentInput),
-                  });
-                }
                 setNewRecipeRows([emptyIngredientRow()]);
                 setSelectedId(recipeId ?? null);
               }}
@@ -298,6 +511,16 @@ function Page() {
         }
       />
 
+      <RecipeSheetImport
+        menuItems={(menuItems.data ?? []) as Row[]}
+        stockItems={(stockItems.data ?? []) as Row[]}
+        subRecipes={rows.filter(
+          (r) => r["recipe_type"] === "sub_recipe" && r["status"] === "active",
+        )}
+        stations={(stations.data ?? []) as Row[]}
+        canImport={canCreate}
+      />
+
       <SectionCard
         title="Station consumption stores"
         description="The same mapping Kitchen Settings holds and the till deducts against. A station without a store cannot post consumption, so the gap is shown here rather than discovered at the till."
@@ -306,7 +529,9 @@ function Page() {
           isLoading={stationStores.isLoading}
           error={stationStores.error}
           isEmpty={(stationStores.data ?? []).length === 0}
-          empty={<p className="py-6 text-sm text-muted-foreground">No active stations configured yet.</p>}
+          empty={
+            <p className="py-6 text-sm text-muted-foreground">No active stations configured yet.</p>
+          }
         >
           <ul className="divide-y divide-border">
             {(stationStores.data ?? []).map((s) => (
@@ -318,7 +543,9 @@ function Page() {
                   <p className="font-medium">{s.stationName}</p>
                   <p className="text-xs text-muted-foreground">
                     {s.recipesActive} active recipe{s.recipesActive === 1 ? "" : "s"}
-                    {s.locationName ? ` · consumes from ${s.locationName}` : " · no consumption store set"}
+                    {s.locationName
+                      ? ` · consumes from ${s.locationName}`
+                      : " · no consumption store set"}
                   </p>
                 </div>
                 <StatusPill tone={s.state === "ready" ? "success" : "warning"}>
@@ -329,7 +556,6 @@ function Page() {
           </ul>
         </QueryState>
       </SectionCard>
-
 
       <SectionCard
         title="Recipes"
@@ -343,7 +569,10 @@ function Page() {
         >
           <ul className="divide-y divide-border">
             {rows.map((r) => (
-              <li key={String(r["id"])} className="flex items-start justify-between gap-3 py-3 text-sm">
+              <li
+                key={String(r["id"])}
+                className="flex items-start justify-between gap-3 py-3 text-sm"
+              >
                 <button
                   type="button"
                   className="text-left"
@@ -357,12 +586,13 @@ function Page() {
                     {String(r["recipe_type"] ?? "menu_item") === "direct_sale"
                       ? `Direct stock · ${directStockMapping(r)?.stockItemName ?? "stock item not set"} · ${r["yield_quantity"] ?? 1} ${String(r["yield_unit"] ?? "container")} per sale`
                       : `${String(r["recipe_type"] ?? "menu_item") === "sub_recipe" ? "Batch sub-recipe" : "Menu item recipe"} · yield ${r["yield_quantity"] ?? "—"} ${String(r["yield_unit"] ?? "")} · ${
-                          (r["operational_stations"] as Row | null)?.["name"] ?? "Unassigned station"
+                          (r["operational_stations"] as Row | null)?.["name"] ??
+                          "Unassigned station"
                         }`}
                   </p>
                 </button>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {canCreate ? (
+                  {canCreate && String(r["status"]) === "draft" ? (
                     <Select
                       value={(r["station_id"] as string | null) ?? ""}
                       onValueChange={(v) =>
@@ -403,6 +633,39 @@ function Page() {
                       Approve
                     </Button>
                   ) : null}
+                  {canCreate && String(r["status"]) === "active" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saveRecipe.isPending}
+                      onClick={async () => {
+                        const record = toRecipeRecord(r);
+                        const id = await saveRecipe.mutateAsync({
+                          name: String(r["name"] ?? "Recipe"),
+                          recipeType:
+                            r["recipe_type"] === "direct_sale" ? "direct_sale" : record.recipe_type,
+                          menuItemId: r["menu_item_id"] as string | null,
+                          stationId: r["station_id"] as string | null,
+                          outputStockItemId: r["output_stock_item_id"] as string | null,
+                          yieldQuantity: record.yield_quantity,
+                          yieldUnit: record.yield_unit,
+                          preparationSteps: r["preparation_steps"] as string | null,
+                          components: record.ingredients.map((i) => ({
+                            componentType: i.component_type,
+                            stockItemId: i.stock_item_id ?? null,
+                            subRecipeId: i.sub_recipe_id ?? null,
+                            name: i.ingredient_name ?? "",
+                            quantity: i.quantity,
+                            unit: i.unit,
+                            wasteAllowance: i.waste_allowance ?? 0,
+                          })),
+                        });
+                        setSelectedId(id);
+                      }}
+                    >
+                      New draft version
+                    </Button>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -423,7 +686,7 @@ function Page() {
               : "Components are recorded for the full recipe yield. Per-unit usage below is what a single sale consumes."
           }
           actions={
-            canCreate ? (
+            canCreate && selected.status === "draft" ? (
               <RecordDialog
                 title="Add ingredients"
                 description="Add one row per stock item or prepared sub-recipe consumed by this recipe's full yield."
@@ -472,12 +735,15 @@ function Page() {
                   Consumption resolves{" "}
                   <span className="font-medium">{selectedStation.stationName}</span> →{" "}
                   <span className="font-medium">{selectedStation.locationName}</span>
-                  {selectedStation.state === "ready" ? "" : ` · ${STATION_STATE_LABEL[selectedStation.state]}`}
+                  {selectedStation.state === "ready"
+                    ? ""
+                    : ` · ${STATION_STATE_LABEL[selectedStation.state]}`}
                 </>
               ) : (
                 <>
-                  <span className="font-medium">{selectedStation.stationName}</span> has no consumption
-                  store set, so a sale of this recipe cannot post stock. Set it in Kitchen Settings.
+                  <span className="font-medium">{selectedStation.stationName}</span> has no
+                  consumption store set, so a sale of this recipe cannot post stock. Set it in
+                  Kitchen Settings.
                 </>
               )
             ) : (
@@ -509,8 +775,8 @@ function Page() {
                 </dd>
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-3">
-                Container sizes are edited on the stock item itself, so a 300 ml and a 500 ml soda can be
-                held as separate items with their own sizes.
+                Container sizes are edited on the stock item itself, so a 300 ml and a 500 ml soda
+                can be held as separate items with their own sizes.
               </p>
             </dl>
           ) : selected.ingredients.length === 0 ? (
@@ -537,10 +803,12 @@ function Page() {
                     <td className="py-2 pr-4">{ing.quantity}</td>
                     <td className="py-2 pr-4">{ing.unit}</td>
                     <td className="py-2 pr-4">
-                      {preview[idx] ? `${Number(preview[idx].quantity.toFixed(4))} ${preview[idx].unit}` : "—"}
+                      {preview[idx]
+                        ? `${Number(preview[idx].quantity.toFixed(4))} ${preview[idx].unit}`
+                        : "—"}
                     </td>
                     <td className="py-2 text-right">
-                      {canCreate ? (
+                      {canCreate && selected.status === "draft" ? (
                         <Button
                           size="sm"
                           variant="ghost"

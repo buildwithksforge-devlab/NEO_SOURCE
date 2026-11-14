@@ -229,11 +229,11 @@ function OrderPage() {
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h1
           className="text-2xl font-semibold"
-          style={{ color: brandFallback.secondary }}
+          style={{ color: "var(--guest-text, #07142D)" }}
         >
           Order food
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Straight to {ws.hotel_name}&apos;s kitchen — the same order the chefs
           and cashiers see.
         </p>
@@ -278,7 +278,7 @@ function OrderPage() {
             </div>
 
             {activeFulfilment === "room-service" ? (
-              <p className="mt-3 text-xs" style={{ color: brandFallback.steel }}>
+              <p className="mt-3 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                 {inHouse
                   ? `Room ${stay.data?.room_number ?? "—"} · stay ${stay.data?.confirmation_number}`
                   : "Room service is available once you are checked in."}
@@ -294,7 +294,7 @@ function OrderPage() {
               <div className="flex justify-center py-6">
                 <Loader2
                   className="size-5 animate-spin"
-                  style={{ color: brandFallback.steel }}
+                  style={{ color: "var(--guest-muted, #52627A)" }}
                 />
               </div>
             ) : (menu.data?.length ?? 0) === 0 ? (
@@ -308,7 +308,7 @@ function OrderPage() {
                   <div key={category}>
                     <p
                       className="text-xs font-semibold uppercase tracking-wide"
-                      style={{ color: brandFallback.steel }}
+                      style={{ color: "var(--guest-muted, #52627A)" }}
                     >
                       {category}
                     </p>
@@ -333,7 +333,7 @@ function OrderPage() {
                               <span className="flex size-14 items-center justify-center rounded-lg bg-black/5">
                                 <UtensilsCrossed
                                   className="size-5"
-                                  style={{ color: brandFallback.steel }}
+                                  style={{ color: "var(--guest-muted, #52627A)" }}
                                   aria-hidden
                                 />
                               </span>
@@ -342,19 +342,19 @@ function OrderPage() {
                             <span className="min-w-0 flex-1">
                               <span
                                 className="block text-sm font-medium"
-                                style={{ color: brandFallback.secondary }}
+                                style={{ color: "var(--guest-text, #07142D)" }}
                               >
                                 {item.name}
                               </span>
                               <span
                                 className="block truncate text-xs"
-                                style={{ color: brandFallback.steel }}
+                                style={{ color: "var(--guest-muted, #52627A)" }}
                               >
                                 {item.description ?? ""}
                               </span>
                               <span
                                 className="mt-1 block text-sm font-semibold"
-                                style={{ color: brandFallback.secondary }}
+                                style={{ color: "var(--guest-text, #07142D)" }}
                               >
                                 {money(item.base_price)}
                               </span>
@@ -472,7 +472,7 @@ function OrderPage() {
                         <span className="min-w-0">
                           <span
                             className="block text-sm font-medium"
-                            style={{ color: brandFallback.secondary }}
+                            style={{ color: "var(--guest-text, #07142D)" }}
                           >
                             {item?.name ?? "Item"}
                           </span>
@@ -480,7 +480,7 @@ function OrderPage() {
                           {line["special_instructions"] ? (
                             <span
                               className="block text-xs"
-                              style={{ color: brandFallback.steel }}
+                              style={{ color: "var(--guest-muted, #52627A)" }}
                             >
                               {String(line["special_instructions"])}
                             </span>
@@ -510,7 +510,7 @@ function OrderPage() {
                           >
                             <Minus
                               className="size-3.5"
-                              style={{ color: brandFallback.steel }}
+                              style={{ color: "var(--guest-muted, #52627A)" }}
                               aria-hidden
                             />
                           </button>
@@ -532,7 +532,7 @@ function OrderPage() {
                           >
                             <Plus
                               className="size-3.5"
-                              style={{ color: brandFallback.steel }}
+                              style={{ color: "var(--guest-muted, #52627A)" }}
                               aria-hidden
                             />
                           </button>
@@ -596,7 +596,7 @@ function OrderPage() {
                   <div className="mt-4 space-y-2">
                     <p
                       className="text-xs font-medium"
-                      style={{ color: brandFallback.steel }}
+                      style={{ color: "var(--guest-muted, #52627A)" }}
                     >
                       Payment
                     </p>
@@ -631,7 +631,7 @@ function OrderPage() {
                           }
                         />
                         <span
-                          style={{ color: brandFallback.secondary }}
+                          style={{ color: "var(--guest-text, #07142D)" }}
                         >
                           {option.label}
                         </span>
@@ -641,7 +641,7 @@ function OrderPage() {
                     {!stay.data?.can_charge_to_room ? (
                       <p
                         className="text-xs"
-                        style={{ color: brandFallback.steel }}
+                        style={{ color: "var(--guest-muted, #52627A)" }}
                       >
                         Room charging is not open on your folio — the property
                         will settle this order at the desk.
@@ -686,10 +686,10 @@ function Line({
 }) {
   return (
     <div className="flex items-center justify-between">
-      <dt style={{ color: brandFallback.steel }}>{label}</dt>
+      <dt style={{ color: "var(--guest-muted, #52627A)" }}>{label}</dt>
       <dd
         className={strong ? "font-semibold" : ""}
-        style={{ color: brandFallback.secondary }}
+        style={{ color: "var(--guest-text, #07142D)" }}
       >
         {value}
       </dd>
@@ -756,7 +756,7 @@ function ItemCustomiser({
         <fieldset key={group.group_id}>
           <legend
             className="text-xs font-semibold"
-            style={{ color: brandFallback.secondary }}
+            style={{ color: "var(--guest-text, #07142D)" }}
           >
             {group.name}
             {group.required ? " · required" : ""}
@@ -795,7 +795,7 @@ function ItemCustomiser({
 
       <label
         className="block text-xs"
-        style={{ color: brandFallback.steel }}
+        style={{ color: "var(--guest-muted, #52627A)" }}
       >
         Special instructions
         <input
@@ -810,7 +810,7 @@ function ItemCustomiser({
 
       <label
         className="block text-xs"
-        style={{ color: brandFallback.steel }}
+        style={{ color: "var(--guest-muted, #52627A)" }}
       >
         Allergy note — the kitchen sees this on the ticket
         <input
@@ -843,7 +843,7 @@ function ItemCustomiser({
           type="button"
           onClick={onCancel}
           className="text-xs"
-          style={{ color: brandFallback.steel }}
+          style={{ color: "var(--guest-muted, #52627A)" }}
         >
           Cancel
         </button>
@@ -851,7 +851,7 @@ function ItemCustomiser({
         {missing.length ? (
           <span
             className="text-xs"
-            style={{ color: brandFallback.steel }}
+            style={{ color: "var(--guest-muted, #52627A)" }}
           >
             Choose {missing.map((group) => group.name).join(", ")}
           </span>

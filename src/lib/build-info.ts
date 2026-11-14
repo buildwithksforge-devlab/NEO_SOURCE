@@ -8,12 +8,14 @@
  */
 declare const __NEO_BUILD_REVISION__: string;
 declare const __NEO_BUILD_TIME__: string;
+declare const __NEO_BUILD_ID__: string;
 
 function safe(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
 export const buildInfo = {
+  sourceId: safe(typeof __NEO_BUILD_ID__ === "undefined" ? undefined : __NEO_BUILD_ID__,"development"),
   /** Short source revision the bundle was built from. */
   revision: safe(
     typeof __NEO_BUILD_REVISION__ === "undefined" ? undefined : __NEO_BUILD_REVISION__,

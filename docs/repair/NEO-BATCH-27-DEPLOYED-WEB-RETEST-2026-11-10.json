@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-10",
+  "passed": true,
+  "origin": "https://neo-preview.neo-hospitality.workers.dev",
+  "sourceId": "3e60a4b662a22e13",
+  "rows": [
+    {
+      "path": "/",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "3e60a4b662a22e13"
+    },
+    {
+      "path": "/auth",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "3e60a4b662a22e13"
+    },
+    {
+      "path": "/pos/orders",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "buildId": "3e60a4b662a22e13"
+    }
+  ],
+  "scope": "HTTP startup/auth and protected client-shell response; no new hydrated-browser claim. No authenticated departmental workflow, real provider delivery or physical device output was exercised."
+}

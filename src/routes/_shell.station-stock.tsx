@@ -13,6 +13,7 @@ import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDis
 import { EmptyState, QueryState } from "@/components/common/StateSystem";
 import { formatQuantity, healthLabel, healthTone, titleCase } from "@/lib/inventory";
 import {
+  currentStationId,
   reorderAlerts,
   unconfiguredItems,
   useMyStations,
@@ -45,12 +46,13 @@ export const Route = createFileRoute("/_shell/station-stock")({
 
 function StationStockPage() {
   const stations = useMyStations();
-  const [stationId, setStationId] = useState<string | null>(null);
+  const [selectedStationId, setStationId] = useState<string | null>(null);
   const list = stations.data ?? [];
+  const stationId = currentStationId(selectedStationId, list);
 
   useEffect(() => {
-    if (!stationId && list.length > 0) setStationId(list[0]!.stationId);
-  }, [list, stationId]);
+    if (selectedStationId !== stationId) setStationId(stationId);
+  }, [selectedStationId, stationId]);
 
   const stores = useStationStores(stationId);
   const locationIds = useMemo(() => (stores.data ?? []).map((s) => s.locationId), [stores.data]);
@@ -58,6 +60,7 @@ function StationStockPage() {
   const movements = useStationConsumption(locationIds);
 
   const rows = levels.data ?? [];
+  const totalsKnown = Boolean(stationId && !stores.isLoading && !stores.error && !levels.isLoading && !levels.error);
   const alerts = reorderAlerts(rows);
   const unconfigured = unconfiguredItems(rows);
 
@@ -100,13 +103,13 @@ function StationStockPage() {
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           <SectionCard title="Ingredients tracked">
-            <p className="text-3xl font-semibold">{rows.length}</p>
+            <p className="text-3xl font-semibold">{totalsKnown ? rows.length : "—"}</p>
           </SectionCard>
           <SectionCard title="At or below reorder point">
-            <p className="text-3xl font-semibold">{alerts.length}</p>
+            <p className="text-3xl font-semibold">{totalsKnown ? alerts.length : "—"}</p>
           </SectionCard>
           <SectionCard title="No reorder point recorded">
-            <p className="text-3xl font-semibold">{unconfigured.length}</p>
+            <p className="text-3xl font-semibold">{totalsKnown ? unconfigured.length : "—"}</p>
           </SectionCard>
         </div>
 

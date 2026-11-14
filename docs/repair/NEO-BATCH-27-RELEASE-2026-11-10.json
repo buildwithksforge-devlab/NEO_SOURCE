@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-10",
+  "batch": 27,
+  "scope": "Finish only the stale-view batch already pending; pause other queue work at user request.",
+  "sourceId": "3e60a4b662a22e13",
+  "versionId": "028d70c4-47ad-4e4d-b82b-4a3f808c9cc5",
+  "rollbackVersion": "669f2229-7e69-4e04-bbf0-5ad9392b4e78",
+  "passedTests": 4347,
+  "failedTests": 0,
+  "fullRun": {
+    "passed": 4345,
+    "failed": 2
+  },
+  "finalFocused": {
+    "passed": 139,
+    "failed": 0
+  },
+  "resolvedScannerFailures": 2,
+  "skippedTests": 155,
+  "focusedStaleViewChecks": 53,
+  "previousUniquePasses": 4280,
+  "retainedPreviousUniquePasses": 4280,
+  "regressions": [],
+  "typecheck": true,
+  "build": true,
+  "startupSmoke": true,
+  "sourceIdentity": true,
+  "liveHttp": {
+    "date": "2026-11-10",
+    "passed": true,
+    "origin": "https://neo-preview.neo-hospitality.workers.dev",
+    "sourceId": "3e60a4b662a22e13",
+    "rows": [
+      {
+        "path": "/",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "3e60a4b662a22e13"
+      },
+      {
+        "path": "/auth",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "3e60a4b662a22e13"
+      },
+      {
+        "path": "/pos/orders",
+        "status": 200,
+        "cacheControl": "private, no-store",
+        "buildId": "3e60a4b662a22e13"
+      }
+    ],
+    "scope": "HTTP startup/auth and protected client-shell response; no new hydrated-browser claim. No authenticated departmental workflow, real provider delivery or physical device output was exercised."
+  },
+  "noSqlOrHistoricalDataChange": true,
+  "authenticatedOperationalAcceptance": false
+}

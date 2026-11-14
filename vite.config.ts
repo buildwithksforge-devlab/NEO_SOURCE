@@ -1,3 +1,4 @@
+import { sourceFingerprint } from "./scripts/build-identity.ts";
 // @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
 // or the app will break with duplicate plugins:
 //   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
@@ -29,6 +30,7 @@ export default defineConfig({
   vite: {
     define: {
       __NEO_BUILD_REVISION__: JSON.stringify(sourceRevision()),
+      __NEO_BUILD_ID__: JSON.stringify(sourceFingerprint(process.cwd())),
       __NEO_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     },
   },

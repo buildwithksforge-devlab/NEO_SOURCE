@@ -1,0 +1,251 @@
+-- NEØ F01: Secure existing requisition approvals.
+-- No operational data is modified when this migration is created.
+-- Apply through the normal reviewed migration process.
+--
+-- Supervisor:
+--   pending-supervisor -> awaiting-stores
+--
+-- Stores:
+--   awaiting-stores -> ready-for-issue / partially-approved
+--
+-- Actual issuing continues through neo_req_issue_safe.
+
+CREATE OR REPLACE FUNCTION public.req_approve(
+    _requisition uuid,
+    _lines jsonb DEFAULT '[]'::jsonb,
+    _stage text DEFAULT 'supervisor'
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+    v_org uuid := public.current_org_id();
+    v_req public.internal_requisitions%ROWTYPE;
+    v_line jsonb;
+    v_line_id uuid;
+    v_quantity numeric;
+    v_requested numeric;
+    v_partial boolean := false;
+    v_count integer := 0;
+BEGIN
+    IF auth.uid() IS NULL OR v_org IS NULL THEN
+        RAISE EXCEPTION 'Authentication required'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF _stage NOT IN ('supervisor', 'stores') THEN
+        RAISE EXCEPTION 'Invalid approval stage';
+    END IF;
+
+    -- Permission enforcement stays server-side.
+    IF _stage = 'supervisor' THEN
+        IF public.neo_requisition_supervisor_authority() IS NOT TRUE THEN
+            RAISE EXCEPTION 'Not permitted to approve requisitions'
+                USING ERRCODE = '42501';
+        END IF;
+    ELSE
+        IF NOT (
+            public.has_permission('stores', 'approve')
+            OR public.is_org_admin()
+        ) THEN
+            RAISE EXCEPTION 'Stores approval permission required'
+                USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    -- Lock the requisition to prevent competing approvals.
+    SELECT *
+    INTO v_req
+    FROM public.internal_requisitions
+    WHERE id = _requisition
+      AND organization_id = v_org
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Requisition not found';
+    END IF;
+
+    -- Maker-checker: requester cannot approve their own requisition.
+    IF v_req.requested_by = auth.uid() THEN
+        RAISE EXCEPTION
+            'The employee who raised this requisition cannot approve it'
+            USING ERRCODE = '42501';
+    END IF;
+    -- Never approve another property's requisition.
+    IF v_req.branch_id IS NULL
+       OR NOT (
+           v_req.branch_id = ANY(public.current_branch_ids())
+       ) THEN
+        RAISE EXCEPTION 'Requisition outside authorized property'
+            USING ERRCODE = '42501';
+    END IF;
+
+    -- Enforce the intended lifecycle.
+    IF _stage = 'supervisor' THEN
+        IF v_req.status <> 'pending-supervisor' THEN
+            RAISE EXCEPTION
+                'Supervisor approval requires pending-supervisor status';
+        END IF;
+
+        IF COALESCE(jsonb_array_length(
+            CASE
+                WHEN jsonb_typeof(_lines) = 'array'
+                THEN _lines
+                ELSE '[]'::jsonb
+            END
+        ), 0) > 0 THEN
+            RAISE EXCEPTION
+                'Supervisor release cannot modify approved quantities';
+        END IF;
+
+        UPDATE public.internal_requisitions
+        SET status = 'awaiting-stores',
+            supervisor_approved_by = auth.uid(),
+            supervisor_approved_at = now()
+        WHERE id = v_req.id;
+
+        PERFORM public.neo_notify(
+            v_org,
+            NULL,
+            v_req.branch_id,
+            'operational-alert',
+            'Requisition released to Stores - ' ||
+                COALESCE(v_req.request_number, ''),
+            'A supervisor approved the request. Stores can now review quantities.',
+            '/inventory/requisitions',
+            COALESCE(v_req.priority, 'normal'),
+            true,
+            'stores',
+            v_req.id,
+            'stores.requisition_released',
+            'req:' || v_req.id::text || ':released'
+        );
+
+        RETURN jsonb_build_object(
+            'ok', true,
+            'stage', 'supervisor',
+            'status', 'awaiting-stores'
+        );
+    END IF;
+
+    -- Stores cannot bypass supervisor approval.
+    IF v_req.status <> 'awaiting-stores' THEN
+        RAISE EXCEPTION
+            'Stores approval requires awaiting-stores status';
+    END IF;
+
+    IF _lines IS NULL OR jsonb_typeof(_lines) <> 'array' THEN
+        RAISE EXCEPTION 'Approval lines must be an array';
+    END IF;
+
+    -- Validate all submitted quantities before updating any line.
+    FOR v_line IN
+        SELECT value
+        FROM jsonb_array_elements(_lines)
+    LOOP
+        IF jsonb_typeof(v_line) <> 'object'
+           OR COALESCE(v_line->>'id', '') = ''
+           OR COALESCE(v_line->>'quantity_approved', '') = '' THEN
+            RAISE EXCEPTION 'Invalid approval line';
+        END IF;
+
+        v_line_id := (v_line->>'id')::uuid;
+        v_quantity := (v_line->>'quantity_approved')::numeric;
+
+        SELECT quantity_requested
+        INTO v_requested
+        FROM public.internal_requisition_lines
+        WHERE id = v_line_id
+          AND requisition_id = v_req.id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Approval line does not belong to requisition';
+        END IF;
+
+        IF v_quantity IS NULL
+           OR v_quantity < 0
+           OR v_quantity > v_requested THEN
+            RAISE EXCEPTION 'Approved quantity must be between zero and requested quantity';
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(_lines) AS submitted(value)
+            WHERE submitted.value->>'id' = v_line_id::text
+            GROUP BY submitted.value->>'id'
+            HAVING COUNT(*) > 1
+        ) THEN
+            RAISE EXCEPTION 'Duplicate approval line';
+        END IF;
+
+        UPDATE public.internal_requisition_lines
+        SET quantity_approved = v_quantity
+        WHERE id = v_line_id
+          AND requisition_id = v_req.id;
+
+        v_count := v_count + 1;
+    END LOOP;
+
+    -- Every requisition line must be explicitly reviewed.
+    -- Never silently approve a line omitted from the request.
+    IF v_count = 0 THEN
+        RAISE EXCEPTION 'Cannot approve requisition without reviewed lines';
+    END IF;
+
+    IF v_count <> (
+        SELECT COUNT(*)
+        FROM public.internal_requisition_lines
+        WHERE requisition_id = v_req.id
+    ) THEN
+        RAISE EXCEPTION 'Every requisition line must be reviewed';
+    END IF;
+
+    -- At least one line must have a positive approved quantity.
+    -- An entirely unavailable request belongs in the return/shortage flow.
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.internal_requisition_lines
+        WHERE requisition_id = v_req.id
+          AND quantity_approved > 0
+    ) THEN
+        RAISE EXCEPTION 'No quantity approved; return the requisition or route the shortage';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.internal_requisition_lines
+        WHERE requisition_id = v_req.id
+          AND quantity_approved < quantity_requested
+    )
+    INTO v_partial;
+
+    UPDATE public.internal_requisitions
+    SET status = CASE
+            WHEN v_partial THEN 'partially-approved'
+            ELSE 'ready-for-issue'
+        END,
+        store_reviewed_by = auth.uid(),
+        store_reviewed_at = now()
+    WHERE id = v_req.id;
+
+    RETURN jsonb_build_object(
+        'ok', true,
+        'stage', 'stores',
+        'partial', v_partial,
+        'lines_reviewed', v_count,
+        'status', CASE
+            WHEN v_partial THEN 'partially-approved'
+            ELSE 'ready-for-issue'
+        END
+    );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.req_approve(uuid, jsonb, text)
+FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.req_approve(uuid, jsonb, text)
+TO authenticated;

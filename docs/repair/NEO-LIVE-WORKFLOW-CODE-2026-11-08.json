@@ -1,0 +1,55 @@
+{
+  "diagnostic_version": "workflow-code-bundle-live-v1",
+  "draft": {
+    "code": [
+      {
+        "matches": true,
+        "signature": "public.neo_pos_remove_draft(uuid,text)"
+      },
+      {
+        "matches": true,
+        "signature": "public.neo_pos_removed_draft_write_guard()"
+      }
+    ],
+    "definitions_match": true,
+    "diagnostic_version": "draft-removal-install-v1",
+    "read_only": "on",
+    "scope": "Code installation only; no order removal or full workflow certification."
+  },
+  "events": {
+    "definition_matches": true,
+    "diagnostic_version": "event-requirement-ownership-install-v1",
+    "helper_private": true,
+    "read_only": "on",
+    "scope": "Code installation only. Existing requirements/tasks are not rewritten; historical null ownership requires explicit review. Full BEO handoffs remain separate.",
+    "trigger_enabled": true
+  },
+  "folio": {
+    "definition_matches": true,
+    "diagnostic_version": "reservation-folio-status-install-v1",
+    "read_only": "on",
+    "scope": "Installed Savannah status code only. No historical status reconciliation, deposit, payment, balance or journal is created or rewritten. Valid other-organization behavior is preserved.",
+    "trigger_matches": true
+  },
+  "read_only": "on",
+  "rooms": {
+    "code": [
+      {
+        "matches": true,
+        "signature": "ops_room_state(uuid)"
+      },
+      {
+        "matches": true,
+        "signature": "ops_room_availability(uuid,date,date)"
+      },
+      {
+        "matches": true,
+        "signature": "pms_available_rooms(uuid,date,date,uuid,integer,integer,uuid)"
+      }
+    ],
+    "definitions_match": true,
+    "diagnostic_version": "room-readiness-code-postcheck-v1",
+    "read_only": "on",
+    "scope": "Code definitions only; no physical room release, stay checkout, task completion or full department acceptance is certified."
+  }
+}

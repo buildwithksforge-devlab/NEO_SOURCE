@@ -1,4 +1,12 @@
+import {
+  requireLpoActionResult,
+  requireMatchResult,
+  requireInvoiceCaptureResult,
+  requireSupplierJournalResult,
+} from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireAccrualResult } from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +24,8 @@ export function useProcurementCtx() {
   const { branchId: activeBranchId } = useActivePropertyFilter();
   return {
     organizationId,
-    branchId: activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
+    branchId:
+      activeBranchId ?? (profile as { branch_id?: string | null } | null)?.branch_id ?? null,
     userId: user?.id ?? null,
     userName: (profile as { full_name?: string } | null)?.full_name ?? "",
   };
@@ -24,23 +33,39 @@ export function useProcurementCtx() {
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["procurement"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 /* --------------------------------- reads --------------------------------- */
 
 /** Every LPO ever raised, including received, closed, cancelled and voided ones. */
-export function useLpos(filters?: { status?: string; supplierId?: string | null; from?: string; to?: string }) {
+export function useLpos(filters?: {
+  status?: string;
+  supplierId?: string | null;
+  from?: string;
+  to?: string;
+}) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useProcurementCtx();
   return useQuery({
-    queryKey: ["procurement", "lpos", organizationId, filterKey, filters?.status, filters?.supplierId, filters?.from, filters?.to],
+    queryKey: [
+      "procurement",
+      "lpos",
+      organizationId,
+      filterKey,
+      filters?.status,
+      filters?.supplierId,
+      filters?.from,
+      filters?.to,
+    ],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      let q = applyTo(db.from("purchase_orders").select("*, suppliers(name), departments(name), purchase_order_lines(*)"), "purchase_orders")
+      let q = applyTo(
+        db
+          .from("purchase_orders")
+          .select("*, suppliers(name), departments(name), purchase_order_lines(*)"),
+        "purchase_orders",
+      )
         .order("created_at", { ascending: false })
         .limit(300);
       if (filters?.status && filters.status !== "all") q = q.eq("status", filters.status);
@@ -95,7 +120,10 @@ export function useSupplierInvoices() {
     queryKey: ["procurement", "invoices", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("supplier_invoices").select("*, suppliers(name), purchase_orders(order_number)"), "supplier_invoices")
+      const { data, error } = await applyTo(
+        db.from("supplier_invoices").select("*, suppliers(name), purchase_orders(order_number)"),
+        "supplier_invoices",
+      )
         .order("invoice_date", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -110,14 +138,29 @@ export function useSupplierInvoices() {
 export function useLpoAction() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async ({ orderId, action, reason }: { orderId: string; action: string; reason: string }) => {
-      const { data, error } = await guardedRpc(db, "proc_lpo_action", { _order: orderId, _action: action, _reason: reason });
+    mutationFn: async ({
+      orderId,
+      action,
+      reason,
+    }: {
+      orderId: string;
+      action: string;
+      reason: string;
+    }) => {
+      const { data, error } = await guardedRpc(db, "proc_lpo_action", {
+        _order: orderId,
+        _action: action,
+        _reason: reason,
+      });
       if (error) throw error;
-      return data as Row;
+      return requireLpoActionResult(data, action) as Row;
     },
     onSuccess: (_d, vars) => {
-      invalidate();
-      toast.success(`Purchase order ${vars.action === "check" ? "checked" : `${vars.action}${vars.action.endsWith("e") ? "d" : "ed"}`}`);
+      const refresh = invalidate();
+      toast.success(
+        `Purchase order ${vars.action === "check" ? "checked" : `${vars.action}${vars.action.endsWith("e") ? "d" : "ed"}`}`,
+      );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -129,15 +172,17 @@ export function useThreeWayMatch() {
     mutationFn: async (invoiceId: string) => {
       const { data, error } = await guardedRpc(db, "proc_three_way_match", { _invoice: invoiceId });
       if (error) throw error;
-      return (data ?? {}) as Row;
+      return requireMatchResult(data) as Row;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       const critical = Number(data["critical"] ?? 0);
       const total = Number(data["discrepancies"] ?? 0);
-      if (critical > 0) toast.error(`Held for review — ${critical} critical of ${total} discrepancies`);
+      if (critical > 0)
+        toast.error(`Held for review — ${critical} critical of ${total} discrepancies`);
       else if (total > 0) toast.warning(`${total} discrepancy(ies) flagged for review`);
       else toast.success("Matched — order, delivery and invoice agree");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -150,7 +195,12 @@ export function useResolveDiscrepancy() {
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const { data, error } = await db
         .from("supplier_invoice_discrepancies")
-        .update({ resolved: true, resolved_by: ctx.userId, resolved_at: new Date().toISOString(), resolution_reason: reason })
+        .update({
+          resolved: true,
+          resolved_by: ctx.userId,
+          resolved_at: new Date().toISOString(),
+          resolution_reason: reason,
+        })
         .eq("id", id)
         .select()
         .single();
@@ -168,8 +218,9 @@ export function useResolveDiscrepancy() {
         newValue: data,
         reason: vars.reason,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Discrepancy explained and recorded");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -177,19 +228,35 @@ export function useResolveDiscrepancy() {
 
 /* ------------------- complimentary & special-price register ------------------- */
 
-export function useComplimentaryRegister(filters?: { from?: string; to?: string; pricingType?: string }) {
+export function useComplimentaryRegister(filters?: {
+  from?: string;
+  to?: string;
+  pricingType?: string;
+}) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useProcurementCtx();
   return useQuery({
-    queryKey: ["procurement", "complimentary", organizationId, filters?.from, filters?.to, filters?.pricingType, filterKey],
+    queryKey: [
+      "procurement",
+      "complimentary",
+      organizationId,
+      filters?.from,
+      filters?.to,
+      filters?.pricingType,
+      filterKey,
+    ],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      let q = applyTo(db.from("complimentary_register").select("*, departments(name), branches(name)"), "complimentary_register")
+      let q = applyTo(
+        db.from("complimentary_register").select("*, departments(name), branches(name)"),
+        "complimentary_register",
+      )
         .order("created_at", { ascending: false })
         .limit(300);
       if (filters?.from) q = q.gte("created_at", filters.from);
       if (filters?.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
-      if (filters?.pricingType && filters.pricingType !== "all") q = q.eq("pricing_type", filters.pricingType);
+      if (filters?.pricingType && filters.pricingType !== "all")
+        q = q.eq("pricing_type", filters.pricingType);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as Row[];
@@ -227,8 +294,9 @@ export function useSaveComplimentary() {
         newValue: data,
         reason: String((data as Row)["reason"] ?? ""),
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Recorded — awaiting approval");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -238,7 +306,15 @@ export function useApproveComplimentary() {
   const ctx = useProcurementCtx();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async ({ id, approve, reason }: { id: string; approve: boolean; reason?: string }) => {
+    mutationFn: async ({
+      id,
+      approve,
+      reason,
+    }: {
+      id: string;
+      approve: boolean;
+      reason?: string;
+    }) => {
       const { data, error } = await db
         .from("complimentary_register")
         .update({
@@ -264,8 +340,9 @@ export function useApproveComplimentary() {
         newValue: data,
         reason: vars.reason ?? null,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success(vars.approve ? "Approved" : "Rejected");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -298,7 +375,10 @@ export function useAccountingSyncLog() {
     queryKey: ["procurement", "sync-log", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("accounting_sync_log").select("*"), "accounting_sync_log")
+      const { data, error } = await applyTo(
+        db.from("accounting_sync_log").select("*"),
+        "accounting_sync_log",
+      )
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -338,7 +418,6 @@ export type InvoiceCapture = {
 export function useCaptureSupplierInvoice() {
   const ctx = useProcurementCtx();
   const invalidate = useInvalidate();
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: InvoiceCapture) => {
       const { data, error } = await guardedRpc(db, "neo_supplier_invoice_capture", {
@@ -363,7 +442,7 @@ export function useCaptureSupplierInvoice() {
         },
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Row;
+      return requireInvoiceCaptureResult(data) as Row;
     },
     onSuccess: async (data) => {
       await logAudit({
@@ -375,13 +454,15 @@ export function useCaptureSupplierInvoice() {
         recordId: String(data["invoice_id"] ?? ""),
         newValue: data,
       });
-      invalidate();
-      void qc.invalidateQueries({ queryKey: ["finance"] });
+      const refresh = invalidate();
       const match = (data["match"] ?? {}) as Row;
       const critical = Number(match["critical"] ?? 0);
-      if (critical > 0) toast.error(`Invoice captured and held — ${critical} critical matching issue(s)`);
-      else if (Number(match["discrepancies"] ?? 0) > 0) toast.warning("Invoice captured — variances flagged for review");
+      if (critical > 0)
+        toast.error(`Invoice captured and held — ${critical} critical matching issue(s)`);
+      else if (Number(match["discrepancies"] ?? 0) > 0)
+        toast.warning("Invoice captured — variances flagged for review");
       else toast.success("Invoice captured and matched");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -391,7 +472,6 @@ export function useCaptureSupplierInvoice() {
 export function useAcceptSupplierInvoice() {
   const ctx = useProcurementCtx();
   const invalidate = useInvalidate();
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ invoiceId, reason }: { invoiceId: string; reason?: string }) => {
       const { data, error } = await guardedRpc(db, "neo_supplier_invoice_accept", {
@@ -399,7 +479,7 @@ export function useAcceptSupplierInvoice() {
         _reason: reason ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Row;
+      return requireSupplierJournalResult(data) as Row;
     },
     onSuccess: async (data, vars) => {
       await logAudit({
@@ -412,9 +492,9 @@ export function useAcceptSupplierInvoice() {
         newValue: data,
         reason: vars.reason ?? null,
       });
-      invalidate();
-      void qc.invalidateQueries({ queryKey: ["finance"] });
+      const refresh = invalidate();
       toast.success("Payable raised and posted to the ledger");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -427,14 +507,13 @@ export function useAcceptSupplierInvoice() {
 export function useRetryReceiptAccrual() {
   const ctx = useProcurementCtx();
   const invalidate = useInvalidate();
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ receiptId }: { receiptId: string }) => {
       const { data, error } = await guardedRpc(db, "neo_grn_retry_accrual", {
         _receipt: receiptId,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Row;
+      return requireAccrualResult(data) as Row;
     },
     onSuccess: async (data, vars) => {
       await logAudit({
@@ -447,9 +526,13 @@ export function useRetryReceiptAccrual() {
         newValue: data,
         reason: null,
       });
-      invalidate();
-      void qc.invalidateQueries({ queryKey: ["finance"] });
-      toast.success("Delivery posted to the ledger");
+      const refresh = invalidate();
+      if (data["skipped"] === "zero_value") {
+        toast.message("No accrual required — this receipt has no accepted value.");
+      } else {
+        toast.success(`Delivery posted to the ledger — journal ${data["journal_id"]}`);
+      }
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -479,8 +562,9 @@ export function useReverseGoodsReceipt() {
         newValue: data,
         reason: vars.reason,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Receipt reversed — stock and accrual corrected");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -497,7 +581,9 @@ export function useInvoiceableOrders() {
       const { data, error } = await applyTo(
         db
           .from("purchase_orders")
-          .select("id, order_number, status, supplier_id, total_amount, currency, purchase_order_lines(id, description, stock_item_id, quantity, accepted_quantity, invoiced_quantity, unit_price)"),
+          .select(
+            "id, order_number, status, supplier_id, total_amount, currency, purchase_order_lines(id, description, stock_item_id, quantity, accepted_quantity, invoiced_quantity, unit_price)",
+          ),
         "purchase_orders",
       )
         .order("created_at", { ascending: false })
@@ -517,7 +603,9 @@ export function useOrderReceipts(orderId?: string | null) {
     queryFn: async () => {
       const { data, error } = await db
         .from("goods_receipts")
-        .select("id, grn_number, status, received_at, total_value, accrual_journal_id, accrued_value")
+        .select(
+          "id, grn_number, status, received_at, total_value, accrual_journal_id, accrued_value",
+        )
         .eq("order_id", orderId)
         .order("received_at", { ascending: false });
       if (error) throw error;
@@ -582,8 +670,9 @@ export function useSaveMatchingPolicy() {
         recordId: String((data as Row)["id"] ?? ""),
         newValue: data,
       });
-      invalidate();
+      const refresh = invalidate();
       toast.success("Matching policy saved");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

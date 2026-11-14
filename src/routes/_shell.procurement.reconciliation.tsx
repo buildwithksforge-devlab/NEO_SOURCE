@@ -1,4 +1,8 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { requireReceivingReviewResult } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -9,6 +13,7 @@ import { OpsGuard } from "@/components/operations/OpsShared";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 
 const db = supabase as any;
 
@@ -38,6 +43,7 @@ type ReviewCount = {
   branch_id: string;
   delivery_note: string;
   submitted_by: string;
+  submitted_by_current_user?: boolean;
   submitted_at: string;
   status: string;
   remarks: string | null;
@@ -57,11 +63,18 @@ function formatQuantity(value: number) {
 }
 
 function Page() {
+  const { organizationId, user, permissionsLoaded } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [recentlyPosted, setRecentlyPosted] = useState<{
+    grnId: string;
+    orderNumber: string;
+  } | null>(null);
 
   const queue = useQuery({
-    queryKey: ["procurement", "blind-reconciliation"],
+    queryKey: ["procurement", "blind-reconciliation", organizationId, user?.id, filterKey],
+    enabled: Boolean(organizationId && user && permissionsLoaded),
     queryFn: async (): Promise<ReviewCount[]> => {
       const { data, error } = await guardedRpc(
         db,
@@ -71,7 +84,9 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return Array.isArray(data) ? (data as ReviewCount[]) : [];
+      return Array.isArray(data)
+        ? (data as ReviewCount[]).filter((row) => !branchId || row.branch_id === branchId)
+        : [];
     },
   });
 
@@ -80,6 +95,7 @@ function Page() {
       countId: string;
       decision: "approved" | "rejected";
       notes: string;
+      orderNumber: string;
     }) => {
       const { data, error } = await guardedRpc(
         db,
@@ -93,15 +109,28 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return data;
+      return requireReceivingReviewResult(data, payload.countId, payload.decision);
     },
 
-    onSuccess: () => {
-      toast.success("Receiving review decision recorded.");
+    onSuccess: async (result, payload) => {
+      if (payload.decision === "approved" && result && typeof result === "object") {
+        const grnId = (result as Record<string, unknown>)["grn_id"];
+        if (typeof grnId === "string" && grnId) {
+          setRecentlyPosted({ grnId, orderNumber: payload.orderNumber });
+          const postingResult = result["posting_result"] as Record<string, unknown> | undefined;
+          const lifecycle = postingResult?.["lifecycle_result"] as Record<string, unknown> | undefined;
+          const posting = lifecycle?.["posting"] as Record<string, unknown> | undefined;
+          if (posting?.["status"] === "pending-finance")
+            toast.warning("GRN created and stock received. Finance accrual needs attention.");
+          else toast.success("Receiving approved, stock updated, and GRN generated.");
+        } else {
+          toast.info("Count approved. A receiving manager must now select Post Approved GRN below; stock has not moved yet.");
+        }
+      } else {
+        toast.success("Receiving review decision recorded.");
+      }
 
-      void queryClient.invalidateQueries({
-        queryKey: ["procurement"],
-      });
+      await invalidateSupplyViews(queryClient);
     },
 
     onError: (error: Error) => {
@@ -109,11 +138,8 @@ function Page() {
     },
   });
 
-  function submitDecision(
-    countId: string,
-    decision: "approved" | "rejected"
-  ) {
-    const reason = notes[countId]?.trim() ?? "";
+  function submitDecision(count: ReviewCount, decision: "approved" | "rejected") {
+    const reason = notes[count.count_id]?.trim() ?? "";
 
     if (!reason) {
       toast.error("Enter a reason for the review decision.");
@@ -125,9 +151,10 @@ function Page() {
     }
 
     decide.mutate({
-      countId,
+      countId: count.count_id,
       decision,
       notes: reason,
+      orderNumber: count.order_number,
     });
   }
 
@@ -180,7 +207,7 @@ function Page() {
 
       <SectionCard
         title="Independent receiving review"
-        description="Review and authorize the original physical counts. Approval does not post stock."
+        description="Review the original physical counts. Reviewers with receiving posting authority create the GRN on approval. Otherwise, a receiving manager posts the approved count in the section below."
       >
         <div className="mb-4 flex justify-end">
           <Button
@@ -215,6 +242,7 @@ function Page() {
 
         <div className="space-y-5">
           {counts.map((count) => {
+            const submittedByCurrentUser = count.submitted_by_current_user === true;
             const hasExcess = count.lines.some(
               (line) => line.reconciliation_result === "excess"
             );
@@ -238,6 +266,11 @@ function Page() {
                       Submitted:{" "}
                       {new Date(count.submitted_at).toLocaleString()}
                     </p>
+                    {submittedByCurrentUser ? (
+                      <p className="mt-2 text-sm font-medium text-on-tint-warning" role="status">
+                        Submitted by you. Another authorized reviewer must decide this count.
+                      </p>
+                    ) : null}
                   </div>
 
                   <span className="h-fit rounded-full border px-3 py-1 text-xs">
@@ -337,60 +370,72 @@ function Page() {
                   </table>
                 </div>
 
-                <div className="space-y-3 rounded-lg border p-4">
-                  <p className="text-sm font-semibold">
-                    Independent review decision
-                  </p>
-
-                  <Textarea
-                    value={notes[count.count_id] ?? ""}
-                    onChange={(event) =>
-                      setNotes((previous) => ({
-                        ...previous,
-                        [count.count_id]: event.target.value,
-                      }))
-                    }
-                    placeholder="Record review findings and justification..."
-                  />
-
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <Button
-                      variant="destructive"
-                      disabled={decide.isPending}
-                      onClick={() =>
-                        submitDecision(count.count_id, "rejected")
-                      }
-                    >
-                      Reject Count
-                    </Button>
-
-                    <Button
-                      disabled={decide.isPending || hasExcess}
-                      onClick={() =>
-                        submitDecision(count.count_id, "approved")
-                      }
-                    >
-                      Approve Count
-                    </Button>
-                  </div>
-
-                  {hasExcess && (
-                    <p className="text-xs text-destructive">
-                      Approval is blocked because this delivery exceeds
-                      the outstanding purchase-order quantity.
+                {!submittedByCurrentUser ? (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <p className="text-sm font-semibold">
+                      Independent review decision
                     </p>
-                  )}
 
-                  <p className="text-xs text-muted-foreground">
-                    The physical count remains unchanged. Approval
-                    does not create a GRN or post inventory.
-                  </p>
-                </div>
+                    <Textarea
+                      value={notes[count.count_id] ?? ""}
+                      onChange={(event) =>
+                        setNotes((previous) => ({
+                          ...previous,
+                          [count.count_id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Record review findings and justification..."
+                    />
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <Button
+                        variant="destructive"
+                        disabled={decide.isPending}
+                        onClick={() => submitDecision(count, "rejected")}
+                      >
+                        Reject Count
+                      </Button>
+
+                      <Button
+                        disabled={decide.isPending || hasExcess}
+                        onClick={() => submitDecision(count, "approved")}
+                      >
+                        Approve & Post GRN
+                      </Button>
+                    </div>
+
+                    {hasExcess && (
+                      <p className="text-xs text-destructive">
+                        Approval is blocked because this delivery exceeds the outstanding
+                        purchase-order quantity.
+                      </p>
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      The original physical count stays immutable. Rejection preserves the count
+                      and review reason; approval posts stock once through the linked GRN.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             );
           })}
         </div>
       </SectionCard>
+
+      {recentlyPosted ? (
+        <SectionCard
+          title="Receiving posted"
+          description={`GRN generated for LPO ${recentlyPosted.orderNumber}. The document remains available from the LPO record.`}
+        >
+          <DocumentPrintButton
+            type="goods_receipt"
+            id={recentlyPosted.grnId}
+            label={`Download GRN - ${recentlyPosted.orderNumber}`}
+            variant="secondary"
+          />
+        </SectionCard>
+      ) : null}
 
       <ApprovedReceivingPosting />
     </div>

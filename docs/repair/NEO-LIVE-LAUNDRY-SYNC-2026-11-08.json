@@ -1,0 +1,6 @@
+{
+  "diagnostic_version": "live-laundry-sync-install-v1",
+  "guard_matches": true,
+  "read_only": "on",
+  "sync_matches": true
+}

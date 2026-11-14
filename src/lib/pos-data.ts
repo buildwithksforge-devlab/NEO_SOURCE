@@ -1,3 +1,7 @@
+import { requireVoidResult } from "@/lib/pos-void-result";
+import { rejectBusinessFailure, requireSavedRecord } from "@/lib/durable-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
 import { useScopedRealtime } from "@/lib/realtime-scope";
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -20,6 +24,27 @@ import {
   type PosSettings,
 } from "@/lib/pos";
 import { withGuardCapture } from "@/lib/guard-violations";
+
+/** Advisory only: the database stock gate still validates quantities when sending. */
+export function usePosStockAvailability(branchId: string | null | undefined) {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none"],
+    enabled: Boolean(organizationId && branchId),
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await guardedRpc<Array<{ menu_item_id: string; available: boolean; reason: string | null }>>(
+        supabase, "neo_pos_menu_availability", { _branch: branchId },
+      );
+      if (error) throw error;
+      const unavailable = new Map<string, string>();
+      for (const row of data ?? []) {
+        if (row.available === false) unavailable.set(row.menu_item_id, row.reason || "Out of stock");
+      }
+      return unavailable;
+    },
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Reference data
@@ -202,19 +227,20 @@ export function useItemModifierGroups(menuItemId: string | undefined) {
       const { data, error } = await supabase
         .from("menu_item_modifier_groups")
         .select(
-          "display_order, modifier_groups(id, name, required, multi_select, min_select, max_select, modifier_options(id, name, extra_charge, active))",
+          "display_order, modifier_groups(id, name, active, required, multi_select, min_select, max_select, modifier_options(id, name, extra_charge, active))",
         )
         .eq("menu_item_id", menuItemId as string)
         .order("display_order");
       if (error) throw error;
       return (data ?? [])
         .map((r) => (r as { modifier_groups: ModifierGroupWithOptions | null }).modifier_groups)
-        .filter((g): g is ModifierGroupWithOptions => Boolean(g));
+        .filter((g): g is ModifierGroupWithOptions => Boolean(g) && g?.active !== false);
     },
   });
 }
 
 export type ModifierGroupWithOptions = {
+  active?: boolean;
   id: string;
   name: string;
   required: boolean | null;
@@ -228,19 +254,7 @@ export type ModifierGroupWithOptions = {
  * Orders
  * ------------------------------------------------------------------ */
 
-const OPEN_STATUSES = [
-  "draft",
-  "held",
-  "confirmed",
-  "sent",
-  "accepted",
-  "in-preparation",
-  "partially-ready",
-  "ready",
-  "partially-served",
-  "served",
-  "awaiting-payment",
-];
+
 
 export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
   // Self scope means a waiter sees only their own bills: `applyScope` narrows by
@@ -254,7 +268,7 @@ export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
       let q = applyScope(supabase.from("pos_orders").select("*, restaurant_tables(code, name), customers(full_name), profiles!pos_orders_waiter_id_fkey(full_name)"), "pos_orders")
         .order("created_at", { ascending: false })
         .limit(200);
-      if (scope === "open") q = q.in("status", OPEN_STATUSES);
+      if (scope === "open") q = q.or(POS_OPEN_FILTER);
       if (scope === "closed") q = q.in("status", ["paid", "charged-to-room", "credit", "closed", "voided", "cancelled"]);
       const { data, error } = await q;
       if (error) throw error;
@@ -397,6 +411,7 @@ export function useVoidRequests() {
   return useQuery({
     queryKey: ["pos", "void-requests", organizationId, filterKey],
     enabled: Boolean(organizationId),
+    refetchInterval: 15_000,
     queryFn: async () => {
       const { data, error } = await applyTo(supabase.from("pos_void_requests").select("*, pos_orders(order_number), pos_order_items(item_name)"), "pos_void_requests")
         .order("created_at", { ascending: false })
@@ -413,8 +428,9 @@ export function useRefundRequests() {
   return useQuery({
     queryKey: ["pos", "refund-requests", organizationId, filterKey],
     enabled: Boolean(organizationId),
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("pos_refund_requests").select("*, pos_orders(order_number), pos_payments(method, amount)"), "pos_refund_requests")
+      const { data, error } = await applyTo(supabase.from("pos_refund_requests").select("*, pos_orders(order_number), pos_payments(method, amount, destination_account_id)"), "pos_refund_requests")
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -619,6 +635,9 @@ export function useAddOrderItem() {
           quantity: input.quantity,
           unit_price: unit,
           modifier_total: modTotal,
+          selection_modifiers: (input.modifiers ?? []).map((m) => ({
+            group_id: m.group_id, option_id: m.option_id,
+          })),
           tax_rate: taxRate,
           tax_amount: taxAmount,
           line_total: total,
@@ -630,21 +649,8 @@ export function useAddOrderItem() {
         .single();
       if (error) throw error;
 
-      if (input.modifiers?.length) {
-        const { error: modErr } = await supabase.from("pos_order_item_modifiers").insert(
-          input.modifiers.map((m) => ({
-            organization_id: ctx.organization_id,
-            order_item_id: data.id,
-            group_id: m.group_id,
-            option_id: m.option_id,
-            group_name: m.group_name,
-            option_name: m.option_name,
-            extra_charge: m.extra_charge,
-          })),
-        );
-        if (modErr) throw modErr;
-      }
-      await recalcOrderTotals(input.orderId);
+      // Database triggers validate catalogue choices, save modifier rows and
+      // recalculate totals in the same transaction as this item insert.
       return data;
     },
     onSuccess: () => {
@@ -660,9 +666,12 @@ export function useRemoveDraftItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ itemId, orderId }: { itemId: string; orderId: string }) => {
-      const { error } = await supabase.from("pos_order_items").delete().eq("id", itemId).eq("status", "draft");
+      const { data, error } = await supabase.from("pos_order_items").delete()
+        .eq("id", itemId).eq("order_id", orderId).eq("status", "draft").select("id");
       if (error) throw error;
-      await recalcOrderTotals(orderId);
+      if (!data || data.length !== 1 || data[0]?.id !== itemId)
+        throw new Error("The draft item was not removed. Refresh the bill before trying again.");
+      // The existing DELETE totals trigger commits totals with the deletion.
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["pos", "order"] });
@@ -786,7 +795,15 @@ export function useSendOrder() {
         _attempt: stableIdempotencyUuid("pos", "send_to_kitchen", [orderId]),
       } as never);
       if (error) throw error;
-      const r = (data ?? {}) as {
+      const saved = requireSavedRecord(data, ["order_id"], "Kitchen dispatch did not confirm the saved order.");
+      if (saved["order_id"] !== orderId)
+        throw new Error("Kitchen dispatch returned a different order.");
+      for (const key of ["tickets_created", "items_created", "items_reused", "unassigned_station"]) {
+        const value = saved[key];
+        if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+          throw new Error("Kitchen dispatch did not return verified routing counts.");
+      }
+      const r = saved as {
         tickets_created?: number;
         items_created?: number;
         items_reused?: number;
@@ -1173,6 +1190,9 @@ export function usePostRoomCharge() {
         _idempotency_key: `pos-room-charge:${orderId}`,
       });
       if (error) throw error;
+      rejectBusinessFailure(data, "The room charge was not posted.");
+      if (typeof data !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(data))
+        throw new Error("The room charge did not return its saved folio line.");
       return data;
     },
     onSuccess: () => {
@@ -1184,138 +1204,67 @@ export function usePostRoomCharge() {
   });
 }
 
-export function useRequestVoid() {
+/** Remove an unused draft from active orders; the server retains its audit history. */
+export function useRemoveDraftOrder() {
   const qc = useQueryClient();
-  const ctx = useOrgContext();
   return useMutation({
-    mutationFn: async (input: {
-      orderId: string;
-      orderItemId?: string | null;
-      kind: string;
-      amount: number;
-      reason: string;
-      preparationStatus?: string | null;
-    }) => {
-      const { error } = await supabase.from("pos_void_requests").insert({
-        organization_id: ctx.organization_id,
-        branch_id: ctx.branch_id,
-        order_id: input.orderId,
-        order_item_id: input.orderItemId ?? null,
-        request_kind: input.kind,
-        amount: input.amount,
-        reason: input.reason,
-        preparation_status: input.preparationStatus ?? null,
-        requested_by: ctx.userId,
+    mutationFn: async (input: { orderId: string; reason: string }) => {
+      const { data, error } = await guardedRpc(supabase, "neo_pos_remove_draft", {
+        _order: input.orderId, _reason: input.reason.trim(),
       });
       if (error) throw error;
+      const result = data as unknown as { ok?: boolean; removed?: boolean; order_id?: string; status?: string } | null;
+      if (!result?.ok || !result.removed || result.order_id !== input.orderId || result.status !== "cancelled") {
+        throw new Error("Order removal was not confirmed. Refresh before trying again.");
+      }
+      return result;
     },
     onSuccess: () => {
-      toast.success("Void request sent for approval.");
-      void qc.invalidateQueries({ queryKey: ["pos", "void-requests"] });
+      toast.success("Draft order removed from active orders. Audit history retained.");
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useRequestVoid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      orderId: string; orderItemId?: string | null; kind: string;
+      amount: number; reason: string; preparationStatus?: string | null;
+    }) => {
+      if (input.kind !== "item" || !input.orderItemId) throw new Error("Select an item to request its void.");
+      const { data, error } = await guardedRpc(supabase, "neo_pos_void_request", {
+        _order: input.orderId, _item: input.orderItemId, _reason: input.reason.trim(),
+      });
+      if (error) throw error;
+      return requireVoidResult(data, { orderId: input.orderId });
+    },
+    onSuccess: () => {
+      toast.success("Void request saved for approval.");
+      return qc.invalidateQueries({ queryKey: ["pos"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
 export function useDecideVoid() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
   const qc = useQueryClient();
-  const ctx = useOrgContext();
   return useMutation({
     mutationFn: async ({ id, approve, note }: { id: string; approve: boolean; note?: string }) => {
-      const { data: req, error: reqErr } = await applyTo(supabase.from("pos_void_requests").select("*"), "pos_void_requests")
-        .eq("id", id)
-        .single();
-      if (reqErr) throw reqErr;
-      if (req.requested_by === ctx.userId) throw new Error("You cannot approve your own request.");
-      if (req.status !== "pending") throw new Error("This request has already been decided.");
-
-      const { error } = await supabase
-        .from("pos_void_requests")
-        .update({
-          status: approve ? "applied" : "rejected",
-          decided_by: ctx.userId,
-          decided_at: new Date().toISOString(),
-          decision_note: note ?? null,
-        })
-        .eq("id", id)
-        .eq("status", "pending");
-      if (error) throw error;
-
-      if (approve && req.order_item_id) {
-        await supabase.from("pos_order_items").update({ status: "cancel-pending" }).eq("id", req.order_item_id);
-        await supabase.from("pos_order_items").update({ status: "voided" }).eq("id", req.order_item_id);
-        await recalcOrderTotals(req.order_id);
-      }
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["pos", filterKey] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}
-
-export function useRequestRefund() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
-  const qc = useQueryClient();
-  const ctx = useOrgContext();
-  return useMutation({
-    mutationFn: async (input: { orderId: string; paymentId: string; amount: number; reason: string; method?: string }) => {
-      const { data: payment, error: payErr } = await applyTo(supabase.from("pos_payments").select("amount, status"), "pos_payments")
-        .eq("id", input.paymentId)
-        .single();
-      if (payErr) throw payErr;
-      if (payment.status !== "confirmed") throw new Error("Only confirmed payments can be refunded.");
-      if (input.amount > Number(payment.amount)) throw new Error("Refund cannot exceed the original payment.");
-
-      const { error } = await supabase.from("pos_refund_requests").insert({
-        organization_id: ctx.organization_id,
-        branch_id: ctx.branch_id,
-        order_id: input.orderId,
-        payment_id: input.paymentId,
-        amount: input.amount,
-        reason: input.reason,
-        method: input.method ?? null,
-        requested_by: ctx.userId,
+      const { data, error } = await guardedRpc(supabase, "neo_pos_void_decide", {
+        _request: id, _approve: approve, _note: note?.trim() || null,
       });
       if (error) throw error;
+      return requireVoidResult(data, { requestId: id, approve });
     },
-    onSuccess: () => {
-      toast.success("Refund request sent for approval.");
-      void qc.invalidateQueries({ queryKey: ["pos", "refund-requests", filterKey] });
-    },
+    onSuccess: () => invalidateSupplyViews(qc, ["pos", "kitchen", "bar"]),
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
-export function useDecideRefund() {
-  const { applyTo, filterKey } = useActivePropertyFilter();
-  const qc = useQueryClient();
-  const ctx = useOrgContext();
-  return useMutation({
-    mutationFn: async ({ id, approve, note }: { id: string; approve: boolean; note?: string }) => {
-      const { data: req, error: reqErr } = await applyTo(supabase.from("pos_refund_requests").select("*"), "pos_refund_requests")
-        .eq("id", id)
-        .single();
-      if (reqErr) throw reqErr;
-      if (req.requested_by === ctx.userId) throw new Error("You cannot approve your own request.");
-      // The RPC decides the request, marks the payment refunded and posts the
-      // reversing entry to Finance in one transaction — no dead-end approvals.
-      const { error } = await (supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
-      }).rpc("neo_pos_refund_decide", {
-        _request: id,
-        _approve: approve,
-        _note: note ?? null,
-      });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["pos"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}
+export {useRequestRefund,useDecideRefund} from '@/lib/pos-refunds';
 
 export function useOpenShift() {
   const qc = useQueryClient();
@@ -1803,7 +1752,8 @@ export function useSaveMenuItem() {
         _currency: payload.currency ?? null,
       } as never);
       if (error) throw error;
-      return data as unknown as { ok: boolean; item_id: string };
+      if (!data || data.ok !== true || typeof data.item_id !== 'string' || !data.item_id || (payload.id && data.item_id !== payload.id)) throw new Error('The saved menu item could not be verified. Your edits have been retained.');
+      return data as {ok:true;item_id:string};
     },
     onSuccess: () => {
       toast.success("Menu item saved.");
@@ -1811,4 +1761,16 @@ export function useSaveMenuItem() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+}
+
+/** Archive a used item, or delete a draft only when no reference would be lost. */
+export function useRemoveMenuItem(){
+ const invalidate=useMenuInvalidate();
+ return useMutation({mutationFn:async(input:{id:string;mode:'archive'|'delete-draft';reason:string})=>{
+  if(!input.reason.trim())throw new Error('A removal reason is required.');
+  const {data,error}=await guardedRpc(supabase,"neo_menu_remove_item",{_item:input.id,_mode:input.mode,_reason:input.reason.trim()});
+  if(error)throw error;
+  if(!data||data.ok!==true||data.item_id!==input.id||data.mode!==input.mode)throw new Error('The menu removal could not be verified. Refresh before retrying.');
+  return data as {ok:true;item_id:string;mode:string};
+ },onSuccess:(result)=>{toast.success(result.mode==='archive'?'Item archived. Existing sales history retained.':'Unused draft item deleted.');invalidate();},onError:(error:Error)=>toast.error(error.message)});
 }

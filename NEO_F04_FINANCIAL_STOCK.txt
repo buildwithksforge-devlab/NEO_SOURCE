@@ -1,0 +1,144 @@
+﻿=== src/lib/pos-data.ts ===
+4: import { isHalt, settlementOutcome } from "@/lib/command-outcome";
+242: "awaiting-payment",
+258: if (scope === "closed") q = q.in("status", ["paid", "charged-to-room", "credit", "closed", "voided", "cancelled"]);
+279: "*, restaurant_tables(code, name, restaurant_areas(outlet, name)), customers(id, full_name, phone), pos_order_items(*, pos_order_item_modifiers(*), operational_stations(name, code)), pos_payments(*)",
+323: void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+324: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+330: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+331: void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
+335: table: "pos_payments",
+337: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+338: void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+339: void qc.invalidateQueries({ queryKey: ["pos", "shifts"] });
+345: void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
+351: void qc.invalidateQueries({ queryKey: ["pos", "tables"] });
+358: * Shifts, payments, requests
+394: export function useVoidRequests() {
+398: queryKey: ["pos", "void-requests", organizationId, filterKey],
+401: const { data, error } = await applyTo(supabase.from("pos_void_requests").select("*, pos_orders(order_number), pos_order_items(item_name)"), "pos_void_requests")
+410: export function useRefundRequests() {
+414: queryKey: ["pos", "refund-requests", organizationId, filterKey],
+417: const { data, error } = await applyTo(supabase.from("pos_refund_requests").select("*, pos_orders(order_number), pos_payments(method, amount)"), "pos_refund_requests")
+521: }): void {
+575: void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+651: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+652: void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+658: /** Draft items can be deleted; anything sent must go through the void workflow. */
+668: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+735: void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+837: return `Not sent — ${s[1]} has no store to take stock from at this property. Map the station to its store in Inventory settings, then send again.`;
+873: payment_status?: string;
+882: paymentStatus: d.payment_status ?? null,
+900: void qc.invalidateQueries({ queryKey: ["pos"] });
+940: void qc.invalidateQueries({ queryKey: ["pos"] });
+964: void qc.invalidateQueries({ queryKey: ["pos"] });
+971: * Settlement outcome returned by the server-owned contract. The browser never
+975: export type SettlementResult = {
+976: payment_id: string;
+990: payment_status: string;
+995: function settlementToast(r: SettlementResult) {
+999: ? `That payment was already recorded as receipt ${r.receipt_number} — nothing was charged twice.`
+1000: : "That payment was already recorded — nothing was charged twice.",
+1007: "Payment recorded as awaiting confirmation. The bill has not been marked paid.",
+1023: `Payment recorded.${receipt} Balance outstanding ${Number(r.balance).toFixed(2)}.`,
+1030: `Bill fully paid.${receipt} ${r.open_items} item(s) are still open, so the order remains active until they are served or voided.`,
+1035: toast.success(`Payment recorded.${receipt}`);
+1040: * Records a settlement attempt through `pos_record_payment_attempt`. Validation
+1044: export function useRecordPayment() {
+1060: paymentMetadata?: {
+1066: const rpcArgs = input.paymentMetadata
+1078: _payment_metadata: input.paymentMetadata,
+1095: "pos_record_payment_attempt",
+1099: return data as unknown as SettlementResult;
+1102: settlementToast(r);
+1103: void qc.invalidateQueries({ queryKey: ["pos"] });
+1109: /** Confirms a pending external payment manually, with a mandatory note. */
+1110: export function useConfirmManualPayment() {
+1114: mutationFn: async (input: { paymentId: string; note: string }) => {
+1119: "A verification note is required before manually confirming a payment.",
+1125: "pos_confirm_manual_payment",
+1127: _payment_id: input.paymentId,
+1134: return data as unknown as SettlementResult;
+1138: settlementToast(r);
+1139: void qc.invalidateQueries({ queryKey: ["pos"] });
+1146: /** Re-derives paid total, payment status and closure for one bill. */
+1147: export function useReconcileSettlement() {
+
+=== src/lib/kitchen-data.ts ===
+12: import { bindMenuItemConsumption } from "@/lib/recipe-master";
+95: void qc.invalidateQueries({ queryKey: ["kitchen", "routing-rules"] });
+110: void qc.invalidateQueries({ queryKey: ["kitchen", "routing-rules"] });
+153: void qc.invalidateQueries({ queryKey: ["kitchen", "settings"] });
+191: void qc.invalidateQueries({ queryKey: ["kitchen", "prep-targets"] });
+257: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+258: void qc.invalidateQueries({ queryKey: ["pos"] });
+276: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+295: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+336: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+355: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+404: void qc.invalidateQueries({ queryKey: ["kitchen", "clarifications"] });
+428: void qc.invalidateQueries({ queryKey: ["kitchen", "clarifications"] });
+435: * Recipes, portions, batches
+438: export function useRecipes() {
+442: queryKey: ["kitchen", "recipes", organizationId, filterKey],
+446: supabase.from("recipes").select(sel("*, menu_items(name), operational_stations(name), recipe_ingredients!recipe_ingredients_recipe_id_fkey(*)")),
+447: "recipes",
+456: export function useSaveRecipe() {
+460: mutationFn: async (recipe: Record<string, unknown>) => {
+462: .from("recipes")
+463: .upsert({ ...recipe, organization_id: ctx.organization_id, created_by: ctx.userId } as never);
+467: toast.success("Recipe saved.");
+468: void qc.invalidateQueries({ queryKey: ["kitchen", "recipes"] });
+475: export function useApproveRecipe() {
+479: mutationFn: async ({ recipeId, menuItemId }: { recipeId: string; menuItemId: string }) => {
+481: .from("recipes")
+487: .from("recipes")
+493: .eq("id", recipeId);
+495: // Approval is the moment the recipe becomes the menu item's way of
+496: // consuming stock — the item is bound here, never by a separate step.
+497: const { data: recipe } = await supabase
+498: .from("recipes")
+499: .select("recipe_type, output_stock_item_id")
+500: .eq("id", recipeId)
+502: const recipeType = String((recipe as Record<string, unknown> | null)?.["recipe_type"] ?? "menu_item");
+505: recipeType === "direct_sale" ? "direct_sale" : "menu_item",
+506: (recipe as Record<string, unknown> | null)?.["output_stock_item_id"] as string | null,
+510: toast.success("Recipe version approved and activated.");
+511: void qc.invalidateQueries({ queryKey: ["kitchen", "recipes"] });
+517: export function useRecipeIngredientMutation() {
+523: .from("recipe_ingredients")
+528: void qc.invalidateQueries({ queryKey: ["kitchen", "recipes"] });
+562: void qc.invalidateQueries({ queryKey: ["kitchen", "portions"] });
+576: .select(sel("*, operational_stations(name), recipes(version, menu_items(name))"))
+673: void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
+683: not_permitted: "You do not have permission to post production to stock.",
+687: no_recipe: "This batch has no recipe, so its ingredients are unknown.",
+688: no_output_stock_item:
+689: "The recipe has no produced stock item, so there is nothing to receive into the store.",
+690: bad_yield: "The recipe has no yield quantity, so the ingredients cannot be scaled.",
+695: * Post a completed batch to stock: ingredients out of the store, the produced
+717: : `Posted to stock — ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
+719: void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
+720: void qc.invalidateQueries({ queryKey: ["inventory"] });
+817: void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });
+818: void qc.invalidateQueries({ queryKey: ["fnb"] });
+819: void qc.invalidateQueries({ queryKey: ["inventory"] });
+838: void qc.invalidateQueries({ queryKey: ["kitchen", "requests"] });
+875: void qc.invalidateQueries({ queryKey: ["kitchen", "shortages"] });
+914: void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
+945: void qc.invalidateQueries({ queryKey: ["kitchen", "waste"] });
+952: * Take an approved waste record off stock. The database decides the store, the
+956: export function usePostWasteToStock() {
+960: const { data, error } = await guardedRpc(supabase, "neo_kitchen_waste_post", {
+
+=== src/lib/ops-reconciliation.ts ===
+57: cancelled_still_active: "Cancelled or voided items still live in the kitchen",
+62: receipts_not_in_stock: "Receipts not reflected in stock",
+63: stock_without_receipt: "Stock movements with no receipt document",
+64: negative_stock: "Negative stock balances",
+66: duplicate_sources: "Stock movements claiming the same source twice",
+117: void qc.invalidateQueries({ queryKey: ["reconciliation", "pos-kds"] });
+118: void qc.invalidateQueries({ queryKey: ["kitchen"] });
+119: void qc.invalidateQueries({ queryKey: ["pos"] });
+

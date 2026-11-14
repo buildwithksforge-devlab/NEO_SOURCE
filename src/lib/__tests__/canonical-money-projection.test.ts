@@ -30,6 +30,11 @@ const folio = mapFolioProjection({
 });
 
 describe("canonical folio projection", () => {
+  it("includes service charge and refuses a one-cent discrepancy", () => {
+    expect(balancesGross({ netRevenue: 100, tax: 16, serviceCharge: 2, grossObligation: 118 })).toBe(true);
+    expect(balancesGross({ netRevenue: 100, tax: 16, serviceCharge: 2, grossObligation: 118.01 })).toBe(false);
+    expect(balancesSettlement({ collected: 50, outstanding: 68.01, grossObligation: 118 })).toBe(false);
+  });
   it("resolves the guest and reservation relationship", () => {
     expect(folio.reservationId).toBeTruthy();
     expect(folio.customerId).toBeTruthy();

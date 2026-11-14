@@ -69,10 +69,10 @@ function OrdersPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
       <section>
-        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
+        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
           My orders
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Room service, restaurant and delivery orders placed with {ws.hotel_name}.
         </p>
       </section>
@@ -85,7 +85,7 @@ function OrdersPage() {
         />
       ) : orders.isLoading || profile.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       ) : (orders.data?.length ?? 0) === 0 ? (
         <GuestSection title="Order history">
@@ -110,7 +110,7 @@ function OrdersPage() {
                   style={{
                     borderColor: selected ? ws.primary_color : "rgba(0,0,0,0.1)",
                     background: selected ? ws.primary_color : "transparent",
-                    color: selected ? "#fff" : brandFallback.steel,
+                    color: selected ? "var(--pa-on-primary)" : "var(--guest-muted)",
                   }}
                 >
                   {b.label}
@@ -130,26 +130,26 @@ function OrdersPage() {
               <li key={String(o["id"])} className="min-w-0 rounded-xl border border-black/5 p-4">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       <span data-public-id>{String(o["order_number"])}</span>
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {new Date(String(o["created_at"])).toLocaleString()} ·{" "}
                       {statusLabel(o["fulfilment_type"])}
                     </p>
                   </div>
                   <div className="min-w-0 sm:text-right">
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(o["grand_total"], String(o["currency"] ?? "KES"))}
                     </p>
-                    <p className="text-xs font-medium" style={{ color: ws.primary_color }}>
+                    <p className="text-xs font-medium" style={{ color: "var(--pa-accent-ink)" }}>
                       {statusLabel(o["order_status"])} · {statusLabel(o["payment_status"])}
                     </p>
                     <Link
                       to="/guest/$hotelSlug/orders/$orderReference"
                       params={{ hotelSlug, orderReference: String(o["order_number"]) }}
                       className="text-xs underline"
-                      style={{ color: brandFallback.steel }}
+                      style={{ color: "var(--guest-muted, #52627A)" }}
                     >
                       Track order
                     </Link>

@@ -49,10 +49,12 @@ function MyWorkPage() {
         title="My work"
         description="What needs you now, from the modules your permissions already reach. Change the property in the top bar to move NEØ with you."
       />
-      {myWork.isLoading ? (
+      {myWork.isPending ? (
         <LoadingState variant="cards" rows={3} />
       ) : myWork.error ? (
         <ErrorState error={myWork.error} title="My work unavailable" />
+      ) : myWork.data?.authorised !== true ? (
+        <ErrorState error={new Error("Your current workspace access does not include this work list.")} title="My work unavailable" />
       ) : (
         <>
           <MyWorkBoard

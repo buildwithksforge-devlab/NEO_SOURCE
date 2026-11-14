@@ -1,3 +1,5 @@
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { validateTaskCreation } from "@/lib/task-creation";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useState, type FormEvent } from "react";
 import { useDataScope } from "@/lib/data-scope";
@@ -304,8 +306,10 @@ async function updateTaskAndConfirm(
 async function createTaskAndConfirm(
   organizationId: string,
   userId: string,
+  branchId: string | null,
   payload: NewTaskPayload,
 ) {
+  validateTaskCreation({ ...payload, organization_id: organizationId, created_by: userId, branch_id: branchId, status: payload.assignee_id ? "assigned" : "new" });
   const { data: documentReference, error: referenceError } =
     await guardedRpc(
       supabase,
@@ -339,12 +343,13 @@ async function createTaskAndConfirm(
     .insert({
       organization_id: organizationId,
       created_by: userId,
+      branch_id: branchId,
       reference: documentReference,
       ...payload,
       status: expectedStatus,
     })
     .select(
-      "id, reference, organization_id, assignee_id, department_id, status",
+      "id, reference, organization_id, branch_id, assignee_id, department_id, status",
     )
     .single();
 
@@ -359,6 +364,8 @@ async function createTaskAndConfirm(
       "Task creation was not confirmed by the database.",
     );
   }
+
+  if (data.branch_id !== branchId) throw new Error("The saved task belongs to a different property. Refresh before trying again.");
 
   if (data.organization_id !== organizationId) {
     throw new Error(
@@ -396,6 +403,7 @@ async function createTaskAndConfirm(
    ============================================================ */
 
 function TasksPage() {
+  const { branchId } = useActivePropertyFilter();
   const { applyScope, scopeKey } = useDataScope();
 
   const {
@@ -528,6 +536,7 @@ function TasksPage() {
       const task = await createTaskAndConfirm(
         organizationId,
         user.id,
+        branchId,
         payload,
       );
 

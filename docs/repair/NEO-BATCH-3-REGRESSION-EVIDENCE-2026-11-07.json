@@ -1,0 +1,10 @@
+{
+  "mode": "Full offline suite",
+  "passed": 3731,
+  "failed": 0,
+  "skipped": 155,
+  "previousPassedIdentities": 3667,
+  "retainedPreviousPasses": 3667,
+  "regressions": [],
+  "success": true
+}

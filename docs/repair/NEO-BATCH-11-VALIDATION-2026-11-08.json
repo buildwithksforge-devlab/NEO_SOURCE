@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    11
+  ],
+  "isolatedGLReplayChecks": 39,
+  "focusedFinanceRegression": {
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0
+  },
+  "applicationSourceChanged": false,
+  "retainedApplicationValidation": {
+    "passed": 3890,
+    "failed": 0,
+    "skipped": 155,
+    "typecheck": "passed",
+    "productionBuildSmoke": "passed",
+    "fromBatches": [
+      8,
+      9
+    ]
+  },
+  "postingEngineUnchanged": true,
+  "operationalWrites": false,
+  "deployed": false,
+  "advancedOriginalRecords": [
+    "NEO-BKL-A05",
+    "NEO-BKL-J01",
+    "NEO-BKL-J05"
+  ],
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 23,
+    "Awaiting deployment/retest": 21,
+    "Queued": 34,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "codeProgress": {
+    "queued": 34,
+    "activePartial": 23,
+    "awaitingDeploymentRetest": 21,
+    "awaitingWorkflowTest": 25,
+    "awaitingPrintAgentDeployment": 1,
+    "partiallyVerified": 1,
+    "fullyVerified": 1,
+    "note": "Source progress categories are distinct from final acceptance. 105 is the acceptance-open count, not the count untouched."
+  },
+  "sqlEvidence": {
+    "passed": true,
+    "checks": 39,
+    "originalHash": "7dfd4e4a4589661155fb5d7bcd02adfa",
+    "finHash": "4162e3e7a44d05a75389087945abe2b2",
+    "installedHash": "08e96545d8fc2cfe60b3839131c4ee08",
+    "scope": "Actual reviewed GL and fin_post_journal definitions; synthetic periods/accounts and modeled numbering/scope helpers. No live financial writes or historical replay performed."
+  },
+  "limitations": [
+    "Actual reviewed neo_gl_post and fin_post_journal used; synthetic period/account tables and modeled numbering/scope helpers.",
+    "39 isolated checks and 58 focused regressions; full application suite retained from the unchanged application source.",
+    "No operational connection, installation, historical journal retry, payment or receipt rewrite.",
+    "Per-source advisory lock placement and sequential replays tested; multi-session race not certified.",
+    "Existing posting engine and execute privileges retained; protected other-organization valid replay preserved.",
+    "No full finance workflow or department is certified by this batch."
+  ]
+}

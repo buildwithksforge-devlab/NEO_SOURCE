@@ -1,0 +1,2847 @@
+﻿
+============================================================
+FILE: AGENTS.md
+============================================================
+LINES: 10
+    1: <!-- LOVABLE:BEGIN -->
+    2: > [!IMPORTANT]
+    3: > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
+    4: > published git history â€” force pushing, or rebasing/amending/squashing commits
+    5: > that are already pushed â€” as it rewrites history on Lovable's side and the
+    6: > user will likely lose their project history.
+    7: >
+    8: > Commits you push to the connected branch sync back to Lovable and show up in
+    9: > the editor, so keep the branch in a working state.
+   10: <!-- LOVABLE:END -->
+
+============================================================
+FILE: src/lib/shared-production-display.ts
+============================================================
+LINES: 120
+    1: import { supabase } from "@/integrations/supabase/client";
+    2: import { guardedRpc } from "@/lib/rpc-guard";
+    3: import type { KitchenTicket } from "@/lib/kitchen-tickets";
+    4: 
+    5: export const DISPLAY_TOKEN_STORAGE_KEY = "neo.production.display.token.v1";
+    6: export type SharedDisplayAction = {
+    7:   ticketId: string;
+    8:   to: string;
+    9:   expected: string;
+   10:   requestId: string;
+   11:   reason: string;
+   12: };
+   13: export type SharedDisplaySnapshot = {
+   14:   ok: boolean;
+   15:   session_id: string;
+   16:   label: string;
+   17:   property: string;
+   18:   read_only: boolean;
+   19:   expires_at: string;
+   20:   server_time: string;
+   21:   blocked_until: string | null;
+   22:   stations: { id: string; name: string }[];
+   23:   tickets: (KitchenTicket & { claimed_by?: string | null })[];
+   24: };
+   25: export type DisplayActionResult = {
+   26:   ok: boolean;
+   27:   reason?: string;
+   28:   message?: string;
+   29:   actor_name?: string;
+   30:   idempotent?: boolean;
+   31: };
+   32: 
+   33: export function productionActions(status: string): string[] {
+   34:   return (
+   35:     (
+   36:       {
+   37:         new: ["accepted"],
+   38:         accepted: ["preparing"],
+   39:         preparing: ["ready"],
+   40:         "partially-ready": ["ready"],
+   41:       } as Record<string, string[]>
+   42:     )[status] ?? []
+   43:   );
+   44: }
+   45: 
+   46: export async function readSharedDisplay(token: string): Promise<SharedDisplaySnapshot> {
+   47:   const { data, error } = await guardedRpc<SharedDisplaySnapshot>(
+   48:     supabase,
+   49:     "neo_production_display_read",
+   50:     { _token: token },
+   51:   );
+   52:   if (error) throw new Error(error.message);
+   53:   return data;
+   54: }
+   55: export async function actOnSharedDisplay(
+   56:   token: string,
+   57:   code: string,
+   58:   pin: string,
+   59:   action: SharedDisplayAction,
+   60: ): Promise<DisplayActionResult> {
+   61:   const { data, error } = await guardedRpc<DisplayActionResult>(
+   62:     supabase,
+   63:     "neo_production_display_act",
+   64:     {
+   65:       _token: token,
+   66:       _code: code.trim().toUpperCase(),
+   67:       _pin: pin,
+   68:       _ticket: action.ticketId,
+   69:       _to: action.to,
+   70:       _expected: action.expected,
+   71:       _request: action.requestId,
+   72:       _reason: action.reason || null,
+   73:     },
+   74:   );
+   75:   if (error) throw new Error(error.message);
+   76:   return data;
+   77: }
+   78: 
+   79: export async function pairSharedDisplay(
+   80:   branchId: string,
+   81:   stationIds: string[],
+   82:   label: string,
+   83:   readOnly: boolean,
+   84: ) {
+   85:   const { data, error } = await guardedRpc<{ ok: boolean; token: string; session_id: string }>(
+   86:     supabase,
+   87:     "neo_production_display_pair",
+   88:     {
+   89:       _branch: branchId,
+   90:       _stations: stationIds,
+   91:       _label: label,
+   92:       _read_only: readOnly,
+   93:     },
+   94:   );
+   95:   if (error) throw new Error(error.message);
+   96:   try {
+   97:     // Persist only the restricted token, never the supervisor's JWT or a PIN.
+   98:     sessionStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
+   99:     const result = await supabase.auth.signOut({ scope: "local" });
+  100:     if (result.error) throw result.error;
+  101:   } catch (error) {
+  102:     sessionStorage.removeItem(DISPLAY_TOKEN_STORAGE_KEY);
+  103:     // Pairing failed: revoke the unused restricted session if still signed in.
+  104:     await guardedRpc(supabase, "neo_production_display_manage", { _close: data.session_id });
+  105:     throw error;
+  106:   }
+  107:   // Full navigation discards authenticated React/Query caches in this tab.
+  108:   window.location.replace("/station-screen");
+  109: }
+  110: 
+  111: /** Shared screens never retain an authenticated operator browser session. */
+  112: export async function ensureSharedScreenSignedOut() {
+  113:   const { data, error } = await supabase.auth.getSession();
+  114:   if (error) throw error;
+  115:   if (data.session) {
+  116:     const result = await supabase.auth.signOut({ scope: "local" });
+  117:     if (result.error)
+  118:       throw new Error("Sign out of the staff account before using this shared screen.");
+  119:   }
+  120: }
+
+============================================================
+FILE: src/components/kitchen/ProductionDisplay.tsx
+============================================================
+LINES: 292
+    1: import { useEffect, useRef, useState } from "react";
+    2: import { Link } from "@tanstack/react-router";
+    3: import { useQueryClient } from "@tanstack/react-query";
+    4: import { Maximize, Minimize, RefreshCw } from "lucide-react";
+    5: import { toast } from "sonner";
+    6: import { pairSharedDisplay } from "@/lib/shared-production-display";
+    7: import { useAuth } from "@/lib/auth";
+    8: import { useSession } from "@/lib/session";
+    9: import { pathPermitted } from "@/lib/capabilities";
+   10: import { useActivePropertyFilter } from "@/lib/branch-filter";
+   11: import { AccessDeniedPanel } from "@/components/common/AccessState";
+   12: import { PageHeader } from "@/components/common/DataDisplay";
+   13: import { Button } from "@/components/ui/button";
+   14: import { Skeleton } from "@/components/ui/skeleton";
+   15: import { TicketCard } from "@/components/kitchen/TicketCard";
+   16: import { TicketAuditSheet } from "@/components/kitchen/TicketAuditSheet";
+   17: import { QueryState, EmptyState } from "@/components/kitchen/KitchenShared";
+   18: import {
+   19:   DISPLAY_LABELS,
+   20:   DISPLAY_ROUTES,
+   21:   displayStations,
+   22:   selectedDisplayStation,
+   23:   type DisplayDepartment,
+   24: } from "@/lib/production-displays";
+   25: import {
+   26:   KITCHEN_TICKETS_QUERY_KEY,
+   27:   useKitchenTickets,
+   28:   useScopedStations,
+   29:   useKitchenTicketRealtime,
+   30:   useKitchenTicketTransition,
+   31:   useKitchenTicketDelay,
+   32:   useStationAuthority,
+   33:   type KitchenTicket,
+   34: } from "@/lib/kitchen-tickets";
+   35: 
+   36: export function ProductionDisplay({
+   37:   department,
+   38:   requestedStation,
+   39: }: {
+   40:   department: DisplayDepartment;
+   41:   requestedStation?: string | undefined;
+   42: }) {
+   43:   const { can, loading } = useAuth();
+   44:   if (loading) return <Skeleton className="h-64" />;
+   45:   if (!pathPermitted(can, DISPLAY_ROUTES[department]))
+   46:     return <AccessDeniedPanel subject={DISPLAY_LABELS[department]} />;
+   47:   return (
+   48:     <ScopedDisplay
+   49:       key={`${department}:${requestedStation ?? ""}`}
+   50:       department={department}
+   51:       requestedStation={requestedStation}
+   52:     />
+   53:   );
+   54: }
+   55: 
+   56: function ScopedDisplay({
+   57:   department,
+   58:   requestedStation,
+   59: }: {
+   60:   department: DisplayDepartment;
+   61:   requestedStation?: string | undefined;
+   62: }) {
+   63:   const scope = useScopedStations();
+   64:   const { branchId } = useActivePropertyFilter();
+   65:   const { property } = useSession();
+   66:   if (!branchId)
+   67:     return (
+   68:       <AccessDeniedPanel
+   69:         reason="setup"
+   70:         subject="a station display"
+   71:         detail="Choose one property before opening a production display."
+   72:       />
+   73:     );
+   74:   if (scope.isLoading) return <Skeleton className="h-64" />;
+   75:   if (scope.error)
+   76:     return (
+   77:       <QueryState isLoading={false} error={scope.error} isEmpty={false} empty={null}>
+   78:         <span />
+   79:       </QueryState>
+   80:     );
+   81:   const stations = displayStations(scope.stations, department);
+   82:   if (!stations.length)
+   83:     return (
+   84:       <AccessDeniedPanel
+   85:         reason="setup"
+   86:         subject={DISPLAY_LABELS[department]}
+   87:         detail="No active stations for this display are available in your property and access scope."
+   88:       />
+   89:     );
+   90:   const selected = selectedDisplayStation(stations, requestedStation);
+   91:   if (!selected) return <AccessDeniedPanel reason="scope" subject="the bookmarked station" />;
+   92:   return (
+   93:     <DisplayBoard
+   94:       key={`${branchId}:${selected.id}`}
+   95:       department={department}
+   96:       stationId={selected.id}
+   97:       stations={stations}
+   98:       propertyName={property.name}
+   99:     />
+  100:   );
+  101: }
+  102: 
+  103: function DisplayBoard({
+  104:   department,
+  105:   stationId,
+  106:   stations,
+  107:   propertyName,
+  108: }: {
+  109:   department: DisplayDepartment;
+  110:   stationId: string;
+  111:   stations: { id: string; name: string }[];
+  112:   propertyName: string;
+  113: }) {
+  114:   const qc = useQueryClient();
+  115:   const { user, can, canExact } = useAuth();
+  116:   const { branchId } = useActivePropertyFilter();
+  117:   const [pairing, setPairing] = useState(false);
+  118:   const canPair =
+  119:     canExact("kitchen", "production.manage") ||
+  120:     canExact("kitchen", "chef.assign") ||
+  121:     canExact("bar", "queue", "assign");
+  122:   const { canWorkStation } = useStationAuthority();
+  123:   const queue = useKitchenTickets(department === "overview" ? "all" : stationId, "live");
+  124:   const transition = useKitchenTicketTransition();
+  125:   const delay = useKitchenTicketDelay();
+  126:   useKitchenTicketRealtime();
+  127:   const [audit, setAudit] = useState<KitchenTicket | null>(null);
+  128:   const [full, setFull] = useState(false);
+  129:   const [fullscreenError, setFullscreenError] = useState("");
+  130:   const panel = useRef<HTMLDivElement>(null);
+  131:   // Poll as a recovery path when the realtime connection drops; no offline writes.
+  132:   useEffect(() => {
+  133:     const timer = window.setInterval(() => {
+  134:       if (navigator.onLine) void qc.invalidateQueries({ queryKey: KITCHEN_TICKETS_QUERY_KEY });
+  135:     }, 15000);
+  136:     const changed = () => setFull(document.fullscreenElement === panel.current);
+  137:     document.addEventListener("fullscreenchange", changed);
+  138:     return () => {
+  139:       window.clearInterval(timer);
+  140:       document.removeEventListener("fullscreenchange", changed);
+  141:     };
+  142:   }, [qc]);
+  143:   const allowedIds = new Set(stations.map((s) => s.id));
+  144:   const tickets = queue.tickets.filter(
+  145:     (t) =>
+  146:       t.station_id &&
+  147:       allowedIds.has(t.station_id) &&
+  148:       (department === "overview" || t.station_id === stationId),
+  149:   );
+  150:   const readOnly = department === "overview";
+  151:   return (
+  152:     <div ref={panel} className="space-y-4 bg-background p-4 fullscreen:overflow-auto">
+  153:       <PageHeader
+  154:         title={DISPLAY_LABELS[department]}
+  155:         eyebrow={propertyName}
+  156:         description={
+  157:           readOnly
+  158:             ? "Live progress across your permitted stations."
+  159:             : `Personal session: ${user?.email ?? "signed-in staff"}. Actions are recorded against this account.`
+  160:         }
+  161:         actions={
+  162:           <div className="flex flex-wrap gap-2">
+  163:             {pathPermitted(can, "/staff-display-code") ? (
+  164:               <Link to="/staff-display-code" className="rounded-md border px-3 py-2 text-sm">
+  165:                 My display PIN
+  166:               </Link>
+  167:             ) : null}
+  168:             {canPair ? (
+  169:               <>
+  170:                 <Link to="/production-displays" className="rounded-md border px-3 py-2 text-sm">
+  171:                   Shared screen controls
+  172:                 </Link>
+  173:                 <Button
+  174:                   disabled={pairing || !branchId}
+  175:                   onClick={async () => {
+  176:                     if (!branchId) return;
+  177:                     setPairing(true);
+  178:                     try {
+  179:                       await pairSharedDisplay(
+  180:                         branchId,
+  181:                         stations.map((s) => s.id),
+  182:                         `${propertyName} Â· ${DISPLAY_LABELS[department]}`,
+  183:                         department === "overview",
+  184:                       );
+  185:                     } catch (error) {
+  186:                       toast.error(
+  187:                         error instanceof Error ? error.message : "Could not pair this display.",
+  188:                       );
+  189:                       setPairing(false);
+  190:                     }
+  191:                   }}
+  192:                 >
+  193:                   {pairing ? "Pairingâ€¦" : "Pair stations & sign out this browser"}
+  194:                 </Button>
+  195:               </>
+  196:             ) : null}
+  197:             <Button
+  198:               variant="outline"
+  199:               onClick={() => void qc.invalidateQueries({ queryKey: KITCHEN_TICKETS_QUERY_KEY })}
+  200:             >
+  201:               <RefreshCw className="mr-2 size-4" />
+  202:               Refresh
+  203:             </Button>
+  204:             <Button
+  205:               variant="outline"
+  206:               onClick={async () => {
+  207:                 try {
+  208:                   setFullscreenError("");
+  209:                   if (document.fullscreenElement) await document.exitFullscreen();
+  210:                   else await panel.current?.requestFullscreen();
+  211:                 } catch {
+  212:                   setFullscreenError(
+  213:                     "Fullscreen is unavailable in this browser. The display remains usable here.",
+  214:                   );
+  215:                 }
+  216:               }}
+  217:             >
+  218:               {full ? <Minimize className="mr-2 size-4" /> : <Maximize className="mr-2 size-4" />}
+  219:               {full ? "Exit fullscreen" : "Fullscreen"}
+  220:             </Button>
+  221:           </div>
+  222:         }
+  223:       />
+  224:       {fullscreenError ? (
+  225:         <p role="status" className="text-sm">
+  226:           {fullscreenError}
+  227:         </p>
+  228:       ) : null}
+  229:       {!readOnly ? (
+  230:         <nav aria-label="Display stations" className="flex flex-wrap gap-2">
+  231:           {stations.map((s) => (
+  232:             <Link
+  233:               key={s.id}
+  234:               to={DISPLAY_ROUTES[department]}
+  235:               search={{ station: s.id }}
+  236:               className={`rounded-lg border px-4 py-3 ${s.id === stationId ? "bg-primary text-primary-foreground" : ""}`}
+  237:               aria-current={s.id === stationId ? "page" : undefined}
+  238:             >
+  239:               {s.name}
+  240:             </Link>
+  241:           ))}
+  242:         </nav>
+  243:       ) : null}
+  244:       <QueryState
+  245:         isLoading={queue.isLoading}
+  246:         error={queue.error}
+  247:         isEmpty={!queue.isLoading && !queue.error && tickets.length === 0}
+  248:         empty={
+  249:           <EmptyState
+  250:             title="No live tickets"
+  251:             description="Orders appear here when sent to this station."
+  252:           />
+  253:         }
+  254:       >
+  255:         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  256:           {tickets.map((t) => (
+  257:             <TicketCard
+  258:               key={t.ticket_id}
+  259:               ticket={t}
+  260:               busy={transition.isPending || delay.isPending}
+  261:               stationAuthority={!readOnly && canWorkStation(t.station_id)}
+  262:               readOnly={readOnly}
+  263:               pendingTo={
+  264:                 transition.isPending && transition.variables?.ticketId === t.ticket_id
+  265:                   ? transition.variables.to
+  266:                   : null
+  267:               }
+  268:               onOpenAudit={() => setAudit(t)}
+  269:               onTransition={(to, needsReason) => {
+  270:                 if (readOnly) return;
+  271:                 const reason = needsReason ? window.prompt("Reason") : null;
+  272:                 if (needsReason && !reason?.trim()) return;
+  273:                 transition.mutate({ ticketId: t.ticket_id, to, ...(reason ? { reason } : {}) });
+  274:               }}
+  275:               onDelay={() => {
+  276:                 if (readOnly || !canWorkStation(t.station_id)) return;
+  277:                 const reason = window.prompt("Reason for delay");
+  278:                 if (reason?.trim()) delay.mutate({ ticketId: t.ticket_id, reason });
+  279:               }}
+  280:             />
+  281:           ))}
+  282:         </div>
+  283:       </QueryState>
+  284:       <TicketAuditSheet
+  285:         ticket={audit}
+  286:         onOpenChange={(open) => {
+  287:           if (!open) setAudit(null);
+  288:         }}
+  289:       />
+  290:     </div>
+  291:   );
+  292: }
+
+============================================================
+FILE: src/routes/station-screen.tsx
+============================================================
+LINES: 332
+    1: import { useEffect, useRef, useState } from "react";
+    2: import { createFileRoute, Link } from "@tanstack/react-router";
+    3: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+    4: import { toast } from "sonner";
+    5: import { Button } from "@/components/ui/button";
+    6: import { Input } from "@/components/ui/input";
+    7: import { Label } from "@/components/ui/label";
+    8: import {
+    9:   Dialog,
+   10:   DialogContent,
+   11:   DialogHeader,
+   12:   DialogTitle,
+   13:   DialogDescription,
+   14: } from "@/components/ui/dialog";
+   15: import { TicketCard } from "@/components/kitchen/TicketCard";
+   16: import {
+   17:   ensureSharedScreenSignedOut,
+   18:   DISPLAY_TOKEN_STORAGE_KEY,
+   19:   readSharedDisplay,
+   20:   actOnSharedDisplay,
+   21:   productionActions,
+   22:   type SharedDisplayAction,
+   23: } from "@/lib/shared-production-display";
+   24: import { titleCase } from "@/lib/kitchen";
+   25: 
+   26: export const Route = createFileRoute("/station-screen")({
+   27:   beforeLoad: ensureSharedScreenSignedOut,
+   28:   ssr: false,
+   29:   component: SharedScreen,
+   30: });
+   31: function SharedScreen() {
+   32:   const qc = useQueryClient();
+   33:   const [token] = useState(() => sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) ?? "");
+   34:   const [online, setOnline] = useState(() => navigator.onLine);
+   35:   const [selected, setSelected] = useState<SharedDisplayAction | null>(null);
+   36:   const [code, setCode] = useState("");
+   37:   const [pin, setPin] = useState("");
+   38:   const [reason, setReason] = useState("");
+   39:   const [message, setMessage] = useState("");
+   40:   const [station, setStation] = useState("all");
+   41:   const panel = useRef<HTMLDivElement>(null);
+   42:   const snapshot = useQuery({
+   43:     queryKey: ["shared-production-display"],
+   44:     queryFn: () => readSharedDisplay(token),
+   45:     enabled: Boolean(token),
+   46:     retry: false,
+   47:     gcTime: 0,
+   48:     refetchInterval: (q) => (q.state.error ? false : 5000),
+   49:     refetchOnWindowFocus: true,
+   50:   });
+   51:   useEffect(() => {
+   52:     const update = () => {
+   53:       setOnline(navigator.onLine);
+   54:       if (navigator.onLine) void snapshot.refetch();
+   55:     };
+   56:     window.addEventListener("online", update);
+   57:     window.addEventListener("offline", update);
+   58:     return () => {
+   59:       window.removeEventListener("online", update);
+   60:       window.removeEventListener("offline", update);
+   61:     };
+   62:   }, [snapshot.refetch]);
+   63:   const close = () => {
+   64:     setSelected(null);
+   65:     setCode("");
+   66:     setPin("");
+   67:     setReason("");
+   68:     setMessage("");
+   69:   };
+   70:   const action = useMutation({
+   71:     retry: false,
+   72:     mutationFn: async () => {
+   73:       if (!online || !selected) throw new Error("Reconnect before submitting an action.");
+   74:       return actOnSharedDisplay(token, code, pin, { ...selected, reason });
+   75:     },
+   76:     onSettled: () => {
+   77:       setCode("");
+   78:       setPin("");
+   79:     },
+   80:     onSuccess: (result) => {
+   81:       void qc.invalidateQueries({ queryKey: ["shared-production-display"] });
+   82:       if (!result.ok) {
+   83:         setMessage(result.message ?? "Action refused. Refresh and review the ticket.");
+   84:         return;
+   85:       }
+   86:       toast.success(
+   87:         `${result.idempotent ? "Already recorded" : "Recorded"} Â· ${result.actor_name ?? "Staff member"}`,
+   88:       );
+   89:       close();
+   90:     },
+   91:     onError: (error: Error) => {
+   92:       setMessage(
+   93:         `${error.message} Your code and PIN have been cleared. Re-enter them to retry this same action.`,
+   94:       );
+   95:     },
+   96:   });
+   97:   const data = snapshot.data;
+   98:   const disabled =
+   99:     !online ||
+  100:     Boolean(snapshot.error) ||
+  101:     action.isPending ||
+  102:     !data ||
+  103:     Date.parse(data.expires_at) <= Date.now();
+  104:   if (!token)
+  105:     return (
+  106:       <main className="mx-auto max-w-lg p-8">
+  107:         <h1 className="text-2xl font-semibold">Screen not paired</h1>
+  108:         <p className="my-4">
+  109:           A production supervisor must sign in, choose a property and station display, then pair
+  110:           this screen.
+  111:         </p>
+  112:         <Link to="/auth" search={{ redirect: "/production-displays" }}>
+  113:           Supervisor sign in
+  114:         </Link>
+  115:       </main>
+  116:     );
+  117:   return (
+  118:     <main
+  119:       ref={panel}
+  120:       className="min-h-screen space-y-5 bg-background p-4 text-foreground fullscreen:overflow-auto"
+  121:     >
+  122:       <header className="flex flex-wrap items-start justify-between gap-4">
+  123:         <div>
+  124:           <p className="text-sm text-muted-foreground">{data?.property ?? "Production"}</p>
+  125:           <h1 className="text-2xl font-semibold">{data?.label ?? "Shared production display"}</h1>
+  126:           <p className="text-sm">
+  127:             {data?.read_only
+  128:               ? "View only"
+  129:               : "Identify yourself with your staff code and PIN for each action."}
+  130:           </p>
+  131:           {data ? (
+  132:             <p className="text-xs text-muted-foreground">
+  133:               Screen access expires {new Date(data.expires_at).toLocaleString()}
+  134:             </p>
+  135:           ) : null}
+  136:         </div>
+  137:         <div className="flex flex-wrap gap-2">
+  138:           <Button
+  139:             variant="outline"
+  140:             onClick={() => void snapshot.refetch()}
+  141:             disabled={snapshot.isFetching}
+  142:           >
+  143:             Refresh
+  144:           </Button>
+  145:           <Button
+  146:             variant="outline"
+  147:             onClick={async () => {
+  148:               try {
+  149:                 if (document.fullscreenElement) await document.exitFullscreen();
+  150:                 else await panel.current?.requestFullscreen();
+  151:               } catch {
+  152:                 toast.error("Fullscreen is unavailable. Continue using this display here.");
+  153:               }
+  154:             }}
+  155:           >
+  156:             Toggle fullscreen
+  157:           </Button>
+  158:           <Link
+  159:             to="/auth"
+  160:             search={{ redirect: "/production-displays" }}
+  161:             className="rounded-md border px-4 py-2 text-sm"
+  162:           >
+  163:             Supervisor controls
+  164:           </Link>
+  165:         </div>
+  166:       </header>
+  167:       {!online ? (
+  168:         <p role="alert" className="rounded-lg border p-3">
+  169:           Offline â€” tickets may be out of date. Actions are disabled until reconnected.
+  170:         </p>
+  171:       ) : null}
+  172:       {snapshot.error ? (
+  173:         <p role="alert" className="rounded-lg border border-destructive p-3">
+  174:           {snapshot.error.message}
+  175:         </p>
+  176:       ) : null}
+  177:       {snapshot.isLoading ? <p role="status">Loading station ticketsâ€¦</p> : null}
+  178:       {data ? (
+  179:         <>
+  180:           <nav aria-label="Shared display stations" className="flex flex-wrap gap-2">
+  181:             <Button
+  182:               variant={station === "all" ? "default" : "outline"}
+  183:               onClick={() => setStation("all")}
+  184:             >
+  185:               All paired stations
+  186:             </Button>
+  187:             {data.stations.map((s) => (
+  188:               <Button
+  189:                 key={s.id}
+  190:                 variant={station === s.id ? "default" : "outline"}
+  191:                 onClick={() => setStation(s.id)}
+  192:               >
+  193:                 {s.name}
+  194:               </Button>
+  195:             ))}
+  196:           </nav>
+  197:           {!data.tickets.length && !snapshot.error ? (
+  198:             <p className="rounded-lg border p-6">
+  199:               No live tickets. New orders appear here automatically.
+  200:             </p>
+  201:           ) : null}
+  202:           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  203:             {data.tickets
+  204:               .filter((t) => station === "all" || t.station_id === station)
+  205:               .map((t) => (
+  206:                 <TicketCard
+  207:                   key={t.ticket_id}
+  208:                   ticket={t}
+  209:                   readOnly={data.read_only}
+  210:                   allowedActions={productionActions(t.status)}
+  211:                   stationAuthority={!data.read_only}
+  212:                   busy={disabled}
+  213:                   onTransition={(to) => {
+  214:                     setSelected({
+  215:                       ticketId: t.ticket_id,
+  216:                       to,
+  217:                       expected: t.status,
+  218:                       requestId: crypto.randomUUID(),
+  219:                       reason: "",
+  220:                     });
+  221:                     setMessage("");
+  222:                   }}
+  223:                   onDelay={() => {
+  224:                     setSelected({
+  225:                       ticketId: t.ticket_id,
+  226:                       to: "delay",
+  227:                       expected: t.status,
+  228:                       requestId: crypto.randomUUID(),
+  229:                       reason: "",
+  230:                     });
+  231:                     setMessage("");
+  232:                   }}
+  233:                   footer={
+  234:                     <p className="w-full text-xs text-muted-foreground">
+  235:                       {t.claimed_by ? `Claimed by ${t.claimed_by}` : "Not yet claimed"}
+  236:                       {t.accepted_at
+  237:                         ? ` Â· accepted ${new Date(t.accepted_at).toLocaleTimeString()}`
+  238:                         : ""}
+  239:                     </p>
+  240:                   }
+  241:                 />
+  242:               ))}
+  243:           </div>
+  244:         </>
+  245:       ) : null}
+  246:       <Dialog
+  247:         open={Boolean(selected)}
+  248:         onOpenChange={(open) => {
+  249:           if (!open && !action.isPending) close();
+  250:         }}
+  251:       >
+  252:         <DialogContent
+  253:           onEscapeKeyDown={(e) => {
+  254:             if (action.isPending) e.preventDefault();
+  255:           }}
+  256:           onPointerDownOutside={(e) => {
+  257:             if (action.isPending) e.preventDefault();
+  258:           }}
+  259:         >
+  260:           <DialogHeader>
+  261:             <DialogTitle>
+  262:               {selected?.to === "delay"
+  263:                 ? "Report delay"
+  264:                 : titleCase(selected?.to ?? "Staff action")}
+  265:             </DialogTitle>
+  266:             <DialogDescription>
+  267:               This identifies you for this action only. Your code and PIN clear after submission.
+  268:             </DialogDescription>
+  269:           </DialogHeader>
+  270:           <form
+  271:             className="space-y-4"
+  272:             onSubmit={(e) => {
+  273:               e.preventDefault();
+  274:               action.mutate();
+  275:             }}
+  276:           >
+  277:             <div>
+  278:               <Label htmlFor="display-code">Staff code</Label>
+  279:               <Input
+  280:                 id="display-code"
+  281:                 autoComplete="off"
+  282:                 autoFocus
+  283:                 value={code}
+  284:                 maxLength={24}
+  285:                 onChange={(e) => setCode(e.target.value)}
+  286:                 disabled={action.isPending}
+  287:                 required
+  288:               />
+  289:             </div>
+  290:             <div>
+  291:               <Label htmlFor="display-pin">Personal PIN</Label>
+  292:               <Input
+  293:                 id="display-pin"
+  294:                 type="password"
+  295:                 inputMode="numeric"
+  296:                 autoComplete="off"
+  297:                 value={pin}
+  298:                 maxLength={6}
+  299:                 pattern="[0-9]{6}"
+  300:                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+  301:                 disabled={action.isPending}
+  302:                 required
+  303:               />
+  304:             </div>
+  305:             {selected?.to === "delay" ? (
+  306:               <div>
+  307:                 <Label htmlFor="display-reason">Reason for delay</Label>
+  308:                 <Input
+  309:                   id="display-reason"
+  310:                   value={reason}
+  311:                   minLength={3}
+  312:                   maxLength={500}
+  313:                   required
+  314:                   onChange={(e) => setReason(e.target.value)}
+  315:                   disabled={action.isPending}
+  316:                 />
+  317:               </div>
+  318:             ) : null}
+  319:             {message ? (
+  320:               <p role="alert" className="text-sm text-destructive">
+  321:                 {message}
+  322:               </p>
+  323:             ) : null}
+  324:             <Button type="submit" disabled={disabled || pin.length !== 6 || !code.trim()}>
+  325:               {action.isPending ? "Recordingâ€¦" : "Confirm staff action"}
+  326:             </Button>
+  327:           </form>
+  328:         </DialogContent>
+  329:       </Dialog>
+  330:     </main>
+  331:   );
+  332: }
+
+============================================================
+FILE: src/lib/__tests__/shared-production-display.test.ts
+============================================================
+LINES: 89
+    1: // @vitest-environment jsdom
+    2: import { beforeEach, describe, expect, it, vi } from "vitest";
+    3: const mocks = vi.hoisted(() => ({ rpc: vi.fn(), signOut: vi.fn(), getSession: vi.fn() }));
+    4: vi.mock("@/integrations/supabase/client", () => ({
+    5:   supabase: { auth: { signOut: mocks.signOut, getSession: mocks.getSession } },
+    6: }));
+    7: vi.mock("@/lib/rpc-guard", () => ({ guardedRpc: mocks.rpc }));
+    8: import {
+    9:   ensureSharedScreenSignedOut,
+   10:   actOnSharedDisplay,
+   11:   productionActions,
+   12:   pairSharedDisplay,
+   13:   DISPLAY_TOKEN_STORAGE_KEY,
+   14: } from "@/lib/shared-production-display";
+   15: 
+   16: describe("restricted shared display client", () => {
+   17:   beforeEach(() => {
+   18:     vi.clearAllMocks();
+   19:     sessionStorage.clear();
+   20:   });
+   21:   it("signs out a supervisor who returns from controls before showing the shared screen", async () => {
+   22:     mocks.getSession.mockResolvedValue({
+   23:       data: { session: { access_token: "supervisor" } },
+   24:       error: null,
+   25:     });
+   26:     mocks.signOut.mockResolvedValue({ error: null });
+   27:     await ensureSharedScreenSignedOut();
+   28:     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
+   29:   });
+   30:   it("refuses shared mode when the remaining supervisor session cannot sign out", async () => {
+   31:     mocks.getSession.mockResolvedValue({
+   32:       data: { session: { access_token: "supervisor" } },
+   33:       error: null,
+   34:     });
+   35:     mocks.signOut.mockResolvedValue({ error: new Error("failed") });
+   36:     await expect(ensureSharedScreenSignedOut()).rejects.toThrow("Sign out of the staff account");
+   37:     expect(mocks.rpc).not.toHaveBeenCalled();
+   38:   });
+   39:   it("offers production work only, leaving service and cancellation outside the shared screen", () => {
+   40:     expect(productionActions("new")).toEqual(["accepted"]);
+   41:     expect(productionActions("accepted")).toEqual(["preparing"]);
+   42:     expect(productionActions("preparing")).toEqual(["ready"]);
+   43:     for (const state of ["ready", "served", "completed", "cancelled", "unknown"])
+   44:       expect(productionActions(state)).toEqual([]);
+   45:   });
+   46:   it("keeps the same request ID and expected status when retrying an uncertain network action", async () => {
+   47:     const action = {
+   48:       ticketId: "ticket",
+   49:       to: "accepted",
+   50:       expected: "new",
+   51:       requestId: "same-request",
+   52:       reason: "",
+   53:     };
+   54:     mocks.rpc.mockResolvedValue({ data: { ok: true }, error: null });
+   55:     await actOnSharedDisplay("restricted-token", " scn-kit-005 ", "816294", action);
+   56:     await actOnSharedDisplay("restricted-token", "scn-kit-005", "816294", action);
+   57:     expect(mocks.rpc.mock.calls[0]?.[2]).toEqual(mocks.rpc.mock.calls[1]?.[2]);
+   58:     expect(mocks.rpc.mock.calls[0]?.[2]).toMatchObject({
+   59:       _request: "same-request",
+   60:       _expected: "new",
+   61:       _code: "SCN-KIT-005",
+   62:     });
+   63:     expect(sessionStorage.length).toBe(0);
+   64:   });
+   65:   it("removes a token and revokes the new screen if supervisor sign-out fails", async () => {
+   66:     mocks.rpc
+   67:       .mockResolvedValueOnce({
+   68:         data: { ok: true, token: "restricted-token", session_id: "session" },
+   69:         error: null,
+   70:       })
+   71:       .mockResolvedValueOnce({ data: { ok: true }, error: null });
+   72:     mocks.signOut.mockResolvedValue({ error: new Error("Sign-out failed") });
+   73:     await expect(pairSharedDisplay("property", ["station"], "Kitchen", false)).rejects.toThrow(
+   74:       "Sign-out failed",
+   75:     );
+   76:     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
+   77:     expect(sessionStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBeNull();
+   78:     expect(mocks.rpc.mock.calls[1]?.[1]).toBe("neo_production_display_manage");
+   79:     expect(mocks.rpc.mock.calls[1]?.[2]).toEqual({ _close: "session" });
+   80:   });
+   81:   it("does not sign out or create local access if pairing is refused", async () => {
+   82:     mocks.rpc.mockResolvedValue({ data: null, error: { message: "Outside your station scope" } });
+   83:     await expect(
+   84:       pairSharedDisplay("other-property", ["station"], "Kitchen", false),
+   85:     ).rejects.toThrow("Outside your station scope");
+   86:     expect(mocks.signOut).not.toHaveBeenCalled();
+   87:     expect(sessionStorage.length).toBe(0);
+   88:   });
+   89: });
+
+============================================================
+FILE: src/routes/auth.tsx
+============================================================
+LINES: 305
+    1: import { useState } from "react";
+    2: import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+    3: import { Eye, EyeOff, Loader2 } from "lucide-react";
+    4: import { toast } from "sonner";
+    5: import { Button } from "@/components/ui/button";
+    6: import { Input } from "@/components/ui/input";
+    7: import { Label } from "@/components/ui/label";
+    8: import { Checkbox } from "@/components/ui/checkbox";
+    9: import { awaitAuthenticatedUser, provisionWorkspace } from "@/lib/workspace-provisioning";
+   10: import { supabase } from "@/integrations/supabase/client";
+   11: import { AuthLayout } from "@/components/auth/AuthLayout";
+   12: import {
+   13:   CreateWorkspaceWizard,
+   14:   PENDING_WORKSPACE_KEY,
+   15: } from "@/components/auth/CreateWorkspaceWizard";
+   16: import { cn } from "@/lib/utils";
+   17: import { canonicalUrl, PRODUCTION_ORIGIN } from "@/lib/route-visibility";
+   18: 
+   19: type AuthSearch = { redirect?: string | undefined; mode?: string | undefined };
+   20: 
+   21: export const Route = createFileRoute("/auth")({
+   22:   ssr: false,
+   23:   validateSearch: (search: Record<string, unknown>): AuthSearch => ({
+   24:     redirect: typeof search["redirect"] === "string" ? search["redirect"] : undefined,
+   25:     mode: search["mode"] === "create" ? "create" : undefined,
+   26:   }),
+   27:   head: () => ({
+   28:     meta: [
+   29:       { title: "Sign in or create a workspace â€” NEÃ˜" },
+   30:       {
+   31:         name: "description",
+   32:         content:
+   33:           "Sign in to your NEÃ˜ workspace, or create a new workspace for your hotel, lodge, resort or restaurant.",
+   34:       },
+   35:       { property: "og:title", content: "Sign in or create a workspace â€” NEÃ˜" },
+   36:       {
+   37:         property: "og:description",
+   38:         content:
+   39:           "Secure staff sign-in and workspace creation for the NEÃ˜ hospitality operating system.",
+   40:       },
+   41:       { property: "og:type", content: "website" },
+   42:       { property: "og:url", content: canonicalUrl("/auth") },
+   43:       { property: "og:image", content: `${PRODUCTION_ORIGIN}/neo-social-preview.jpg` },
+   44:       { name: "twitter:card", content: "summary_large_image" },
+   45:       { name: "twitter:image", content: `${PRODUCTION_ORIGIN}/neo-social-preview.jpg` },
+   46:     ],
+   47:     links: [{ rel: "canonical", href: canonicalUrl("/auth") }],
+   48:   }),
+   49:   component: AuthPage,
+   50: });
+   51: 
+   52: const LOCK_KEY = "hos.failedLogins";
+   53: const MAX_ATTEMPTS = 5;
+   54: const LOCK_MINUTES = 15;
+   55: const GENERIC_ERROR = "Unable to sign in. Check your credentials and try again.";
+   56: 
+   57: function readLock() {
+   58:   try {
+   59:     return JSON.parse(window.localStorage.getItem(LOCK_KEY) ?? "{}") as {
+   60:       count?: number;
+   61:       until?: number;
+   62:     };
+   63:   } catch {
+   64:     return {};
+   65:   }
+   66: }
+   67: 
+   68: function AuthPage() {
+   69:   const search = useSearch({ from: "/auth" });
+   70:   const [tab, setTab] = useState<"signin" | "create">(
+   71:     search.mode === "create" ? "create" : "signin",
+   72:   );
+   73: 
+   74:   return (
+   75:     <AuthLayout
+   76:       wide={tab === "create"}
+   77:       header={
+   78:         <div
+   79:           role="tablist"
+   80:           aria-label="Authentication options"
+   81:           className="mb-7 flex gap-6 border-b border-neo-mist"
+   82:         >
+   83:           {(
+   84:             [
+   85:               ["signin", "Sign In"],
+   86:               ["create", "Create Workspace"],
+   87:             ] as const
+   88:           ).map(([key, label]) => (
+   89:             <button
+   90:               key={key}
+   91:               role="tab"
+   92:               type="button"
+   93:               aria-selected={tab === key}
+   94:               onClick={() => setTab(key)}
+   95:               className={cn(
+   96:                 "-mb-px border-b-2 px-1 pb-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neo-turquoise",
+   97:                 tab === key
+   98:                   ? "border-neo-turquoise text-neo-midnight"
+   99:                   : "border-transparent text-neo-steel hover:text-neo-midnight",
+  100:               )}
+  101:             >
+  102:               {label}
+  103:             </button>
+  104:           ))}
+  105:         </div>
+  106:       }
+  107:       title={tab === "signin" ? "Welcome back" : "Create your workspace"}
+  108:       subtitle={
+  109:         tab === "signin"
+  110:           ? "Sign in to your NEÃ˜ workspace."
+  111:           : "For a new hotel, restaurant, lodge, resort or hospitality business joining NEÃ˜."
+  112:       }
+  113:       footer={
+  114:         tab === "signin" ? (
+  115:           <p>
+  116:             New hospitality business?{" "}
+  117:             <button
+  118:               type="button"
+  119:               onClick={() => setTab("create")}
+  120:               className="font-medium text-neo-aqua hover:underline"
+  121:             >
+  122:               Create a workspace
+  123:             </button>
+  124:             . Employees are added or invited by an authorised workspace administrator.
+  125:           </p>
+  126:         ) : null
+  127:       }
+  128:     >
+  129:       {tab === "signin" ? <SignInForm redirect={search.redirect} /> : <CreateWorkspaceWizard />}
+  130:     </AuthLayout>
+  131:   );
+  132: }
+  133: 
+  134: function SignInForm({ redirect }: { redirect?: string | undefined }) {
+  135:   const navigate = useNavigate();
+  136:   const [email, setEmail] = useState("");
+  137:   const [password, setPassword] = useState("");
+  138:   const [showPassword, setShowPassword] = useState(false);
+  139:   const [capsLock, setCapsLock] = useState(false);
+  140:   const [remember, setRemember] = useState(true);
+  141:   const [busy, setBusy] = useState(false);
+  142:   const [formError, setFormError] = useState<string | null>(null);
+  143: 
+  144:   async function handleSignIn(e: React.FormEvent) {
+  145:     e.preventDefault();
+  146:     setFormError(null);
+  147:     const lock = readLock();
+  148:     if (lock.until && lock.until > Date.now()) {
+  149:       const mins = Math.ceil((lock.until - Date.now()) / 60000);
+  150:       const msg = `Account temporarily locked. Try again in ${mins} minute(s).`;
+  151:       setFormError(msg);
+  152:       toast.error(msg);
+  153:       return;
+  154:     }
+  155:     setBusy(true);
+  156:     const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+  157:     setBusy(false);
+  158: 
+  159:     if (error) {
+  160:       const count = (lock.count ?? 0) + 1;
+  161:       const payload =
+  162:         count >= MAX_ATTEMPTS ? { count: 0, until: Date.now() + LOCK_MINUTES * 60000 } : { count };
+  163:       window.localStorage.setItem(LOCK_KEY, JSON.stringify(payload));
+  164:       const msg =
+  165:         count >= MAX_ATTEMPTS
+  166:           ? `Too many failed attempts. Locked for ${LOCK_MINUTES} minutes.`
+  167:           : `${GENERIC_ERROR} (${MAX_ATTEMPTS - count} attempt(s) left)`;
+  168:       setFormError(msg);
+  169:       toast.error(msg);
+  170:       return;
+  171:     }
+  172: 
+  173:     window.localStorage.removeItem(LOCK_KEY);
+  174:     if (!remember) window.sessionStorage.setItem("hos.rememberMe", "false");
+  175: 
+  176:     if (data.user) {
+  177:       // Sign-in is strictly read-only for authorization: it never creates,
+  178:       // replaces or promotes a role on its own. The only exception is the
+  179:       // workspace this same person explicitly submitted on this device before
+  180:       // email verification â€” it is completed once, idempotently, and the
+  181:       // backend still refuses to provision an account that already holds any
+  182:       // role or an organisation that already has members.
+  183:       const pending = window.localStorage.getItem(PENDING_WORKSPACE_KEY);
+  184:       if (pending) {
+  185:         // Resume the creator's own draft only after the session is applied and
+  186:         // the server confirms the user; the attempt is idempotent, so a retry
+  187:         // returns the existing workspace instead of duplicating anything.
+  188:         const verifiedId = await awaitAuthenticatedUser();
+  189:         if (verifiedId) {
+  190:           try {
+  191:             const payload = JSON.parse(pending) as { business_name?: string };
+  192:             const key = `${email.trim().toLowerCase()}::${(payload.business_name ?? "").trim().toLowerCase()}`;
+  193:             await provisionWorkspace(payload as Record<string, unknown>, key);
+  194:             window.localStorage.removeItem(PENDING_WORKSPACE_KEY);
+  195:           } catch {
+  196:             // A failed resume never blocks sign-in and never discards the
+  197:             // draft; the workspace gate reports the state and can retry.
+  198:           }
+  199:         }
+  200:       }
+  201: 
+  202:       // The sign-in stamp is written once by the workspace bootstrap, which
+  203:       // throttles it; repeating it here added a blocking write to every login.
+  204:     }
+  205: 
+  206:     toast.success("Signed in");
+  207:     // The intended destination may carry its own question marks (an entrance
+  208:     // on a hotel's page, for example), so it is replayed as a whole address.
+  209:     // Only same-origin paths are ever honoured.
+  210:     const target =
+  211:       redirect && redirect.startsWith("/") && !redirect.startsWith("//")
+  212:         ? redirect
+  213:         : // No explicit destination: the canonical resolver decides, from the
+  214:           // relationships this account genuinely holds. Authentication alone
+  215:           // never implies a guest, and never implies work either.
+  216:           "/continue";
+  217:     navigate({ href: target, replace: true });
+  218:   }
+  219: 
+  220:   return (
+  221:     <form onSubmit={handleSignIn} className="space-y-5">
+  222:       <div className="space-y-2">
+  223:         <Label htmlFor="email" className="text-neo-midnight">
+  224:           Email address
+  225:         </Label>
+  226:         <Input
+  227:           id="email"
+  228:           type="email"
+  229:           autoComplete="email"
+  230:           required
+  231:           className="h-12 rounded-xl border-neo-mist bg-white text-neo-midnight focus-visible:border-neo-turquoise focus-visible:ring-neo-turquoise/40"
+  232:           value={email}
+  233:           onChange={(e) => setEmail(e.target.value)}
+  234:         />
+  235:         <p className="text-xs text-neo-steel">Use the email connected to your NEÃ˜ account.</p>
+  236:       </div>
+  237: 
+  238:       <div className="space-y-2">
+  239:         <Label htmlFor="password" className="text-neo-midnight">
+  240:           Password
+  241:         </Label>
+  242:         <div className="relative">
+  243:           <Input
+  244:             id="password"
+  245:             type={showPassword ? "text" : "password"}
+  246:             autoComplete="current-password"
+  247:             required
+  248:             className="h-12 rounded-xl border-neo-mist bg-white pr-12 text-neo-midnight focus-visible:border-neo-turquoise focus-visible:ring-neo-turquoise/40"
+  249:             value={password}
+  250:             onChange={(e) => setPassword(e.target.value)}
+  251:             onKeyUp={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+  252:             onKeyDown={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+  253:           />
+  254:           <button
+  255:             type="button"
+  256:             onClick={() => setShowPassword((v) => !v)}
+  257:             aria-label={showPassword ? "Hide password" : "Show password"}
+  258:             className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-neo-steel transition-colors hover:text-neo-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neo-turquoise"
+  259:           >
+  260:             {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+  261:           </button>
+  262:         </div>
+  263:         {capsLock ? <p className="text-xs font-medium text-neo-gold">Caps Lock is on.</p> : null}
+  264:       </div>
+  265: 
+  266:       {formError ? (
+  267:         <p role="alert" className="text-sm font-medium text-destructive">
+  268:           {formError}
+  269:         </p>
+  270:       ) : null}
+  271: 
+  272:       <div className="flex items-center justify-between">
+  273:         <label className="flex items-center gap-2 text-sm text-neo-steel">
+  274:           <Checkbox
+  275:             checked={remember}
+  276:             onCheckedChange={(v) => setRemember(Boolean(v))}
+  277:             aria-label="Remember me"
+  278:           />
+  279:           Remember me
+  280:         </label>
+  281:         <Link
+  282:           to="/auth/forgot-password"
+  283:           className="rounded text-sm font-medium text-neo-aqua hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neo-turquoise"
+  284:         >
+  285:           Forgot password?
+  286:         </Link>
+  287:       </div>
+  288: 
+  289:       <Button
+  290:         type="submit"
+  291:         disabled={busy}
+  292:         className="h-12 w-full rounded-xl bg-neo-turquoise text-base font-semibold text-neo-midnight transition-colors hover:bg-neo-aqua hover:text-neo-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neo-turquoise"
+  293:       >
+  294:         {busy ? (
+  295:           <>
+  296:             <Loader2 className="size-4 animate-spin" />
+  297:             Signing inâ€¦
+  298:           </>
+  299:         ) : (
+  300:           "Sign In"
+  301:         )}
+  302:       </Button>
+  303:     </form>
+  304:   );
+  305: }
+
+============================================================
+FILE: src/lib/stock-need-lifecycle.ts
+============================================================
+LINES: 174
+    1: /**
+    2:  * Stock need lifecycle.
+    3:  *
+    4:  * A need is one idea however it arose: a department reported it, or stock fell
+    5:  * to its reorder point. From the moment it is reported it has somewhere to go â€”
+    6:  * issue it from a store in full or in part, or route what cannot be covered to
+    7:  * Procurement as a purchase request. The lineage is kept, so "HR asked for 15
+    8:  * reams â€” what happened?" always has an answer.
+    9:  *
+   10:  * Routing to Procurement reuses an already-active request for the same need
+   11:  * instead of raising a second one, so repeated clicks cannot multiply demand.
+   12:  */
+   13: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+   14: import { toast } from "sonner";
+   15: import { supabase } from "@/integrations/supabase/client";
+   16: import { guardedRpc } from "@/lib/rpc-guard";
+   17: import { useAuth } from "@/lib/auth";
+   18: import { useActivePropertyFilter } from "@/lib/branch-filter";
+   19: import { applyStockNeedStatus, normaliseNeedRow } from "@/lib/stock-needs";
+   20: 
+   21: // The needs trail joins departments, items and purchase requests; call sites narrow.
+   22: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   23: const db = supabase as any;
+   24: 
+   25: export type NeedRow = Record<string, unknown>;
+   26: 
+   27: export function newNeedAttemptKey(): string {
+   28:   return crypto.randomUUID();
+   29: }
+   30: 
+   31: function useNeedsInvalidate() {
+   32:   const qc = useQueryClient();
+   33:   return () => {
+   34:     void qc.invalidateQueries({ queryKey: ["stock-needs"] });
+   35:     void qc.invalidateQueries({ queryKey: ["stores-department"] });
+   36:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+   37:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+   38:   };
+   39: }
+   40: 
+   41: /** Every reported or system-raised need for the selected property. */
+   42: export function useStockNeeds(status: "open" | "all" = "open") {
+   43:   const { organizationId } = useAuth();
+   44:   const { branchId } = useActivePropertyFilter();
+   45:   return useQuery({
+   46:     queryKey: ["stock-needs", "list", organizationId, branchId, status],
+   47:     enabled: Boolean(organizationId),
+   48:     queryFn: async () => {
+   49:       let q = db
+   50:         .from("department_stock_needs")
+   51:         .select(
+   52:           "id, item, quantity, unit, priority, status, notes, origin, created_at, fulfilled_quantity, stock_item_id, purchase_request_id, department_id, departments(name), stock_items(name, base_unit), purchase_requests(request_number, status)",
+   53:         )
+   54:         .order("created_at", { ascending: false })
+   55:         .limit(200);
+   56:       // Needs reported before property scoping existed carry no branch; they are
+   57:       // still this workspace's needs, so a property view must not hide them.
+   58:       if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+   59:       q = applyStockNeedStatus(q, status);
+   60:       const { data, error } = await q;
+   61:       if (error) throw new Error(error.message);
+   62:       return ((data ?? []) as NeedRow[]).map(normaliseNeedRow);
+   63:     },
+   64:   });
+   65: }
+   66: 
+   67: /** Point a reported need at a real catalogue item so it can be issued. */
+   68: export function useLinkNeedItem() {
+   69:   const invalidate = useNeedsInvalidate();
+   70:   return useMutation({
+   71:     mutationFn: async ({ needId, stockItemId }: { needId: string; stockItemId: string }) => {
+   72:       const { data, error } = await guardedRpc(db, "neo_stock_need_link_item", {
+   73:         _need: needId,
+   74:         _stock_item: stockItemId,
+   75:       });
+   76:       if (error) throw new Error(error.message);
+   77:       return (data ?? {}) as Record<string, unknown>;
+   78:     },
+   79:     onSuccess: () => {
+   80:       invalidate();
+   81:       toast.success("Need linked to a stock item.");
+   82:     },
+   83:     onError: (e: Error) => toast.error(e.message),
+   84:   });
+   85: }
+   86: 
+   87: /** Issue against a need, in full or in part, from a chosen store. */
+   88: export function useFulfilNeed() {
+   89:   const invalidate = useNeedsInvalidate();
+   90:   return useMutation({
+   91:     mutationFn: async (input: {
+   92:       needId: string;
+   93:       locationId: string;
+   94:       quantity: number;
+   95:       attemptKey: string;
+   96:     }) => {
+   97:       const { data, error } = await guardedRpc(db, "neo_stock_need_fulfil", {
+   98:         _need: input.needId,
+   99:         _location: input.locationId,
+  100:         _quantity: input.quantity,
+  101:         _attempt: input.attemptKey,
+  102:       });
+  103:       if (error) throw new Error(error.message);
+  104: 
+  105:       if (!data || typeof data !== "object" || Array.isArray(data)) {
+  106:         throw new Error("The database did not confirm the operation.");
+  107:       }
+  108: 
+  109:       const result = data as Record<string, unknown>;
+  110: 
+  111:       if (result["ok"] === false) {
+  112:         throw new Error(
+  113:           String(
+  114:             result["detail"] ??
+  115:               result["reason"] ??
+  116:               "The operation was rejected.",
+  117:           ),
+  118:         );
+  119:       }
+  120: 
+  121:       return result;
+  122:     },
+  123:     onSuccess: (data) => {
+  124:       invalidate();
+  125:       if (data["replayed"] === true) toast.info("Already issued â€” showing the original result.");
+  126:       else if (String(data["status"] ?? "") === "requisitioned")
+  127:         toast.success("Issued in full â€” the need is closed.");
+  128:       else toast.success("Part of the need was issued; the balance is still outstanding.");
+  129:     },
+  130:     onError: (e: Error) => toast.error(e.message),
+  131:   });
+  132: }
+  133: 
+  134: /** Send the outstanding balance to Procurement, reusing any active request. */
+  135: export function useRouteNeedToProcurement() {
+  136:   const invalidate = useNeedsInvalidate();
+  137:   return useMutation({
+  138:     mutationFn: async ({ needId, notes }: { needId: string; notes?: string }) => {
+  139:       const { data, error } = await guardedRpc(db, "neo_stock_need_to_procurement", {
+  140:         _need: needId,
+  141:         _notes: notes ?? null,
+  142:       });
+  143:       if (error) throw new Error(error.message);
+  144: 
+  145:       if (!data || typeof data !== "object" || Array.isArray(data)) {
+  146:         throw new Error("The database did not confirm the operation.");
+  147:       }
+  148: 
+  149:       const result = data as Record<string, unknown>;
+  150: 
+  151:       if (result["ok"] === false) {
+  152:         throw new Error(
+  153:           String(
+  154:             result["detail"] ??
+  155:               result["reason"] ??
+  156:               "The operation was rejected.",
+  157:           ),
+  158:         );
+  159:       }
+  160: 
+  161:       return result;
+  162:     },
+  163:     onSuccess: (data) => {
+  164:       invalidate();
+  165:       if (data["duplicate"] === true)
+  166:         toast.info("A purchase request is already open for this need.");
+  167:       else
+  168:         toast.success(
+  169:           `Routed to Procurement as ${String(data["request_number"] ?? "a purchase request")}.`,
+  170:         );
+  171:     },
+  172:     onError: (e: Error) => toast.error(e.message),
+  173:   });
+  174: }
+
+============================================================
+FILE: src/lib/stock-needs.ts
+============================================================
+LINES: 58
+    1: /**
+    2:  * Department stock needs â€” one status vocabulary.
+    3:  *
+    4:  * A need is *reported* by a department, *acknowledged* by whoever reviews it,
+    5:  * and leaves the queue only once it is *requisitioned* (or declined). Screens
+    6:  * had been asking for the literal status `pending`, which no record ever
+    7:  * carries, so every open-needs summary answered zero and a kitchen need could
+    8:  * never be turned into a requisition. Callers now ask for a queue â€” "open" â€”
+    9:  * and this module decides which persisted statuses that means.
+   10:  */
+   11: 
+   12: /** Statuses that still require someone to act. */
+   13: export const OPEN_STOCK_NEED_STATUSES = ["reported", "acknowledged", "pending"] as const;
+   14: 
+   15: /** Statuses that have left the queue. */
+   16: export const CLOSED_STOCK_NEED_STATUSES = ["requisitioned", "declined", "fulfilled"] as const;
+   17: 
+   18: /**
+   19:  * Read older shortage records safely.
+   20:  *
+   21:  * Needs reported before the lifecycle fields existed carry no urgency, origin,
+   22:  * issued quantity or catalogue link. Normalising on read keeps the original
+   23:  * department, description, quantity, unit, reporter and property intact while
+   24:  * giving every record the shape the queue works with.
+   25:  */
+   26: export function normaliseNeedRow<T extends Record<string, unknown>>(row: T): T {
+   27:   return {
+   28:     ...row,
+   29:     urgency: row["urgency"] ?? row["priority"] ?? "normal",
+   30:     origin: row["origin"] ?? "reported",
+   31:     status: String(row["status"] ?? "reported"),
+   32:     fulfilled_quantity: Number(row["fulfilled_quantity"] ?? 0),
+   33:     stock_item_id: row["stock_item_id"] ?? null,
+   34:     purchase_request_id: row["purchase_request_id"] ?? null,
+   35:   } as T;
+   36: }
+   37: 
+   38: export function isOpenStockNeed(status: unknown): boolean {
+   39:   return (OPEN_STOCK_NEED_STATUSES as readonly string[]).includes(
+   40:     String(status ?? "").trim().toLowerCase(),
+   41:   );
+   42: }
+   43: 
+   44: /**
+   45:  * Apply a requested status filter to a `department_stock_needs` query.
+   46:  *
+   47:  * `all` filters nothing; `open` (and the legacy alias `pending`) expands to the
+   48:  * open statuses; anything else is an exact status the caller asked for.
+   49:  */
+   50: // The Supabase query builder is generic across every department call site.
+   51: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   52: export function applyStockNeedStatus<T extends { eq: any; in: any }>(query: T, status: string): T {
+   53:   const wanted = status.trim().toLowerCase();
+   54:   if (wanted === "all" || wanted === "") return query;
+   55:   if (wanted === "open" || wanted === "pending")
+   56:     return query.in("status", OPEN_STOCK_NEED_STATUSES as unknown as string[]) as T;
+   57:   return query.eq("status", wanted) as T;
+   58: }
+
+============================================================
+FILE: src/lib/stores-lifecycle.ts
+============================================================
+LINES: 311
+    1: /**
+    2:  * Stores Ã¢â€ â€ Procurement lifecycle.
+    3:  *
+    4:  * Requisition Ã¢â€ â€™ approval Ã¢â€ â€™ purchase order Ã¢â€ â€™ receipt Ã¢â€ â€™ stock, plus store issues
+    5:  * and returns. Every write goes through one transactional database routine that
+    6:  * checks capability and property scope itself, and every submission carries a
+    7:  * fresh attempt key so a retry replays the original outcome instead of creating
+    8:  * a second document or a second stock movement.
+    9:  */
+   10: import { guardedRpc } from "@/lib/rpc-guard";
+   11: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+   12: import { toast } from "sonner";
+   13: import { supabase } from "@/integrations/supabase/client";
+   14: import { useAuth } from "@/lib/auth";
+   15: import { useActivePropertyFilter } from "@/lib/branch-filter";
+   16: 
+   17: // The procurement trail spans many generated table types; call sites narrow.
+   18: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   19: const db = supabase as any;
+   20: 
+   21: export type LifecycleResult = Record<string, unknown>;
+   22: 
+   23: /** One key per user submission, not per attempt Ã¢â‚¬â€ retries must reuse it. */
+   24: export function newAttemptKey(): string {
+   25:   return crypto.randomUUID();
+   26: }
+   27: 
+   28: export type ReceiptLineInput = {
+   29:   order_line_id: string;
+   30:   quantity_received: number;
+   31:   quantity_rejected?: number;
+   32:   rejection_reason?: string;
+   33:   quantity_damaged?: number;
+   34:   unit_price?: number;
+   35:   batch_number?: string;
+   36:   expiry_date?: string;
+   37:   notes?: string;
+   38:   /** Written justification for exceeding the outstanding quantity on THIS line. */
+   39:   over_receipt_reason?: string;
+   40: };
+   41: 
+   42: export type IssueLineInput = { stock_item_id: string; quantity: number; unit?: string };
+   43: 
+   44: function useLifecycleInvalidate() {
+   45:   const qc = useQueryClient();
+   46:   return () => {
+   47:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+   48:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+   49:     void qc.invalidateQueries({ queryKey: ["reconciliation"] });
+   50:   };
+   51: }
+   52: 
+   53: function replayNote(data: LifecycleResult, message: string) {
+   54:   if (data["replayed"] === true) toast.info("Already recorded Ã¢â‚¬â€ showing the original result.");
+   55:   else toast.success(message);
+   56: }
+   57: 
+   58: /* ------------------------------ requisitions ------------------------------ */
+   59: 
+   60: export function useSubmitRequisition() {
+   61:   const invalidate = useLifecycleInvalidate();
+   62:   return useMutation({
+   63:     mutationFn: async ({ requestId, attemptKey }: { requestId: string; attemptKey: string }) => {
+   64:       const { data, error } = await guardedRpc(db, "neo_procurement_request_submit", {
+   65:         _request: requestId,
+   66:         _attempt: attemptKey,
+   67:       });
+   68:       if (error) throw new Error(error.message);
+   69:       return (data ?? {}) as LifecycleResult;
+   70:     },
+   71:     onSuccess: (data) => {
+   72:       invalidate();
+   73:       replayNote(data, `Requisition ${String(data["request_number"] ?? "")} sent for approval`);
+   74:     },
+   75:     onError: (e: Error) => toast.error(e.message),
+   76:   });
+   77: }
+   78: 
+   79: export function useDecideRequisition() {
+   80:   const invalidate = useLifecycleInvalidate();
+   81:   return useMutation({
+   82:     mutationFn: async ({
+   83:       requestId,
+   84:       decision,
+   85:       reason,
+   86:     }: {
+   87:       requestId: string;
+   88:       decision: "approve" | "reject";
+   89:       reason?: string;
+   90:     }) => {
+   91:       const { data, error } = await guardedRpc(db, "neo_procurement_request_decide", {
+   92:         _request: requestId,
+   93:         _decision: decision,
+   94:         _reason: reason ?? null,
+   95:       });
+   96:       if (error) throw new Error(error.message);
+   97:       return (data ?? {}) as LifecycleResult;
+   98:     },
+   99:     onSuccess: (data) => {
+  100:       invalidate();
+  101:       toast.success(`Requisition ${String(data["status"] ?? "updated")}`);
+  102:     },
+  103:     onError: (e: Error) => toast.error(e.message),
+  104:   });
+  105: }
+  106: 
+  107: export function useCreateOrderFromRequest() {
+  108:   const invalidate = useLifecycleInvalidate();
+  109:   return useMutation({
+  110:     mutationFn: async (input: {
+  111:       requestId: string;
+  112:       supplierId: string;
+  113:       expectedDate?: string | null;
+  114:       locationId?: string | null;
+  115:       attemptKey: string;
+  116:     }) => {
+  117:       const { data, error } = await guardedRpc(db, "neo_procurement_order_from_request", {
+  118:         _request: input.requestId,
+  119:         _supplier: input.supplierId,
+  120:         _expected: input.expectedDate ?? null,
+  121:         _attempt: input.attemptKey,
+  122:         _location: input.locationId ?? null,
+  123:       });
+  124:       if (error) throw new Error(error.message);
+  125:       return (data ?? {}) as LifecycleResult;
+  126:     },
+  127:     onSuccess: (data) => {
+  128:       invalidate();
+  129:       replayNote(data, `Purchase order ${String(data["order_number"] ?? "")} raised`);
+  130:     },
+  131:     onError: (e: Error) => toast.error(e.message),
+  132:   });
+  133: }
+  134: 
+  135: export function useApproveOrder() {
+  136:   const invalidate = useLifecycleInvalidate();
+  137:   return useMutation({
+  138:     mutationFn: async ({ orderId, reason }: { orderId: string; reason?: string }) => {
+  139:       const { data, error } = await guardedRpc(db, "neo_procurement_order_approve", {
+  140:         _order: orderId,
+  141:         _reason: reason ?? null,
+  142:       });
+  143:       if (error) throw new Error(error.message);
+  144:       return (data ?? {}) as LifecycleResult;
+  145:     },
+  146:     onSuccess: () => {
+  147:       invalidate();
+  148:       toast.success("Purchase order approved");
+  149:     },
+  150:     onError: (e: Error) => toast.error(e.message),
+  151:   });
+  152: }
+  153: 
+  154: /**
+  155:  * Procurement prices a requested line before the request goes for approval.
+  156:  * The request total is recalculated by the database, never by the screen.
+  157:  */
+  158: export function useSetRequestLinePrice() {
+  159:   const invalidate = useLifecycleInvalidate();
+  160:   return useMutation({
+  161:     mutationFn: async ({ lineId, unitPrice }: { lineId: string; unitPrice: number }) => {
+  162:       const { data, error } = await guardedRpc(db, "neo_procurement_request_price_line", {
+  163:         _line: lineId,
+  164:         _price: unitPrice,
+  165:       });
+  166:       if (error) throw new Error(error.message);
+  167:       return (data ?? {}) as LifecycleResult;
+  168:     },
+  169:     onSuccess: () => {
+  170:       invalidate();
+  171:       toast.success("Estimated price saved");
+  172:     },
+  173:     onError: (e: Error) => toast.error(e.message),
+  174:   });
+  175: }
+  176: 
+  177: /* -------------------------------- receiving ------------------------------- */
+  178: 
+  179: export function useReceiveGoods() {
+  180:   const invalidate = useLifecycleInvalidate();
+  181:   return useMutation({
+  182:     mutationFn: async (input: {
+  183:       orderId: string;
+  184:       locationId: string;
+  185:       lines: ReceiptLineInput[];
+  186:       attemptKey: string;
+  187:       notes?: string;
+  188:       overReceiptReason?: string;
+  189:       deliveryNoteNumber?: string;
+  190:       supplierInvoiceNumber?: string;
+  191:     }) => {
+  192:       const { data, error } = await guardedRpc(db, "neo_stores_receive_goods", {
+  193:         _order: input.orderId,
+  194:         _location: input.locationId,
+  195:         _lines: input.lines,
+  196:         _attempt: input.attemptKey,
+  197:         _notes: input.notes ?? null,
+  198:         _over_receipt_reason: input.overReceiptReason ?? null,
+  199:         _delivery_note: input.deliveryNoteNumber ?? null,
+  200:         _supplier_invoice: input.supplierInvoiceNumber ?? null,
+  201:       });
+  202:       if (error) throw new Error(error.message);
+  203:       return (data ?? {}) as LifecycleResult;
+  204:     },
+  205:     onSuccess: (data) => {
+  206:       invalidate();
+  207:       replayNote(
+  208:         data,
+  209:         `${String(data["grn_number"] ?? "Delivery")} received${data["partial"] === true ? " (partial)" : ""} and posted to stock`,
+  210:       );
+  211:     },
+  212:     onError: (e: Error) => toast.error(e.message),
+  213:   });
+  214: }
+  215: 
+  216: /* --------------------------- issues and returns --------------------------- */
+  217: 
+  218: export function useStoreIssue() {
+  219:   const invalidate = useLifecycleInvalidate();
+  220:   return useMutation({
+  221:     mutationFn: async (input: {
+  222:       locationId: string;
+  223:       lines: IssueLineInput[];
+  224:       attemptKey: string;
+  225:       departmentId?: string | null;
+  226:       reason: string;
+  227:       direction: "issue" | "return";
+  228:     }) => {
+  229:       const { data, error } = await guardedRpc(db, "neo_stores_issue", {
+  230:         _location: input.locationId,
+  231:         _lines: input.lines,
+  232:         _attempt: input.attemptKey,
+  233:         _department: input.departmentId ?? null,
+  234:         _reason: input.reason,
+  235:         _direction: input.direction,
+  236:       });
+  237:       if (error) throw new Error(error.message);
+  238:       return (data ?? {}) as LifecycleResult;
+  239:     },
+  240:     onSuccess: (data) => {
+  241:       invalidate();
+  242:       replayNote(data, data["direction"] === "return" ? "Return posted to stock" : "Issue posted from stock");
+  243:     },
+  244:     onError: (e: Error) => toast.error(e.message),
+  245:   });
+  246: }
+  247: 
+  248: /* ------------------------------- low stock -------------------------------- */
+  249: 
+  250: export function useLowStockScan() {
+  251:   const { branchId } = useActivePropertyFilter();
+  252:   const { organizationId } = useAuth();
+  253:   return useMutation({
+  254:     mutationFn: async () => {
+  255:       const { data, error } = await guardedRpc(db, "neo_stores_low_stock_scan", { _branch: branchId ?? null });
+  256:       if (error) throw new Error(error.message);
+  257:       return (data ?? {}) as LifecycleResult;
+  258:     },
+  259:     onSuccess: (data) => {
+  260:       const found = Number(data["items_below_minimum"] ?? 0);
+  261:       if (found === 0) toast.success("Nothing is below its minimum level");
+  262:       else toast.warning(`${found} item${found === 1 ? "" : "s"} below minimum Ã¢â‚¬â€ buyers notified`);
+  263:     },
+  264:     onError: (e: Error) => toast.error(e.message),
+  265:     meta: { organizationId },
+  266:   });
+  267: }
+  268: 
+  269: /* --------------------------------- reads ---------------------------------- */
+  270: 
+  271: /** Purchase orders that are open for receiving, with their outstanding lines. */
+  272: export function useReceivableOrders() {
+  273:   const { organizationId } = useAuth();
+  274:   const { branchId, filterKey } = useActivePropertyFilter();
+  275: 
+  276:   return useQuery({
+  277:     queryKey: ["procurement", "blind-receiving", organizationId, filterKey],
+  278:     enabled: Boolean(organizationId),
+  279:     queryFn: async () => {
+  280:       const { data, error } = await guardedRpc(
+  281:         db,
+  282:         "neo_blind_receiving_orders",
+  283:         {},
+  284:       );
+  285: 
+  286:       if (error) throw new Error(error.message);
+  287: 
+  288:       const rows = Array.isArray(data) ? data : [];
+  289: 
+  290:       return rows
+  291:         .filter((order: any) =>
+  292:           !branchId || order.branch_id === branchId
+  293:         )
+  294:         .map((order: any) => ({
+  295:           id: order.id,
+  296:           order_number: order.order_number,
+  297:           supplier_name: order.supplier_name,
+  298:           branch_id: order.branch_id,
+  299:           deliver_to_location_id: order.deliver_to_location_id,
+  300:           items: Array.isArray(order.items) ? order.items : [],
+  301:         }));
+  302:     },
+  303:   });
+  304: }
+  305: 
+  306: export function outstandingOf(line: Record<string, unknown>): number {
+  307:   const ordered = Number(line["quantity"] ?? 0);
+  308:   const cancelled = Number(line["cancelled_quantity"] ?? 0);
+  309:   const received = Number(line["received_quantity"] ?? 0);
+  310:   return Math.max(ordered - cancelled - received, 0);
+  311: }
+
+============================================================
+FILE: src/routes/_shell.inventory.needs.tsx
+============================================================
+LINES: 241
+    1: import { useState } from "react";
+    2: import { createFileRoute } from "@tanstack/react-router";
+    3: import { OpsGuard } from "@/components/operations/OpsShared";
+    4: import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
+    5: import { QueryState } from "@/components/pms/PmsShared";
+    6: import { Button } from "@/components/ui/button";
+    7: import { Input } from "@/components/ui/input";
+    8: import { Label } from "@/components/ui/label";
+    9: import { Badge } from "@/components/ui/badge";
+   10: import {
+   11:   Select,
+   12:   SelectContent,
+   13:   SelectItem,
+   14:   SelectTrigger,
+   15:   SelectValue,
+   16: } from "@/components/ui/select";
+   17: import { useStockItems, useStockLocations } from "@/lib/inventory-data";
+   18: import { titleCase, type Row } from "@/lib/inventory";
+   19: import {
+   20:   newNeedAttemptKey,
+   21:   useFulfilNeed,
+   22:   useLinkNeedItem,
+   23:   useRouteNeedToProcurement,
+   24:   useStockNeeds,
+   25:   type NeedRow,
+   26: } from "@/lib/stock-need-lifecycle";
+   27: 
+   28: export const Route = createFileRoute("/_shell/inventory/needs")({
+   29:   head: () => ({
+   30:     meta: [
+   31:       { title: "Stock needs and shortages â€” NEÃ˜" },
+   32:       {
+   33:         name: "description",
+   34:         content:
+   35:           "Every reported or system-raised stock need in one queue: issue it from a store, issue part of it, or route the shortage to Procurement with its lineage kept.",
+   36:       },
+   37:       { property: "og:title", content: "Stock needs and shortages â€” NEÃ˜" },
+   38:       {
+   39:         property: "og:description",
+   40:         content:
+   41:           "Fulfil, part-fulfil or route a stock need to Procurement â€” never a dead-end card.",
+   42:       },
+   43:       { property: "og:type", content: "website" },
+   44:       { name: "twitter:card", content: "summary" },
+   45:     ],
+   46:   }),
+   47:   component: GuardedPage,
+   48: });
+   49: 
+   50: function Page() {
+   51:   const needs = useStockNeeds("open");
+   52:   const items = useStockItems();
+   53:   const locations = useStockLocations();
+   54:   const link = useLinkNeedItem();
+   55:   const fulfil = useFulfilNeed();
+   56:   const route = useRouteNeedToProcurement();
+   57: 
+   58:   const [drafts, setDrafts] = useState<Record<string, { location: string; quantity: string }>>({});
+   59:   const [attemptKeys, setAttemptKeys] = useState<Record<string, string>>({});
+   60: 
+   61:   const needRows = (needs.data ?? []) as NeedRow[];
+   62:   const itemRows = (items.data ?? []) as Row[];
+   63:   const locationRows = (locations.data ?? []) as Row[];
+   64: 
+   65:   function draft(id: string) {
+   66:     return drafts[id] ?? { location: "", quantity: "" };
+   67:   }
+   68:   function setDraft(id: string, patch: Partial<{ location: string; quantity: string }>) {
+   69:     setDrafts((d) => ({ ...d, [id]: { ...draft(id), ...patch } }));
+   70:   }
+   71:   function keyFor(id: string) {
+   72:     const existing = attemptKeys[id];
+   73:     if (existing) return existing;
+   74:     const fresh = newNeedAttemptKey();
+   75:     setAttemptKeys((k) => ({ ...k, [id]: fresh }));
+   76:     return fresh;
+   77:   }
+   78: 
+   79:   return (
+   80:     <div className="space-y-6">
+   81:       <PageHeader
+   82:         eyebrow="Supply Chain"
+   83:         title="Stock needs and shortages"
+   84:         description="One queue for every need, whether a department reported it or stock fell to its reorder point. Issue it from a store, issue part of it, or send the shortage to Procurement â€” the lineage from need to purchase request is kept."
+   85:       />
+   86: 
+   87:       <SectionCard
+   88:         title="Open needs"
+   89:         description="Each need stays here until it is issued in full or declined."
+   90:       >
+   91:         <QueryState
+   92:           isLoading={needs.isLoading}
+   93:           error={needs.error}
+   94:           isEmpty={needRows.length === 0}
+   95:           empty={
+   96:             <p className="py-6 text-sm text-muted-foreground">
+   97:               Nothing is outstanding â€” no department has reported a need.
+   98:             </p>
+   99:           }
+  100:         >
+  101:           <ul className="divide-y divide-border">
+  102:             {needRows.map((n) => {
+  103:               const id = String(n["id"]);
+  104:               const requested = Number(n["quantity"] ?? 0);
+  105:               const done = Number(n["fulfilled_quantity"] ?? 0);
+  106:               const outstanding = Math.max(requested - done, 0);
+  107:               const linkedItem = n["stock_item_id"] ? String(n["stock_item_id"]) : "";
+  108:               const pr = n["purchase_requests"] as Row | null;
+  109:               const d = draft(id);
+  110:               return (
+  111:                 <li key={id} className="space-y-3 py-4">
+  112:                   <div className="flex flex-wrap items-start justify-between gap-2">
+  113:                     <div>
+  114:                       <p className="font-medium">{String(n["item"] ?? "Item not named")}</p>
+  115:                       <p className="text-xs text-muted-foreground">
+  116:                         {String((n["departments"] as Row | null)?.["name"] ?? "Department")} Â·{" "}
+  117:                         {requested} {String(n["unit"] ?? "")} requested
+  118:                         {done > 0 ? ` Â· ${done} issued Â· ${outstanding} outstanding` : ""}
+  119:                       </p>
+  120:                       {pr ? (
+  121:                         <p className="text-xs text-muted-foreground">
+  122:                           With Procurement as {String(pr["request_number"] ?? "a request")} (
+  123:                           {titleCase(String(pr["status"] ?? ""))})
+  124:                         </p>
+  125:                       ) : null}
+  126:                     </div>
+  127:                     <Badge variant="outline">{titleCase(String(n["status"] ?? "reported"))}</Badge>
+  128:                   </div>
+  129: 
+  130:                   <div className="grid gap-3 sm:grid-cols-4">
+  131:                     <div className="space-y-2 sm:col-span-2">
+  132:                       <Label>Stock item</Label>
+  133:                       <Select
+  134:                         value={linkedItem}
+  135:                         onValueChange={(v) => link.mutate({ needId: id, stockItemId: v })}
+  136:                       >
+  137:                         <SelectTrigger>
+  138:                           <SelectValue placeholder="Link to a catalogue item" />
+  139:                         </SelectTrigger>
+  140:                         <SelectContent>
+  141:                           {itemRows.map((it) => (
+  142:                             <SelectItem key={String(it["id"])} value={String(it["id"])}>
+  143:                               {String(it["name"])}
+  144:                             </SelectItem>
+  145:                           ))}
+  146:                         </SelectContent>
+  147:                       </Select>
+  148:                     </div>
+  149:                     <div className="space-y-2">
+  150:                       <Label>Issue from</Label>
+  151:                       <Select
+  152:                         value={d.location}
+  153:                         onValueChange={(v) => setDraft(id, { location: v })}
+  154:                       >
+  155:                         <SelectTrigger>
+  156:                           <SelectValue placeholder="Store" />
+  157:                         </SelectTrigger>
+  158:                         <SelectContent>
+  159:                           {locationRows.map((l) => (
+  160:                             <SelectItem key={String(l["id"])} value={String(l["id"])}>
+  161:                               {String(l["name"])}
+  162:                             </SelectItem>
+  163:                           ))}
+  164:                         </SelectContent>
+  165:                       </Select>
+  166:                     </div>
+  167:                     <div className="space-y-2">
+  168:                       <Label htmlFor={`need-qty-${id}`}>Quantity</Label>
+  169:                       <Input
+  170:                         id={`need-qty-${id}`}
+  171:                         type="number"
+  172:                         min={0}
+  173:                         step="0.01"
+  174:                         placeholder={String(outstanding)}
+  175:                         value={d.quantity}
+  176:                         onChange={(e) => setDraft(id, { quantity: e.target.value })}
+  177:                       />
+  178:                     </div>
+  179:                   </div>
+  180: 
+  181:                   <div className="flex flex-wrap justify-end gap-2">
+  182:                     <Button
+  183:                       size="sm"
+  184:                       disabled={
+  185:                         !linkedItem ||
+  186:                         !d.location ||
+  187:                         !(Number(d.quantity) > 0) ||
+  188:                         fulfil.isPending
+  189:                       }
+  190:                       onClick={() =>
+  191:                         fulfil.mutate(
+  192:                           {
+  193:                             needId: id,
+  194:                             locationId: d.location,
+  195:                             quantity: Number(d.quantity),
+  196:                             attemptKey: keyFor(id),
+  197:                           },
+  198:                           {
+  199:                             onSuccess: () => {
+  200:                               setDraft(id, { quantity: "" });
+  201:                               setAttemptKeys((k) => ({ ...k, [id]: newNeedAttemptKey() }));
+  202:                             },
+  203:                           },
+  204:                         )
+  205:                       }
+  206:                     >
+  207:                       Issue from store
+  208:                     </Button>
+  209:                     {/* A purchase can only be received into stock when the need
+  210:                         points at a catalogue item, so linking comes first. */}
+  211:                     {!linkedItem ? (
+  212:                       <span className="self-center text-xs text-muted-foreground">
+  213:                         Link a stock item to send this to Procurement
+  214:                       </span>
+  215:                     ) : null}
+  216:                     <Button
+  217:                       size="sm"
+  218:                       variant="outline"
+  219:                       disabled={route.isPending || !linkedItem}
+  220:                       onClick={() => route.mutate({ needId: id })}
+  221:                     >
+  222:                       Route to Procurement
+  223:                     </Button>
+  224:                   </div>
+  225:                 </li>
+  226:               );
+  227:             })}
+  228:           </ul>
+  229:         </QueryState>
+  230:       </SectionCard>
+  231:     </div>
+  232:   );
+  233: }
+  234: 
+  235: function GuardedPage() {
+  236:   return (
+  237:     <OpsGuard path="/inventory/needs">
+  238:       <Page />
+  239:     </OpsGuard>
+  240:   );
+  241: }
+
+============================================================
+FILE: src/routes/_shell.inventory.requisitions.tsx
+============================================================
+LINES: 535
+    1: import { useMemo, useState } from "react";
+    2: import { createFileRoute } from "@tanstack/react-router";
+    3: import { PackageSearch } from "lucide-react";
+    4: import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+    5: import { EmptyState, OpsGuard } from "@/components/operations/OpsShared";
+    6: import { QueryState } from "@/components/common/StateSystem";
+    7: import {
+    8:   RequisitionWorkspace,
+    9:   RequisitionLineItems,
+   10:   InspectorSection,
+   11:   type RequisitionRow,
+   12:   type RequisitionLineRow,
+   13: } from "@/components/common/RequisitionWorkspace";
+   14: import type { SummaryFigure } from "@/components/common/SummaryStrip";
+   15: import { Button } from "@/components/ui/button";
+   16: import { Input } from "@/components/ui/input";
+   17: import { CatalogueGroup, CatalogueRow } from "@/components/common/CatalogueWorkspace";
+   18: import { Textarea } from "@/components/ui/textarea";
+   19: import {
+   20:   Select,
+   21:   SelectContent,
+   22:   SelectItem,
+   23:   SelectTrigger,
+   24:   SelectValue,
+   25: } from "@/components/ui/select";
+   26: import { useStockLocations, useStockItems } from "@/lib/inventory-data";
+   27: import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+   28: import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
+   29: import { useAuth } from "@/lib/auth";
+   30: import { titleCase } from "@/lib/operations";
+   31: import {
+   32:   num,
+   33:   str,
+   34:   useAllDepartmentStockNeeds,
+   35:   useAssignRequisitionStockItem,
+   36:   useIssueRequisition,
+   37:   useSetIssuingStore,
+   38:   useRaiseReplenishment,
+   39:   useRejectRequisition,
+   40:   useStoresAvailability,
+   41:   useStoresRequisitions,
+   42:   type StoresRow,
+   43: } from "@/lib/stores-department";
+   44: 
+   45: export const Route = createFileRoute("/_shell/inventory/requisitions")({
+   46:   head: () => ({
+   47:     meta: [
+   48:       { title: "Department requests â€” Stores â€” NEÃ˜" },
+   49:       {
+   50:         name: "description",
+   51:         content:
+   52:           "Requests from every department in one Stores queue: check availability, issue in full or in part, return with a reason or send the shortage to Procurement.",
+   53:       },
+   54:       { property: "og:title", content: "Department requests â€” Stores â€” NEÃ˜" },
+   55:       {
+   56:         property: "og:description",
+   57:         content:
+   58:           "The Storekeeper's queue of department requisitions, with live availability and partial issuing.",
+   59:       },
+   60:       { property: "og:type", content: "website" },
+   61:       { name: "twitter:card", content: "summary" },
+   62:     ],
+   63:   }),
+   64:   component: () => (
+   65:     <OpsGuard module="stores" action="requisitions.view">
+   66:       <StoresRequisitionsPage />
+   67:     </OpsGuard>
+   68:   ),
+   69: });
+   70: 
+   71: const STATUS_TONE: Record<string, "success" | "warning" | "destructive" | "info" | "default"> = {
+   72:   "awaiting-stores": "warning",
+   73:   "ready-for-issue": "info",
+   74:   "partially-approved": "warning",
+   75:   "partially-issued": "warning",
+   76:   issued: "success",
+   77:   received: "success",
+   78:   rejected: "destructive",
+   79: };
+   80: 
+   81: function outstandingOf(line: StoresRow) {
+   82:   return Math.max(
+   83:     num(line["quantity_approved"] ?? line["quantity_requested"]) - num(line["quantity_issued"]),
+   84:     0,
+   85:   );
+   86: }
+   87: 
+   88: function StoresRequisitionsPage() {
+   89:   const { can } = useAuth();
+   90:   const mayIssue = can("stores", "requisitions.edit") || can("stores", "issues.create");
+   91:   const mayRelease =
+   92:     can("stores", "approve") ||
+   93:     can("stores", "requisitions.approve") ||
+   94:     can("restaurant", "approve") ||
+   95:     can("housekeeping", "approve") ||
+   96:     can("maintenance", "approve");
+   97: 
+   98:   const [scope, setScope] = useState<"open" | "all">("open");
+   99:   const requisitions = useStoresRequisitions(scope);
+  100:   const availabilityQuery = useStoresAvailability();
+  101:   const needs = useAllDepartmentStockNeeds("pending");
+  102: 
+  103:   const assignStockItem = useAssignRequisitionStockItem();
+  104:   const stockItemsQuery = useStockItems();
+  105:   const issue = useIssueRequisition();
+  106:   const reject = useRejectRequisition();
+  107:   const replenish = useRaiseReplenishment();
+  108:   const setStore = useSetIssuingStore();
+  109:   const locationsQuery = useStockLocations();
+  110: 
+  111:   const [selectedId, setSelectedId] = useState<string | null>(null);
+  112:   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  113:   const [reason, setReason] = useState("");
+  114:   const [issueAttemptId, setIssueAttemptId] = useState(() => crypto.randomUUID());
+  115: 
+  116:   const availability = useMemo(
+  117:     () => availabilityQuery.data ?? new Map<string, number>(),
+  118:     [availabilityQuery.data],
+  119:   );
+  120:   const rows = (requisitions.data ?? []) as StoresRow[];
+  121:   const needRows = (needs.data ?? []) as StoresRow[];
+  122: 
+  123:   const select = (id: string | null) => {
+  124:     setSelectedId(id);
+  125:     setDrafts({});
+  126:     setReason("");
+  127:   };
+  128: 
+  129:   const awaitingApprovalCount = rows.filter(
+  130:     (r) => str(r["status"], "") === "pending-supervisor",
+  131:   ).length;
+  132:   const readyCount = rows.filter((r) =>
+  133:     ["awaiting-stores", "ready-for-issue", "partially-approved"].includes(
+  134:       str(r["status"], ""),
+  135:     ),
+  136:   ).length;
+  137:   const issuedCount = rows.filter((r) =>
+  138:     ["issued", "received"].includes(str(r["status"], "")),
+  139:   ).length;
+  140: 
+  141:   const lead: SummaryFigure = {
+  142:     id: "total",
+  143:     label: "Department requests",
+  144:     value: requisitions.isLoading ? "â€¦" : rows.length,
+  145:     hint: scope === "open" ? "Open requests" : "All requests",
+  146:   };
+  147:   const figures: SummaryFigure[] = [
+  148:     {
+  149:       id: "awaiting",
+  150:       label: "Awaiting approval",
+  151:       value: requisitions.isLoading ? "â€¦" : awaitingApprovalCount,
+  152:       tone: awaitingApprovalCount ? "warning" : "success",
+  153:     },
+  154:     {
+  155:       id: "ready",
+  156:       label: "Ready to issue",
+  157:       value: requisitions.isLoading ? "â€¦" : readyCount,
+  158:       tone: readyCount ? "info" : "default",
+  159:     },
+  160:     {
+  161:       id: "issued",
+  162:       label: "Issued / received",
+  163:       value: requisitions.isLoading ? "â€¦" : issuedCount,
+  164:       tone: "success",
+  165:     },
+  166:   ];
+  167: 
+  168:   const workspaceRows: RequisitionRow[] = rows.map((r) => {
+  169:     const status = str(r["status"], "awaiting-stores");
+  170:     const department = str((r["departments"] as StoresRow | null)?.["name"], "Department");
+  171:     return {
+  172:       id: String(r["id"]),
+  173:       title: `${str(r["request_number"], "Requisition")} â€” ${department}`,
+  174:       subtitle: `${titleCase(str(r["priority"], "normal"))} priority Â· ${str(r["reason"], "No reason given")}`,
+  175:       chips: <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>,
+  176:     };
+  177:   });
+  178: 
+  179:   const renderInspector = (id: string) => {
+  180:     const requisition = rows.find((r) => String(r["id"]) === id);
+  181:     if (!requisition) return null;
+  182: 
+  183:     const lines = (requisition["internal_requisition_lines"] ?? []) as StoresRow[];
+  184:     const status = str(requisition["status"], "awaiting-stores");
+  185:     const awaitingApproval = status === "pending-supervisor";
+  186:     const approvedForIssue = [
+  187:       "ready-for-issue",
+  188:       "partially-approved",
+  189:       "partially-issued",
+  190:     ].includes(status);
+  191:     const canIssue = false; // E07-B: disabled until inventory certification
+  192:     const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
+  193:     const sourceStoreId = str(requisition["source_location_id"], "");
+  194:     const sourceStoreName = str(
+  195:       (requisition["source_store"] as StoresRow | null)?.["name"],
+  196:       "Not chosen yet",
+  197:     );
+  198:     const storeOptions = (locationsQuery.data ?? []).filter(
+  199:       (l) => (l as StoresRow)["active"] !== false,
+  200:     ) as StoresRow[];
+  201:     const totalRequested = lines.reduce((sum, line) => sum + num(line["quantity_requested"]), 0);
+  202:     const totalIssued = lines.reduce((sum, line) => sum + num(line["quantity_issued"]), 0);
+  203:     const fullyIssued = totalRequested > 0 && totalIssued >= totalRequested;
+  204: 
+  205:     const shortage = lines.some((line) => {
+  206:       const itemId = str(line["stock_item_id"], "");
+  207:       const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+  208:       return outstandingOf(line) > onHand;
+  209:     });
+  210: 
+  211:     const issueLines = lines
+  212:       .map((line) => {
+  213:         const lineId = String(line["id"]);
+  214:         const typed = drafts[lineId];
+  215:         const quantity = typed === undefined || typed === "" ? outstandingOf(line) : Number(typed);
+  216:         return { id: lineId, quantity_issued: Number.isFinite(quantity) ? quantity : 0 };
+  217:       })
+  218:       .filter((line) => line.quantity_issued > 0);
+  219: 
+  220:     const lineRows: RequisitionLineRow[] = lines.map((line) => {
+  221:       const lineId = String(line["id"]);
+  222:       const itemId = str(line["stock_item_id"], "");
+  223:       const onHand = itemId ? (availability.get(itemId) ?? 0) : 0;
+  224:       const outstanding = outstandingOf(line);
+  225:       const short = outstanding > onHand;
+  226:       return {
+  227:         id: lineId,
+  228:         name: str(
+  229:           (line["stock_items"] as StoresRow | null)?.["name"],
+  230:           str(line["description"], "Item"),
+  231:         ),
+  232:         unit: str(line["unit"], "unit"),
+  233:         requested: num(line["quantity_requested"]),
+  234:         outstanding,
+  235:         available: onHand,
+  236:         shortage: short,
+  237:         control:
+  238:           canIssue && outstanding > 0 ? (
+  239:             <Input
+  240:               className="ml-auto h-8 w-24 text-right"
+  241:               inputMode="decimal"
+  242:               placeholder={String(Math.min(outstanding, onHand))}
+  243:               value={drafts[lineId] ?? ""}
+  244:               onChange={(e) => setDrafts((prev) => ({ ...prev, [lineId]: e.target.value }))}
+  245:             />
+  246:           ) : (
+  247:             <span className="text-xs text-muted-foreground">â€”</span>
+  248:           ),
+  249:       };
+  250:     });
+  251: 
+  252:     return {
+  253:       title: `${str(requisition["request_number"], "Requisition")} â€” ${department}`,
+  254:       subtitle: `${titleCase(str(requisition["priority"], "normal"))} priority`,
+  255:       chips: (
+  256:         <>
+  257:           <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>
+  258:           {requisition["purchase_request_id"] ? (
+  259:             <StatusPill tone="info">Replenishment raised</StatusPill>
+  260:           ) : null}
+  261:         </>
+  262:       ),
+  263:       sections: (
+  264:         <>
+  265:           <InspectorSection
+  266:             title="Request"
+  267:             actions={
+  268:               <DocumentPrintButton
+  269:                 type="requisition"
+  270:                 id={id}
+  271:                 label="Print requisition"
+  272:                 variant="ghost"
+  273:               />
+  274:             }
+  275:           >
+  276:             <p className="text-sm text-muted-foreground">
+  277:               {str(requisition["reason"], "No reason given")}
+  278:             </p>
+  279:           </InspectorSection>
+  280:           {mayIssue && ["pending-supervisor", "awaiting-stores"].includes(status) ? (
+  281:             <InspectorSection title="Match requested items to inventory">
+  282:               <div className="space-y-4">
+  283:                 {lines.map((line) => {
+  284:                   const lineId = String(line["id"]);
+  285:                   const currentItemId = str(line["stock_item_id"], "");
+  286: 
+  287:                   return (
+  288:                     <div key={lineId} className="space-y-2 rounded-lg border p-3">
+  289:                       <p className="text-sm font-medium">
+  290:                         {str(line["description"], "Requested item")}
+  291:                       </p>
+  292: 
+  293:                       <p className="text-xs text-muted-foreground">
+  294:                         Requested: {num(line["quantity_requested"])} {str(line["unit"], "units")}
+  295:                       </p>
+  296: 
+  297:                       <Select
+  298:                         value={currentItemId}
+  299:                         disabled={assignStockItem.isPending}
+  300:                         onValueChange={(stockItemId) =>
+  301:                           assignStockItem.mutate({
+  302:                             requisitionId: id,
+  303:                             lineId,
+  304:                             stockItemId,
+  305:                           })
+  306:                         }
+  307:                       >
+  308:                         <SelectTrigger className="h-9">
+  309:                           <SelectValue placeholder="Select actual inventory item" />
+  310:                         </SelectTrigger>
+  311: 
+  312:                         <SelectContent>
+  313:                           {((stockItemsQuery.data ?? []) as StoresRow[]).map((item) => (
+  314:                             <SelectItem key={String(item["id"])} value={String(item["id"])}>
+  315:                               {str(item["name"], "Inventory item")}
+  316:                             </SelectItem>
+  317:                           ))}
+  318:                         </SelectContent>
+  319:                       </Select>
+  320: 
+  321:                       {currentItemId ? (
+  322:                         <p className="text-xs text-muted-foreground">
+  323:                           Inventory item linked
+  324:                         </p>
+  325:                       ) : (
+  326:                         <p className="text-xs text-amber-700">
+  327:                           Match this request to an inventory item before issuing.
+  328:                         </p>
+  329:                       )}
+  330:                     </div>
+  331:                   );
+  332:                 })}
+  333:               </div>
+  334:             </InspectorSection>
+  335:           ) : null}
+  336: 
+  337:           <InspectorSection title="Line items & availability">
+  338:             <RequisitionLineItems lines={lineRows} />
+  339:             <p className="mt-2 text-xs text-muted-foreground">
+  340:               Leave a quantity blank to issue the full outstanding amount. A partial issue keeps
+  341:               the balance open.
+  342:             </p>
+  343:           </InspectorSection>
+  344: 
+  345:           <InspectorSection title="Progress">
+  346:             <div className="space-y-1 text-sm">
+  347:               <p>
+  348:                 <span className="text-muted-foreground">Stage: </span>
+  349:                 {awaitingApproval
+  350:                   ? "Waiting on departmental approval before Stores can issue"
+  351:                   : fullyIssued
+  352:                     ? "Issued in full â€” this request is closed"
+  353:                     : totalIssued > 0
+  354:                       ? "Partly issued â€” the balance stays open until the rest is released"
+  355:                       : "Approved and with Stores, waiting to be issued"}
+  356:               </p>
+  357:               <p className="text-muted-foreground">
+  358:                 {totalIssued} of {totalRequested} requested issued
+  359:                 {requisition["issued_at"]
+  360:                   ? ` Â· last issued ${new Date(String(requisition["issued_at"])).toLocaleString()}`
+  361:                   : ""}
+  362:               </p>
+  363:             </div>
+  364:           </InspectorSection>
+  365: 
+  366:           {canIssue ? (
+  367:             <InspectorSection title="Issuing store">
+  368:               <p className="mb-2 text-sm text-muted-foreground">
+  369:                 Stock leaves from: <span className="text-foreground">{sourceStoreName}</span>
+  370:               </p>
+  371:               <Select
+  372:                 value={sourceStoreId}
+  373:                 onValueChange={(v) => setStore.mutate({ requisitionId: id, locationId: v })}
+  374:               >
+  375:                 <SelectTrigger className="h-9">
+  376:                   <SelectValue placeholder="Choose the store this will be issued from" />
+  377:                 </SelectTrigger>
+  378:                 <SelectContent>
+  379:                   {storeOptions.map((l) => (
+  380:                     <SelectItem key={String(l["id"])} value={String(l["id"])}>
+  381:                       {str(l["name"], "Store")}
+  382:                       {l["code"] ? ` Â· ${str(l["code"])}` : ""}
+  383:                     </SelectItem>
+  384:                   ))}
+  385:                 </SelectContent>
+  386:               </Select>
+  387:               {!sourceStoreId ? (
+  388:                 <p className="mt-2 text-xs text-muted-foreground">
+  389:                   Choose a store before issuing â€” stock has to come off a real shelf.
+  390:                 </p>
+  391:               ) : null}
+  392:             </InspectorSection>
+  393:           ) : null}
+  394: 
+  395: 
+  396:           {canIssue ? (
+  397:             <InspectorSection title="Reason">
+  398:               <Textarea
+  399:                 rows={2}
+  400:                 placeholder="Reason â€” required to return this request, or to explain the shortage sent to Procurement"
+  401:                 value={reason}
+  402:                 onChange={(e) => setReason(e.target.value)}
+  403:               />
+  404:             </InspectorSection>
+  405:           ) : null}
+  406:         </>
+  407:       ),
+  408:       footer: (
+  409:         <>
+  410:           {canIssue ? (
+  411:             <>
+  412:               <Button
+  413:                 disabled={
+  414:                   issue.isPending ||
+  415:                   issueLines.length === 0 ||
+  416:                   !sourceStoreId ||
+  417:                   issueLines.some((entry) =>
+  418:                     !lines.some(
+  419:                       (line) =>
+  420:                         String(line["id"]) === entry.id &&
+  421:                         Boolean(line["stock_item_id"]),
+  422:                     ),
+  423:                   )
+  424:                 }
+  425:                 onClick={() =>
+  426:                   issue.mutate(
+  427:                     {
+  428:                       requisitionId: id,
+  429:                       lines: issueLines,
+  430:                       attemptId: issueAttemptId,
+  431:                     },
+  432:                     {
+  433:                       onSuccess: () => setIssueAttemptId(crypto.randomUUID()),
+  434:                     },
+  435:                   )
+  436:                 }
+  437:               >
+  438:                 {sourceStoreId
+  439:                   ? `Issue ${issueLines.length} line${issueLines.length === 1 ? "" : "s"}`
+  440:                   : "Choose an issuing store first"}
+  441:               </Button>
+  442:               <Button
+  443:                 variant="outline"
+  444:                 disabled={reject.isPending || reason.trim() === ""}
+  445:                 onClick={() => reject.mutate({ requisitionId: id, reason: reason.trim() })}
+  446:               >
+  447:                 Return with reason
+  448:               </Button>
+  449:               {shortage ? (
+  450:                 <Button
+  451:                   variant="outline"
+  452:                   disabled={replenish.isPending || Boolean(requisition["purchase_request_id"])}
+  453:                   onClick={() =>
+  454:                     replenish.mutate({
+  455:                       requisition,
+  456:                       notes:
+  457:                         reason.trim() || "Stock unavailable to fulfil a department requisition",
+  458:                     })
+  459:                   }
+  460:                 >
+  461:                   Send shortage to Procurement
+  462:                 </Button>
+  463:               ) : null}
+  464:             </>
+  465:           ) : null}
+  466:         </>
+  467:       ),
+  468:     };
+  469:   };
+  470: 
+  471:   return (
+  472:     <div className="space-y-6">
+  473:       <PageHeader
+  474:         eyebrow="Inventory & Stores"
+  475:         title="Department requests"
+  476:         description="Every department asks Stores for what it needs. Check availability, issue in full or in part, return the request with a reason, or route the shortage to Procurement."
+  477:         actions={
+  478:           <Tabs value={scope} onValueChange={(v) => setScope(v as "open" | "all")}>
+  479:             <TabsList>
+  480:               <TabsTrigger value="open">Open</TabsTrigger>
+  481:               <TabsTrigger value="all">All</TabsTrigger>
+  482:             </TabsList>
+  483:           </Tabs>
+  484:         }
+  485:       />
+  486: 
+  487:       <RequisitionWorkspace
+  488:         lead={lead}
+  489:         figures={figures}
+  490:         isLoading={requisitions.isLoading}
+  491:         error={requisitions.error}
+  492:         rows={workspaceRows}
+  493:         emptyState={
+  494:           <EmptyState
+  495:             icon={PackageSearch}
+  496:             title="No department requests"
+  497:             description="Requisitions raised by Housekeeping, Kitchen, Bar, Front Office and the other departments land here once they reach Stores."
+  498:           />
+  499:         }
+  500:         selectedId={selectedId}
+  501:         onSelect={select}
+  502:         renderInspector={renderInspector}
+  503:       />
+  504: 
+  505:       <SectionCard
+  506:         title="Reported stock needs"
+  507:         description="Shortages reported by departments that have not yet become a formal requisition."
+  508:       >
+  509:         <QueryState
+  510:           isLoading={needs.isLoading}
+  511:           error={needs.error}
+  512:           isEmpty={needRows.length === 0}
+  513:           empty={
+  514:             <p className="py-6 text-sm text-muted-foreground">Nothing reported at the moment.</p>
+  515:           }
+  516:         >
+  517:           <CatalogueGroup label="Reported shortages" count={needRows.length}>
+  518:             {needRows.map((row) => (
+  519:               <CatalogueRow
+  520:                 key={String(row["id"])}
+  521:                 title={str(row["item"], "Item")}
+  522:                 subtitle={`${str(
+  523:                   (row["departments"] as StoresRow | null)?.["name"],
+  524:                   titleCase(str(row["module"], "â€”")),
+  525:                 )} Â· ${titleCase(str(row["priority"], "normal"))}`}
+  526:                 trailing={`${num(row["quantity"])} ${str(row["unit"], "unit")}`}
+  527:               />
+  528:             ))}
+  529:           </CatalogueGroup>
+  530:         </QueryState>
+  531: 
+  532:       </SectionCard>
+  533:     </div>
+  534:   );
+  535: }
+
+============================================================
+FILE: src/routes/_shell.marketing.supplies.tsx
+============================================================
+LINES: 230
+    1: import { useState } from "react";
+    2: import { createFileRoute } from "@tanstack/react-router";
+    3: import { PackageSearch } from "lucide-react";
+    4: import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+    5: import { EmptyState, OpsGuard, QueryState } from "@/components/operations/OpsShared";
+    6: import { Button } from "@/components/ui/button";
+    7: import { Input } from "@/components/ui/input";
+    8: import { Label } from "@/components/ui/label";
+    9: import {
+   10:   Table,
+   11:   TableBody,
+   12:   TableCell,
+   13:   TableHead,
+   14:   TableHeader,
+   15:   TableRow,
+   16: } from "@/components/ui/table";
+   17: import { useAuth } from "@/lib/auth";
+   18: import { titleCase } from "@/lib/operations";
+   19: import {
+   20:   MKT_SUPPLY_SUGGESTIONS,
+   21:   num,
+   22:   str,
+   23:   useMarketingStockNeeds,
+   24:   useReportMarketingStockNeed,
+   25:   useReviewMarketingStockNeed,
+   26:   type MktRow,
+   27: } from "@/lib/marketing-department";
+   28: 
+   29: export const Route = createFileRoute("/_shell/marketing/supplies")({
+   30:   head: () => ({
+   31:     meta: [
+   32:       { title: "Marketing Supplies â€” NEÃ˜" },
+   33:       {
+   34:         name: "description",
+   35:         content:
+   36:           "Brochures, banners and branded material requested by the marketing team and reviewed by the Marketing Manager.",
+   37:       },
+   38:       { property: "og:title", content: "Marketing Supplies â€” NEÃ˜" },
+   39:       {
+   40:         property: "og:description",
+   41:         content:
+   42:           "Report what marketing is short of. Stock and purchasing stay owned by Stores and Procurement.",
+   43:       },
+   44:       { property: "og:type", content: "website" },
+   45:       { name: "twitter:card", content: "summary" },
+   46:     ],
+   47:   }),
+   48:   component: () => (
+   49:     <OpsGuard module="marketing" action="stock_needs.view">
+   50:       <MarketingSuppliesPage />
+   51:     </OpsGuard>
+   52:   ),
+   53: });
+   54: 
+   55: const NEED_TONE: Record<string, "success" | "warning" | "destructive" | "default"> = {
+   56:   pending: "warning",
+   57:   acknowledged: "default",
+   58:   requisitioned: "success",
+   59:   declined: "destructive",
+   60:   closed: "default",
+   61: };
+   62: 
+   63: function MarketingSuppliesPage() {
+   64:   const { can } = useAuth();
+   65:   const mayReview = can("marketing", "stock_needs.approve");
+   66: 
+   67:   const needs = useMarketingStockNeeds("all");
+   68:   const report = useReportMarketingStockNeed();
+   69:   const review = useReviewMarketingStockNeed();
+   70: 
+   71:   const [item, setItem] = useState("");
+   72:   const [quantity, setQuantity] = useState("1");
+   73:   const [notes, setNotes] = useState("");
+   74: 
+   75:   const rows = (needs.data ?? []) as MktRow[];
+   76: 
+   77:   return (
+   78:     <div className="space-y-6">
+   79:       <PageHeader
+   80:         eyebrow="Marketing"
+   81:         title="Supply needs"
+   82:         description="The team reports what it is short of. The Marketing Manager decides whether it becomes a Stores requisition â€” nobody here raises one directly."
+   83:       />
+   84: 
+   85:       <SectionCard
+   86:         title="Report a need"
+   87:         description={`Common items: ${MKT_SUPPLY_SUGGESTIONS.join(", ")}.`}
+   88:       >
+   89:         <div className="grid gap-3 md:grid-cols-4">
+   90:           <div className="space-y-1.5 md:col-span-2">
+   91:             <Label htmlFor="need-item">Item</Label>
+   92:             <Input
+   93:               id="need-item"
+   94:               value={item}
+   95:               onChange={(e) => setItem(e.target.value)}
+   96:               placeholder="Roll-up banners for the expo stand"
+   97:             />
+   98:           </div>
+   99:           <div className="space-y-1.5">
+  100:             <Label htmlFor="need-qty">Quantity</Label>
+  101:             <Input
+  102:               id="need-qty"
+  103:               type="number"
+  104:               min="1"
+  105:               value={quantity}
+  106:               onChange={(e) => setQuantity(e.target.value)}
+  107:             />
+  108:           </div>
+  109:           <div className="flex items-end">
+  110:             <Button
+  111:               className="w-full"
+  112:               disabled={!item.trim() || report.isPending}
+  113:               onClick={() =>
+  114:                 report.mutate(
+  115:                   { item, quantity: Number(quantity) || 1, notes },
+  116:                   {
+  117:                     onSuccess: () => {
+  118:                       setItem("");
+  119:                       setQuantity("1");
+  120:                       setNotes("");
+  121:                     },
+  122:                   },
+  123:                 )
+  124:               }
+  125:             >
+  126:               Report need
+  127:             </Button>
+  128:           </div>
+  129:           <div className="space-y-1.5 md:col-span-4">
+  130:             <Label htmlFor="need-notes">Notes</Label>
+  131:             <Input
+  132:               id="need-notes"
+  133:               value={notes}
+  134:               onChange={(e) => setNotes(e.target.value)}
+  135:               placeholder="Needed before the trade show on the 14th"
+  136:             />
+  137:           </div>
+  138:         </div>
+  139:       </SectionCard>
+  140: 
+  141:       <SectionCard
+  142:         title="Reported needs"
+  143:         description="Every marketing supply need for this property."
+  144:       >
+  145:         <QueryState
+  146:           isLoading={needs.isLoading}
+  147:           error={needs.error}
+  148:           isEmpty={rows.length === 0}
+  149:           empty={
+  150:             <EmptyState
+  151:               title="No supply needs reported"
+  152:               description="Report a shortage and it appears here for the Marketing Manager to review."
+  153:               icon={PackageSearch}
+  154:             />
+  155:           }
+  156:         >
+  157:           <div className="overflow-x-auto">
+  158:             <Table>
+  159:               <TableHeader>
+  160:                 <TableRow>
+  161:                   <TableHead>Item</TableHead>
+  162:                   <TableHead className="text-right">Quantity</TableHead>
+  163:                   <TableHead>Priority</TableHead>
+  164:                   <TableHead>Status</TableHead>
+  165:                   <TableHead className="text-right">Review</TableHead>
+  166:                 </TableRow>
+  167:               </TableHeader>
+  168:               <TableBody>
+  169:                 {rows.map((row) => {
+  170:                   const status = str(row["status"], "pending");
+  171:                   const open = ["pending", "acknowledged"].includes(status);
+  172:                   return (
+  173:                     <TableRow key={String(row["id"])}>
+  174:                       <TableCell>
+  175:                         <p className="font-medium">{str(row["item"], "Item")}</p>
+  176:                         <p className="text-xs text-muted-foreground">
+  177:                           {str(row["notes"], "No notes")}
+  178:                         </p>
+  179:                       </TableCell>
+  180:                       <TableCell className="text-right">
+  181:                         {num(row["quantity"])} {str(row["unit"], "unit")}
+  182:                       </TableCell>
+  183:                       <TableCell>{titleCase(str(row["priority"], "normal"))}</TableCell>
+  184:                       <TableCell>
+  185:                         <StatusPill tone={NEED_TONE[status] ?? "default"}>
+  186:                           {titleCase(status)}
+  187:                         </StatusPill>
+  188:                       </TableCell>
+  189:                       <TableCell className="text-right">
+  190:                         {mayReview && open ? (
+  191:                           <div className="flex justify-end gap-2">
+  192:                             <Button
+  193:                               size="sm"
+  194:                               variant="outline"
+  195:                               disabled={review.isPending}
+  196:                               onClick={() =>
+  197:                                 review.mutate({
+  198:                                   needId: String(row["id"]),
+  199:                                   decision: "acknowledge",
+  200:                                 })
+  201:                               }
+  202:                             >
+  203:                               Acknowledge
+  204:                             </Button>
+  205:                             <Button
+  206:                               size="sm"
+  207:                               variant="outline"
+  208:                               disabled={review.isPending}
+  209:                               onClick={() =>
+  210:                                 review.mutate({ needId: String(row["id"]), decision: "decline" })
+  211:                               }
+  212:                             >
+  213:                               Decline
+  214:                             </Button>
+  215:                           </div>
+  216:                         ) : (
+  217:                           <span className="text-xs text-muted-foreground">â€”</span>
+  218:                         )}
+  219:                       </TableCell>
+  220:                     </TableRow>
+  221:                   );
+  222:                 })}
+  223:               </TableBody>
+  224:             </Table>
+  225:           </div>
+  226:         </QueryState>
+  227:       </SectionCard>
+  228:     </div>
+  229:   );
+  230: }
+
+============================================================
+FILE: src/lib/__tests__/transfer-and-need-lifecycle.test.ts
+============================================================
+LINES: 69
+    1: import { describe, expect, it } from "vitest";
+    2: import { readFileSync, readdirSync } from "node:fs";
+    3: import { resolve } from "node:path";
+    4: import { RPC_MANIFEST } from "@/lib/rpc-manifest";
+    5: 
+    6: const migrations = (() => {
+    7:   const dir = resolve(process.cwd(), "supabase/migrations");
+    8:   return readdirSync(dir)
+    9:     .map((f) => readFileSync(resolve(dir, f), "utf8"))
+   10:     .join("\n");
+   11: })();
+   12: 
+   13: const transfers = readFileSync(resolve(process.cwd(), "src/lib/stock-transfers.ts"), "utf8");
+   14: const needs = readFileSync(resolve(process.cwd(), "src/lib/stock-need-lifecycle.ts"), "utf8");
+   15: 
+   16: describe("store transfer is its own transaction type", () => {
+   17:   it("dispatches and receives through dedicated canonical routines", () => {
+   18:     expect(transfers).toContain("neo_stores_transfer_create");
+   19:     expect(transfers).toContain("neo_stores_transfer_receive");
+   20:     expect(transfers).toContain("neo_stores_transfer_cancel");
+   21:   });
+   22: 
+   23:   it("never records a transfer as a usage or waste movement", () => {
+   24:     expect(transfers).not.toContain("inventory_apply_movement");
+   25:     expect(transfers).not.toMatch(/"(usage|wastage|waste)"/i);
+   26:   });
+   27: 
+   28:   it("carries one attempt key per submission so a retry cannot double-post", () => {
+   29:     expect(transfers).toContain("newTransferAttemptKey");
+   30:     expect(transfers).toContain("_attempt: input.attemptKey");
+   31:   });
+   32: 
+   33:   it("posts the source out and the destination in as separate ledger effects", () => {
+   34:     expect(migrations).toContain("'transfer-out'");
+   35:     expect(migrations).toContain("'transfer-in'");
+   36:   });
+   37: });
+   38: 
+   39: describe("stock need lifecycle", () => {
+   40:   it("can be issued in full or in part, or routed to procurement", () => {
+   41:     expect(needs).toContain("neo_stock_need_fulfil");
+   42:     expect(needs).toContain("neo_stock_need_to_procurement");
+   43:     expect(needs).toContain("neo_stock_need_link_item");
+   44:   });
+   45: 
+   46:   it("keeps the lineage from need to purchase request", () => {
+   47:     expect(needs).toContain("purchase_request_id");
+   48:     expect(needs).toContain("purchase_requests(request_number, status)");
+   49:   });
+   50: 
+   51:   it("reports a reused procurement request instead of raising a second one", () => {
+   52:     expect(needs).toContain('data["duplicate"] === true');
+   53:   });
+   54: });
+   55: 
+   56: describe("callable surface", () => {
+   57:   it("declares every new routine as staff-only", () => {
+   58:     for (const name of [
+   59:       "neo_stores_transfer_create",
+   60:       "neo_stores_transfer_receive",
+   61:       "neo_stores_transfer_cancel",
+   62:       "neo_stock_need_link_item",
+   63:       "neo_stock_need_fulfil",
+   64:       "neo_stock_need_to_procurement",
+   65:     ]) {
+   66:       expect(RPC_MANIFEST[name]).toBe("authenticated");
+   67:     }
+   68:   });
+   69: });
+
+============================================================
+FILE: supabase/migrations/20261022133000_restrict_legacy_req_issue.sql
+============================================================
+LINES: 10
+    1: -- NEÃ˜ E07-B: Restrict legacy requisition issuing.
+    2: -- Apply only after neo_req_issue_safe passes integration tests.
+    3: -- Existing issue records are not modified.
+    4: 
+    5: REVOKE EXECUTE ON FUNCTION public.req_issue(uuid, jsonb)
+    6: FROM PUBLIC, anon, authenticated;
+    7: 
+    8: -- Protected issuing remains available to authenticated users.
+    9: GRANT EXECUTE ON FUNCTION public.neo_req_issue_safe(uuid, jsonb, uuid)
+   10: TO authenticated;
+

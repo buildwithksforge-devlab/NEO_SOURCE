@@ -41,10 +41,10 @@ function TrackOrderPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           Track order
         </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
+        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
           Live progress from the kitchen to your room or your door.
         </p>
       </section>
@@ -69,22 +69,22 @@ function TrackOrderPage() {
               <li key={String(o["id"])} className="rounded-xl border border-black/5 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {String(o["order_number"])}
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {statusLabel(o["fulfilment_type"])} · {statusLabel(o["order_status"])}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(o["grand_total"], String(o["currency"] ?? "KES"))}
                     </p>
                     <Link
                       to="/guest/$hotelSlug/orders/$orderReference"
                       params={{ hotelSlug, orderReference: String(o["order_number"]) }}
                       className="text-xs font-medium"
-                      style={{ color: ws.primary_color }}
+                      style={{ color: "var(--pa-accent-ink)" }}
                     >
                       Follow this order
                     </Link>

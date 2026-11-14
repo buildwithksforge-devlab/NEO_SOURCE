@@ -1,0 +1,33 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite();let checks=0;
+const q=async(s,p=[])=>(await db.query(s,p)).rows;
+const check=async(n,f)=>{await f();checks++;console.log('PASS '+n)};
+const org='91000000-0000-4000-8000-000000000001',branch='91000000-0000-4000-8000-000000000002',id='91000000-0000-4000-8000-000000000003';
+const line={description:'Event meal',category:'food',quantity:2,unit_price:100,taxable:true};
+const price=async(items=[line],discount=0)=>(await q('select neo_event_quotation_price($1,$2::jsonb,$3,16,3,50) as result',[id,JSON.stringify(items),discount]))[0].result;
+try{
+ await db.exec(`create role anon;create role authenticated;create schema auth;
+ create function auth.uid() returns uuid language sql as $$select '${org}'::uuid$$;
+ create function current_org_id() returns uuid language sql as $$select nullif(current_setting('test.org',true),'')::uuid$$;
+ create function has_permission(text,text,text) returns boolean language sql as $$select current_setting('test.permission',true)='yes'$$;
+ create function neo_branch_in_scope(uuid) returns boolean language sql as $$select current_setting('test.branch',true)=$1::text$$;
+ create table event_quotations(id uuid primary key,organization_id uuid,branch_id uuid,status text,subtotal numeric,discount_amount numeric,service_charge_rate numeric,service_charge_amount numeric,tax_rate numeric,tax_amount numeric,grand_total numeric,deposit_percent numeric,deposit_amount numeric,balance_due numeric,updated_by uuid,updated_at timestamptz);
+ create table event_quotation_items(organization_id uuid,quotation_id uuid,category text,description text,quantity numeric,unit text,unit_price numeric,line_total numeric,taxable boolean,unit_cost numeric,sort_order integer);
+ `);
+ await q("select set_config('test.org',$1,false),set_config('test.branch',$2,false),set_config('test.permission','yes',false)",[org,branch]);
+ await q("insert into event_quotations(id,organization_id,branch_id,status) values($1,$2,$3,'draft')",[id,org,branch]);
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261025150000_e01c_quotation_pricing_engine.sql',import.meta.url),'utf8'));
+ await check('quotation lines persist and total follows stored quantities',async()=>{const r=await price();assert.equal(r.line_count,1);assert.equal(r.grand_total,238);assert.equal((await q('select count(*) n from event_quotation_items'))[0].n,1)});
+ await check('pricing retry replaces lines without duplicates',async()=>{await price();assert.equal((await q('select count(*) n from event_quotation_items'))[0].n,1)});
+ await check('an invalid later line rolls back removal of the old lines',async()=>{await assert.rejects(price([line,{...line,description:''}]),/Invalid/);assert.equal((await q('select count(*) n from event_quotation_items'))[0].n,1);assert.equal(Number((await q('select grand_total from event_quotations'))[0].grand_total),238)});
+ await check('discount allocation, tax and deposit remain consistent',async()=>{const r=await price([line,{...line,description:'Untaxed',taxable:false}],100);assert.equal(r.grand_total,333);assert.equal(r.tax,24);assert.equal(r.deposit_required,166.5);assert.equal(r.post_deposit_remainder,166.5)});
+ await check('excessive discount cannot erase previously saved lines',async()=>{await assert.rejects(price([line],999),/Discount/);assert.equal((await q('select count(*) n from event_quotation_items'))[0].n,2)});
+ await check('sent/accepted quotes require revision',async()=>{await q("update event_quotations set status='accepted'");await assert.rejects(price(),/revision/);await q("update event_quotations set status='draft'")});
+ await check('wrong organization cannot reprice',async()=>{await q("select set_config('test.org',$1,false)",[branch]);await assert.rejects(price(),/workspace/);await q("select set_config('test.org',$1,false)",[org])});
+ await check('wrong property cannot reprice',async()=>{await q("select set_config('test.branch',$1,false)",[org]);await assert.rejects(price(),/scope/);await q("select set_config('test.branch',$1,false)",[branch])});
+ await check('missing edit authority cannot reprice',async()=>{await q("select set_config('test.permission','no',false)");await assert.rejects(price(),/permission/);await q("select set_config('test.permission','yes',false)")});
+ await check('anonymous execution is not granted',async()=>assert.equal((await q("select has_function_privilege('anon','neo_event_quotation_price(uuid,jsonb,numeric,numeric,numeric,numeric)','execute') as allowed"))[0].allowed,false));
+ console.log(JSON.stringify({passed:true,checks,scope:'Isolated existing quotation SQL; no operational database connection.'}));
+}catch(e){console.error(e);process.exitCode=1}finally{await db.close()}

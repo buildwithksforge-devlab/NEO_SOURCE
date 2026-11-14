@@ -1,0 +1,12 @@
+{
+  "recordedOn": "2026-11-07",
+  "source": "User-supplied operational SQL Editor postcheck and success screenshots",
+  "diagnostic_version": "pos-room-charge-repair-postcheck-v1",
+  "repair_verified": true,
+  "allSixChecks": true,
+  "verifiedExistingLinks": 3,
+  "matchingInstalledDefinitions": 6,
+  "unchangedRetainedFunctions": 11,
+  "catering_historical_status": "failed",
+  "scope": "Installed code and three existing metadata links; no full original workflow promoted"
+}

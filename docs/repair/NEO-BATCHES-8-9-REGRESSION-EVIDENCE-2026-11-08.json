@@ -1,0 +1,21 @@
+{
+  "mode": "Fresh full offline suite for batches 8-9 application source (batch 9 adds isolated SQL only)",
+  "passed": 3890,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousPasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "previousBatch",
+      "previousPasses": 3821,
+      "retained": 3821,
+      "regressions": []
+    }
+  ],
+  "success": true
+}

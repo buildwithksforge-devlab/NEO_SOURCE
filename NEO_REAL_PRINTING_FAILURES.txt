@@ -1,0 +1,186 @@
+﻿NEO PRINTING - REAL FUNCTIONALITY REVIEW
+Generated: 2026-10-27 11:20:09
+Purpose: Identify missing hardware integration and misleading printing states.
+
+=== 1. PRINTING SOURCE FILES ===
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\DocumentPrintButton.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\permission-fingerprint.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx
+
+=== 2. HARDWARE CONNECTION IMPLEMENTATION ===
+
+PATTERN: navigator.bluetooth
+MATCHES: 0
+
+PATTERN: navigator.usb
+MATCHES: 0
+
+PATTERN: navigator.serial
+MATCHES: 0
+
+PATTERN: BluetoothDevice
+MATCHES: 0
+
+PATTERN: USBDevice
+MATCHES: 0
+
+PATTERN: SerialPort
+MATCHES: 0
+
+PATTERN: escpos
+MATCHES: 0
+
+PATTERN: ESC/POS
+MATCHES: 0
+
+PATTERN: node:net
+MATCHES: 0
+
+PATTERN: net.Socket
+MATCHES: 0
+
+PATTERN: win32print
+MATCHES: 0
+
+PATTERN: StartDocPrinter
+MATCHES: 0
+
+PATTERN: CloudPRNT
+MATCHES: 0
+
+=== 3. MANUAL PRINT SUCCESS REPORTING ===
+
+PATTERN: It printed
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:102: ? "The job is queued. Confirm what actually happened at the printer — NEØ does not assume it printed."
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:166: It printed
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:298: "Queued — record the result once you know whether it printed",
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:328: It printed
+
+PATTERN: recordResult.mutate
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:326: onClick={() => recordResult.mutate({ job: j.id, success: true })}
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:335: recordResult.mutate({
+
+PATTERN: record.mutate
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\P16_PAYMENT_BACKUP_20261026\DeliveryPaymentDialog.tsx:139: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:154: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:164: onClick={() => record.mutate({ job, success: true }, { onSuccess: reset })}
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\delivery\DeliveryPaymentDialog.tsx:168: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\events\EventBillDialog.tsx:95: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\finance\RecordReceiptDialog.tsx:110: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\pms\DepositPanel.tsx:133: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.bar.wastage.tsx:124: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.delivery.verification.tsx:242: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.events.payments.tsx:176: const result = (await record.mutateAsync({
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.finance.till.tsx:165: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.housekeeping.inspections.tsx:358: record.mutate(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.hr.attendance.tsx:203: updateRecord.mutate({ id: String(row["id"]), values: { status: "approved" } })
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.hr.attendance.tsx:315: updateRecord.mutate({ id: String(inspected["id"]), values: { status: "approved" } });
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.hr.documents.tsx:185: record.mutate(
+
+PATTERN: neo_print_record_result
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\F01_MARKETING_BACKUP_20261023_111706\rpc-manifest.ts:362: neo_print_record_result: "authenticated",
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:53703: neo_print_record_result: {
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:334: rpc<Row>("neo_print_record_result", {
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts:362: neo_print_record_result: "authenticated",
+
+PATTERN: health_status='online'
+
+PATTERN: status='completed'
+
+=== 4. AUTOMATIC DEPARTMENT PRINTING ===
+
+PATTERN: station_ticket
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:59: SELECT 1 FROM public.station_tickets k
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:62: UPDATE public.station_tickets SET
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:75: SELECT k.id INTO _target_ticket FROM public.station_tickets k
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:79: INSERT INTO public.station_tickets (
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:97: UPDATE public.station_ticket_items i SET ticket_id = _target_ticket
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:101: SELECT 1 FROM public.station_ticket_items d
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:118: FROM public.station_ticket_items WHERE ticket_id = _target_ticket;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:123: FROM public.station_tickets k
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:139: UPDATE public.station_tickets SET status = _state, updated_at = now()
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:155: FROM public.station_ticket_items WHERE ticket_id = _t.id;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:160: FROM public.station_tickets k
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:176: UPDATE public.station_tickets SET status = _state, updated_at = now()
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026142000_p13_kitchen_station_authority.sql:13: SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:333: FROM public.station_ticket_items ti
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:334: JOIN public.station_tickets t ON t.id = ti.ticket_id
+
+PATTERN: print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:3: CREATE INDEX IF NOT EXISTS print_jobs_pos_receipt_history_idx
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:4: ON public.print_jobs (
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:56: FROM public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:136: FROM public.print_jobs pj
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:154: FROM public.print_jobs pj
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:197: INSERT INTO public.print_jobs (
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:249: jb public.print_jobs;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:257: FROM public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:304: UPDATE public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:349: UPDATE public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:363: UPDATE public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:378: UPDATE public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:406: jb public.print_jobs;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:410: FROM public.print_jobs
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:456: UPDATE public.print_jobs
+
+PATTERN: neo_print_enqueue
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:32: CREATE OR REPLACE FUNCTION public.neo_print_enqueue(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:114: REVOKE ALL ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) FROM PUBLIC;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:117: GRANT EXECUTE ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) TO authenticated;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043914_a0104c81-c391-406d-8d42-f9b16d5930e7.sql:11: REVOKE ALL ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) FROM anon, public;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043914_a0104c81-c391-406d-8d42-f9b16d5930e7.sql:19: GRANT EXECUTE ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) TO authenticated;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:13: CREATE OR REPLACE FUNCTION public.neo_print_enqueue(
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:472: ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:485: ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text)
+
+PATTERN: idempotency_key
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261024110000_f02_event_collection_single_posting.sql:163: idempotency_key, description, currency, created_by, status)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261024120000_f03_guest_deposit_liability_clearing.sql:72: AND r.idempotency_key = 'deposit:' || NEW.id::text
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026100000_s01_events_payment_idempotency.sql:100: AND p.idempotency_key = 'event-intent:' || v_intent
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026100000_s01_events_payment_idempotency.sql:182: source_module, source_record_id, idempotency_key, destination_account_id)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026100000_s01_events_payment_idempotency.sql:224: idempotency_key, description, currency, created_by, status)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026110000_p02_reservation_deposit_atomicity.sql:7: _reference text DEFAULT NULL::text, _idempotency_key text DEFAULT NULL::text,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026110000_p02_reservation_deposit_atomicity.sql:26: IF NULLIF(btrim(COALESCE(_idempotency_key,'')), '') IS NULL THEN RAISE EXCEPTION 'A deposit idempotency key is required'; END IF;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026110000_p02_reservation_deposit_atomicity.sql:33: WHERE organization_id = _org AND idempotency_key = _idempotency_key;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026110000_p02_reservation_deposit_atomicity.sql:42: reference, received_by, idempotency_key, notes)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026110000_p02_reservation_deposit_atomicity.sql:46: auth.uid(), _idempotency_key, _notes)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:77: posting_type, idempotency_key, status, payload
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:504: idempotency_key,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026152000_p16_delivery_payment_idempotency_v2.sql:86: AND idempotency_key = v_key
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026152000_p16_delivery_payment_idempotency_v2.sql:150: source_record_id, idempotency_key, destination_account_id)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026152000_p16_delivery_payment_idempotency_v2.sql:162: idempotency_key, description, currency, created_by, status)
+
+PATTERN: printer_role
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:479: printer_role text NOT NULL DEFAULT 'receipt',
+
+PATTERN: station_id
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:73: _t.station_id := _p.station_id;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:76: WHERE k.order_id = _t.order_id AND k.course = _t.course AND k.station_id = _p.station_id;
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:80: organization_id, branch_id, department_id, order_id, station_id, ticket_number, course,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:86: (SELECT s.department_id FROM public.operational_stations s WHERE s.id = _p.station_id),
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:87: _t.order_id, _p.station_id,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:88: _t.ticket_number || '-' || upper(substr(md5(_p.station_id::text), 1, 4)),
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql:99: AND i.id IN (SELECT link_id FROM _reconcile_items WHERE station_id = _p.station_id)
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026142000_p13_kitchen_station_authority.sql:40: IF _t.station_id IS NOT NULL
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026142000_p13_kitchen_station_authority.sql:41: AND _t.station_id = ANY(public.neo_kitchen_visible_station_ids()) THEN
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026142000_p13_kitchen_station_authority.sql:47: COALESCE((SELECT name FROM public.operational_stations WHERE id = _t.station_id), 'production')
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:158: v_item.station_id,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:159: v_menu.station_id,
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:160: v_recipe.station_id
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:169: AND sl.station_id = v_station
+  C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026143000_p14_direct_stock_recipe_guard.sql:185: 'station_id',v_station
+
+=== 5. PRINT CONNECTOR INFRASTRUCTURE ===
+NO LOCAL PRINT CONNECTOR FILES DETECTED
+
+=== 6. OBSERVED FUNCTIONAL FAILURES ===
+FAIL-01: Manual 'It printed' confirmation available without hardware proof.
+FAIL-02: Bluetooth connection not demonstrated.
+FAIL-03: USB connection not demonstrated.
+FAIL-04: System-installed printer discovery not demonstrated.
+FAIL-05: Printer configuration still relies on manual addresses.
+FAIL-06: Automatic Kitchen/Coffee/Bar/Pastry physical printing not verified.
+FAIL-07: Cloud printer delivery not demonstrated.
+FAIL-08: Physical test-print delivery not confirmed.
