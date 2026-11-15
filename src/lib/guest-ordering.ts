@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
 import { requireGuestOrderResult } from "@/lib/guest-order-result";
+import { readFolioChargeComponents, type FolioChargeComponent } from "@/lib/folio-charge-components";
 
 type Row = Record<string, unknown>;
 
@@ -85,6 +86,8 @@ export type GuestFolio = {
   total_discounts: number | null;
   tax: number | null;
   service_charge: number | null;
+  other_charges?: number;
+  charge_components?: FolioChargeComponent[];
   gross_obligation: number | null;
   collected: number | null;
   outstanding: number | null;
@@ -122,7 +125,10 @@ export function useGuestBill(organizationId: string, enabled = true, awaitingPro
       if (error) throw new Error(error.message);
       const payload = (data ?? {}) as { folios?: GuestFolio[]; payments?: GuestReceipt[] };
       return {
-        folios: payload.folios ?? [],
+        folios: (payload.folios ?? []).map((folio) => {
+          const charges = readFolioChargeComponents(folio as unknown as Record<string, unknown>);
+          return { ...folio, other_charges: charges.otherCharges, charge_components: charges.chargeComponents };
+        }),
         payments: payload.payments ?? [],
       };
     },

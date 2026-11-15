@@ -113,6 +113,7 @@ export function FolioStatementBody({ folioId }: { folioId: string }) {
             { label: "Net charges", value: money(projection.data?.netRevenue ?? 0, currency) },
             { label: "Taxes", value: money(projection.data?.tax ?? 0, currency) },
             { label: "Service charge", value: money(projection.data?.serviceCharge ?? 0, currency) },
+            ...(projection.data?.chargeComponents ?? []).map((charge) => ({ label: charge.label, value: money(charge.amount, currency) })),
             { label: "Gross billed", value: money(projection.data?.grossObligation ?? 0, currency) },
             { label: "Collected", value: money(projection.data?.collected ?? 0, currency) },
           ]}

@@ -98,8 +98,11 @@ function FolioPage() {
           >
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Figure label="Net charges" value={money(activeFolio?.net_revenue, currency)} />
-              <Figure label="VAT" value={money(activeFolio?.tax, currency)} />
+              <Figure label="Taxes" value={money(activeFolio?.tax, currency)} />
               <Figure label="Service charge" value={money(activeFolio?.service_charge, currency)} />
+              {(activeFolio?.charge_components ?? []).map((charge) => (
+                <Figure key={charge.key} label={charge.label} value={money(charge.amount, currency)} />
+              ))}
               <Figure label="Gross billed" value={money(activeFolio?.gross_obligation, currency)} />
               <Figure label="Collected" value={money(activeFolio?.collected, currency)} />
             </dl>

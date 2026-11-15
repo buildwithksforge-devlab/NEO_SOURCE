@@ -15,6 +15,7 @@ import { DOCUMENT_BROWN, wireframeSegments } from "./document-artwork";
 import { NEO_SYMBOL_BASE64 } from "./document-symbol";
 import { documentTraceCode } from "./document-trace";
 import { documentLayout } from "./document-layouts";
+import { readFolioChargeComponents } from "./folio-charge-components";
 
 
 export const DOCUMENT_TYPES = [
@@ -173,7 +174,8 @@ export async function buildBusinessDocumentPdf(
       return Number(raw);
     };
     const outstanding = amount("outstanding");
-    if (Math.abs(amount("net_revenue") + amount("tax") + amount("service_charge") - amount("gross_obligation")) >= 0.005
+    const charges = readFolioChargeComponents(projection);
+    if (Math.abs(amount("net_revenue") + amount("tax") + amount("service_charge") + charges.otherCharges - amount("gross_obligation")) >= 0.005
       || Math.abs(amount("collected") + outstanding - amount("gross_obligation")) >= 0.005) {
       throw new Error("The folio financial components do not reconcile. Review the ledger before printing.");
     }
@@ -181,6 +183,7 @@ export async function buildBusinessDocumentPdf(
       { label: "Net charges", amount: amount("net_revenue") },
       { label: "Taxes", amount: amount("tax") },
       { label: "Service charge", amount: amount("service_charge") },
+      ...charges.chargeComponents.map((charge) => ({ label: charge.label, amount: charge.amount })),
       { label: "Gross billed", amount: amount("gross_obligation") },
       { label: "Collected", amount: amount("collected") },
       { label: outstanding < 0 ? "Refund due" : "Outstanding", amount: Math.abs(outstanding), emphasis: true },

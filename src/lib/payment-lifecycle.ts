@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useAuth } from "@/lib/auth";
+import { readFolioChargeComponents, type FolioChargeComponent } from "@/lib/folio-charge-components";
 
 export type FolioProjection = {
   found: boolean;
@@ -36,6 +37,9 @@ export type FolioProjection = {
   netRevenue: number;
   tax: number;
   serviceCharge: number;
+  discountTotal: number;
+  otherCharges: number;
+  chargeComponents: FolioChargeComponent[];
   grossObligation: number;
   collected: number;
   outstanding: number;
@@ -79,6 +83,7 @@ const num = (v: unknown) => Number(v ?? 0);
 
 export function mapFolioProjection(raw: Record<string, unknown> | null): FolioProjection {
   const r = raw ?? {};
+  const charges = readFolioChargeComponents(r);
   return {
     found: r["found"] === true,
     folioId: (r["folio_id"] as string) ?? null,
@@ -93,6 +98,8 @@ export function mapFolioProjection(raw: Record<string, unknown> | null): FolioPr
     netRevenue: num(r["net_revenue"]),
     tax: num(r["tax"]),
     serviceCharge: num(r["service_charge"]),
+    discountTotal: num(r["total_discounts"]),
+    ...charges,
     grossObligation: num(r["gross_obligation"]),
     collected: num(r["collected"]),
     outstanding: num(r["outstanding"]),
@@ -138,10 +145,11 @@ export function balancesGross(p: {
   netRevenue: number;
   tax: number;
   serviceCharge?: number;
+  otherCharges?: number;
   grossObligation: number;
 }): boolean {
-  return [p.netRevenue, p.tax, p.serviceCharge ?? 0, p.grossObligation].every(Number.isFinite)
-    && Math.abs(p.netRevenue + p.tax + (p.serviceCharge ?? 0) - p.grossObligation) < 0.005;
+  return [p.netRevenue, p.tax, p.serviceCharge ?? 0, p.otherCharges ?? 0, p.grossObligation].every(Number.isFinite)
+    && Math.abs(p.netRevenue + p.tax + (p.serviceCharge ?? 0) + (p.otherCharges ?? 0) - p.grossObligation) < 0.005;
 }
 
 /** paid + outstanding = gross. */

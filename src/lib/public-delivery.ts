@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
+import { requireGuestOrderResult } from "@/lib/guest-order-result";
 
 type Row = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ const sb = supabase as unknown as {
 };
 
 export type Quote = {
+  currency?: string;
   subtotal: number;
   tax_total: number;
   discount_total: number;
@@ -248,7 +250,7 @@ export function usePublicPlaceOrder() {
         _payment_method: input.paymentMethod,
       });
       if (error) throw new Error(error.message);
-      return data as { delivery_order_id: string; order_number: string; pin: string };
+      return requireGuestOrderResult(data);
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
     onError: (e: Error) => toast.error(e.message),

@@ -30,6 +30,7 @@ import {
   useSavePublicAddress,
 } from "@/lib/public-delivery";
 import { paymentMethodLabel } from "@/lib/payment-methods";
+import { mpesaSupportsTotal } from "@/lib/mpesa-application-result";
 
 export const Route = createFileRoute("/delivery/$hotelSlug/checkout")({
   component: CheckoutPage,
@@ -77,6 +78,7 @@ function CheckoutPage() {
   ]).filter((m) => m !== "cash" || settings.data?.["cod_enabled"] !== false);
   const [paymentMethod, setPaymentMethod] = useState("");
   const activeMethod = paymentMethod || configuredMethods[0] || "";
+  const mpesaAmountReady = mpesaSupportsTotal(quote.data?.grand_total, quote.data?.currency ?? "KES");
   const [mpesaPhone, setMpesaPhone] = useState("");
   const charge = useDeliveryMpesaCharge();
   const [newAddress, setNewAddress] = useState({
@@ -369,23 +371,23 @@ function CheckoutPage() {
               </div>
             ) : quote.data ? (
               <div className="mt-3 space-y-2 text-sm" style={{ color: brandFallback.steel }}>
-                <Line label="Subtotal" value={money(quote.data.subtotal)} />
-                <Line label="Tax" value={money(quote.data.tax_total)} />
+                <Line label="Subtotal" value={money(quote.data.subtotal, quote.data.currency ?? "KES")} />
+                <Line label="Tax" value={money(quote.data.tax_total, quote.data.currency ?? "KES")} />
                 {quote.data.service_charge ? (
-                  <Line label="Service charge" value={money(quote.data.service_charge)} />
+                  <Line label="Service charge" value={money(quote.data.service_charge, quote.data.currency ?? "KES")} />
                 ) : null}
                 {fulfilment === "delivery" ? (
-                  <Line label="Delivery fee" value={money(quote.data.delivery_fee)} />
+                  <Line label="Delivery fee" value={money(quote.data.delivery_fee, quote.data.currency ?? "KES")} />
                 ) : null}
                 {quote.data.discount_total ? (
-                  <Line label="Discount" value={`- ${money(quote.data.discount_total)}`} />
+                  <Line label="Discount" value={`- ${money(quote.data.discount_total, quote.data.currency ?? "KES")}`} />
                 ) : null}
                 <div
                   className="flex items-center justify-between border-t border-black/5 pt-2 text-base font-semibold"
                   style={{ color: brandFallback.secondary }}
                 >
                   <span>Total</span>
-                  <span>{money(quote.data.grand_total)}</span>
+                  <span>{money(quote.data.grand_total, quote.data.currency ?? "KES")}</span>
                 </div>
                 {quote.data.eta_minutes ? (
                   <p className="text-xs">Estimated {quote.data.eta_minutes} minutes</p>
@@ -407,7 +409,7 @@ function CheckoutPage() {
                       onChange={(e) => setPaymentMethod(e.target.value)}
                     >
                       {configuredMethods.map((m) => (
-                        <option key={m} value={m}>
+                        <option key={m} value={m} disabled={m === "mpesa" && !mpesaAmountReady}>
                           {m === "cash" ? "Cash on delivery" : paymentMethodLabel(m)}
                         </option>
                       ))}
@@ -435,6 +437,7 @@ function CheckoutPage() {
                       We send the payment request to this number. Your order is only confirmed once
                       you approve it on your phone.
                     </p>
+                    {!mpesaAmountReady && quote.data ? <p role="alert" className="mt-2 text-xs text-destructive">M-Pesa requires a positive whole KES total. Choose another configured payment method; this total has not been rounded and no prompt has been sent.</p> : null}
                   </div>
                 ) : null}
 
@@ -446,7 +449,7 @@ function CheckoutPage() {
                     charge.isPending ||
                     !cartId ||
                     !activeMethod ||
-                    (activeMethod === "mpesa" && mpesaPhone.replace(/\D/g, "").length < 9)
+                    (activeMethod === "mpesa" && (!mpesaAmountReady || mpesaPhone.replace(/\D/g, "").length < 9))
                   }
                   onClick={async () => {
                     if (!cartId) return;
@@ -463,11 +466,11 @@ function CheckoutPage() {
                         if (result.ok) {
                           toast.success(result.detail);
                         } else {
-                          toast.error(`${result.detail} You can try again on your order page.`);
+                          toast.error(`${result.detail} Check the saved attempt on your order page before starting another prompt.`);
                         }
                       } catch {
                         toast.error(
-                          "We could not send the payment request. You can try again on your order page.",
+                          "The prompt outcome could not be confirmed. Check the saved attempt on your order page before starting another prompt.",
                         );
                       }
                     } else {

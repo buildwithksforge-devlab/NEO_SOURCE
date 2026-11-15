@@ -31,3 +31,18 @@ Received remaining-finance-code-contracts-v1: 63 exact installed routine definit
 Local proof: checkout/tip candidate 20 isolated database checks; late-provider-receipt candidate 14 isolated database checks; delayed-observation/reconciliation/entry UI suites 45 tests. Production build verification currently running. These do not certify all Finance or constitute installation.
 
 Latest explicit priority order: (1) Finance; (2) Front Office permissions; (3) Documents; (4) Apps; (5) diagnosis recommendations, remaining operational chains and KES51 recovery (payment recovery is also a Finance responsibility). Preserve all five until completed. Do not promote polish ahead of unresolved financial correctness.
+
+## Latest verified app release (supersedes earlier live-build checkpoints)
+Commit1c9d9fd is pushed. Worker6201cd4d-b160-4fc1-91cd-061fb9ed74a0 deployed successfully.333 regression tests, targeted45 tests, TypeScript/build/smoke passed; live invalid payment-session, fabricated callback-token and device checks rejected. Delayed M-Pesa observation/recheck client-handler changes are released. The database result routine installation remains pending the user's JSON. Other Finance-chain candidates remain local only. No business recovery was executed.
+
+
+## Confirmed database checkpoint
+The user confirmed mpesa-late-receipt-reconciliation-v1 installed with definition_matches=true and permissions_unchanged=true. It supersedes the pending-install notes above. Installation executed no payment or recovery; KES51 remains unresolved. Next Finance candidate: eligible-source folio amount corrected to already-inclusive net_amount and excludes payment/deposit/refund rows;9 isolated SQL checks passed. Not yet installed; retain it for the financial handoff batch.
+
+
+## Active Finance batch — current checkpoint
+- Checkout/ledger parity candidate: 12 existing routines and 5 private helpers. Installer preserves existing routine owners/permissions; no historical backfill or business command runs during installation.
+- Isolated checks: 46 checkout/posting/installer; 14 shared staff/guest folio projection; 9 source-amount checks. These are not live business acceptance.
+- Includes exact cart replay, catalogue choices, inclusive tax, fee/tip agreement, staff-tip liability, scoped revenue reconciliation and shared document breakdown. Whole-KES M-Pesa guards reject unsupported totals before creating an attempt; no silent rounding.
+- Database installation remains pending. Matching compatible app release is being prepared first.
+- Finance still open: refund classification and original posting evidence, manager-reviewed receipt-code fallback, configurable charge engine, procurement/stock/payroll/reports review and authentic KES51 recovery. Priorities 2–5 remain queued in their existing order.

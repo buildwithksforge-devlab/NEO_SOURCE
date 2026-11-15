@@ -10,3 +10,8 @@ export function mpesaResultApplied(value: unknown, code: number): boolean {
 export function mpesaObservationInterval(status: unknown): number | false {
  return status === 'success' ? false : 4000;
 }
+
+export function mpesaSupportsTotal(amount: unknown, currency: string): boolean {
+ return (typeof amount === 'number' || (typeof amount === 'string' && amount.trim() !== ''))
+  && currency === 'KES' && Number.isSafeInteger(Number(amount)) && Number(amount) > 0;
+}

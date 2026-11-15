@@ -143,13 +143,13 @@ function FolioDetailPage() {
   const lineRows = (lines.data ?? []) as Array<Record<string, any>>;
   const postedRows = lineRows.filter((l) => String(l["status"] ?? "posted") === "posted");
   const postedLineCount = postedRows.length;
-  const discountTotal = Number(f?.["total_discounts"] ?? 0);
 
   // The bill itself is never re-added here. `neo_folio_projection` is the one
   // canonical answer to net, tax, gross, collected and outstanding, so this
   // screen cannot disagree with the register, the cashbook or the ledger.
   const projection = useFolioProjection(id);
   const proj = projection.data?.found ? projection.data : null;
+  const discountTotal = proj?.discountTotal ?? 0;
   const netCharges = proj?.netRevenue ?? 0;
   const taxTotal = proj?.tax ?? 0;
   const serviceTotal = proj?.serviceCharge ?? 0;
@@ -277,11 +277,14 @@ function FolioDetailPage() {
                     value={money(netCharges, currency)}
                   />
                   {discountTotal > 0 ? (
-                    <StatementRow label="Discounts" value={`- ${money(discountTotal, currency)}`} />
+                    <p className="text-xs text-muted-foreground">Net charges already include discounts of {money(discountTotal, currency)}.</p>
                   ) : null}
                   <StatementRow label="Service charge" value={money(serviceTotal, currency)} />
+                  {(proj?.chargeComponents ?? []).map((charge) => (
+                    <StatementRow key={charge.key} label={charge.label} value={money(charge.amount, currency)} />
+                  ))}
 
-                  <StatementRow label="VAT" value={money(taxTotal, currency)} />
+                  <StatementRow label="Taxes" value={money(taxTotal, currency)} />
                   <StatementRow label="Gross billed" value={money(totalBilled, currency)} />
                   <StatementRow label="Collected" value={money(totalCollected, currency)} />
                   {Number(f["total_refunds"] ?? 0) > 0 ? (
