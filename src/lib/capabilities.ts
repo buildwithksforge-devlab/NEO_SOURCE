@@ -60,6 +60,7 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/pms/requests", module: "front-office", feature: "requests" },
   { prefix: "/pms/transport", module: "front-office", feature: "requests" },
   { prefix: "/pms/reservations", module: "front-office", feature: "reservations" },
+  { prefix: "/pms/reservations/new", module: "front-office", feature: "reservations", action: "create" },
   { prefix: "/pms/waitlist", module: "front-office", feature: "waitlist" },
   { prefix: "/pms/groups", module: "front-office", feature: "groups" },
   { prefix: "/pms/folios", module: "front-office", feature: "folios" },

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { useOptionalAuth } from "@/lib/auth";
+import { pathPermitted } from "@/lib/capabilities";
 import type { LucideIcon } from "lucide-react";
 
 import { ChevronRight, MoreHorizontal } from "lucide-react";
@@ -304,8 +306,10 @@ export function StatCard({
   /** Overrides the affordance caption ("View", "Filter"). */
   actionLabel?: string;
 }) {
+  const auth = useOptionalAuth();
+  const permittedTarget = to && (!auth || (auth.permissionsLoaded && pathPermitted(auth.can, to))) ? to : undefined;
   const toneRing = TONE_RING[tone];
-  const interactive = Boolean(to || onClick);
+  const interactive = Boolean(permittedTarget || onClick);
 
   const card = (
     <Card
@@ -368,10 +372,10 @@ export function StatCard({
     </Card>
   );
 
-  if (to) {
+  if (permittedTarget) {
     return (
       <Link
-        to={to}
+        to={permittedTarget}
         {...(params ? { params } : {})}
         {...(search ? { search } : {})}
         aria-label={`${label}: ${value}`}

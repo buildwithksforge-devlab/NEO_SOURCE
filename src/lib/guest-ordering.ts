@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
+import { requireGuestOrderResult } from "@/lib/guest-order-result";
 
 type Row = Record<string, unknown>;
 
@@ -360,7 +361,7 @@ export function usePlaceRoomServiceOrder() {
         _payment_intent: input.paymentIntent,
       });
       if (error) throw new Error(error.message);
-      return data as { order_number: string; charged_to_room: boolean };
+      return requireGuestOrderResult(data, input.paymentIntent === "room-charge");
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["guest-cart"] });
@@ -382,7 +383,7 @@ export function usePlaceDeliveryOrder() {
         _payment_method: input.paymentMethod,
       });
       if (error) throw new Error(error.message);
-      return data as { order_number: string; pin: string };
+      return requireGuestOrderResult(data);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["guest-cart"] });

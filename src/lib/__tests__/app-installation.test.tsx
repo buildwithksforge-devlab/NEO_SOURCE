@@ -57,10 +57,12 @@ function native(outcome: "accepted" | "dismissed" = "accepted") {
   return event;
 }
 describe("browser installation experience", () => {
-  it("offers installation after a stable app entrance and allows continuing normally", () => {
+  it("keeps the entrance visible until installation is requested", () => {
     show();
     expect(screen.queryByRole("dialog")).toBeNull();
     act(() => vi.advanceTimersByTime(2200));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Continue in browser" }));
     expect(screen.queryByRole("dialog")).toBeNull();

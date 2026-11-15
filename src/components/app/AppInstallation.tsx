@@ -11,11 +11,9 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { useRouterState } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +25,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/lib/auth";
 import {
   installInstructions,
   installPlatform,
-  isInstallEntrance,
   type InstallPlatform,
 } from "@/lib/app-install";
 
@@ -60,16 +56,12 @@ export function AppInstallButton() {
   );
 }
 export function AppInstallationProvider({ children }: { children: ReactNode }) {
-  const { loading } = useAuth();
-  const routerStatus = useRouterState({ select: (state) => state.status });
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [installed, setInstalled] = useState(false),
     [open, setOpen] = useState(false),
     [prompt, setPrompt] = useState<InstallEvent | null>(null),
     [platform, setPlatform] = useState<InstallPlatform>("desktop"),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
-  const offered = useRef(false);
   const [acknowledged, setAcknowledged] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(display-mode: standalone)");
@@ -140,37 +132,10 @@ export function AppInstallationProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("appinstalled", complete);
     };
   }, []);
-  useEffect(() => {
-    if (
-      loading ||
-      routerStatus !== "idle" ||
-      !isInstallEntrance(pathname) ||
-      installed ||
-      acknowledged ||
-      offered.current ||
-      window.top !== window.self
-    )
-      return;
-    try {
-      if (readInstallPreference(INSTALL_DISMISSED_KEY) || sessionStorage.getItem(DISMISSED)) return;
-    } catch {
-      /* Storage may be restricted; keep the prompt usable. */
-    }
-    const timer = window.setTimeout(() => {
-      // Never cover another dialog or a person who has already started typing.
-      if (
-        document.querySelector('[role="dialog"][data-state="open"]') ||
-        document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')
-      )
-        return;
-      offered.current = true;
-      setOpen(true);
-    }, 2200);
-    return () => window.clearTimeout(timer);
-  }, [loading, routerStatus, pathname, installed, acknowledged]);
+  // Installation is user-initiated. Entrance, payment and work screens stay
+  // usable while the deferred native prompt remains available from the button.
   const close = useCallback(() => {
     setOpen(false);
-    offered.current = true;
     try {
       sessionStorage.setItem(DISMISSED, "1");
       saveInstallPreference(INSTALL_DISMISSED_KEY);

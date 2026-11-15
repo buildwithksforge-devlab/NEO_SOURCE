@@ -37,6 +37,7 @@ describe("durable installation and device acknowledgements", () => {
   it("remembers dismissal after sign-out clears session storage and the provider remounts", () => {
     const first = show();
     act(() => vi.advanceTimersByTime(2200));
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue in browser" }));
     expect(localStorage.getItem(INSTALL_DISMISSED_KEY)).toBe("1");
     first.unmount();
@@ -60,6 +61,7 @@ describe("durable installation and device acknowledgements", () => {
   it("lets users acknowledge an existing installation without claiming a new browser installation event", () => {
     show();
     act(() => vi.advanceTimersByTime(2200));
+    fireEvent.click(screen.getByRole("button", { name: "Install app" }));
     fireEvent.click(screen.getByRole("button", { name: "Already installed" }));
     expect(localStorage.getItem(INSTALL_ACK_KEY)).toBe("1");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -98,6 +100,7 @@ describe("durable installation and device acknowledgements", () => {
     expect(hasConfiguredDisplayOrStaffDevice()).toBe(false);
     show();
     act(() => vi.advanceTimersByTime(2200));
-    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Install app" })).toBeTruthy();
   });
 });

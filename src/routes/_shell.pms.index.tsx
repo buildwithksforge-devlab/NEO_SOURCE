@@ -1,6 +1,7 @@
 import { QueryState } from "@/components/common/StateSystem";
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PermittedLink as Link } from "@/components/common/PermittedLink";
 import {
   BedDouble,
   CalendarCheck2,
@@ -73,10 +74,10 @@ function FrontOfficeDashboard() {
               quick={["today", "tomorrow", "next-7", "this-month"]}
             />
             <Button asChild variant="outline" size="sm">
-              <Link to="/pms/availability">Check availability</Link>
+              <Link to="/pms/availability" hideWhenDenied>Check availability</Link>
             </Button>
             <Button asChild size="sm">
-              <Link to="/pms/reservations/new">New reservation</Link>
+              <Link to="/pms/reservations/new" hideWhenDenied>New reservation</Link>
             </Button>
           </div>
         }

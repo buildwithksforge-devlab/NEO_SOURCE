@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PermittedLink as Link } from "@/components/common/PermittedLink";
 import { ArrowUpDown, CalendarPlus, CircleDot, LogIn, LogOut, Star, Users } from "lucide-react";
 import {
   Select,
@@ -232,7 +233,7 @@ function ReservationDirectory() {
         description="The single reservation record every other module reads from — CRM, folios, housekeeping and reports."
         actions={
           <Button asChild size="sm">
-            <Link to="/pms/reservations/new">
+            <Link to="/pms/reservations/new" hideWhenDenied>
               <CalendarPlus className="mr-2 size-4" /> New reservation
             </Link>
           </Button>
@@ -330,7 +331,7 @@ function ReservationDirectory() {
                   </Button>
                 ) : (
                   <Button asChild size="sm">
-                    <Link to="/pms/reservations/new">New reservation</Link>
+                    <Link to="/pms/reservations/new" hideWhenDenied>New reservation</Link>
                   </Button>
                 )
               }

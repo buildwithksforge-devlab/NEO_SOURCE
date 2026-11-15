@@ -1,7 +1,6 @@
 import { PermittedLink } from "@/components/common/PermittedLink";
 import { useState } from "react";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BedDouble, CalendarCheck2 } from "lucide-react";
 import { Atomic, RowActions, SectionCard, TableScroll } from "@/components/common/DataDisplay";
@@ -101,7 +100,7 @@ export function MovementBoard({ scope }: { scope: Scope }) {
             description="Reservations appear here automatically once they are created with matching dates."
             action={
               <Button asChild size="sm" variant="outline">
-                <PermittedLink to="/pms/reservations/new">New reservation</PermittedLink>
+                <PermittedLink to="/pms/reservations/new" hideWhenDenied>New reservation</PermittedLink>
               </Button>
             }
           />
@@ -127,9 +126,9 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="neo-sticky-col whitespace-nowrap font-mono text-xs">
-                      <Link to="/pms/reservations/$id" params={{ id: row.id }} className="text-primary hover:underline">
+                      <PermittedLink to="/pms/reservations/$id" params={{ id: row.id }} className="text-primary hover:underline">
                         {row.confirmation_number}
-                      </Link>
+                      </PermittedLink>
                     </TableCell>
                     <TableCell>
                       <div className="flex min-w-0 items-center gap-2">
