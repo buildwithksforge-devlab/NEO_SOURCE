@@ -21,8 +21,18 @@ The earlier installed calculation inventory confirms delivery quotes already ext
 
 The user confirmed installation of `pos-discount-collection-guard-v1`: future discount commands reject pending/recorded collections, validate policy amounts and time windows, and preserve approval rules. Nineteen isolated checks and installer/ACL checks passed.
 
-`folio-finite-amount-guard-v1` adds finite-value validation to the existing folio invariant while retaining negative reversal signs and its existing arithmetic tolerance. Twenty isolated amount checks and installer repeat/ACL/unchanged-row/refusal checks passed. Its managed installation requires a separate user result; source presence is not proof of installation.
+The user confirmed `folio-finite-amount-guard-v2` installed with matching definition and unchanged permissions. It adds finite-value validation to the existing folio invariant while retaining negative reversal signs and its existing arithmetic tolerance. Twenty isolated amount checks and installer repeat/ACL/unchanged-row/refusal checks passed. V2 tolerates SQL formatting changes; the earlier V1 chat formatting mismatch rolled back.
 
 The guest client now requires saved delivery/POS order UUIDs and room-charge evidence before reporting success. This improves response validation but does not resolve the backend cart replay defect.
 
 No real payment, booking, approval, stock movement or historical correction was executed for this audit. The existing KES51 recovery remains unresolved until an authentic original sale snapshot is found.
+
+## Expanded installed inventory and active M-Pesa repair
+
+`remaining-finance-code-contracts-v1` supplies 63 installed definitions. This confirms the Finance eligible-source folio expression adds tax/service to already-inclusive `net_amount`; the source amount needs correction. The installed manual POS confirmation command also accepts a note and internal reference without requiring a verified M-Pesa receipt. A manager-reviewed receipt exception must remain distinct from automatic provider verification.
+
+The user explicitly chose collected tips payable to rider/staff. The local financial-chain candidates use separate liability accounting; they are not installed or deployed. Twenty isolated checkout/tip checks passed with controlled collaborator fixtures, not full live acceptance.
+
+The M-Pesa late-receipt candidate replaces only the existing service-only result routine. It requires receipt metadata before applying success, keeps receipt-less provider success unresolved, permits late verified success after earlier non-success, prevents duplicate receipt application and preserves existing successful collection. Fourteen isolated application checks and three installer owner/ACL/unchanged-row/repeat/refusal checks passed. Installation itself invokes no payment command and performs no historical recovery. It remains pending installation until the user supplies its result.
+
+Matching local client/handler changes keep observing saved non-success attempts while the dialog is open and allow status checks after earlier failure. Forty-five targeted tests passed; the release regression, TypeScript, production build and smoke also passed. Source tests do not prove Safaricom delivery or settle the KES51 attempt. The manager receipt submission/approval workflow, reconciliation classification, refunds and the broader Finance audit remain open.

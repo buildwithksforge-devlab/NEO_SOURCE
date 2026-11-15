@@ -5,3 +5,8 @@ export function mpesaResultApplied(value: unknown, code: number): boolean {
  const expected=code===0?'success':code===1032?'cancelled':[1037,1019].includes(code)?'timeout':'failed';
  return r['ok']!==false && r['status']===expected && (r['applied']===true || r['duplicate']===true);
 }
+
+/** Observe the saved attempt while its dialog is open, including late results. */
+export function mpesaObservationInterval(status: unknown): number | false {
+ return status === 'success' ? false : 4000;
+}

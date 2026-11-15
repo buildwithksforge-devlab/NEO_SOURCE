@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { chargeWithMpesa, reconcileMpesaTransaction } from "@/lib/mpesa.functions";
 import { useMpesaCollectionStatus } from "@/lib/payment-methods";
+import { mpesaObservationInterval } from "@/lib/mpesa-application-result";
 
 type Props = {
   sourceModule: "pos_order" | "folio";
@@ -42,7 +43,9 @@ type Props = {
   triggerLabel?: string;
 };
 
-const TERMINAL = new Set(["success", "failed", "cancelled", "timeout", "unknown"]);
+// An unclear transport/provider response is unresolved. Keep observing the
+// saved attempt so a delayed callback can update this open dialog.
+const TERMINAL = new Set(["success", "failed", "cancelled", "timeout"]);
 
 export function MpesaPromptDialog({
   sourceModule,
@@ -116,7 +119,7 @@ export function MpesaPromptDialog({
     enabled: Boolean(transactionId),
     refetchInterval: (query) => {
       const row = query.state.data as { status?: string } | undefined;
-      return row && TERMINAL.has(row.status ?? "") ? false : 4000;
+      return mpesaObservationInterval(row?.status);
     },
     queryFn: async () => {
       const { data, error } = await supabase
@@ -132,14 +135,14 @@ export function MpesaPromptDialog({
   const currentStatus = (status.data?.status as string | undefined) ?? null;
 
   useEffect(() => {
+    if (currentStatus === "unknown") {
+      toast.warning("Safaricom's response is unclear. Keep this attempt for checking; do not send another prompt.");
+      return;
+    }
     if (currentStatus && TERMINAL.has(currentStatus)) {
       if (currentStatus === "success") {
         toast.success(
           `M-Pesa payment received${status.data?.mpesa_receipt_number ? ` — ${status.data.mpesa_receipt_number}` : ""}`,
-        );
-      } else if (currentStatus === "unknown") {
-        toast.warning(
-          "Safaricom's response is unclear. Do not send another prompt until the existing attempt is checked.",
         );
       } else {
         toast.error(

@@ -56,6 +56,30 @@ beforeEach(() => {
 });
 
 describe("M-Pesa connection dependency boundaries", () => {
+  it("rechecks an earlier saved failure rather than treating it as final money evidence", async () => {
+    maybeSingle.mockResolvedValue({ data: {
+      source_module: "pos_order", organization_id: "org", checkout_request_id: "checkout",
+      applied_at: "2026-11-15T06:00:00Z", status: "timeout",
+    } });
+    rpc.mockResolvedValue({ data: true, error: null });
+    mock.query.mockResolvedValue({ ok: true, data: { ResultCode: "0" } });
+    mock.apply.mockResolvedValue({ data: { applied: false, status: "pending", reason: "receipt_pending" }, error: null });
+    const run = reconcileMpesaTransaction as unknown as (input: unknown) => Promise<Result>;
+    expect(await run({ data: { transactionId: "txn" }, context })).toMatchObject({ ok: false, status: "receipt-pending" });
+    expect(mock.query).toHaveBeenCalledOnce();
+    expect(mock.apply).toHaveBeenCalledOnce();
+  });
+
+  it("does not query or apply another result after saved successful collection", async () => {
+    maybeSingle.mockResolvedValue({ data: {
+      source_module: "pos_order", organization_id: "org", applied_at: "2026-11-15T06:00:00Z", status: "success",
+    } });
+    rpc.mockResolvedValue({ data: true, error: null });
+    const run = reconcileMpesaTransaction as unknown as (input: unknown) => Promise<Result>;
+    expect(await run({ data: { transactionId: "txn" }, context })).toMatchObject({ ok: true, status: "success" });
+    expect(mock.query).not.toHaveBeenCalled();
+    expect(mock.apply).not.toHaveBeenCalled();
+  });
   it.each(["", null, undefined])(
     "does not apply status-query result %s as a successful payment",
     async (code) => {

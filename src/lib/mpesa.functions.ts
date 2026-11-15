@@ -566,7 +566,9 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
     ) {
       return { ok: false, status: "unauthorised", detail: "You cannot reconcile this payment." };
     }
-    if (row["applied_at"]) {
+    // A saved non-success must remain queryable: a later provider receipt may
+    // resolve an earlier timeout or failure. Only received money is final here.
+    if (row["applied_at"] && row["status"] === "success") {
       return {
         ok: true,
         status: row["status"] as string,
@@ -609,7 +611,8 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
     if ((query.data.CheckoutRequestID && query.data.CheckoutRequestID !== row["checkout_request_id"]) || (query.data.MerchantRequestID && row["merchant_request_id"] && query.data.MerchantRequestID !== row["merchant_request_id"])) {
       return {ok:false,status:"verification-mismatch",detail:"Daraja returned a different transaction reference. No payment was applied."};
     }
-    // 1032/1037 and friends are terminal; anything else non-zero is a decline.
+    // Apply this provider observation; the atomic routine owns transitions,
+    // duplicate receipts and late-result reconciliation.
     const { data: applied, error } = await supabaseAdmin.rpc("neo_mpesa_apply_result", {
       _transaction: data.transactionId,
       _result_code: code,
@@ -619,6 +622,9 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
       _payload: query.data as unknown as Record<string, unknown>,
       _source: "status-query",
     });
+    if (!error && applied?.reason === "receipt_pending") {
+      return { ok: false, status: "receipt-pending", detail: "Safaricom reports success, but its receipt metadata is not yet saved. Keep this attempt; do not send another prompt. The payment is awaiting reconciliation." };
+    }
     if (error || !mpesaResultApplied(applied, code)) return { ok: false, status: "apply-failed", detail: "The database did not confirm application of this provider result. Keep the existing transaction for reconciliation." };
     return {
       ok: true,
