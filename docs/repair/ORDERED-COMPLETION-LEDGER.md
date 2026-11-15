@@ -46,3 +46,8 @@ The user confirmed mpesa-late-receipt-reconciliation-v1 installed with definitio
 - Includes exact cart replay, catalogue choices, inclusive tax, fee/tip agreement, staff-tip liability, scoped revenue reconciliation and shared document breakdown. Whole-KES M-Pesa guards reject unsupported totals before creating an attempt; no silent rounding.
 - Database installation remains pending. Matching compatible app release is being prepared first.
 - Finance still open: refund classification and original posting evidence, manager-reviewed receipt-code fallback, configurable charge engine, procurement/stock/payroll/reports review and authentic KES51 recovery. Priorities 2–5 remain queued in their existing order.
+
+## Confirmed installation and next Finance repair
+- User confirmed `finance-checkout-ledger-parity-v1`: all 12 definitions and five private helpers match; existing permissions unchanged. Matching client commit 889c0e2 pushed and Worker f031ee82-b456-4082-b4ad-4e2565be803d deployed. 334 release regressions, 21 focused component checks, TypeScript/build/smoke passed; live invalid-session/callback/device requests rejected.
+- Standalone POS refund candidate now reverses actual original journal credit accounts and considers verified earlier payouts. 35 isolated workflow/installer checks plus 12 allocation checks pass, including 100 successive one-cent refunds. Not installed yet. No historical payout changed.
+- Delivery-linked refund invoice ownership, manager receipt-code review, configurable charges, broader Finance modules and KES51 recovery remain open; priorities 2–5 remain in order.
