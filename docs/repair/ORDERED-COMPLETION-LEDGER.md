@@ -51,3 +51,8 @@ The user confirmed mpesa-late-receipt-reconciliation-v1 installed with definitio
 - User confirmed `finance-checkout-ledger-parity-v1`: all 12 definitions and five private helpers match; existing permissions unchanged. Matching client commit 889c0e2 pushed and Worker f031ee82-b456-4082-b4ad-4e2565be803d deployed. 334 release regressions, 21 focused component checks, TypeScript/build/smoke passed; live invalid-session/callback/device requests rejected.
 - Standalone POS refund candidate now reverses actual original journal credit accounts and considers verified earlier payouts. 35 isolated workflow/installer checks plus 12 allocation checks pass, including 100 successive one-cent refunds. Not installed yet. No historical payout changed.
 - Delivery-linked refund invoice ownership, manager receipt-code review, configurable charges, broader Finance modules and KES51 recovery remain open; priorities 2–5 remain in order.
+
+## Further Finance checkpoint
+- User confirmed standalone refund repair `pos-refund-original-credit-allocation-v1` installed, definition matching and permissions unchanged. Source migration pushed in 2ff51b8. No payout executed by installation.
+- Supplier invoice capture had explicit input validation gaps: non-finite/negative line values and linked entity workspace/property validation. Candidate now passes 26 isolated capture/installer checks. Matching collaborator is controlled; no live invoice created. Installation pending.
+- Delivery-linked refunds still require proper invoice/collection ownership; do not bypass this by inventing a POS revenue journal or deleting its evidence guard. Manager-reviewed receipt fallback and other ordered Finance tasks remain open.
