@@ -12,7 +12,8 @@
 
 ## Existing workflow work
 - Shared-workspace installer: user confirmed all 23 definitions match.
-- Finish review and installation of pending POS bill protection and atomic modifiers before deploying dependent client changes.
+- POS bill protection and atomic modifiers installed and deployed in `8a5cfa6`; all four database triggers confirmed enabled.
+- Initial release verified at Worker `df612086-86b5-4b11-bac6-27937ba849b9`; Finance audit and full document/app redesign remain active.
 - Preserve recovery of the already-paid KES51 attempt only from authentic saved sale evidence; never charge again.
 
 ## Next: complete app flows and presentation

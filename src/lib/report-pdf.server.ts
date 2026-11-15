@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { embedDocumentFonts } from "./document-fonts.server";
+import { formatReportFact } from "./report-fact-format";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -189,13 +190,14 @@ export async function buildManagementReportPdf(
   for (const row of rows) {
     ensure(68);
     page.drawLine({ start: { x: margin, y: y + 8 }, end: { x: pageSize[0] - margin, y: y + 8 }, thickness: 0.5, color: rgb(0.82, 0.84, 0.87) });
+    const rowTop = y;
     drawLines(row.definition.label, margin, 10, bold, 300);
-    const value = row.value === null || row.value === undefined
-      ? "Awaiting data"
-      : row.definition.kind === "money"
-        ? `${currency} ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(row.value))}`
-        : row.definition.kind === "percent" ? `${Number(row.value).toFixed(1)}%` : String(row.value);
-    page.drawText(value, { x: 390, y: y + 14, size: 11, font: bold, color: primary });
+    const value = formatReportFact(row.value, row.definition.kind, currency);
+    const valueLines = wrap(value, bold, 10, pageSize[0] - margin - 390);
+    valueLines.forEach((part, index) => page.drawText(part, {
+      x: 390, y: rowTop - index * 14, size: 10, font: bold, color: primary,
+    }));
+    y = Math.min(y, rowTop - valueLines.length * 14);
     drawLines(row.definition.eligibility, margin, 8, regular, 470, rgb(0.38, 0.4, 0.44));
     y -= 12;
   }

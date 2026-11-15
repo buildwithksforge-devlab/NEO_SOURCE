@@ -6,7 +6,7 @@
  * service: the database issues the document number, computes the money and
  * enforces property scope. Nothing on this path is recomputed client-side.
  */
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, type PDFFont, type PDFPage } from "pdf-lib";
 import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -41,6 +41,7 @@ type Line = {
   discount?: number | string | null;
   tax?: number | string | null;
   total?: number | string | null;
+  category?: string | null;
   date?: string | null;
   note?: string | null;
 };
@@ -75,7 +76,7 @@ const money = (value: unknown, currency: string) => {
   if (value === null || value === undefined || value === "") return "—";
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "—";
-  return `${currency} ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)}`;
+  return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)}`;
 };
 
 const quantity = (value: unknown) => {
@@ -85,11 +86,13 @@ const quantity = (value: unknown) => {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(numeric);
 };
 
-const dateLabel = (value: unknown) => {
+const formatDocumentDate = (value: unknown, timeZone: string) => {
   if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return String(value);
   const parsed = new Date(String(value));
   if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toISOString().slice(0, 16).replace("T", " ");
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone }).format(parsed);
 };
 
 const wrap = (value: string, font: PDFFont, size: number, width: number) => {
@@ -97,6 +100,18 @@ const wrap = (value: string, font: PDFFont, size: number, width: number) => {
   const lines: string[] = [];
   let line = "";
   for (const word of words) {
+    if (font.widthOfTextAtSize(word, size) > width) {
+      if (line) { lines.push(line); line = ""; }
+      let fragment = "";
+      for (const character of word) {
+        if (fragment && font.widthOfTextAtSize(fragment + character, size) > width) {
+          lines.push(fragment); fragment = "";
+        }
+        fragment += character;
+      }
+      line = fragment;
+      continue;
+    }
     const next = line ? `${line} ${word}` : word;
     if (font.widthOfTextAtSize(next, size) <= width) line = next;
     else {
@@ -180,7 +195,7 @@ export async function buildBusinessDocumentPdf(
       !["void", "voided", "reversed"].includes(line.status ?? "posted") &&
       !["payment", "deposit", "refund"].includes(line.line_type ?? "charge")
     ).map((line) => ({
-      description: line.description || line.category || "Charge",
+      description: line.description || line.category || "Charge", category: line.category,
       quantity: line.quantity, unit_price: line.unit_price,
       discount: line.discount_amount, tax: line.tax_amount,
       total: line.net_amount, date: line.posting_date,
@@ -211,14 +226,17 @@ export async function buildBusinessDocumentPdf(
    */
   const branchId = (payload as unknown as { branch_id?: string | null }).branch_id ?? null;
   let propertyLogo = text(property["logo_url"]);
-  if (!propertyLogo && branchId) {
+  let documentTimezone = text(property["timezone"]) || text(identity["timezone"]) || "UTC";
+  if (branchId && (!propertyLogo || !property["timezone"])) {
     const { data: branch } = await supabase
       .from("branches")
-      .select("logo_url")
+      .select("logo_url, timezone")
       .eq("id", branchId)
       .maybeSingle();
-    propertyLogo = text((branch as { logo_url?: string | null } | null)?.logo_url);
+    propertyLogo ||= text(branch?.logo_url);
+    documentTimezone = text(branch?.timezone) || documentTimezone;
   }
+  const dateLabel = (value: unknown) => formatDocumentDate(value, documentTimezone);
   const logoUrl =
     propertyLogo || text(brand["logoLight"]) || text(brand["logoDark"]) || "";
 
@@ -226,7 +244,7 @@ export async function buildBusinessDocumentPdf(
   const pdf = await PDFDocument.create();
   const { regular, bold } = await embedDocumentFonts(pdf);
   const [pageWidth, pageHeight]: [number, number] = [595.28, 841.89];
-  const margin = 44;
+  const margin = 39.7;
   const contentWidth = pageWidth - margin * 2;
 
   let embeddedLogo: Awaited<ReturnType<PDFDocument["embedPng"]>> | null = null;
@@ -255,25 +273,25 @@ export async function buildBusinessDocumentPdf(
   const startPage = () => {
     if (pageNumber > 0) page = pdf.addPage([pageWidth, pageHeight]);
     pageNumber += 1;
-    // The wireframe is drawn from the same shared geometry as the on-screen
-    // sheet, so screen and PDF are one drawing rather than two look-alikes.
-    for (const segment of wireframeSegments({
-      x: pageWidth - 176,
-      y: pageHeight - 118,
-      width: 176,
-      height: 176,
-    })) {
-      if (segment.y1 > pageHeight || segment.y2 > pageHeight) continue;
+    // Match the preview's 62mm × 42mm SVG viewport, including its crop.
+    const cornerWidth = 175.75, cornerHeight = 119.06, scale = cornerWidth / 190;
+    page.pushOperators(pushGraphicsState(), rectangle(pageWidth - cornerWidth, pageHeight - cornerHeight, cornerWidth, cornerHeight), clip(), endPath());
+    for (const segment of wireframeSegments({ x: 0, y: -34, width: 190, height: 190 })) {
       page.drawLine({
-        start: { x: segment.x1, y: segment.y1 },
-        end: { x: segment.x2, y: segment.y2 },
-        thickness: 0.35,
-        color: inkBlack,
+        start: { x: pageWidth - cornerWidth + segment.x1 * scale, y: pageHeight - segment.y1 * scale },
+        end: { x: pageWidth - cornerWidth + segment.x2 * scale, y: pageHeight - segment.y2 * scale },
+        thickness: 0.35, color: inkBlack,
       });
     }
-    page.drawText(`${documentTitle} ${documentNumber}`, { x: margin, y: 26, size: 7.5, font: regular, color: muted });
-    page.drawText(`Page ${pageNumber}`, { x: pageWidth - margin - 34, y: 26, size: 7.5, font: regular, color: muted });
-    y = pageHeight - 62;
+    page.pushOperators(popGraphicsState());
+    page.drawText('Page ' + pageNumber, { x: pageWidth - margin - 34, y: 26, size: 7, font: regular, color: muted });
+    y = pageHeight - 45.35;
+    if (pageNumber > 1) {
+      for (const part of wrap(documentTitle + ' · ' + documentNumber, bold, 9, 300)) {
+        page.drawText(part, { x: margin, y, size: 9, font: bold, color: inkBlack }); y -= 12;
+      }
+      y = Math.min(y - 18, pageHeight - 140);
+    }
   };
 
   const ensure = (height: number) => {
@@ -301,83 +319,58 @@ export async function buildBusinessDocumentPdf(
     ? `${text(identity["tax_id_label"])}: ${text(identity["tax_id"])}`
     : `${text(identity["tax_id_label"]) || "Tax ID"}: Not configured`;
 
-  // Client brand leads: mark and trading name top-left, metadata top-right.
-  let mastheadX = margin;
-  if (embeddedLogo) {
-    const scaled = embeddedLogo.scale(34 / embeddedLogo.height);
-    page.drawImage(embeddedLogo, { x: margin, y: y - 24, width: scaled.width, height: 34 });
-    mastheadX = margin + scaled.width + 12;
-  }
-
+  // Match the preview: property trading name first, legal identity below.
   const mastheadTop = y;
-  page.drawText(organisation, { x: mastheadX, y, size: 14.5, font: bold, color: dark });
+  let logoWidth = 42;
+  if (embeddedLogo) {
+    const factor = Math.min(42 / embeddedLogo.height, 119 / embeddedLogo.width);
+    logoWidth = embeddedLogo.width * factor;
+    page.drawImage(embeddedLogo, { x: margin, y: mastheadTop - 42, width: logoWidth, height: embeddedLogo.height * factor });
+  } else {
+    page.drawRectangle({ x: margin, y: mastheadTop - 42, width: 42, height: 42, borderWidth: 0.5, borderColor: rgb(0.75, 0.75, 0.75) });
+    const initials = propertyName.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 3).join("").toUpperCase();
+    const initialWidth = bold.widthOfTextAtSize(initials, 9);
+    page.drawText(initials, { x: margin + (42 - initialWidth) / 2, y: mastheadTop - 25, size: 9, font: bold, color: inkBlack });
+  }
+  const mastheadX = margin + logoWidth + 12;
   y -= 15;
-  page.drawText(propertyName, { x: mastheadX, y, size: 10, font: bold, color: primary });
-  y -= 12;
-  for (const line of [addressParts, contactParts, taxLine].filter(Boolean)) {
-    page.drawText(line, { x: mastheadX, y, size: 8.5, font: regular, color: muted });
-    y -= 11;
+  for (const part of wrap(propertyName.toUpperCase(), bold, 16.5, Math.min(270, pageWidth - mastheadX - 185))) {
+    draw(part, mastheadX, 16.5, bold, inkBlack); y -= 18;
   }
-  if (identity["registration_number"]) {
-    page.drawText(`Registration: ${text(identity["registration_number"])}`, {
-      x: mastheadX,
-      y,
-      size: 8.5,
-      font: regular,
-      color: muted,
-    });
-    y -= 11;
+  y -= 1;
+  for (const line of [organisation, taxLine, identity["registration_number"] ? 'Registration: ' + text(identity["registration_number"]) : ""].filter(Boolean)) {
+    for (const part of wrap(line, regular, 7.5, 285)) { draw(part, mastheadX, 7.5, regular, muted); y -= 10; }
   }
-
-  // ---- Document metadata block (top right) ----
+  const titleTop = Math.min(y, mastheadTop - 42) - 30;
+  const titleWidth = contentWidth - 245;
+  page.drawRectangle({ x: margin, y: titleTop - 20, width: 85.04, height: 19.84, color: brown });
+  const titleLines = wrap(documentTitle.toUpperCase(), bold, 22.5, titleWidth);
+  titleLines.forEach((part, index) => page.drawText(part, { x: margin + 39.7, y: titleTop - 29 - index * 25, size: 22.5, font: bold, color: inkBlack }));
+  const metaSource = payload.meta ?? {};
   const metaEntries: [string, string][] = [
-    ["Document no.", documentNumber],
-    ["Date", dateLabel(payload.document?.date)],
+    [documentTitle + ' no.', documentNumber], ["Date", dateLabel(payload.document?.date)],
+    ["Status", text(payload.document?.status)], ["Currency", currency], ["Timezone", documentTimezone],
   ];
-  const metaSource = (payload.meta ?? {}) as Record<string, unknown>;
   for (const key of ["due_date", "reservation", "confirmation", "reference", "room", "stay"]) {
-    const value = text(metaSource[key]);
-    if (value) metaEntries.push([key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), value]);
+    const value = text(metaSource[key]); if (value) metaEntries.push([key.replace(/_/g, " "), value]);
   }
-  const statusText = text(payload.document?.status);
-  if (statusText) metaEntries.push(["Status", statusText.replace(/_/g, " ")]);
-
   const metaRight = pageWidth - margin;
-  let metaY = mastheadTop;
-  for (const [label, value] of metaEntries.filter(([, value]) => value)) {
-    const labelWidth = regular.widthOfTextAtSize(label, 7.5);
-    const valueWidth = bold.widthOfTextAtSize(value, 8.5);
-    page.drawText(label, { x: metaRight - 118 - labelWidth / 1, y: metaY, size: 7.5, font: regular, color: muted });
-    page.drawText(value, { x: metaRight - valueWidth, y: metaY, size: 8.5, font: bold, color: dark });
-    metaY -= 12;
+  let metaY = Math.min(titleTop - 9, pageHeight - 128);
+  metaEntries.filter(([,value])=>value).forEach(([label,value], index) => {
+    const font = index === 0 ? bold : regular, size = index === 0 ? 9 : 8.25;
+    for (const part of wrap(label + ': ' + value, font, size, 195)) {
+      page.drawText(part, { x: metaRight - font.widthOfTextAtSize(part, size), y: metaY, size, font, color: inkBlack }); metaY -= 12;
+    }
+  });
+  const trace = documentTraceCode({ organizationId: text(identity["organisation_id"]) || null,
+    propertyId: branchId, documentType: input.type, documentNumber });
+  if (trace) {
+    metaY -= 3;
+    page.drawText(trace, { x: metaRight - regular.widthOfTextAtSize(trace, 6), y: metaY,
+      size: 6, font: regular, color: muted });
+    metaY -= 8;
   }
-  y = Math.min(y, metaY) - 6;
-
-  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: tableRule });
-  y -= 26;
-
-  // ---- Title band: brand tint, restrained, client-owned ----
-  // Brown block, then the large uppercase title overlapping it — the signature
-  // of the canonical NEØ document.
-  page.drawRectangle({ x: margin, y: y + 6, width: 86, height: 20, color: brown });
-  page.drawText(documentTitle.toUpperCase(), { x: margin + 40, y: y - 2, size: 24, font: bold, color: inkBlack });
-  const subtitle = text(payload.document?.subtitle);
-  if (subtitle) {
-    const subtitleWidth = regular.widthOfTextAtSize(subtitle, 8.5);
-    page.drawText(subtitle, {
-      x: pageWidth - margin - 10 - subtitleWidth,
-      y: y + 4,
-      size: 8.5,
-      font: regular,
-      color: muted,
-    });
-  }
-  y -= 34;
-
-  // The balance is not restated here: it belongs once, on the brown total
-  // band beneath the line items, so the reader never has to reconcile two
-  // figures for the same thing.
-
+  y = Math.min(titleTop - 29 - titleLines.length * 25, metaY) - 26;
 
   // ---- Party block ----
   const party = payload.party ?? {};
@@ -416,7 +409,10 @@ export async function buildBusinessDocumentPdf(
       ];
 
   let nextColumnX = margin;
-  const columns = (layout.columns ?? fallbackColumns).map((column) => {
+  const configuredColumns = layout.columns ?? fallbackColumns;
+  const columnScale = contentWidth / configuredColumns.reduce((sum, column) => sum + column.width, 0);
+  const columns = configuredColumns.map((source) => {
+    const column = { ...source, width: source.width * columnScale };
     const positioned = { ...column, x: nextColumnX };
     nextColumnX += column.width;
     return positioned;
@@ -424,7 +420,7 @@ export async function buildBusinessDocumentPdf(
   const descriptionColumn =
     columns.find((column) => column.key === "description") ?? columns[0]!;
   const drawHeader = () => {
-    page.drawRectangle({ x: margin - 6, y: y - 5, width: contentWidth + 12, height: 18, color: rgb(0.95, 0.97, 0.98) });
+    page.drawLine({ start: { x: margin, y: y - 6 }, end: { x: pageWidth - margin, y: y - 6 }, thickness: 0.6, color: tableRule });
     for (const column of columns) {
       const label = column.label.toUpperCase();
       const width = bold.widthOfTextAtSize(label, 7.5);
@@ -442,72 +438,38 @@ export async function buildBusinessDocumentPdf(
   if (lines.length) {
     ensure(60);
     drawHeader();
-    for (const line of lines) {
-      const description = text(line.description) || "—";
-      const wrapped = wrap(description, regular, 9, descriptionColumn.width);
-      const noteText = text(line.note);
-      const noteIsColumn = columns.some((column) => column.key === "note");
+    for (const [lineIndex, line] of lines.entries()) {
+      const cellFont = (key: string) => key === "total" ? bold : regular;
+      const cellValue = (key: string) => {
+        if (key === "number") return String(lineIndex + 1);
+        if (key === "date") return dateLabel(line.date);
+        if (key === "description") return text(line.description) || "—";
+        if (key === "category") return text(line.category).replace(/_/g, " ");
+        if (key === "quantity") return unitIsColumn ? quantity(line.quantity) : [quantity(line.quantity), text(line.unit)].filter(Boolean).join(" ");
+        if (key === "unit") return text(line.unit);
+        if (key === "unit_price") return money(line.unit_price, currency);
+        if (key === "tax") return money(line.tax, currency);
+        if (key === "total") return money(line.total, currency);
+        return text(line.note);
+      };
       const unitIsColumn = columns.some((column) => column.key === "unit");
-      const noteLines =
-        !noteIsColumn && noteText
-          ? wrap(noteText, regular, 7.5, descriptionColumn.width)
-          : [];
-      const rowHeight = wrapped.length * 11 + noteLines.length * 9 + 8;
-      if (y - rowHeight < 48) {
-        startPage();
-        drawHeader();
-      }
+      const cells = columns.map((column) => ({ column, font: cellFont(column.key), parts: wrap(cellValue(column.key), cellFont(column.key), 8.5, column.width - 8) }));
+      const noteLines = !columns.some((column) => column.key === "note") && line.note ? wrap(text(line.note), regular, 7.5, descriptionColumn.width - 8) : [];
+      const mainHeight = Math.max(1, ...cells.map((cell) => cell.parts.length)) * 12;
+      const rowHeight = mainHeight + noteLines.length * 10 + 10;
+      if (y - rowHeight < 55) { startPage(); drawHeader(); }
       const rowTop = y;
-      for (const [index, part] of wrapped.entries()) {
-        page.drawText(part, { x: descriptionColumn.x, y: rowTop - index * 11, size: 9, font: regular, color: dark });
+      for (const {column,font,parts} of cells) {
+        parts.forEach((part,index) => page.drawText(part, {
+          x: column.align === "right" ? column.x + column.width - 4 - font.widthOfTextAtSize(part,8.5) : column.x,
+          y: rowTop - index * 12, size: 8.5, font, color: inkBlack,
+        }));
       }
-      for (const [index, part] of noteLines.entries()) {
-        page.drawText(part, {
-          x: descriptionColumn.x,
-          y: rowTop - wrapped.length * 11 - index * 9,
-          size: 7.5,
-          font: regular,
-          color: muted,
-        });
-      }
-      for (const column of columns.filter((column) => column.key !== "description")) {
-        let value = "";
-        if (column.key === "date") {
-          value = dateLabel(line.date);
-        } else if (column.key === "quantity") {
-          value = unitIsColumn
-            ? quantity(line.quantity)
-            : [quantity(line.quantity), text(line.unit)].filter(Boolean).join(" ");
-        } else if (column.key === "unit") {
-          value = text(line.unit);
-        } else if (column.key === "unit_price") {
-          value = money(line.unit_price, currency);
-        } else if (column.key === "tax") {
-          value = line.tax === null || line.tax === undefined ? "—" : money(line.tax, currency);
-        } else if (column.key === "total") {
-          value = money(line.total, currency);
-        } else if (column.key === "note") {
-          value = text(line.note) || dateLabel(line.date);
-        }
-        if (!value) continue;
-        const width = regular.widthOfTextAtSize(value, 9);
-        page.drawText(value, {
-          x: column.align === "right" ? column.x + column.width - width : column.x,
-          y: rowTop,
-          size: 9,
-          font: column.key === "total" ? bold : regular,
-          color: dark,
-        });
-      }
+      noteLines.forEach((part,index)=>page.drawText(part,{ x:descriptionColumn.x,y:rowTop-mainHeight-index*10,size:7.5,font:regular,color:muted }));
       y = rowTop - rowHeight;
-      page.drawLine({
-        start: { x: margin, y: y + 6 },
-        end: { x: pageWidth - margin, y: y + 6 },
-        thickness: 0.4,
-        color: rule,
-      });
+      page.drawLine({ start:{x:margin,y:y+6},end:{x:pageWidth-margin,y:y+6},thickness:0.35,dashArray:[1,2],color:rule });
     }
-    y -= 10;
+    y -= 16;
   }
 
   // ---- Totals: a right-aligned summary panel, total on a brand band ----
@@ -538,6 +500,7 @@ if (totals.length) {
   ensure(totals.length * 16 + 30);
 
   for (const total of totals) {
+    if (total.emphasis) y -= 8;
     const value = money(total.amount, currency);
     const size = total.emphasis ? 11 : 9;
     const font = total.emphasis ? bold : regular;
@@ -557,7 +520,7 @@ if (totals.length) {
       y: total.emphasis ? y + 1 : y,
       size,
       font,
-      color: total.emphasis ? rgb(1, 1, 1) : muted,
+      color: total.emphasis ? rgb(1, 1, 1) : inkBlack,
     });
 
     const width = font.widthOfTextAtSize(value, size);
@@ -570,19 +533,11 @@ if (totals.length) {
       color: total.emphasis ? rgb(1, 1, 1) : dark,
     });
 
-    y -= total.emphasis ? 28 : 14;
+    y -= total.emphasis ? 34 : 18;
 
-    if (!total.emphasis) {
-      page.drawLine({
-        start: { x: boxX + 4, y: y + 8 },
-        end: { x: pageWidth - margin - 4, y: y + 8 },
-        thickness: 0.35,
-        color: rule,
-      });
-    }
   }
 
-  y -= 6;
+  y -= 8;
 }
 
   // ---- Payment information, terms and operational detail ----
@@ -646,65 +601,34 @@ if (totals.length) {
     }
   }
 
-  // ---- Footer: property contact, then quiet provenance ----
-  ensure(64);
-  page.drawLine({ start: { x: margin, y: y + 10 }, end: { x: pageWidth - margin, y: y + 10 }, thickness: 1, color: brown });
-  page.drawText(`${propertyName} · ${organisation}`, { x: margin + 10, y: y - 2, size: 8, font: bold, color: dark });
-  const footerContact = [addressParts, contactParts].filter(Boolean).join("  ·  ");
-  if (footerContact) {
-    page.drawText(footerContact.slice(0, 150), { x: margin + 10, y: y - 14, size: 7, font: regular, color: muted });
-  }
-  page.drawText(
-    `Generated ${dateLabel(payload.generated_at)} from the canonical record. Document number issued by the system; amounts are not recalculated at print time.`,
-    { x: margin + 10, y: y - 25, size: 6.5, font: regular, color: muted },
-  );
-
-  // Immutable trace code, then the centred house signature.
-  const trace = documentTraceCode({
-    organizationId: text(identity["organisation_id"]) || null,
-    propertyId: branchId,
-    documentType: input.type,
-    documentNumber,
+  // A real footer region, with the same three contact columns as the preview.
+  if (y < 148) startPage();
+  const footerTop = 138;
+  page.drawLine({ start:{x:margin,y:footerTop},end:{x:pageWidth-margin,y:footerTop},thickness:0.6,color:brown });
+  const contactColumns = [["Phone",text(property["phone"])],["Mail",text(property["email"])],["Address",addressParts]];
+  contactColumns.forEach(([label,value],index)=>{
+    const x=margin+index*(contentWidth/3);
+    if (index === 0) {
+      page.drawRectangle({ x: x + 2, y: footerTop - 23, width: 4.5, height: 9, borderWidth: 0.8, borderColor: inkBlack });
+    } else if (index === 1) {
+      page.drawRectangle({ x, y: footerTop - 22, width: 9, height: 6, borderWidth: 0.6, borderColor: inkBlack });
+      page.drawLine({ start: { x, y: footerTop - 16 }, end: { x: x + 4.5, y: footerTop - 20 }, thickness: 0.5, color: inkBlack });
+      page.drawLine({ start: { x: x + 9, y: footerTop - 16 }, end: { x: x + 4.5, y: footerTop - 20 }, thickness: 0.5, color: inkBlack });
+    } else {
+      page.drawCircle({ x: x + 4.5, y: footerTop - 18, size: 2.7, borderWidth: 1, borderColor: inkBlack });
+      page.drawLine({ start: { x: x + 2.4, y: footerTop - 20 }, end: { x: x + 4.5, y: footerTop - 24 }, thickness: 0.7, color: inkBlack });
+      page.drawLine({ start: { x: x + 6.6, y: footerTop - 20 }, end: { x: x + 4.5, y: footerTop - 24 }, thickness: 0.7, color: inkBlack });
+    }
+    page.drawText(label!,{x:x+13,y:footerTop-19,size:8.25,font:bold,color:inkBlack});
+    wrap(value||"Not configured",regular,7.5,contentWidth/3-25).slice(0,4).forEach((part,line)=>page.drawText(part,{x:x+13,y:footerTop-31-line*10,size:7.5,font:regular,color:muted}));
   });
-  if (trace) {
-    page.drawText(trace, { x: margin + 10, y: y - 36, size: 6.5, font: regular, color: muted });
-  }
-
-  // The permanent NEØ mark, set quietly in the lower-right corner. It sits in
-  // the existing footer margin, so nothing above it moves.
+  const signature="Powered by NEØ",credit="Built by AI, Data & Marketing by Wambui";
+  page.drawText(signature,{x:(pageWidth-regular.widthOfTextAtSize(signature,6.75))/2,y:58,size:6.75,font:regular,color:muted});
+  page.drawText(credit,{x:(pageWidth-regular.widthOfTextAtSize(credit,6))/2,y:47,size:6,font:regular,color:muted});
   try {
-    const symbol = await pdf.embedPng(Buffer.from(NEO_SYMBOL_BASE64, "base64"));
-    const symbolSize = 26;
-    page.drawImage(symbol, {
-      x: pageWidth - margin - symbolSize,
-      y: y - 44,
-      width: symbolSize,
-      height: symbolSize,
-    });
-  } catch {
-    // A mark that cannot be embedded must never cost the document itself.
-  }
-
-  const signature = "Powered by NEØ";
-  const signatureWidth = regular.widthOfTextAtSize(signature, 7);
-  page.drawText(signature, {
-    x: (pageWidth - signatureWidth) / 2,
-    y: y - 50,
-    size: 7,
-    font: regular,
-    color: muted,
-  });
-
-  const credit = "Built by AI, Data & Marketing by Wambui";
-  const creditWidth = regular.widthOfTextAtSize(credit, 6);
-  page.drawText(credit, {
-    x: (pageWidth - creditWidth) / 2,
-    y: y - 60,
-    size: 6,
-    font: regular,
-    color: muted,
-  });
-
+    const symbol=await pdf.embedPng(Buffer.from(NEO_SYMBOL_BASE64,"base64"));
+    page.drawImage(symbol,{x:pageWidth-margin-26,y:39,width:26,height:26});
+  } catch { /* Branding artwork never invalidates an otherwise printable record. */ }
 
   pdf.setTitle(`${documentTitle} ${documentNumber}`);
   pdf.setAuthor(organisation);

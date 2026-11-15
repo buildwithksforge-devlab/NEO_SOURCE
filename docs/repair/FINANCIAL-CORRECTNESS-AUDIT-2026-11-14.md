@@ -25,4 +25,18 @@ Status: in progress. This is not certification of all Finance calculations or hi
 - Detect rather than rewrite any historical inconsistencies; any financial recovery needs exact supporting evidence.
 
 ## Deployment status
-New document/arithmetic edits are local and not deployed. Shared-workspace 23-routine installer was confirmed installed separately. Two pending POS migrations must be installed before their dependent client changes deploy.
+Initial document/arithmetic changes and POS dependencies are deployed in commit `8a5cfa6`, Worker version `df612086-86b5-4b11-bac6-27937ba849b9`. The user confirmed both POS routines, column and four triggers installed. Release checks: 323 regression tests, TypeScript, production build and smoke passed. Live assets match and unauthenticated payment/PIN/callback probes were rejected. This is release evidence, not end-to-end accounting certification.
+
+## Installed calculation definitions reviewed after deployment
+The user returned `financial-calculation-contracts-v1` with eleven installed routines and fingerprints. These supersede older migration bodies when auditing live behavior.
+
+- **Preserve existing repair:** installed `delivery_quote_cart` already extracts inclusive tax and does not add it again to grand total. The older repository migration differs. Do not restore that older body. Installed POS totals also already zero an empty bill correctly.
+- **Confirmed room-service handoff defect:** `neo_guest_place_room_service` passes inclusive subtotal less discount as folio base, then separately adds tax through `folio_post_charge`. For a tax-inclusive 116 sale with tax 16, the resulting folio charge becomes 132 before service charge. This is a future-call defect; do not rewrite historical bills without evidence. Tips also need separate classification and reconciliation before claiming the complete handoff fixed.
+- **Modifier parity gap:** delivery quote adds cart modifier prices into subtotal, but order creation writes base menu quantity × price as line total and inserts modifiers separately. No modifier-trigger definition has yet been found that reconciles that amount. Confirm trigger inventory before replacing the chain; the newly installed atomic-selection mechanism is available for the eventual handoff repair.
+- **Currency defect:** delivery order creation temporarily uses preferred language as currency then forces KES; room-service creation also forces KES. Property currency must govern these paths, with M-Pesa remaining KES-only by its own contract.
+- **Retry identity defect:** converted-cart recovery selects the customer's latest delivery order rather than an order bound to that exact cart. Different carts can be confused on retry. An exact durable cart-to-order relationship is required.
+- **Pending-collection discount review:** installed discount command does not itself lock the order before reading or check open provider attempts. Confirm existing order triggers and discount authority before changing it; preserve approved void/refund workflows.
+- **Tax extensibility gap:** Finance tax codes have configured rates/treatments/effective dates/accounts, while menu lines use an effective numeric tax rate and POS settings expose a service percentage. Adding a Finance tax code alone is not proof that every sales entry point uses it. Configuration-to-charge-component mapping, rounding, posting and documents require further explicit work.
+
+## Follow-up document/report repair
+Report PDFs now distinguish invalid facts from genuine zeroes, require a known currency and wrap long values. Ten new report formatter regression cases pass. This repair is included with the shared A4 layout correction described in `DOCUMENT-LAYOUT-2026-11-15.md`. The release build, TypeScript, smoke and 323 regression checks passed; deployment is recorded separately. No additional backend monetary routine is changed by this follow-up.

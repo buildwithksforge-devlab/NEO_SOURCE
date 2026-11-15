@@ -6,6 +6,8 @@
  */
 
 export type DocumentColumnKey =
+  | "number"
+  | "category"
   | "description"
   | "date"
   | "quantity"
@@ -73,12 +75,12 @@ export const DOCUMENT_LAYOUTS = {
     detailHeading: "STAY & FOLIO DETAILS",
     partyFallback: "Guest",
     columns: [
-      { key: "date", label: "Date", width: 82, align: "left" },
-      { key: "description", label: "Description", width: 183, align: "left" },
-      { key: "quantity", label: "Qty", width: 45, align: "right" },
-      { key: "unit_price", label: "Rate", width: 75, align: "right" },
-      { key: "tax", label: "Tax", width: 55, align: "right" },
-      { key: "total", label: "Amount", width: 65, align: "right" },
+      { key: "number", label: "No.", width: 23, align: "left" },
+      { key: "date", label: "Date", width: 80, align: "left" },
+      { key: "description", label: "Description", width: 205, align: "left" },
+      { key: "category", label: "Category", width: 90, align: "left" },
+      { key: "quantity", label: "Qty", width: 25, align: "right" },
+      { key: "total", label: "Amount", width: 93, align: "right" },
     ],
   },
 
