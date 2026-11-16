@@ -8,7 +8,7 @@ This consolidated list supersedes the historical "next work" notes in the eviden
 
 | Order | Kind | Actual remaining work | Finish evidence |
 | --- | --- | --- | --- |
-| 1 | ROLLOUT | Establish authorized original-project inspection; compare staged SQL to installed routines; release compatible database/app/agent changes in dependency order | Recorded installed definitions, unchanged grants and deployed build; new runtime paths actually active |
+| 1 | ROLLOUT | Preview application is deployed (release record below). Establish authorized original-project inspection, compare/install staged SQL and verify compatible backend/agent operation | Recorded installed definitions, unchanged grants and deployed build; new runtime paths actually active |
 | 2 | ROLLOUT / CHECK/FIX | Install/verify the actual Windows printer; ordinary receipt/A4 print; agent pairing/discovery; Kitchen/Bar/Coffee/Pastry routing, offline/uncertain outcome, retry, backup/reprint | Correct physical paper, correct station/property and no silent duplicate; saved IP alone is insufficient |
 | 3 | BUILD / CHECK/FIX | Complete requisition → RFQ/quotation → selection → approval → LPO → supplier communication, with durable dispatch evidence | Original approved purchase and actual outbound communication remain linked/retrievable |
 | 4 | BUILD / CHECK/FIX | Supplier delivery-note attachment/archive and full GRN finance accrual, including pending-finance recovery | Delivery document, accepted GRN, stock value and posted accrual journal reconcile without reposting stock |
@@ -190,3 +190,12 @@ Platform references for printing direction: [browser print dialog](https://devel
 - Deployment script retains worker `neo-preview`, existing account, compatibility date and `keep_vars=true`. Uses installed Node package entrypoints to avoid the host's blocked npm/npx shim, checks migration versions and TypeScript, builds fresh and runs built-server smoke before deployment. Existing runtime flags/settings are preserved.
 - Pre-release focused checks: **101 tests passed in 10 files**, covering legacy compatibility, print relay/entry, M-Pesa dispatch and newer PMS check-in/nightly/accommodation/night-audit candidates. These overlap prior runs; no cumulative total is claimed. Final deployment result/build identity will be recorded after verification.
 - Local safety backups, scratch captures and environment credentials remain on this computer and are excluded from the source commit.
+
+### Preview release verified
+
+- Source repairs committed as `0febd2f`; Windows PowerShell native-warning handling corrected in `6bc12bd`. Both pushed to `origin/repair/neo-waves-20261106` without rewriting history.
+- Deployed source revision: **`6bc12bde`**. Worker: **`neo-preview`**. Existing URL: **https://neo-preview.neo-hospitality.workers.dev**. Cloudflare version: **`90f065c1-03bd-406f-a1ea-825db36f506c`**. Source build ID: **`b33769acc209ed89`**.
+- Full TypeScript, fresh production build and built-server smoke passed. Deployment wrapper separately verified that native stderr warnings do not abort successful commands, while nonzero exits still refuse deployment. Public-build scan passed after excluding the confirmed public Supabase project identifier; no credential value or runtime setting was changed.
+- Live verification: `/` and `/auth` each returned **HTTP 200**, the expected source build ID and `Cache-Control: private, no-store`. Downloaded Windows agent ZIP matched committed SHA-256 **`290f2e32727c580b956cad29a60588e61091663166fe391473accc25acc33c4c`**.
+- Existing Worker account/name and runtime variables preserved with `keep_vars=true`. This was an application/asset release: **no SQL migration was executed**, no payment/stock/guest transaction was submitted, and no printer agent was paired or physical paper verified. Managed-print activation and installed SQL/operational acceptance remain open.
+- This release record is a documentation-only follow-up; it does not change the deployed runtime source or assets. The remaining-only queue above is the next-session checkpoint.
