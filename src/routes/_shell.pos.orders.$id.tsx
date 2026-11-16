@@ -59,6 +59,8 @@ import {
   usePosDiscountPolicies,
   useApplyPosDiscount,
   useConfirmManualPayment,
+  useSubmitMpesaReceiptReview,
+  useMpesaReceiptReviewQueue,
   useReconcileSettlement,
   useRemoveDraftItem,
   useRemoveDraftOrder,
@@ -131,6 +133,11 @@ function OrderTerminal() {
   const reconcile = useReconcileSettlement();
   const confirmManual = useConfirmManualPayment();
   const canManualConfirm = can("pos", "payments", "manual-confirm");
+  const canSubmitReceipt = can("pos", "payments", "process") || canManualConfirm
+    || can("finance", "collections", "verify_bill")
+    || can("finance", "till", "confirm_cash") || can("finance", "approve");
+  const submitReceipt = useSubmitMpesaReceiptReview();
+  const receiptReviews = useMpesaReceiptReviewQueue(order.data?.branch_id ?? null);
   const discountPolicies = usePosDiscountPolicies();
   const applyDiscount = useApplyPosDiscount();
   const receiptPrintState = usePosReceiptPrintState(id);
@@ -175,6 +182,7 @@ function OrderTerminal() {
     method: string;
   } | null>(null);
   const [confirmNote, setConfirmNote] = useState("");
+  const [confirmReceipt, setConfirmReceipt] = useState("");
 
   const q = search.trim().toLowerCase();
   // A bar tab sells the bar's menus, not the whole hotel catalogue: the
@@ -706,63 +714,74 @@ function OrderTerminal() {
                 </div>
               </SectionCard>
 
-              <SectionCard
-                title="Payments"
-                description="Every settlement attempt is recorded, including pending ones."
-              >
+              <SectionCard title="Payments"
+                description="Saved payment attempts and their receipt reviews. A submitted receipt remains unconfirmed until approved.">
+                {receiptReviews.isError ? (
+                  <p role="alert" className="mb-3 text-sm text-destructive">
+                    Receipt-review status could not be refreshed. Check the existing review before resubmitting.
+                  </p>
+                ) : null}
                 {(data.pos_payments ?? []).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
                 ) : (
-                  <ul className="space-y-2 text-sm">
-                    {data.pos_payments.map((p) => (
-                      <li key={p.id} className="flex items-start justify-between gap-2">
-                        <span className="min-w-0">
-                          {titleCase(p.method)}
-                          {p.external_reference ? ` · ${p.external_reference}` : ""}
-                          {p.verification_note ? (
-                            <span className="block text-xs text-muted-foreground">
-                              Manually confirmed — {p.verification_note}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          {money(p.amount)}
-                          <StatusPill
-                            tone={
-                              p.status === "confirmed"
-                                ? "success"
-                                : p.status === "failed"
-                                  ? "destructive"
-                                  : "warning"
-                            }
-                          >
-                            {titleCase(p.status)}
-                          </StatusPill>
-                          {p.method === "mpesa" && (p.status === "pending" || p.status === "initiated") ? (
-                            <MpesaPromptDialog sourceModule="pos_order" sourceRecordId={data.id}
-                              paymentId={p.id} recoveryOnly triggerLabel="Check Safaricom"
-                              balance={balance} initialAmount={Number(p.amount)} onSettled={() => void order.refetch()} />
-                          ) : null}
-                          {canManualConfirm &&
-                            (p.status === "pending" || p.status === "initiated") ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setConfirmNote("");
-                                setConfirmPayment({
-                                  id: p.id,
-                                  amount: Number(p.amount),
-                                  method: p.method,
-                                });
-                              }}
-                            >
-                              {p.method === "mpesa" ? "Manual verification" : "Confirm"}
-                            </Button>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {data.pos_payments.map((p) => {
+                      const review = receiptReviews.data?.find((r) => r.payment_id === p.id);
+                      const reviewing = review && [
+                        "pending_approval", "approved_pending_execution", "executing", "execution_failed",
+                      ].includes(review.status);
+                      const pending = ["pending", "initiated", "failed"].includes(p.status);
+                      return (
+                        <li key={p.id} className="rounded-xl border border-border p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{titleCase(p.method)} · {money(p.amount)}</p>
+                              {p.external_reference ? (
+                                <p className="break-all text-xs text-muted-foreground">{p.external_reference}</p>
+                              ) : null}
+                              {p.verification_note ? (
+                                <p className="mt-1 text-xs text-muted-foreground">{p.verification_note}</p>
+                              ) : null}
+                              {review ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Receipt {review.receipt}: {titleCase(review.status.replaceAll("_", " "))}
+                                </p>
+                              ) : null}
+                              {review?.execution_error ? (
+                                <p className="mt-1 text-xs text-destructive">{review.execution_error}</p>
+                              ) : null}
+                            </div>
+                            <StatusPill tone={p.status === "confirmed" ? "success" : p.status === "failed" ? "destructive" : "warning"}>
+                              {p.provider_status === "manager-reviewed" ? "Cashier / supervisor reviewed" : titleCase(p.status)}
+                            </StatusPill>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {p.method === "mpesa" && can("pos", "payments", "process")
+                              && (pending || p.provider_status === "manager-reviewed") ? (
+                              <MpesaPromptDialog sourceModule="pos_order" sourceRecordId={data.id}
+                                paymentId={p.id} recoveryOnly triggerLabel="Check Safaricom"
+                                balance={balance} initialAmount={Number(p.amount)}
+                                onSettled={() => void order.refetch()} />
+                            ) : null}
+                            {p.method === "mpesa" && pending && canSubmitReceipt && !reviewing ? (
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setConfirmNote(""); setConfirmReceipt("");
+                                setConfirmPayment({ id: p.id, amount: Number(p.amount), method: p.method });
+                              }}>
+                                Submit receipt for review
+                              </Button>
+                            ) : null}
+                            {p.method !== "mpesa" && canManualConfirm
+                              && ["pending", "initiated"].includes(p.status) ? (
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setConfirmNote(""); setConfirmReceipt("");
+                                setConfirmPayment({ id: p.id, amount: Number(p.amount), method: p.method });
+                              }}>Confirm</Button>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </SectionCard>
@@ -812,50 +831,65 @@ function OrderTerminal() {
             balance={balance}
           />
           <Dialog
-            open={Boolean(confirmPayment) && canManualConfirm}
+            open={Boolean(confirmPayment) && (confirmPayment?.method === "mpesa" ? canSubmitReceipt : canManualConfirm)}
             onOpenChange={(open) => {
               if (!open) {
-                setConfirmPayment(null);
-                setConfirmNote("");
+                setConfirmPayment(null); setConfirmNote(""); setConfirmReceipt("");
               }
-            }}
-          >
+            }}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Confirm payment manually</DialogTitle>
+                <DialogTitle>
+                  {confirmPayment?.method === "mpesa" ? "Submit M-Pesa receipt" : "Confirm payment manually"}
+                </DialogTitle>
                 <DialogDescription>
-                  {confirmPayment
-                    ? `${titleCase(confirmPayment.method)} · ${money(confirmPayment.amount)}. `
-                    : ""}
-                  Confirm only after independently verifying the money was received. This action records your verification; it does not send a prompt or charge the customer.
+                  {confirmPayment ? `${titleCase(confirmPayment.method)} · ${money(confirmPayment.amount)}. ` : ""}
+                  {confirmPayment?.method === "mpesa"
+                    ? "Enter the actual receipt and evidence for the cashier or authorized supervisor to check. Submission does not confirm money or send another prompt."
+                    : "Confirm only after verifying that the money was received. Your verification is recorded."}
                 </DialogDescription>
               </DialogHeader>
+              {confirmPayment?.method === "mpesa" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="confirm-receipt">Safaricom receipt code</Label>
+                  <Input id="confirm-receipt" value={confirmReceipt}
+                    maxLength={16} autoCapitalize="characters" autoComplete="off"
+                    onChange={(e) => setConfirmReceipt(e.target.value.toUpperCase())} />
+                </div>
+              ) : null}
               <div className="grid gap-2">
-                <Label htmlFor="confirm-note">Verification note</Label>
-                <Textarea
-                  id="confirm-note"
-                  value={confirmNote}
+                <Label htmlFor="confirm-note">
+                  {confirmPayment?.method === "mpesa" ? "Money evidence for review" : "Verification note"}
+                </Label>
+                <Textarea id="confirm-note" value={confirmNote} maxLength={1500}
                   onChange={(e) => setConfirmNote(e.target.value)}
-                  placeholder="How was this payment verified?"
-                />
+                  placeholder="Describe the receiving-account evidence to check." />
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!canManualConfirm || !confirmNote.trim() || confirmManual.isPending}
+                  disabled={confirmPayment?.method === "mpesa"
+                    ? !canSubmitReceipt || !/^[A-Z0-9]{8,16}$/.test(confirmReceipt.trim())
+                      || confirmNote.trim().length < 10 || submitReceipt.isPending
+                    : !canManualConfirm || !confirmNote.trim() || confirmManual.isPending}
                   onClick={() => {
-                    if (!canManualConfirm || !confirmPayment) return;
-                    confirmManual.mutate(
-                      { paymentId: confirmPayment.id, note: confirmNote.trim() },
-                      {
-                        onSuccess: () => {
-                          setConfirmPayment(null);
-                          setConfirmNote("");
-                        },
-                      },
-                    );
-                  }}
-                >
-                  Confirm payment
+                    if (!confirmPayment) return;
+                    const close = () => {
+                      setConfirmPayment(null); setConfirmNote(""); setConfirmReceipt("");
+                    };
+                    if (confirmPayment.method === "mpesa") {
+                      if (!canSubmitReceipt) return;
+                      submitReceipt.mutate({
+                        paymentId: confirmPayment.id,
+                        receipt: confirmReceipt, evidence: confirmNote,
+                      }, { onSuccess: close });
+                    } else {
+                      if (!canManualConfirm) return;
+                      confirmManual.mutate({
+                        paymentId: confirmPayment.id, note: confirmNote.trim(),
+                      }, { onSuccess: close });
+                    }
+                  }}>
+                  {confirmPayment?.method === "mpesa" ? "Submit for cashier review" : "Confirm payment"}
                 </Button>
               </DialogFooter>
             </DialogContent>

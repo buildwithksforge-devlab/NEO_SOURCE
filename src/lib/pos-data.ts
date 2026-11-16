@@ -1,5 +1,5 @@
 import { requireVoidResult } from "@/lib/pos-void-result";
-import { rejectBusinessFailure, requireSavedRecord, requirePosPaymentResult } from "@/lib/durable-command-result";
+import { rejectBusinessFailure, requireSavedRecord, requirePosPaymentResult, requireMpesaReceiptReviewResult } from "@/lib/durable-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
@@ -1782,4 +1782,113 @@ export function useRemoveMenuItem(){
   if(!data||data.ok!==true||data.item_id!==input.id||data.mode!==input.mode)throw new Error('The menu removal could not be verified. Refresh before retrying.');
   return data as {ok:true;item_id:string;mode:string};
  },onSuccess:(result)=>{toast.success(result.mode==='archive'?'Item archived. Existing sales history retained.':'Unused draft item deleted.');invalidate();},onError:(error:Error)=>toast.error(error.message)});
+}
+
+export type MpesaReceiptReview = {
+  request_id: string;
+  payment_id: string;
+  amount: number;
+  currency: string;
+  receipt: string;
+  evidence: string;
+  status: string;
+  requested_at: string;
+  requested_by: string;
+  execution_error: string | null;
+  can_approve: boolean;
+};
+
+export function useMpesaReceiptReviewQueue(branchId: string | null = null) {
+  const { organizationId, user } = useAuth();
+  const { scopeKey } = useDataScope();
+  const branch = branchId && branchId !== "all" ? branchId : null;
+  return useQuery<MpesaReceiptReview[]>({
+    queryKey: ["pos", "receipt-reviews", organizationId, user?.id, scopeKey, branch],
+    enabled: Boolean(organizationId && user?.id),
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(
+        supabase, "neo_mpesa_receipt_review_queue", { _branch: branch },
+      );
+      if (error) throw new Error(error.message);
+      if (!Array.isArray(data)) throw new Error("Receipt-review status could not be loaded.");
+      return data.map((value: unknown) => {
+        const row = requireSavedRecord(
+          value, ["request_id", "payment_id", "status", "receipt", "currency", "evidence"],
+          "Incomplete receipt-review status was returned.",
+        );
+        const amount = Number(row["amount"]);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          throw new Error("Receipt-review amount needs attention.");
+        }
+        return { ...row, amount, can_approve: row["can_approve"] === true } as unknown as MpesaReceiptReview;
+      });
+    },
+  });
+}
+
+export function useSubmitMpesaReceiptReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { paymentId: string; receipt: string; evidence: string }) => {
+      const receipt = input.receipt.trim().toUpperCase();
+      const evidence = input.evidence.trim();
+      if (!/^[A-Z0-9]{8,16}$/.test(receipt) || evidence.length < 10 || evidence.length > 1500) {
+        throw new Error("Enter the actual receipt code and a clear description of the money evidence.");
+      }
+      const { data, error } = await guardedRpc(
+        supabase, "neo_mpesa_receipt_review_request",
+        { _payment: input.paymentId, _receipt: receipt, _evidence: evidence },
+      );
+      if (error) throw new Error(error.message);
+      return requireMpesaReceiptReviewResult(data, input.paymentId);
+    },
+    onSuccess: (result) => {
+      if (result["status"] === "confirmed") {
+        toast.message("This payment is already confirmed. No additional payment was recorded.");
+      } else if (result["status"] === "execution_failed") {
+        toast.warning("The existing receipt review needs attention. Check it before submitting again.");
+      } else {
+        toast.message("Receipt submitted for cashier review. Submission does not confirm the payment.");
+      }
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+      void qc.invalidateQueries({ queryKey: ["approval-requests"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useDecideMpesaReceiptReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      requestId: string; paymentId: string;
+      action: "approved" | "rejected" | "returned"; note: string;
+    }) => {
+      const note = input.note.trim();
+      if (note.length < 10 || note.length > 1500) {
+        throw new Error("Record a clear decision note of at least 10 characters.");
+      }
+      const { data, error } = await guardedRpc(
+        supabase, "neo_mpesa_receipt_review_decide",
+        { _request: input.requestId, _action: input.action, _note: note },
+      );
+      if (error) throw new Error(error.message);
+      return requireMpesaReceiptReviewResult(data, input.paymentId, input.requestId);
+    },
+    onSuccess: (result) => {
+      if (result["status"] === "execution_failed") {
+        toast.warning("The receipt decision was saved, but confirmation needs attention. Check the review error; do not collect again.");
+      } else if (result["status"] === "completed") {
+        toast.success("Receipt review completed. Check the saved payment and Finance posting status.");
+      } else {
+        toast.message(result["status"] === "rejected"
+          ? "Receipt review rejected." : "Receipt returned for correction.");
+      }
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+      void qc.invalidateQueries({ queryKey: ["approval-requests"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 }

@@ -80,3 +80,26 @@ export function requireLaundryPostingResult(value: unknown): CommandRecord {
   if (result["ok"] !== true || result["folio_charged"] !== true) throw new Error(message);
   return result;
 }
+
+/** A receipt proposal is distinct from a confirmed payment. */
+export function requireMpesaReceiptReviewResult(
+  value: unknown,
+  paymentId: string,
+  requestId?: string,
+): CommandRecord {
+  const message = "Receipt review was not confirmed as saved. Check the existing payment before retrying.";
+  const result = requireSavedRecord(value, ["payment_id", "status"], message);
+  const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+  if (result["payment_id"] !== paymentId || !uuid.test(paymentId)) throw new Error(message);
+  if (!requestId && result["status"] === "confirmed") {
+    return requirePosPaymentResult(result, { paymentId, confirmed: true });
+  }
+  const saved = requireSavedRecord(result, ["request_id"], message);
+  const states = requestId
+    ? ["completed", "rejected", "returned_for_correction", "execution_failed"]
+    : ["pending_approval", "approved_pending_execution", "executing", "execution_failed"];
+  if (!uuid.test(String(saved["request_id"]))
+      || (requestId && saved["request_id"] !== requestId)
+      || !states.includes(String(saved["status"]))) throw new Error(message);
+  return saved;
+}

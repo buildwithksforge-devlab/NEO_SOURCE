@@ -4,6 +4,7 @@ import {
   requirePrintJobId,
   requireSavedRecord,
   requirePosPaymentResult,
+  requireMpesaReceiptReviewResult,
 } from "@/lib/durable-command-result";
 
 describe("saved payment responses", () => {
@@ -152,5 +153,44 @@ describe("accrual and intake results", () => {
   });
   it("does not accept an arbitrary toast-shaped value as a print job ID", () => {
     expect(() => requirePrintJobId("queued")).toThrow("persisted job ID");
+  });
+});
+
+describe("M-Pesa receipt review acknowledgements", () => {
+  const payment = "ab000000-0000-4000-8000-000000000001";
+  const request = "ab000000-0000-4000-8000-000000000002";
+  it("keeps a saved proposal distinct from confirmed money", () => {
+    expect(requireMpesaReceiptReviewResult({
+      payment_id: payment, request_id: request, status: "pending_approval",
+    }, payment)["status"]).toBe("pending_approval");
+  });
+  it("accepts a provider confirmation that won the submission race", () => {
+    expect(requireMpesaReceiptReviewResult({
+      payment_id: payment, status: "confirmed",
+    }, payment)["status"]).toBe("confirmed");
+  });
+  it("preserves failed execution as an attention state", () => {
+    expect(requireMpesaReceiptReviewResult({
+      payment_id: payment, request_id: request, status: "execution_failed",
+    }, payment, request)["status"]).toBe("execution_failed");
+  });
+  it.each([
+    null, {}, { payment_id: payment, status: "pending_approval" },
+    { payment_id: payment, request_id: "missing", status: "pending_approval" },
+    { payment_id: request, request_id: request, status: "pending_approval" },
+    { payment_id: payment, request_id: request, status: "completed" },
+    { ok: false, payment_id: payment, request_id: request, status: "pending_approval" },
+  ])("rejects an unproven submission: %j", (result) => {
+    expect(() => requireMpesaReceiptReviewResult(result, payment)).toThrow();
+  });
+  it("requires the exact request identity for a decision", () => {
+    expect(() => requireMpesaReceiptReviewResult({
+      payment_id: payment, request_id: payment, status: "completed",
+    }, payment, request)).toThrow();
+  });
+  it("does not accept a pending proposal as a completed decision", () => {
+    expect(() => requireMpesaReceiptReviewResult({
+      payment_id: payment, request_id: request, status: "pending_approval",
+    }, payment, request)).toThrow();
   });
 });
