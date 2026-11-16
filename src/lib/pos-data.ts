@@ -1,5 +1,5 @@
 import { requireVoidResult } from "@/lib/pos-void-result";
-import { rejectBusinessFailure, requireSavedRecord } from "@/lib/durable-command-result";
+import { rejectBusinessFailure, requireSavedRecord, requirePosPaymentResult } from "@/lib/durable-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
@@ -1010,6 +1010,10 @@ export type SettlementResult = {
 };
 
 function settlementToast(r: SettlementResult) {
+  if (r.finance && typeof r.finance === "object" && "ok" in r.finance && r.finance.ok === false) {
+    toast.warning("Payment saved, but Finance posting needs attention. Check the saved receipt; do not collect the payment again.");
+    return;
+  }
   if (r.duplicate) {
     toast.info(
       r.receipt_number
@@ -1113,7 +1117,7 @@ export function useRecordPayment() {
         rpcArgs,
       );
       if (error) throw error;
-      return data as unknown as SettlementResult;
+      return requirePosPaymentResult(data, { confirmed: Boolean(input.manualConfirm) }) as unknown as SettlementResult;
     },
     onSuccess: (r) => {
       settlementToast(r);
@@ -1148,7 +1152,7 @@ export function useConfirmManualPayment() {
 
       if (error) throw error;
 
-      return data as unknown as SettlementResult;
+      return requirePosPaymentResult(data, { paymentId: input.paymentId, confirmed: true }) as unknown as SettlementResult;
     },
 
     onSuccess: (r) => {

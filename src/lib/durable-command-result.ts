@@ -1,6 +1,22 @@
 /** Validate durable command responses before a mutation can report success. */
 type CommandRecord = Record<string, unknown>;
 
+/** A successful RPC transport is not proof that a payment was saved or confirmed. */
+export function requirePosPaymentResult(
+  value: unknown,
+  expected: { paymentId?: string; confirmed?: boolean } = {},
+): CommandRecord {
+  const fallback = "No saved payment was confirmed. Check the existing attempt before taking another payment.";
+  const result = requireSavedRecord(value, ["payment_id", "status"], fallback);
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(result["payment_id"]))
+      || (expected.paymentId && result["payment_id"] !== expected.paymentId)
+      || !["initiated", "pending", "confirmed"].includes(String(result["status"]))
+      || (expected.confirmed && result["status"] !== "confirmed")) {
+    throw new Error(fallback);
+  }
+  return result;
+}
+
 export function rejectBusinessFailure(value: unknown, fallback: string): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) return;
   const result = value as CommandRecord;

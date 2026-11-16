@@ -3,7 +3,26 @@ import {
   requireAccrualResult,
   requirePrintJobId,
   requireSavedRecord,
+  requirePosPaymentResult,
 } from "@/lib/durable-command-result";
+
+describe("saved payment responses", () => {
+  const paymentId = "ab000000-0000-4000-8000-000000000001";
+  it("accepts a saved pending attempt without treating it as confirmation", () => {
+    expect(requirePosPaymentResult({ payment_id: paymentId, status: "pending" })["status"]).toBe("pending");
+    expect(() => requirePosPaymentResult({ payment_id: paymentId, status: "pending" }, { confirmed: true })).toThrow("Check the existing attempt");
+  });
+  it("requires confirmation for the exact requested payment", () => {
+    expect(requirePosPaymentResult({ payment_id: paymentId, status: "confirmed" }, { paymentId, confirmed: true })["payment_id"]).toBe(paymentId);
+    expect(() => requirePosPaymentResult({ payment_id: "ab000000-0000-4000-8000-000000000002", status: "confirmed" }, { paymentId, confirmed: true })).toThrow("No saved payment");
+  });
+  it.each([null, {}, { status: "confirmed" }, { payment_id: "saved", status: "confirmed" }, { payment_id: paymentId, status: "failed" }])("refuses an unproven saved result %j", (value) => {
+    expect(() => requirePosPaymentResult(value)).toThrow("No saved payment");
+  });
+  it("preserves the backend refusal instead of reporting success", () => {
+    expect(() => requirePosPaymentResult({ ok: false, detail: "Provider receipt is still pending" })).toThrow("Provider receipt is still pending");
+  });
+});
 import { useQueuePrint, useRecordPrintResult, useRetryPrintJob } from "@/lib/printing";
 
 const mock = vi.hoisted(() => ({

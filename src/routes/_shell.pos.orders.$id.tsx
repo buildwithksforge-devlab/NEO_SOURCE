@@ -748,13 +748,14 @@ function OrderTerminal() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() =>
+                              onClick={() => {
+                                setConfirmNote("");
                                 setConfirmPayment({
                                   id: p.id,
                                   amount: Number(p.amount),
                                   method: p.method,
-                                })
-                              }
+                                });
+                              }}
                             >
                               {p.method === "mpesa" ? "Manual verification" : "Confirm"}
                             </Button>
@@ -811,8 +812,13 @@ function OrderTerminal() {
             balance={balance}
           />
           <Dialog
-            open={Boolean(confirmPayment)}
-            onOpenChange={(o) => !o && setConfirmPayment(null)}
+            open={Boolean(confirmPayment) && canManualConfirm}
+            onOpenChange={(open) => {
+              if (!open) {
+                setConfirmPayment(null);
+                setConfirmNote("");
+              }
+            }}
           >
             <DialogContent>
               <DialogHeader>
@@ -835,9 +841,9 @@ function OrderTerminal() {
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!confirmNote.trim() || confirmManual.isPending}
+                  disabled={!canManualConfirm || !confirmNote.trim() || confirmManual.isPending}
                   onClick={() => {
-                    if (!confirmPayment) return;
+                    if (!canManualConfirm || !confirmPayment) return;
                     confirmManual.mutate(
                       { paymentId: confirmPayment.id, note: confirmNote.trim() },
                       {
