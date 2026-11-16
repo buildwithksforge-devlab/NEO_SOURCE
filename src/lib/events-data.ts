@@ -1359,6 +1359,9 @@ export function useRecordEventPayment() {
   }>(
     async (v) => {
       if (!v.intentKey || !Number.isFinite(v.amount) || v.amount <= 0 || Math.abs(Math.round(v.amount * 100) - v.amount * 100) > 0.000001) throw new Error("Enter a positive amount in cents and keep the payment attempt identity.");
+      if (v.method.trim().toLowerCase() === "mpesa") {
+        throw new Error("Events M-Pesa requires a verified provider collection. A receipt code alone cannot confirm payment.");
+      }
       const { data, error } = await guardedRpc(db, "neo_event_billing_record_payment", {
         _booking: v.bookingId,
         _amount: v.amount,

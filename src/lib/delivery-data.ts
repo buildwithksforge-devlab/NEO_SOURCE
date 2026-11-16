@@ -2127,6 +2127,9 @@ export function useRecordDeliveryPayment() {
       destinationAccountId?: string | null;
     }) => {
       guardPreview();
+      if (input.method.trim().toLowerCase() === "mpesa") {
+        throw new Error("Delivery M-Pesa requires the existing verified STK collection flow. Do not confirm payment manually.");
+      }
       const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment_v2", {
         _order: input.orderId,
         _amount: input.amount,
