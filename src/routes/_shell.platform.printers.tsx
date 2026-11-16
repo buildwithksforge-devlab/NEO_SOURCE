@@ -113,7 +113,7 @@ const PRINTER_ROLES = [
 const CONNECTION_TYPES = [
   {
     value: "network",
-    label: "Network TCP/IP",
+    label: "Network ESC/POS receipt printer",
   },
   {
     value: "windows",
@@ -409,6 +409,11 @@ export function PrintersPage() {
                 newConnection === "network" ? "192.168.1.50:9100" : "EPSON TM-T20III Receipt"
               }
             />
+            <p className="mt-2 text-sm text-muted-foreground">
+              {newConnection === "network"
+                ? "For compatible ESC/POS receipt or kitchen printers. Saving an IP address does not connect or test the device. For an office printer, install it in Windows and use the document’s Print action."
+                : "Install the printer in Windows first, including its driver. USB and Bluetooth devices must appear in Windows Printers & scanners. Enter the exact installed queue name and verify a Windows test page."}
+            </p>
           </div>
         </div>
 

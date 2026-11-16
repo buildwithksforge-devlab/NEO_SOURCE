@@ -10,14 +10,21 @@
  *      name, legal name) — not a hardcoded NEØ mark,
  *   2. the preview is the folio actually open (its folio number and balance),
  *   3. the print action calls the branded server document engine with
- *      `folio_statement` + THIS folio's id, and hands the browser a download
- *      named after the system-issued document number.
+ *      `folio_statement` + THIS folio's id, and opens a PDF print preview.
+ *      Download remains an explicitly separate action.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const exportSpy = vi.fn();
+const previewShow = vi.fn();
+const previewClose = vi.fn();
+const openPreview = vi.fn(() => ({ show: previewShow, close: previewClose }));
+vi.mock("@/lib/browser-document", async (original) => ({
+  ...(await original<typeof import("@/lib/browser-document")>()),
+  openDocumentPrintWindow: () => openPreview(),
+}));
 
 const FOLIO = {
   id: "11111111-2222-4333-8444-555555555555",
@@ -68,11 +75,7 @@ vi.mock("@/components/common/PermittedLink", () => ({
     className?: string;
     "aria-current"?: React.AriaAttributes["aria-current"];
   }) => (
-    <a
-      href={to}
-      className={className}
-      aria-current={ariaCurrent}
-    >
+    <a href={to} className={className} aria-current={ariaCurrent}>
       {children}
     </a>
   ),
@@ -165,6 +168,9 @@ const clicks: string[] = [];
 
 beforeEach(() => {
   exportSpy.mockReset();
+  previewShow.mockClear();
+  previewClose.mockClear();
+  openPreview.mockClear();
   clicks.length = 0;
   // jsdom has no object URLs and no navigation — capture the download instead.
   Object.defineProperty(URL, "createObjectURL", { value: () => "blob:doc", writable: true });
@@ -220,7 +226,34 @@ describe("folio statement document action", () => {
     });
 
     // The browser is handed the system-issued document, never a screen print.
+    await waitFor(() =>
+      expect(previewShow).toHaveBeenCalledWith(expect.any(Blob), "FS-000412.pdf"),
+    );
+    expect(clicks).toEqual([]);
+    expect(openPreview.mock.invocationCallOrder[0]!).toBeLessThan(
+      exportSpy.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("keeps an explicit PDF download separate from printing", async () => {
+    exportSpy.mockResolvedValue({
+      base64: btoa("%PDF"),
+      filename: "FS-000412.pdf",
+      documentNumber: "FS-000412",
+    });
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: /download pdf/i }));
     await waitFor(() => expect(clicks).toEqual(["FS-000412.pdf"]));
+    expect(openPreview).not.toHaveBeenCalled();
+  });
+
+  it("closes the preparing window on a denied/failed export", async () => {
+    exportSpy.mockRejectedValue(new Error("Not permitted"));
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: /print statement/i }));
+    await waitFor(() => expect(previewClose).toHaveBeenCalledTimes(1));
+    expect(previewShow).not.toHaveBeenCalled();
+    expect(clicks).toEqual([]);
   });
 
   it("never falls back to printing the screen", async () => {

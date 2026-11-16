@@ -5,7 +5,8 @@ if (!(Test-Path -LiteralPath $compiler)) { throw 'Install .NET Framework 4.8 bef
 $stage = Join-Path ([IO.Path]::GetTempPath()) ('neo-print-agent-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $source = Join-Path $PSScriptRoot '..\agents\windows\NeoPrintAgent.cs'
-& $compiler /nologo /target:winexe /optimize+ ("/out:" + (Join-Path $stage 'NEOPrintAgent.exe')) /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll /r:System.Security.dll $source
+$discoverySource = Join-Path $PSScriptRoot '..\agents\windows\PrinterDiscovery.cs'
+& $compiler /nologo /target:winexe /optimize+ ("/out:" + (Join-Path $stage 'NEOPrintAgent.exe')) /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll /r:System.Security.dll /r:System.Management.dll $source $discoverySource
 if ($LASTEXITCODE -ne 0) { throw 'Windows agent compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\agents\windows\Install Print Agent.cmd') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\agents\windows\README.txt') -Destination $stage

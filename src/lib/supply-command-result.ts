@@ -148,7 +148,11 @@ export function requireBlindReceiptResult(value: unknown, countId: string): Reco
     !uuid(result["grn_id"])
   )
     throw new Error("The approved count lacks its matching saved GRN. Refresh before retrying.");
-  if (result["replayed"] !== true) requireGoodsReceiptResult(result["lifecycle_result"]);
+  if (result["replayed"] !== true) {
+    const lifecycle = requireGoodsReceiptResult(result["lifecycle_result"]);
+    if (lifecycle["receipt_id"] !== result["grn_id"])
+      throw new Error("The stock posting and approved count refer to different GRNs.");
+  }
   return result;
 }
 
@@ -165,7 +169,9 @@ export function requireReceivingReviewResult(
   } else if (result["status"] === "posted") {
     if (result["stock_posted"] !== true || !uuid(result["grn_id"]))
       throw new Error("The approved receiving lacks its saved GRN.");
-    requireBlindReceiptResult(result["posting_result"], countId);
+    const posting = requireBlindReceiptResult(result["posting_result"], countId);
+    if (posting["grn_id"] !== result["grn_id"])
+      throw new Error("The receiving approval and stock posting refer to different GRNs.");
   } else if (result["status"] !== "approved" || result["stock_posted"] !== false) {
     throw new Error("The receiving approval or posting state was not confirmed.");
   }

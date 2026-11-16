@@ -42,3 +42,9 @@ dist-ssr
 *.pyc
 
 /neo-print-agent.json
+
+# Local repair scratch captures and safety copies; canonical source lives in migrations/tests.
+/neo-local-safety-backups/
+/neo-local-deposit-repair-source.txt
+/neo-pms-money-audit-local.txt
+/src/lib/__tests__/*.before-*.bak

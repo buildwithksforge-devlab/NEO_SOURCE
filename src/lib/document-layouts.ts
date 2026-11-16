@@ -114,7 +114,7 @@ export const DOCUMENT_LAYOUTS = {
     partyFallback: "Supplier",
     columns: [
       { key: "description", label: "Item", width: 220, align: "left" },
-      { key: "quantity", label: "Received", width: 65, align: "right" },
+      { key: "quantity", label: "Delivered", width: 65, align: "right" },
       { key: "unit", label: "Unit", width: 50, align: "right" },
       { key: "unit_price", label: "Unit cost", width: 75, align: "right" },
       { key: "total", label: "Accepted value", width: 95, align: "right" },

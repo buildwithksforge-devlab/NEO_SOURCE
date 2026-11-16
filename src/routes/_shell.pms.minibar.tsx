@@ -33,6 +33,7 @@ import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { formatMoney } from "@/lib/events";
 import { useStockLocations } from "@/lib/inventory-data";
+import { minibarStoreAllowed } from "@/lib/minibar-options";
 import {
   useChargeableFolios,
   useMinibarMenuItems,
@@ -82,14 +83,24 @@ function MinibarPage() {
   const [search, setSearch] = useState("");
 
   const canPost = can("front-office", "folios.create");
+  const selectedFolio = (folios.data ?? []).find((f) => str(f["id"]) === folioId);
+  const availableStores = (locations.data ?? []).filter((store) =>
+    minibarStoreAllowed(store, selectedFolio?.["branch_id"]),
+  );
 
+  const propertyMenu = useMemo(
+    () =>
+      (menu.data ?? []).filter(
+        (item) => !item["branch_id"] || item["branch_id"] === selectedFolio?.["branch_id"],
+      ),
+    [menu.data, selectedFolio],
+  );
   const menuRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const rows = menu.data ?? [];
+    const rows = propertyMenu;
     return q ? rows.filter((m) => str(m["name"]).toLowerCase().includes(q)) : rows;
-  }, [menu.data, search]);
+  }, [propertyMenu, search]);
 
-  const selectedFolio = (folios.data ?? []).find((f) => str(f["id"]) === folioId);
   const roomId = selectedFolio?.["reservations"]?.room_id ?? null;
 
   const chosen = useMemo(
@@ -110,7 +121,13 @@ function MinibarPage() {
 
   const total = chosen.reduce((t, l) => t + l.quantity * l.unit_price, 0);
   const unpriced = chosen.filter((l) => !(l.unit_price > 0));
-  const ready = Boolean(folioId && locationId && chosen.length > 0 && unpriced.length === 0);
+  const ready = Boolean(
+    selectedFolio &&
+    availableStores.some((store) => str(store["id"]) === locationId) &&
+    chosen.length > 0 &&
+    unpriced.length === 0 &&
+    chosen.every((line) => propertyMenu.some((item) => str(item["id"]) === line.menu_item_id)),
+  );
 
   const bump = (id: string, by: number) =>
     setLines((prev) => {
@@ -122,14 +139,19 @@ function MinibarPage() {
     });
 
   const submit = async () => {
-    if (!ready) return;
-    await post.mutateAsync({
-      folioId,
-      locationId,
-      roomId,
-      notes: notes.trim() || null,
-      lines: chosen,
-    });
+    if (!ready || post.isPending) return;
+    try {
+      await post.mutateAsync({
+        folioId,
+        locationId,
+        roomId,
+        notes: notes.trim() || null,
+        lines: chosen,
+      });
+    } catch {
+      // The mutation displays the error. Preserve the draft for review.
+      return;
+    }
     setLines({});
     setNotes("");
   };
@@ -156,7 +178,14 @@ function MinibarPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Guest folio</Label>
-                <Select value={folioId} onValueChange={setFolioId}>
+                <Select
+                  value={folioId}
+                  onValueChange={(value) => {
+                    setFolioId(value);
+                    setLocationId("");
+                    setLines({});
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose an open folio" />
                   </SelectTrigger>
@@ -177,18 +206,31 @@ function MinibarPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Minibar store</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
+                <Select
+                  value={locationId}
+                  onValueChange={setLocationId}
+                  disabled={!selectedFolio || locations.isLoading || Boolean(locations.error)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose the store the items came from" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(locations.data ?? []).map((l) => (
+                    {availableStores.map((l) => (
                       <SelectItem key={str(l["id"])} value={str(l["id"])}>
                         {str(l["name"], "Store")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {locations.error ? (
+                  <p className="text-sm text-destructive">
+                    Stores could not be loaded. Refresh before posting.
+                  </p>
+                ) : selectedFolio && !locations.isLoading && availableStores.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No active store is configured for this guest’s property.
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -211,7 +253,10 @@ function MinibarPage() {
                     const price = Number(m["base_price"] ?? 0);
                     const qty = lines[id] ?? 0;
                     return (
-                      <div key={id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <div
+                        key={id}
+                        className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                      >
                         <div>
                           <p className="font-medium">{str(m["name"], "Item")}</p>
                           <p className="text-xs text-muted-foreground">

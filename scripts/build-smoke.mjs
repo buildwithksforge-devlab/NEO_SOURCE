@@ -106,6 +106,34 @@ async function smokeRoutes() {
   const handler = mod.default ?? mod;
   if (typeof handler.fetch !== "function") throw new Error("built server exposes no fetch handler");
 
+  // Exercise the real Nitro -> SSR boundary, not only src/server.ts directly.
+  // No remote call or live agent operation occurs: only the managed upstream
+  // fetch is replaced, then restored before the ordinary route checks below.
+  const originalFetch = globalThis.fetch;
+  let printForwards = 0;
+  try {
+    globalThis.fetch = async (input, init) => {
+      if (String(input) !== "https://horizon-prime-os.lovable.app/api/public/print-agent/printers") {
+        throw new Error("Smoke print request reached an unexpected executor");
+      }
+      const headers = new Headers(init?.headers);
+      if (headers.has("cookie") || headers.has("apikey")) throw new Error("Smoke print request forwarded a private browser header");
+      printForwards++;
+      return Response.json({ printers: [] });
+    };
+    const print = await handler.fetch(new Request(`http://localhost:${PORT}/api/public/print-agent/printers`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer neopc_" + "0".repeat(64), cookie: "smoke-only" },
+      body: "{}",
+    }), { NEO_MANAGED_PRINT_ENABLED: "true" }, { waitUntil() {}, passThroughOnException() {} });
+    if (print.status !== 200 || printForwards !== 1) throw new Error("Compiled managed printing did not use its request-local runtime binding");
+    const payload = await print.json();
+    if (!Array.isArray(payload.printers) || payload.printers.length !== 0) throw new Error("Compiled print routing returned an unexpected result");
+    console.log("  ✓ managed print route uses request-local bindings and fixed executor; no live request");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   for (const route of ROUTES) {
     const res = await handler.fetch(new Request(`http://localhost:${PORT}${route}`), process.env, {
       waitUntil() {},

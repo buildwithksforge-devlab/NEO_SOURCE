@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { usePrinters, useQueuePrint, usePrintJobDelivery } from "@/lib/printing";
-import type { BusinessDocumentType } from "@/components/common/DocumentPrintButton";
 import type { Printer as PrinterProfile } from "@/lib/printing";
 
 function roleMatches(printer: PrinterProfile, requestedRole: string | undefined): boolean {
@@ -50,7 +49,9 @@ export function SendToPrinterButton({
   role,
   label = "Send to printer",
 }: {
-  type: BusinessDocumentType;
+  // The queue currently supplies canonical document data only for POS receipts.
+  // Other business documents use the authorised PDF/browser print path.
+  type: "pos_receipt";
   id: string | null | undefined;
   /** Shown on the job so an operator recognises it at the printer. */
   documentNumber?: string | null;

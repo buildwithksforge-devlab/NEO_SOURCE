@@ -418,7 +418,7 @@ export type StkChargeResult = {
 export const chargeWithMpesa = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: StkChargeInput) => ({
-    sourceModule: input?.sourceModule === "folio" ? ("folio" as const) : ("pos_order" as const),
+    sourceModule: String(input?.sourceModule ?? "").trim(),
     sourceRecordId: String(input?.sourceRecordId ?? "").trim(),
     msisdn: String(input?.msisdn ?? "").trim(),
     amount: Number(input?.amount ?? 0),
@@ -426,6 +426,15 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }): Promise<StkChargeResult> => {
     const client = context.supabase as unknown as Rpc;
+
+    // Never reinterpret an unsupported collection as a POS order.
+    if (data.sourceModule !== "folio" && data.sourceModule !== "pos_order") {
+      return {
+        ok: false,
+        status: "unsupported-source",
+        detail: "This payment source does not have a verified STK settlement route.",
+      };
+    }
     if (!data.sourceRecordId) return { ok: false, status: "invalid", detail: "Nothing to charge." };
     if (!(data.amount > 0))
       return { ok: false, status: "invalid", detail: "Enter an amount greater than zero." };
@@ -474,7 +483,38 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
         status: "rejected",
         detail: error?.message ?? "Payment creation was not confirmed.",
       };
-    if (started.reused) return existingMpesaCollection(started);
+    // Reused attempts have already passed database authority checks.
+    // Never send a second prompt; reject conflicting saved metadata when present.
+    if (started.reused) {
+      if (
+        (started["organization_id"] != null &&
+          String(started["organization_id"]) !== creds.organizationId) ||
+        (started["amount"] != null &&
+          Number(started["amount"]) !== data.amount)
+      ) {
+        return {
+          ok: false,
+          status: "collection-mismatch",
+          detail: "Existing collection details differ. Reconcile before retrying.",
+        };
+      }
+      return existingMpesaCollection(started);
+    }
+
+    // Every new dispatch must match the locked database collection.
+    const authorisedAmount = Number(started["amount"]);
+    if (
+      !Number.isSafeInteger(authorisedAmount) ||
+      authorisedAmount <= 0 ||
+      authorisedAmount !== data.amount ||
+      String(started["organization_id"] ?? "") !== creds.organizationId
+    ) {
+      return {
+        ok: false,
+        status: "collection-mismatch",
+        detail: "The locked collection amount or workspace differs from the request. Reconcile the saved attempt; no STK prompt was dispatched.",
+      };
+    }
     const transactionId = String(started["transaction_id"]);
     const accountReference = String(started.account_reference ?? creds.accountReference ?? "NEO");
 
@@ -489,7 +529,7 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
     if (held) return held;
     const push = await stkPush(creds, {
       msisdn,
-      amount: data.amount,
+      amount: authorisedAmount,
       accountReference,
       description: data.description ?? "NEO payment",
       callbackUrl: callbackUrl(base, creds.callbackToken),

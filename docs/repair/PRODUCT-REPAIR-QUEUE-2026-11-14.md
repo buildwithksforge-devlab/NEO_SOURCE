@@ -1,5 +1,7 @@
 # NEØ product repair queue
 
+For the ordered procurement, documents/printing and PMS work requested on 16 November, continue from [ACTIVE-EXECUTION-QUEUE.md](ACTIVE-EXECUTION-QUEUE.md). It preserves the individual outstanding tasks, source map and acceptance gates; the broader scope below remains in force.
+
 ## Active: document consistency
 - Financial correctness now takes priority over visual polish. Audit source calculations across POS, folios, deposits, refunds, taxes, discounts, service charges, procurement, receiving, stock valuation, journals and reports. Track evidence and unresolved findings; document/preview agreement alone does not certify the ledger.
 - All business documents: match preview, PDF download and print output.

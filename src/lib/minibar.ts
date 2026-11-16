@@ -3,8 +3,9 @@
  *
  * A minibar consumption is two things happening together: the item leaves the
  * minibar store, and the guest's open folio is charged for it. Both happen in
- * one server routine so neither can happen without the other, and posting the
- * same consumption twice charges once.
+ * one server routine so neither can happen without the other. The legacy
+ * command has no durable client attempt key; uncertain outcomes need review
+ * before resubmission.
  *
  * Nothing here invents a price, a store or a stock mapping: a line can only be
  * posted when the menu item is mapped to a stock item and carries a price.
@@ -15,6 +16,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { minibarChannelAllowed } from "@/lib/minibar-options";
+import { requireMinibarPostingResult } from "@/lib/minibar-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>;
@@ -38,7 +42,7 @@ export function useChargeableFolios() {
         supabase
           .from("folios")
           .select(
-            "id, folio_number, folio_type, status, balance, reservation_id, customers(full_name), reservations(id, room_id, rooms(room_number))",
+            "id, branch_id, folio_number, folio_type, status, balance, reservation_id, customers(full_name), reservations(id, room_id, rooms(room_number))",
           ),
         "folios",
       )
@@ -63,7 +67,7 @@ export function useMinibarMenuItems() {
         supabase
           .from("menu_items")
           .select(
-            "id, name, base_price, consumption_mode, consumption_channels, stock_item_id, stock_quantity_per_sale, stock_unit",
+            "id, branch_id, name, base_price, consumption_mode, consumption_channels, stock_item_id, stock_quantity_per_sale, stock_unit",
           ),
         "menu_items",
       )
@@ -72,7 +76,9 @@ export function useMinibarMenuItems() {
         .order("name")
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      return ((data ?? []) as unknown as Row[]).filter((item) =>
+        minibarChannelAllowed(item["consumption_channels"]),
+      );
     },
   });
 }
@@ -131,15 +137,15 @@ export function usePostMinibar() {
       if (error) throw new Error(error.message);
       const result = (data ?? {}) as { ok?: boolean; reason?: string; posting_number?: string };
       if (result.ok !== true) {
-        throw new Error(POST_REASONS[result.reason ?? ""] ?? "That minibar charge could not be posted.");
+        throw new Error(
+          POST_REASONS[result.reason ?? ""] ?? "That minibar charge could not be posted.",
+        );
       }
-      return result;
+      return requireMinibarPostingResult(data, input.lines.length);
     },
     onSuccess: (result) => {
-      toast.success(`Minibar charge ${result.posting_number ?? ""} posted to the folio.`.trim());
-      void qc.invalidateQueries({ queryKey: ["minibar"] });
-      void qc.invalidateQueries({ queryKey: ["pms"] });
-      void qc.invalidateQueries({ queryKey: ["inventory"] });
+      toast.success(`Minibar charge ${result["posting_number"]} posted to the folio.`);
+      void invalidateSupplyViews(qc, ["minibar", "station-stock"]);
     },
     onError: (e: Error) => toast.error(e.message),
   });

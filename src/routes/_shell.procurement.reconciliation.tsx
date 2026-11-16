@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -63,13 +63,15 @@ function formatQuantity(value: number) {
 }
 
 function Page() {
-  const { organizationId, user, permissionsLoaded } = useAuth();
+  const { organizationId, user, permissionsLoaded, can } = useAuth();
   const { branchId, filterKey } = useActivePropertyFilter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [recentlyPosted, setRecentlyPosted] = useState<{
     grnId: string;
     orderNumber: string;
+    orderId: string;
+    propertyId: string;
   } | null>(null);
 
   const queue = useQuery({
@@ -96,6 +98,8 @@ function Page() {
       decision: "approved" | "rejected";
       notes: string;
       orderNumber: string;
+      orderId: string;
+      propertyId: string;
     }) => {
       const { data, error } = await guardedRpc(
         db,
@@ -116,7 +120,7 @@ function Page() {
       if (payload.decision === "approved" && result && typeof result === "object") {
         const grnId = (result as Record<string, unknown>)["grn_id"];
         if (typeof grnId === "string" && grnId) {
-          setRecentlyPosted({ grnId, orderNumber: payload.orderNumber });
+          setRecentlyPosted({ grnId, orderNumber: payload.orderNumber, orderId: payload.orderId, propertyId: payload.propertyId });
           const postingResult = result["posting_result"] as Record<string, unknown> | undefined;
           const lifecycle = postingResult?.["lifecycle_result"] as Record<string, unknown> | undefined;
           const posting = lifecycle?.["posting"] as Record<string, unknown> | undefined;
@@ -155,6 +159,8 @@ function Page() {
       decision,
       notes: reason,
       orderNumber: count.order_number,
+      orderId: count.purchase_order_id,
+      propertyId: count.branch_id,
     });
   }
 
@@ -400,7 +406,7 @@ function Page() {
                         disabled={decide.isPending || hasExcess}
                         onClick={() => submitDecision(count, "approved")}
                       >
-                        Approve & Post GRN
+                        {can("procurement", "receiving.manage") ? "Approve & Post GRN" : "Approve Count"}
                       </Button>
                     </div>
 
@@ -413,7 +419,8 @@ function Page() {
 
                     <p className="text-xs text-muted-foreground">
                       The original physical count stays immutable. Rejection preserves the count
-                      and review reason; approval posts stock once through the linked GRN.
+                      and review reason. Approval creates the GRN when you have posting authority;
+                      otherwise a receiving manager completes the posting below.
                     </p>
                   </div>
                 ) : null}
@@ -423,7 +430,7 @@ function Page() {
         </div>
       </SectionCard>
 
-      {recentlyPosted ? (
+      {recentlyPosted && (!branchId || recentlyPosted.propertyId === branchId) ? (
         <SectionCard
           title="Receiving posted"
           description={`GRN generated for LPO ${recentlyPosted.orderNumber}. The document remains available from the LPO record.`}
@@ -434,6 +441,9 @@ function Page() {
             label={`Download GRN - ${recentlyPosted.orderNumber}`}
             variant="secondary"
           />
+          <Link to="/lpos/$id" params={{ id: recentlyPosted.orderId }} className="mt-3 block text-sm underline">
+            Open purchase and document history
+          </Link>
         </SectionCard>
       ) : null}
 

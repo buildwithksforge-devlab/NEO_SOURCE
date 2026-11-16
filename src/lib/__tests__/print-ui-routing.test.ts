@@ -7,6 +7,11 @@ function source(path: string): string {
 }
 
 describe("print UI routing", () => {
+  it("routes folio printing through the PDF instead of a receipt-only agent payload", () => {
+    const folio = source("src/components/pms/FolioStatementDialog.tsx");
+    expect(folio).toContain('<DocumentPrintButton type="folio_statement"');
+    expect(folio).not.toContain("SendToPrinterButton");
+  });
   const button = source(
     "src/components/common/SendToPrinterButton.tsx",
   );

@@ -1,5 +1,6 @@
 import { protectDynamicResponse } from "./lib/web-response-policy";
 import { forwardManagedMpesaCallback } from "./lib/mpesa-callback-relay";
+import { forwardManagedPrintRequest } from "./lib/managed-print-relay";
 import { managedRequestDeadline, managedTransportFailure } from "./lib/managed-request-deadline";
 import "./lib/error-capture";
 
@@ -192,6 +193,11 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const print = await forwardManagedPrintRequest(
+        request,
+        env && typeof env === "object" ? (env as Record<string, unknown>) : {},
+      );
+      if (print) return print;
       const callback = await forwardManagedMpesaCallback(
         request,
         env && typeof env === "object" ? (env as Record<string, unknown>) : {},

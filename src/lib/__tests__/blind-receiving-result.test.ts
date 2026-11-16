@@ -35,6 +35,18 @@ describe("approved receiving screen evidence", () => {
   it("recognizes rejection without pretending a GRN was created", () => {
     expect(requireReceivingReviewResult({ok:true,count_id:count,status:"rejected"},count,"rejected")["status"]).toBe("rejected");
   });
+  it("refuses a different receipt nested inside an apparently successful stock posting", () => {
+    expect(() => requireBlindReceiptResult({
+      ok: true, count_id: count, status: "posted", grn_id: grn,
+      lifecycle_result: { ok: true, receipt_id: count, grn_number: "GRN-WRONG", posting: { status: "posted" } },
+    }, count)).toThrow(/different GRNs/);
+  });
+  it("refuses approval whose nested posting points to another GRN", () => {
+    expect(() => requireReceivingReviewResult({
+      ok: true, count_id: count, status: "posted", stock_posted: true, grn_id: grn,
+      posting_result: { ok: true, count_id: count, status: "posted", grn_id: count, replayed: true },
+    }, count, "approved")).toThrow(/different GRNs/);
+  });
   it.each([
     null,
     {},

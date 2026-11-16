@@ -8,7 +8,6 @@
  */
 import { Receipt } from "lucide-react";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
-import { SendToPrinterButton } from "@/components/common/SendToPrinterButton";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
 import {
   Dialog,
@@ -151,12 +150,6 @@ export function FolioStatementDialog({
           <>
             <div className="flex justify-end gap-2">
               <DocumentPrintButton type="folio_statement" id={folioId} label="Print statement" />
-              <SendToPrinterButton
-                type="folio_statement"
-                id={folioId}
-                documentNumber={folioNumber ?? null}
-                role="front_office"
-              />
             </div>
             <FolioStatementBody folioId={folioId} />
           </>

@@ -6,6 +6,26 @@ $EXPECTED_URL = "https://neo-preview.neo-hospitality.workers.dev"
 
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
+# Use installed package entrypoints; do not depend on the host NVM npm/npx trust shim.
+$tscEntry = Join-Path (Get-Location).Path "node_modules/typescript/bin/tsc"
+$viteEntry = Join-Path (Get-Location).Path "node_modules/vite/bin/vite.js"
+$wranglerEntry = Join-Path (Get-Location).Path "node_modules/wrangler/bin/wrangler.js"
+if (!(Test-Path -LiteralPath $wranglerEntry)) {
+    $cachedWrangler = Get-ChildItem (Join-Path $env:LOCALAPPDATA "npm-cache/_npx") -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        ForEach-Object { Join-Path $_.FullName "node_modules/wrangler/bin/wrangler.js" } |
+        Where-Object { Test-Path -LiteralPath $_ } |
+        Select-Object -First 1
+    if (!$cachedWrangler) { throw "Install Wrangler before deployment; no package was downloaded." }
+    $wranglerEntry = $cachedWrangler
+}
+if (!(Test-Path -LiteralPath $tscEntry) -or !(Test-Path -LiteralPath $viteEntry)) {
+    throw "Install project dependencies before deployment."
+}
+
+node scripts/check-migration-versions.mjs
+if ($LASTEXITCODE -ne 0) { throw "Migration versions failed. Deployment cancelled." }
+
 Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host "NEO PROTECTED DEPLOYMENT" -ForegroundColor Cyan
@@ -16,7 +36,7 @@ Write-Host "WORKER: $EXPECTED_WORKER"
 # Check TypeScript before building.
 Write-Host "`nChecking TypeScript..." -ForegroundColor Yellow
 
-npx tsc --noEmit
+node $tscEntry --noEmit
 
 if ($LASTEXITCODE -ne 0) {
     throw "TypeScript failed. Deployment cancelled."
@@ -25,11 +45,14 @@ if ($LASTEXITCODE -ne 0) {
 # Build fresh application.
 Write-Host "`nBuilding NEØ..." -ForegroundColor Yellow
 
-npm run build
+node $viteEntry build
 
 if ($LASTEXITCODE -ne 0) {
     throw "Build failed. Deployment cancelled."
 }
+
+node scripts/build-smoke.mjs --no-build
+if ($LASTEXITCODE -ne 0) { throw "Built-server smoke failed. Deployment cancelled." }
 
 # Nitro generates the configuration here.
 $configPath = ".output/server/wrangler.json"
@@ -91,7 +114,7 @@ if ($verify.keep_vars -ne $true) {
 # Confirm that the original Worker already exists.
 Write-Host "`nChecking original Worker..." -ForegroundColor Yellow
 
-npx wrangler deployments list --name $EXPECTED_WORKER --json | Out-Null
+node $wranglerEntry deployments list --name $EXPECTED_WORKER --json | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Original Worker not found. Deployment blocked."
@@ -99,7 +122,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "`nDeploying ONLY to neo-preview..." -ForegroundColor Green
 
-npx wrangler deploy --config $configPath
+node $wranglerEntry deploy --config $configPath
 
 if ($LASTEXITCODE -ne 0) {
     throw "Deployment failed."
