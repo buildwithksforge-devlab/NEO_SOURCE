@@ -25,6 +25,6 @@ This replaces the earlier chronological checkpoints. Installed code, app deploym
 ## Current bounded payroll repair
 - Exact installed payroll routines supplied by user and fingerprint-matched to the existing source: compute 08d45a5abc8b40a41675eda35a2bdcd1; post aaadf1eebad0f2e43f438003e49aec6a. Do not request them again.
 - One required forward migration updates those existing routines and protects posted input/period history. No new payroll service, tax formula, production table or alternate workflow. Existing salary/daily/hourly rules and command permissions remain.
-- Existing payroll test file now exercises real candidate SQL with controlled journal-posting/audit collaborators. 43 payroll/payslip checks passed; frontend TypeScript/release checks in progress.
-- Current migration: supabase/migrations/20261116080000_payroll_calculation_posting_guards.sql. NOT installed yet. Do not treat local SQL or app deployment as database installation.
+- Existing payroll test file now exercises real candidate SQL with controlled journal-posting/audit collaborators. 43 payroll/payslip checks and TypeScript passed; matching app release verification in progress.
+- Current migration: supabase/migrations/20261116080000_payroll_calculation_posting_guards.sql. User confirmed `payroll-existing-calculation-posting-v1` installed, definitions match and command permissions unchanged.
 - Client fixes stay in existing files: payroll query/result validation, currency-cent totals, blocking failed calculations, and currency-labelled Finance period rows without summing different currencies.

@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMoneyExact } from "@/lib/money-format";
-import { usePayrollLedger, type PayrollComputationRow } from "@/lib/hr-payroll";
+import { payrollTotals, usePayrollLedger, type PayrollComputationRow } from "@/lib/hr-payroll";
 import { shortDate, titleCase, type Row } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { SalarySlipDialog } from "@/components/hr/SalarySlipDialog";
@@ -101,8 +101,8 @@ export function PayrollLedgerCard({ periods }: { periods: Row[] }) {
   }, [lines, search, periodFilter, postedFilter]);
 
   const currency = filtered[0]?.employee.currency ?? "KES";
-  const sum = (pick: (r: PayrollComputationRow) => number) =>
-    filtered.reduce((total, l) => total + pick(l.employee), 0);
+  const currencies = new Set(filtered.map((line) => line.employee.currency));
+  const totals = currencies.size <= 1 ? payrollTotals(filtered.map((line) => line.employee)) : null;
 
   return (
     <SectionCard
@@ -151,9 +151,9 @@ export function PayrollLedgerCard({ periods }: { periods: Row[] }) {
       >
         <>
           <p className="mb-3 text-sm text-muted-foreground">
-            {filtered.length} lines · gross {formatMoneyExact(sum((r) => r.gross_pay), currency)} ·
-            deductions {formatMoneyExact(sum((r) => r.deductions), currency)} · net{" "}
-            {formatMoneyExact(sum((r) => r.net_pay), currency)}
+            {filtered.length} lines · {totals ? <>
+              gross {formatMoneyExact(totals.gross, currency)} · deductions {formatMoneyExact(totals.deductions, currency)} · net {formatMoneyExact(totals.net, currency)}
+            </> : "Different currencies are shown separately; no combined total is shown."}
           </p>
           <TableScroll>
             <Table>

@@ -60,7 +60,11 @@ export function PayrollCashSection({ from, to }: { from: string; to: string }) {
     <SectionCard
       title="Payroll"
       description={
-        lines.length
+        periods.error || ledger.error
+          ? "Payroll calculations need review; no combined total is shown."
+          : periods.isLoading || ledger.isLoading
+            ? "Loading payroll calculations before showing totals."
+          : lines.length
           ? currency
             ? `Pay periods ending in this range · ${moneyWithCode(netPosted, currency)} net already posted to the books · ${moneyWithCode(netPending, currency)} net not yet posted.`
             : "Pay periods ending in this range. Compare each period in its own currency; no combined currency total is shown."
