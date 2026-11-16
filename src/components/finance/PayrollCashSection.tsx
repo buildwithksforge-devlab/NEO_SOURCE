@@ -14,7 +14,7 @@ import { SectionCard } from "@/components/common/DataDisplay";
 import { DataTable, FinanceEmpty, FinanceQueryState } from "@/components/finance/FinanceShared";
 import { StatusPill } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
-import { money, shortDate } from "@/lib/finance";
+import { moneyWithCode, shortDate } from "@/lib/finance";
 import { usePayrollPeriods } from "@/lib/hr-data";
 import { payrollTotals, usePayrollLedger } from "@/lib/hr-payroll";
 
@@ -44,21 +44,26 @@ export function PayrollCashSection({ from, to }: { from: string; to: string }) {
       gross: totals.gross,
       deductions: totals.deductions,
       net: totals.net,
+      currency: totals.employees ? totals.currency : null,
       posted,
       postedAt: period["posted_at"] ? shortDate(period["posted_at"]) : null,
       missing: totals.missing,
     };
   });
 
-  const netPosted = lines.filter((l) => l.posted).reduce((s, l) => s + l.net, 0);
-  const netPending = lines.filter((l) => !l.posted).reduce((s, l) => s + l.net, 0);
+  const currencies = [...new Set(lines.flatMap((line) => line.currency ? [line.currency] : []))];
+  const currency = currencies.length === 1 ? currencies[0] : undefined;
+  const netPosted = currency ? lines.filter((l) => l.posted).reduce((s, l) => s + Math.round(l.net * 100), 0) / 100 : 0;
+  const netPending = currency ? lines.filter((l) => !l.posted).reduce((s, l) => s + Math.round(l.net * 100), 0) / 100 : 0;
 
   return (
     <SectionCard
       title="Payroll"
       description={
         lines.length
-          ? `Pay periods ending in this range · ${money(netPosted)} net already posted to the books · ${money(netPending)} net not yet posted.`
+          ? currency
+            ? `Pay periods ending in this range · ${moneyWithCode(netPosted, currency)} net already posted to the books · ${moneyWithCode(netPending, currency)} net not yet posted.`
+            : "Pay periods ending in this range. Compare each period in its own currency; no combined currency total is shown."
           : "Pay periods ending in this range, what they cost and whether they have reached the books."
       }
       actions={
@@ -95,9 +100,9 @@ export function PayrollCashSection({ from, to }: { from: string; to: string }) {
                     <div className="text-xs text-destructive">{l.missing} without a pay record</div>
                   ) : null}
                 </td>
-                <td className="py-2 pr-4 tabular-nums">{money(l.gross)}</td>
-                <td className="py-2 pr-4 tabular-nums">{money(l.deductions)}</td>
-                <td className="py-2 pr-4 font-medium tabular-nums">{money(l.net)}</td>
+                <td className="py-2 pr-4 tabular-nums">{l.currency ? moneyWithCode(l.gross, l.currency) : "—"}</td>
+                <td className="py-2 pr-4 tabular-nums">{l.currency ? moneyWithCode(l.deductions, l.currency) : "—"}</td>
+                <td className="py-2 pr-4 font-medium tabular-nums">{l.currency ? moneyWithCode(l.net, l.currency) : "—"}</td>
                 <td className="py-2 pr-4">
                   <StatusPill tone={l.posted ? "success" : "warning"}>
                     {l.posted ? `Posted${l.postedAt ? ` ${l.postedAt}` : ""}` : "Not posted"}

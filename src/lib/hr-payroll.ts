@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { useHrCtx, useHrInvalidate } from "@/lib/hr-data";
 import type { Row } from "@/lib/hr";
+import { requireSavedRecord } from "@/lib/durable-command-result";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const db = supabase as any;
@@ -364,14 +365,35 @@ export function usePayrollComputation(periodId?: string) {
         _period: periodId,
       });
       if (error) throw error;
-      return (data ?? []) as PayrollComputationRow[];
+      if (!Array.isArray(data)) throw new Error("Payroll calculation returned no verified rows. Refresh before posting.");
+      const rows = data as PayrollComputationRow[];
+      payrollTotals(rows);
+      return rows;
     },
   });
 }
 
 export function payrollTotals(rows: PayrollComputationRow[]) {
-  const sum = (key: keyof PayrollComputationRow) =>
-    rows.reduce((total, r) => total + Number(r[key] ?? 0), 0);
+  const currencies = new Set(rows.map((row) => row.currency));
+  if ([...currencies].some((currency) => typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)))
+    throw new Error("Payroll currency is missing or invalid. Review the recorded pay before posting.");
+  if (currencies.size > 1)
+    throw new Error(`This payroll period mixes ${[...currencies].join(", ")}. Use separate currency periods; no combined total was calculated.`);
+  const sum = (key: keyof PayrollComputationRow) => {
+    let total = 0;
+    for (const row of rows) {
+      const value = row[key];
+      if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === "")
+        throw new Error("Payroll amounts are incomplete. Review the period before posting.");
+      const number = Number(value);
+      const cents = Math.round(number * 100);
+      if (!Number.isFinite(number) || number < 0 || !Number.isSafeInteger(cents) || Math.abs(number - cents / 100) > 0.0000001)
+        throw new Error("Payroll amounts require finite currency cents within supported display precision.");
+      total += cents;
+      if (!Number.isSafeInteger(total)) throw new Error("Payroll total exceeds supported display precision. Review the ledger.");
+    }
+    return total / 100;
+  };
   return {
     employees: rows.length,
     missing: rows.filter((r) => r.missing_compensation).length,
@@ -402,7 +424,10 @@ export function usePayrollLedger(periods: Row[]) {
           _period: String(p["id"]),
         });
         if (error) throw error;
-        return (data ?? []) as PayrollComputationRow[];
+        if (!Array.isArray(data)) throw new Error("Payroll calculation returned no verified rows. Refresh before posting.");
+        const rows = data as PayrollComputationRow[];
+        payrollTotals(rows);
+        return rows;
       },
     })),
   });
@@ -478,7 +503,10 @@ export function usePostPayroll() {
     mutationFn: async (periodId: string) => {
       const { data, error } = await guardedRpc(db, "neo_hr_payroll_post", { _period: periodId });
       if (error) throw error;
-      return data as { journal_id: string; employees: number; net: number; duplicate_prevented: boolean };
+      const saved = requireSavedRecord(data, ["journal_id"], "Payroll posting was not confirmed. Check the existing period before retrying.");
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(saved["journal_id"])))
+        throw new Error("Payroll did not return a saved journal. Check the period before retrying.");
+      return saved as unknown as { journal_id: string; employees: number; net: number; duplicate_prevented: boolean };
     },
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ["hr"] });
