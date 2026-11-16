@@ -561,9 +561,10 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
       .maybeSingle();
     const row = existing?.data as Record<string, any> | null;
     if (!row) return { ok: false, status: "not-found", detail: "Transaction not visible to you." };
-    if (
-      !(await client.rpc("neo_mpesa_can_collect", { _source_module: row["source_module"] })).data
-    ) {
+    const permission = await client.rpc("neo_mpesa_can_collect", {
+      _source_module: row["source_module"],
+    });
+    if (permission.error || permission.data !== true) {
       return { ok: false, status: "unauthorised", detail: "You cannot reconcile this payment." };
     }
     // A saved non-success must remain queryable: a later provider receipt may

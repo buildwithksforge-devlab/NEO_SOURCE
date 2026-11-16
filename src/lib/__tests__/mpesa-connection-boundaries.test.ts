@@ -200,3 +200,36 @@ describe("M-Pesa connection dependency boundaries", () => {
     expect(mock.load).not.toHaveBeenCalled();
   });
 });
+
+describe("M-Pesa reconciliation permission evidence", () => {
+  it.each([
+    { data: false, error: null },
+    { data: null, error: null },
+    { data: { authorised: true }, error: null },
+    { data: "true", error: null },
+    { data: 1, error: null },
+    { data: true, error: { message: "Permission lookup failed" } },
+  ])("rejects a permission response without an explicit error-free grant: %j",
+    async (permission) => {
+      maybeSingle.mockResolvedValue({
+        data: {
+          source_module: "pos_order",
+          organization_id: "org",
+          checkout_request_id: "checkout",
+        },
+        error: null,
+      });
+      rpc.mockResolvedValue(permission);
+      const run = reconcileMpesaTransaction as unknown as
+        (input: unknown) => Promise<Result>;
+
+      expect(await run({
+        data: { transactionId: "txn" },
+        context,
+      })).toMatchObject({ ok: false, status: "unauthorised" });
+
+      expect(mock.load).not.toHaveBeenCalled();
+      expect(mock.query).not.toHaveBeenCalled();
+      expect(mock.apply).not.toHaveBeenCalled();
+    });
+});
