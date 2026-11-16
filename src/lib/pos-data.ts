@@ -1171,7 +1171,12 @@ export function useReconcileSettlement() {
     mutationFn: async (orderId: string) => {
       const { data, error } = await guardedRpc(supabase, "pos_reconcile_order_settlement", { _order_id: orderId });
       if (error) throw error;
-      return data as unknown as SettlementResult;
+      const saved = requireSavedRecord(data, ["order_id", "payment_status"],
+        "Bill reconciliation was not confirmed. Refresh the existing bill before retrying.");
+      if (saved["order_id"] !== orderId) {
+        throw new Error("Reconciliation returned a different bill. Refresh before retrying.");
+      }
+      return saved as unknown as SettlementResult;
     },
     onSuccess: (r) => {
       const result = settlementOutcome(r as unknown as Parameters<typeof settlementOutcome>[0]);
