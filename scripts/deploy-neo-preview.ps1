@@ -1,5 +1,20 @@
 $ErrorActionPreference = "Stop"
 
+function Invoke-NeoNode {
+    param([string]$Entry, [string[]]$Arguments)
+    $savedPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell represents native stderr warnings as ErrorRecords.
+        # Preserve their text and decide failure using the actual process exit code.
+        $ErrorActionPreference = "Continue"
+        & node $Entry @Arguments 2>&1 | ForEach-Object { $_.ToString() }
+        $nativeExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedPreference
+    }
+    if ($nativeExitCode -ne 0) { throw "Node tool failed with exit code ${nativeExitCode}: $Entry" }
+}
+
 $EXPECTED_WORKER = "neo-preview"
 $EXPECTED_ACCOUNT = "a8f39d59dfcd73614466adf7d87a907d"
 $EXPECTED_URL = "https://neo-preview.neo-hospitality.workers.dev"
@@ -23,7 +38,7 @@ if (!(Test-Path -LiteralPath $tscEntry) -or !(Test-Path -LiteralPath $viteEntry)
     throw "Install project dependencies before deployment."
 }
 
-node scripts/check-migration-versions.mjs
+Invoke-NeoNode -Entry "scripts/check-migration-versions.mjs"
 if ($LASTEXITCODE -ne 0) { throw "Migration versions failed. Deployment cancelled." }
 
 Write-Host ""
@@ -36,7 +51,7 @@ Write-Host "WORKER: $EXPECTED_WORKER"
 # Check TypeScript before building.
 Write-Host "`nChecking TypeScript..." -ForegroundColor Yellow
 
-node $tscEntry --noEmit
+Invoke-NeoNode -Entry $tscEntry -Arguments @("--noEmit")
 
 if ($LASTEXITCODE -ne 0) {
     throw "TypeScript failed. Deployment cancelled."
@@ -45,13 +60,13 @@ if ($LASTEXITCODE -ne 0) {
 # Build fresh application.
 Write-Host "`nBuilding NEØ..." -ForegroundColor Yellow
 
-node $viteEntry build
+Invoke-NeoNode -Entry $viteEntry -Arguments @("build")
 
 if ($LASTEXITCODE -ne 0) {
     throw "Build failed. Deployment cancelled."
 }
 
-node scripts/build-smoke.mjs --no-build
+Invoke-NeoNode -Entry "scripts/build-smoke.mjs" -Arguments @("--no-build")
 if ($LASTEXITCODE -ne 0) { throw "Built-server smoke failed. Deployment cancelled." }
 
 # Nitro generates the configuration here.
@@ -114,7 +129,7 @@ if ($verify.keep_vars -ne $true) {
 # Confirm that the original Worker already exists.
 Write-Host "`nChecking original Worker..." -ForegroundColor Yellow
 
-node $wranglerEntry deployments list --name $EXPECTED_WORKER --json | Out-Null
+Invoke-NeoNode -Entry $wranglerEntry -Arguments @("deployments", "list", "--name", $EXPECTED_WORKER, "--json") | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Original Worker not found. Deployment blocked."
@@ -122,7 +137,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "`nDeploying ONLY to neo-preview..." -ForegroundColor Green
 
-node $wranglerEntry deploy --config $configPath
+Invoke-NeoNode -Entry $wranglerEntry -Arguments @("deploy", "--config", $configPath)
 
 if ($LASTEXITCODE -ne 0) {
     throw "Deployment failed."
