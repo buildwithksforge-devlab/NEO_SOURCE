@@ -22,6 +22,7 @@ import {
   useMenuCategories,
 } from "@/lib/kitchen-data";
 import { useStockItems } from "@/lib/inventory-data";
+import { directSaleDraftMapping, recipeStockMappingIssue } from "@/lib/recipe-stock-mapping";
 import {
   RECIPE_UNITS,
   RecipeEngineError,
@@ -118,7 +119,7 @@ function RecipeSheetImport({
     <section id="recipe-import">
       <SectionCard
         title="Import recipe sheets"
-        description="One row per ingredient. Repeat the recipe code or dish name on each row. Review each dish, then save complete drafts for approval."
+        description="One row per ingredient for dishes and batches. For direct-sale packaged goods, use one row with output_stock_item and yield, leaving ingredient columns blank. All save as drafts for separate approval."
       >
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -332,11 +333,13 @@ function Page() {
     .map((r) => ({
       value: String(r["id"]),
       label: `${String(r["name"] ?? "Sub-recipe")} · yield ${r["yield_quantity"] ?? "—"} ${String(r["yield_unit"] ?? "")}`,
+      unit: String(r["yield_unit"] ?? ""),
     }));
 
   const stockOptions = (stockItems.data ?? []).map((s) => ({
     value: String(s["id"]),
     label: `${String(s["name"])} (${String(s["base_unit"] ?? "")})`,
+    unit: String(s["base_unit"] ?? ""),
   }));
 
   const labelFor = (row: IngredientDraft) =>
@@ -425,7 +428,7 @@ function Page() {
 
   const preview = selected ? perUnitPreview(selected) : [];
   let expansionNote: string | null = null;
-  if (selected && selected.status === "active") {
+  if (selected && selected.status === "active" && selectedRow?.["recipe_type"] !== "direct_sale") {
     try {
       expandRecipeToStock(recipes, selected.id, 1);
     } catch (e) {
@@ -448,15 +451,23 @@ function Page() {
               submitLabel="Save draft recipe"
               pending={saveRecipe.isPending}
               fields={recipeFields}
-              extra={
-                <IngredientRows
-                  rows={newRecipeRows}
-                  onChange={setNewRecipeRows}
-                  stockOptions={stockOptions}
-                  subRecipeOptions={subRecipeOptions}
-                />
+              extra={(values) =>
+                values["recipe_type"] === "direct_sale" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Direct-sale products deduct the selected stock item using the yield quantity and
+                    unit. Ingredient rows are not needed and will not be saved.
+                  </p>
+                ) : (
+                  <IngredientRows
+                    rows={newRecipeRows}
+                    onChange={setNewRecipeRows}
+                    stockOptions={stockOptions}
+                    subRecipeOptions={subRecipeOptions}
+                  />
+                )
               }
-              extraInvalid={
+              extraInvalid={(values) =>
+                values["recipe_type"] !== "direct_sale" &&
                 !rowsAreValid(newRecipeRows.filter((r) => !isBlank(r))) &&
                 newRecipeRows.some((r) => !isBlank(r))
               }
@@ -488,7 +499,7 @@ function Page() {
                     : null,
                   preparationSteps: (values["preparation_steps"] as string) ?? null,
                   status: "draft",
-                  components: sheet.map(toComponentInput),
+                  components: recipeType === "direct_sale" ? [] : sheet.map(toComponentInput),
                   ...(!menuItemId && recipeType !== "sub_recipe"
                     ? {
                         newMenuItem: {
@@ -583,13 +594,17 @@ function Page() {
                     {String(r["name"] ?? (r["menu_items"] as Row | null)?.["name"] ?? "Recipe")}
                   </p>
                   <p className="text-xs text-muted-foreground">
+                    {r["recipe_code"] ? `Code ${String(r["recipe_code"])} · ` : ""}Version {String(r["version"] ?? 1)} · Ref {String(r["id"]).slice(0, 8)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
                     {String(r["recipe_type"] ?? "menu_item") === "direct_sale"
-                      ? `Direct stock · ${directStockMapping(r)?.stockItemName ?? "stock item not set"} · ${r["yield_quantity"] ?? 1} ${String(r["yield_unit"] ?? "container")} per sale`
+                      ? `Direct stock · ${directStockMapping(r)?.stockItemName ?? "mapping needs review"} · ${r["yield_quantity"] ?? 1} ${String(r["yield_unit"] ?? "container")} per sale`
                       : `${String(r["recipe_type"] ?? "menu_item") === "sub_recipe" ? "Batch sub-recipe" : "Menu item recipe"} · yield ${r["yield_quantity"] ?? "—"} ${String(r["yield_unit"] ?? "")} · ${
                           (r["operational_stations"] as Row | null)?.["name"] ??
                           "Unassigned station"
                         }`}
                   </p>
+                  {recipeStockMappingIssue(r) ? <p className="mt-1 text-xs text-destructive">{recipeStockMappingIssue(r)}</p> : null}
                 </button>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   {canCreate && String(r["status"]) === "draft" ? (
@@ -614,8 +629,17 @@ function Page() {
                       </SelectContent>
                     </Select>
                   ) : null}
-                  <StatusPill tone={String(r["status"]) === "active" ? "success" : "default"}>
-                    {titleCase(String(r["status"] ?? "draft"))}
+                  <StatusPill
+                    tone={
+                      String(r["status"]) === "active" &&
+                      !(r["recipe_type"] === "direct_sale" && !directStockMapping(r))
+                        ? "success"
+                        : "default"
+                    }
+                  >
+                    {r["recipe_type"] === "direct_sale" && !directStockMapping(r)
+                      ? "Mapping needs review"
+                      : titleCase(String(r["status"] ?? "draft"))}
                   </StatusPill>
 
                   {canApprove && String(r["status"] ?? "draft") === "draft" ? (
@@ -640,17 +664,19 @@ function Page() {
                       disabled={saveRecipe.isPending}
                       onClick={async () => {
                         const record = toRecipeRecord(r);
+                        const ownedMapping = directSaleDraftMapping(r);
                         const id = await saveRecipe.mutateAsync({
-                          name: String(r["name"] ?? "Recipe"),
+                          name: ownedMapping?.name ?? String(r["name"] ?? "Recipe"),
+                          branchId: (r["branch_id"] as string | null) ?? null,
                           recipeType:
                             r["recipe_type"] === "direct_sale" ? "direct_sale" : record.recipe_type,
                           menuItemId: r["menu_item_id"] as string | null,
                           stationId: r["station_id"] as string | null,
-                          outputStockItemId: r["output_stock_item_id"] as string | null,
-                          yieldQuantity: record.yield_quantity,
-                          yieldUnit: record.yield_unit,
+                          outputStockItemId: ownedMapping?.stockItemId ?? r["output_stock_item_id"] as string | null,
+                          yieldQuantity: ownedMapping?.quantity ?? record.yield_quantity,
+                          yieldUnit: ownedMapping?.unit ?? record.yield_unit,
                           preparationSteps: r["preparation_steps"] as string | null,
-                          components: record.ingredients.map((i) => ({
+                          components: r["recipe_type"] === "direct_sale" ? [] : record.ingredients.map((i) => ({
                             componentType: i.component_type,
                             stockItemId: i.stock_item_id ?? null,
                             subRecipeId: i.sub_recipe_id ?? null,
@@ -682,11 +708,11 @@ function Page() {
           }
           description={
             directMapping
-              ? "A finished packaged product. It needs no ingredients: each sale takes one container off the store below."
+              ? `Each sale consumes ${directMapping.perSale} ${directMapping.unit} of the finished product below. No ingredient sheet is needed.`
               : "Components are recorded for the full recipe yield. Per-unit usage below is what a single sale consumes."
           }
           actions={
-            canCreate && selected.status === "draft" ? (
+            canCreate && selected.status === "draft" && selectedRow?.["recipe_type"] !== "direct_sale" ? (
               <RecordDialog
                 title="Add ingredients"
                 description="Add one row per stock item or prepared sub-recipe consumed by this recipe's full yield."
@@ -723,6 +749,7 @@ function Page() {
             ) : null
           }
         >
+          {recipeStockMappingIssue(selectedRow) ? <p className="mb-3 rounded-md border border-destructive/40 p-3 text-sm">{recipeStockMappingIssue(selectedRow)}</p> : null}
           {expansionNote ? (
             <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
               {expansionNote}

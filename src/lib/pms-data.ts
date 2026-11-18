@@ -1,5 +1,6 @@
 import { requireFolioCloseResult } from "@/lib/folio-close-result";
 import { requireSavedRecord } from "@/lib/durable-command-result";
+import { requireCheckoutResult } from "@/lib/checkout-reconciliation";
 import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
 import {calendarNights} from '@/lib/availability-search';
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -384,7 +385,7 @@ export function useCheckOut() {
         _notes: input.notes,
       });
       if (error) throw error;
-      return requireSavedRecord(data, ["stay_id"], "Check-out did not confirm the saved stay.");
+      return requireCheckoutResult(data, input.reservation);
     },
     onSuccess: () => {
       toast.success("Guest checked out — room released for cleaning");

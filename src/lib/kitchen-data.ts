@@ -1248,17 +1248,17 @@ export function useKitchenMetrics(from?: string, to?: string) {
 
 export function useKitchenMenuItems() {
   const { organizationId } = useCtx();
+  const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery({
-    queryKey: ["kitchen", "menu-items", organizationId],
+    queryKey: ["kitchen", "menu-items", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("menu_items")
-        .select(
-          sel(
-            "id, name, availability, category_id, station_id, prep_minutes, menu_categories(name)",
-          ),
-        )
+      const { data, error } = await applyTo(
+        supabase.from("menu_items").select(
+          sel("id, name, branch_id, availability, category_id, station_id, prep_minutes, menu_categories(name)"),
+        ).eq("organization_id", organizationId!),
+        "menu_items",
+      )
         .order("name");
       if (error) throw error;
       return (data ?? []) as unknown as Row[];

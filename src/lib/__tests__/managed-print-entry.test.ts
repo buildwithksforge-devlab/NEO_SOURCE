@@ -17,6 +17,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("print routing before the local privileged executor", () => {
+  it("uses the managed communication executor before local privileged routes only when enabled", async () => {
+    const id="e98b312a6ceb488a8c655879fd1294414c8ca3f5371063378ad309e1c8c1f433";
+    const req=new Request(`https://neo.test/_serverFn/${id}`,{method:"POST",headers:{authorization:"Bearer test.payload.signature","content-type":"application/json"},body:"{}"});
+    Object.defineProperty(req,"runtime",{value:{cloudflare:{env:{NEO_MANAGED_COMMS_ENABLED:"true"}}}});
+    const upstream=vi.fn<typeof fetch>().mockResolvedValue(Response.json({resend:{api_key:"masked"}}));
+    vi.stubGlobal("fetch",upstream);
+    expect((await server.fetch(req,undefined,{})).status).toBe(200);
+    expect(upstream).toHaveBeenCalledOnce();expect(local.fetch).not.toHaveBeenCalled();
+  });
   it("returns the managed response without loading the local app/database route", async () => {
     const upstream = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ printers: [] }));
     vi.stubGlobal("fetch", upstream);

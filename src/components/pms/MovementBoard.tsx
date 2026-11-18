@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatDate, money, titleCase, today } from "@/lib/pms";
 import { useReservations } from "@/lib/pms-data";
+import { reservationFolioIndex } from "@/lib/reservation-folio-index";
 import { EmptyState, QueryState, ReservationStatusBadge } from "@/components/pms/PmsShared";
 import { RevertCheckInDialog } from "@/components/pms/RevertCheckInDialog";
 import {
@@ -25,7 +26,7 @@ import {
 
 type Scope = "arrivals" | "departures" | "in-house";
 
-/** Open folio balances keyed by reservation, so the board can block a checkout that still owes money. */
+/** Open folio navigation; checkout independently reloads every canonical folio position. */
 function useOpenFolioIndex() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useAuth();
@@ -33,14 +34,10 @@ function useOpenFolioIndex() {
     queryKey: ["pms", "folio-index", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("folios").select("id, reservation_id, balance, status"), "folios")
+      const { data, error } = await applyTo(supabase.from("folios").select("id, reservation_id, folio_type, currency, balance, status"), "folios")
         .in("status", ["open", "under-review", "reopened"]);
       if (error) throw error;
-      const index: Record<string, { id: string; balance: number }> = {};
-      for (const f of data ?? []) {
-        if (f.reservation_id) index[f.reservation_id] = { id: f.id, balance: Number(f.balance) };
-      }
-      return index;
+      return reservationFolioIndex(data ?? []);
     },
   });
 }
@@ -163,7 +160,7 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                       <ReservationStatusBadge status={row.status} />
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      <Atomic>{folio ? money(folio.balance) : "—"}</Atomic>
+                      <Atomic>{folio ? folio.count > 1 ? `${folio.count} open folios` : folio.balance !== null ? money(folio.balance) : "Review balances" : "—"}</Atomic>
                     </TableCell>
                     <TableCell>
                       <RowActions>
@@ -188,8 +185,8 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                         ) : null}
                         {mayAct && scope === "departures" ? (
                           <>
-                            {folio ? <RecordPaymentDialog folioId={folio.id} balance={folio.balance} /> : null}
-                            <CheckOutDialog reservation={row} balance={folio?.balance ?? 0} />
+                            {folio?.count === 1 && folio.balance !== null && folio.balance > 0 ? <RecordPaymentDialog folioId={folio.id} balance={folio.balance} /> : null}
+                            <CheckOutDialog reservation={row} />
                           </>
                         ) : null}
                       </RowActions>

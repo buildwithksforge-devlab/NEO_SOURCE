@@ -641,7 +641,7 @@ function OrderTerminal() {
 
                 <dl className="mt-4 space-y-1 border-t border-border pt-3 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Subtotal</dt>
+                    <dt className="text-muted-foreground">Items (tax included)</dt>
                     <dd>{money(data.subtotal)}</dd>
                   </div>
                   {Number(data.discount_total ?? 0) > 0 ? (
@@ -651,11 +651,11 @@ function OrderTerminal() {
                     </div>
                   ) : null}
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Tax</dt>
+                    <dt className="text-muted-foreground">Included tax</dt>
                     <dd>{money(data.tax_total)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Service charge</dt>
+                    <dt className="text-muted-foreground">Service charge (added)</dt>
                     <dd>{money(data.service_charge_total)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
@@ -671,6 +671,7 @@ function OrderTerminal() {
                     <dd>{money(balance)}</dd>
                   </div>
                 </dl>
+                <p className="mt-2 text-xs text-muted-foreground">Included tax is already part of the item prices; do not add it again. Service charge is added after any discount. Preparation and serving statuses do not count as payment.</p>
 
                 <div className="mt-4 grid gap-2">
                   <Button

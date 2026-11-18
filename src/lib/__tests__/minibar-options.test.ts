@@ -9,10 +9,12 @@ describe("minibar property and channel choices", () => {
     expect(minibarChannelAllowed("minibar")).toBe(false);
   });
   it("offers only active stores from the selected folio property", () => {
-    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a" }, "hotel-a")).toBe(true);
-    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-b" }, "hotel-a")).toBe(false);
-    expect(minibarStoreAllowed({ active: false, branch_id: "hotel-a" }, "hotel-a")).toBe(false);
-    expect(minibarStoreAllowed({ active: true, branch_id: null }, "hotel-a")).toBe(false);
-    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a" }, null)).toBe(false);
+    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a", location_type: "minibar" }, "hotel-a")).toBe(true);
+    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a", location_type: "bar" }, "hotel-a")).toBe(false);
+    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a" }, "hotel-a")).toBe(false);
+    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-b", location_type: "minibar" }, "hotel-a")).toBe(false);
+    expect(minibarStoreAllowed({ active: false, branch_id: "hotel-a", location_type: "minibar" }, "hotel-a")).toBe(false);
+    expect(minibarStoreAllowed({ active: true, branch_id: null, location_type: "minibar" }, "hotel-a")).toBe(false);
+    expect(minibarStoreAllowed({ active: true, branch_id: "hotel-a", location_type: "minibar" }, null)).toBe(false);
   });
 });

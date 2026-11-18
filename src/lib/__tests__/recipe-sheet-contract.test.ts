@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { prepareRecipeSheet } from "@/lib/recipe-engine";
+import { directSaleDraftMapping } from "@/lib/recipe-stock-mapping";
 import {
   emptyIngredientRow,
   isRowComplete,
@@ -105,22 +106,22 @@ describe("atomic recipe sheets and canonical approval", () => {
     stock = "00000000-0000-4000-8000-000000000012",
     foreign = "00000000-0000-4000-8000-000000000013";
   const migration = readFileSync(
-    "supabase/migrations/20261113100000_atomic_recipe_sheets.sql",
+    "supabase/repair/2026-11-18/INSTALL-RECIPE-SAVE-AND-IMPORT.sql",
     "utf8",
   );
   beforeAll(async () => {
     db = new PGlite();
     await db.exec(`CREATE ROLE authenticated;CREATE ROLE anon;CREATE ROLE service_role;CREATE SCHEMA auth;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '${actor}'::uuid $$;
-      CREATE FUNCTION current_org_id() RETURNS uuid LANGUAGE sql AS $$ SELECT '${org}'::uuid $$;
+      CREATE FUNCTION current_org_id() RETURNS uuid LANGUAGE sql AS $$ SELECT coalesce(nullif(current_setting('test.recipe_org',true),''),'${org}')::uuid $$;
       CREATE FUNCTION is_org_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
       CREATE FUNCTION has_permission(text,text) RETURNS boolean LANGUAGE sql AS $$ SELECT CASE WHEN $2='recipes.approve' THEN coalesce(current_setting('test.recipe_approve',true),'yes')='yes' ELSE true END $$;
-      CREATE FUNCTION neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT $1='${branch}'::uuid AND coalesce(current_setting('test.recipe_scope',true),'yes')='yes' $$;
+      CREATE FUNCTION neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT $1=coalesce(nullif(current_setting('test.recipe_branch',true),''),'${branch}')::uuid AND coalesce(current_setting('test.recipe_scope',true),'yes')='yes' $$;
       CREATE TABLE menu_categories(id uuid PRIMARY KEY,organization_id uuid);
       CREATE TABLE operational_stations(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid);
       CREATE TABLE stock_items(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,name text,sku text,base_unit text,created_at timestamptz DEFAULT now());
       CREATE TABLE menu_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,branch_id uuid,category_id uuid,name text,base_price numeric,station_id uuid,
-        consumption_mode text DEFAULT 'none',stock_item_id uuid,publish_status text DEFAULT 'draft',created_by uuid);
+        consumption_mode text DEFAULT 'none',stock_item_id uuid,stock_quantity_per_sale numeric DEFAULT 1,stock_unit text,publish_status text DEFAULT 'draft',created_by uuid);
       CREATE TABLE recipes(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,branch_id uuid,name text,recipe_code text,recipe_type text,menu_item_id uuid REFERENCES menu_items(id),
         station_id uuid,output_stock_item_id uuid,yield_quantity numeric,yield_unit text,prep_target_minutes integer,preparation_steps text,status text DEFAULT 'draft',version integer DEFAULT 1,
         created_by uuid,approved_by uuid,approved_at timestamptz,effective_to timestamptz,updated_at timestamptz,supersedes_id uuid);
@@ -160,6 +161,7 @@ describe("atomic recipe sheets and canonical approval", () => {
   beforeEach(async () => {
     await db.exec(`TRUNCATE neo_recipe_sheet_attempts,recipe_ingredients,recipes,menu_items,menu_categories,stock_items,operational_stations;
       SELECT set_config('test.recipe_approve','yes',false),set_config('test.recipe_scope','yes',false),set_config('test.recipe_binding_fail','no',false);
+      SELECT set_config('test.recipe_org','${org}',false),set_config('test.recipe_branch','${branch}',false);
       INSERT INTO menu_categories VALUES('${category}','${org}');
       INSERT INTO menu_items(id,organization_id,branch_id,category_id,name,base_price,consumption_mode) VALUES('${menu}','${org}','${branch}','${category}','Rice dish',100,'none');
       INSERT INTO stock_items VALUES('${stock}','${org}','${branch}','Rice','RICE','kg'),('${foreign}','${actor}','${actor}','Foreign','FOREIGN','kg');`);
@@ -197,6 +199,96 @@ describe("atomic recipe sheets and canonical approval", () => {
     return r.rows[0]!.r;
   };
   const activate = (id: string) => db.query("SELECT neo_recipe_activate($1,NULL)", [id]);
+  it("saves and approves in two arbitrary tenants with isolated retry history and RLS",async()=>{
+    const otherOrg="00000000-0000-4000-8000-000000000090",otherBranch="00000000-0000-4000-8000-000000000091",
+      otherStock="00000000-0000-4000-8000-000000000092",otherMenu="00000000-0000-4000-8000-000000000093";
+    await db.query("INSERT INTO stock_items(id,organization_id,branch_id,name,base_unit) VALUES($1,$2,$3,'Other tenant stock','kg')",[otherStock,otherOrg,otherBranch]);
+    await db.query("INSERT INTO menu_items(id,organization_id,branch_id,name) VALUES($1,$2,$3,'Other tenant menu')",[otherMenu,otherOrg,otherBranch]);
+    const attempt=crypto.randomUUID();
+    await db.exec("SET ROLE authenticated");
+    try {
+      const first=await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_unit:"kg"}),[],attempt);
+      await activate(first.recipe_id);
+      await db.query("SELECT set_config('test.recipe_org',$1,false),set_config('test.recipe_branch',$2,false)",[otherOrg,otherBranch]);
+      const second=await save(header({branch_id:otherBranch,menu_item_id:otherMenu,recipe_type:"direct_sale",output_stock_item_id:otherStock,yield_unit:"kg"}),[],attempt);
+      await activate(second.recipe_id);
+      expect(second.recipe_id).not.toBe(first.recipe_id);
+      expect((await db.query("SELECT organization_id,status FROM recipes")).rows).toEqual([{organization_id:otherOrg,status:"active"}]);
+      expect((await db.query("SELECT count(*)::int n FROM neo_recipe_sheet_attempts")).rows[0]).toEqual({n:1});
+      await expect(activate(first.recipe_id)).rejects.toThrow("outside property access");
+      await db.query("SELECT set_config('test.recipe_org',$1,false),set_config('test.recipe_branch',$2,false)",[org,branch]);
+      expect((await db.query("SELECT organization_id,status FROM recipes")).rows).toEqual([{organization_id:org,status:"active"}]);
+    } finally {await db.exec("RESET ROLE");}
+  });
+  it("corrects a legacy foreign-stock recipe through the owned menu binding and normal draft approval",async()=>{
+    const old=await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_quantity:1,yield_unit:"kg"}),[]);
+    await activate(old.recipe_id);
+    // Legacy state: the approved recipe now resolves to foreign stock, while
+    // the reviewed existing-menu repair points future sales at the owned can.
+    await db.query("UPDATE stock_items SET organization_id=$1 WHERE id=$2",[actor,stock]);
+    await db.query("UPDATE stock_items SET organization_id=$1,branch_id=$2,name='Red Bull',sku='RB',base_unit='Can' WHERE id=$3",[org,branch,foreign]);
+    await db.query("UPDATE menu_items SET stock_item_id=$1,stock_quantity_per_sale=1,stock_unit='Can' WHERE id=$2",[foreign,menu]);
+    const correction=directSaleDraftMapping({recipe_type:"direct_sale",organization_id:org,branch_id:branch,
+      menu_item_id:menu,menu_items:{id:menu,name:"Red Bull",organization_id:org,branch_id:branch,
+        consumption_mode:"direct_stock",stock_item_id:foreign,stock_quantity_per_sale:1,stock_unit:"Can",
+        mapped_stock_item:{id:foreign,organization_id:org,branch_id:branch}}})!;
+    const next=await save(header({name:correction.name,recipe_type:"direct_sale",output_stock_item_id:correction.stockItemId,
+      yield_quantity:correction.quantity,yield_unit:correction.unit}),[]);
+    await activate(next.recipe_id);
+    expect((await db.query("SELECT status,output_stock_item_id FROM recipes ORDER BY version")).rows).toEqual([
+      {status:"superseded",output_stock_item_id:stock},{status:"active",output_stock_item_id:foreign},
+    ]);
+    expect((await db.query("SELECT stock_item_id,stock_quantity_per_sale::float8 quantity,stock_unit FROM menu_items")).rows[0])
+      .toEqual({stock_item_id:foreign,quantity:1,stock_unit:"Can"});
+  });
+  it("installs the API argument contract and denies anonymous save/approval", async () => {
+    expect((await db.query<{proargnames:string[]}>("SELECT proargnames FROM pg_proc WHERE oid='neo_recipe_sheet_save(jsonb,jsonb,uuid)'::regprocedure")).rows[0]!.proargnames)
+      .toEqual(["_recipe","_components","_attempt"]);
+    expect((await db.query("SELECT has_function_privilege('authenticated','neo_recipe_sheet_save(jsonb,jsonb,uuid)','EXECUTE') staff,has_function_privilege('anon','neo_recipe_sheet_save(jsonb,jsonb,uuid)','EXECUTE') anonymous,has_function_privilege('anon','neo_recipe_activate(uuid,uuid)','EXECUTE') anonymous_approval")).rows[0])
+      .toEqual({staff:true,anonymous:false,anonymous_approval:false});
+  });
+  it("saves a reviewed direct-sale import once and approves its exact stock quantity", async () => {
+    const group=prepareRecipeSheet([{
+      recipe_name:"Bag of rice",menu_item:menu,recipe_type:"direct_sale",
+      output_stock_item:stock,yield_quantity:"0.5",yield_unit:"kg",
+    }],{menuItems:[{id:menu,name:"Rice dish"}],stockItems:[{id:stock,name:"Rice"}],subRecipes:[],stations:[]})[0]!;
+    expect(group.errors).toEqual([]);
+    const input=header({name:group.recipe.name,recipe_type:group.recipe.recipeType,
+      menu_item_id:group.recipe.menuItemId,output_stock_item_id:group.recipe.outputStockItemId,
+      yield_quantity:group.recipe.yieldQuantity,yield_unit:group.recipe.yieldUnit});
+    const first=await save(input,[],null);
+    expect(await save(input,[],null)).toMatchObject({recipe_id:first.recipe_id,replayed:true});
+    await activate(first.recipe_id);
+    expect((await db.query("SELECT stock_item_id,stock_quantity_per_sale::float8 quantity,stock_unit FROM menu_items")).rows[0])
+      .toEqual({stock_item_id:stock,quantity:0.5,stock_unit:"kg"});
+  });
+  it("rejects a direct-sale import using another organisation's stock without creating a partial draft", async () => {
+    await expect(save(header({recipe_type:"direct_sale",output_stock_item_id:foreign}),[])).rejects.toThrow("Output stock item does not belong to this property");
+    expect((await db.query("SELECT count(*)::int n FROM recipes")).rows[0]).toEqual({n:0});
+    expect((await db.query("SELECT consumption_mode FROM menu_items")).rows[0]).toEqual({consumption_mode:"none"});
+  });
+  it("replaces stale direct-sale quantity and unit with the approved version atomically", async () => {
+    await db.exec("UPDATE menu_items SET consumption_mode='direct_stock',stock_quantity_per_sale=9,stock_unit='ml'");
+    const first = await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_quantity:200,yield_unit:"g"}), []);
+    await activate(first.recipe_id);
+    expect((await db.query("SELECT stock_item_id,stock_quantity_per_sale::float8 quantity,stock_unit FROM menu_items")).rows[0])
+      .toEqual({stock_item_id:stock,quantity:200,stock_unit:"g"});
+    const next = await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_quantity:0.5,yield_unit:"kg"}), []);
+    await activate(next.recipe_id);
+    await activate(next.recipe_id);
+    expect((await db.query("SELECT stock_quantity_per_sale::float8 quantity,stock_unit FROM menu_items")).rows[0])
+      .toEqual({quantity:0.5,stock_unit:"kg"});
+    expect((await db.query("SELECT status FROM recipes ORDER BY version")).rows).toEqual([{status:"superseded"},{status:"active"}]);
+  });
+  it("keeps the old direct-sale binding and version when new unit validation fails", async () => {
+    const first=await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_quantity:1,yield_unit:"kg"}), []);
+    await activate(first.recipe_id);
+    const invalid=await save(header({recipe_type:"direct_sale",output_stock_item_id:stock,yield_quantity:25,yield_unit:"ml"}), []);
+    await expect(activate(invalid.recipe_id)).rejects.toThrow("Incompatible ingredient units");
+    expect((await db.query("SELECT stock_quantity_per_sale::float8 quantity,stock_unit FROM menu_items")).rows[0])
+      .toEqual({quantity:1,stock_unit:"kg"});
+    expect((await db.query("SELECT status FROM recipes ORDER BY version")).rows).toEqual([{status:"active"},{status:"draft"}]);
+  });
   it("saves header and complete components once, with a real authenticated caller and RLS", async () => {
     await db.exec("SET ROLE authenticated");
     try {

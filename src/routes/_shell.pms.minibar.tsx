@@ -34,6 +34,8 @@ import { useTenant } from "@/lib/tenant";
 import { formatMoney } from "@/lib/events";
 import { useStockLocations } from "@/lib/inventory-data";
 import { minibarStoreAllowed } from "@/lib/minibar-options";
+import { clearMinibarAttempt, minibarAttemptKey } from "@/lib/minibar-attempt";
+import { toast } from "sonner";
 import {
   useChargeableFolios,
   useMinibarMenuItems,
@@ -66,14 +68,13 @@ export const Route = createFileRoute("/_shell/pms/minibar")({
 const str = (v: unknown, fallback = "") => (v == null ? fallback : String(v));
 
 function MinibarPage() {
-  const { can } = useAuth();
+  const { can, organizationId, user } = useAuth();
   const { tenant } = useTenant();
   const symbol = tenant.regional.currencySymbol;
 
   const folios = useChargeableFolios();
   const locations = useStockLocations();
   const menu = useMinibarMenuItems();
-  const postings = useMinibarPostings();
   const post = usePostMinibar();
 
   const [folioId, setFolioId] = useState("");
@@ -81,6 +82,8 @@ function MinibarPage() {
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+  const [confirmSeparate, setConfirmSeparate] = useState(false);
+  const postings = useMinibarPostings(folioId || undefined);
 
   const canPost = can("front-office", "folios.create");
   const selectedFolio = (folios.data ?? []).find((f) => str(f["id"]) === folioId);
@@ -101,7 +104,7 @@ function MinibarPage() {
     return q ? rows.filter((m) => str(m["name"]).toLowerCase().includes(q)) : rows;
   }, [propertyMenu, search]);
 
-  const roomId = selectedFolio?.["reservations"]?.room_id ?? null;
+  const roomId = selectedFolio?.["stays"]?.room_id ?? null;
 
   const chosen = useMemo(
     () =>
@@ -123,6 +126,7 @@ function MinibarPage() {
   const unpriced = chosen.filter((l) => !(l.unit_price > 0));
   const ready = Boolean(
     selectedFolio &&
+    roomId &&
     availableStores.some((store) => str(store["id"]) === locationId) &&
     chosen.length > 0 &&
     unpriced.length === 0 &&
@@ -139,7 +143,7 @@ function MinibarPage() {
     });
 
   const submit = async () => {
-    if (!ready || post.isPending) return;
+    if (!ready || post.isPending || post.isSuccess) return;
     try {
       await post.mutateAsync({
         folioId,
@@ -174,16 +178,20 @@ function MinibarPage() {
             You do not have permission to charge a guest folio.
           </p>
         ) : (
-          <div className="space-y-5">
+          <fieldset disabled={post.isPending} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Guest folio</Label>
                 <Select
+                  disabled={post.isPending}
                   value={folioId}
                   onValueChange={(value) => {
                     setFolioId(value);
                     setLocationId("");
                     setLines({});
+                    setNotes("");
+                    setConfirmSeparate(false);
+                    post.reset();
                   }}
                 >
                   <SelectTrigger>
@@ -191,7 +199,7 @@ function MinibarPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {(folios.data ?? []).map((f) => {
-                      const room = f["reservations"]?.rooms?.room_number;
+                      const room = f["stays"]?.rooms?.room_number;
                       return (
                         <SelectItem key={str(f["id"])} value={str(f["id"])}>
                           {`${str(f["folio_number"], "Folio")} · ${str(f["customers"]?.full_name, "Guest")}${room ? ` · Room ${room}` : ""}`}
@@ -203,6 +211,9 @@ function MinibarPage() {
                 {folios.data && folios.data.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No folio is open right now.</p>
                 ) : null}
+                {selectedFolio && !roomId ? <p className="text-sm text-destructive">
+                  This folio needs a current stay with an assigned room before minibar consumption can be charged.
+                </p> : null}
               </div>
               <div className="space-y-1.5">
                 <Label>Minibar store</Label>
@@ -228,7 +239,7 @@ function MinibarPage() {
                   </p>
                 ) : selectedFolio && !locations.isLoading && availableStores.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No active store is configured for this guest’s property.
+                    No active store has type Minibar for this guest’s property. Configure its type in Inventory stores.
                   </p>
                 ) : null}
               </div>
@@ -316,18 +327,38 @@ function MinibarPage() {
                   ? "Nothing selected yet."
                   : `${chosen.length} line${chosen.length === 1 ? "" : "s"} · ${formatMoney(symbol, total)}`}
               </p>
-              <Button disabled={!ready || post.isPending} onClick={() => void submit()}>
+              <Button disabled={!ready || post.isPending || post.isSuccess} onClick={() => void submit()}>
                 {post.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Charge folio and reduce stock
               </Button>
             </div>
-          </div>
+            {folioId ? <div className="space-y-2 text-sm">
+              <p className="text-muted-foreground">
+                Retries retain the same request. Review posted charges below before starting a separate charge.
+                {post.isSuccess ? " This charge is saved. Start a separate charge for new consumption." : ""}
+              </p>
+              {confirmSeparate ? <div className="space-y-2">
+                <p>Confirm that you reviewed this folio’s posted charges and intend to record new consumption.</p>
+                <Button variant="outline" disabled={post.isPending} onClick={async () => {
+                  try {
+                    const key = minibarAttemptKey(organizationId ?? "", user?.id ?? "", folioId);
+                    if (!navigator.locks) throw new Error("Secure request storage is unavailable.");
+                    await navigator.locks.request(key, () => clearMinibarAttempt(key));
+                    setLines({}); setNotes(""); post.reset(); setConfirmSeparate(false);
+                  } catch (error) { toast.error(error instanceof Error ? error.message : "Request could not be reset."); }
+                }}>Confirm new consumption</Button>
+                <Button variant="ghost" onClick={() => setConfirmSeparate(false)}>Cancel</Button>
+              </div> : <Button variant="outline" disabled={post.isPending} onClick={() => setConfirmSeparate(true)}>
+                Start a separate charge
+              </Button>}
+            </div> : null}
+          </fieldset>
         )}
       </SectionCard>
 
       <SectionCard
         title="Posted minibar charges"
-        description="Each one charged a folio and moved the same items out of the store."
+        description={selectedFolio ? `Showing charges for ${str(selectedFolio["folio_number"], "the selected folio")}.` : "Select a folio above to review its charges. Showing the latest 100 charges in this property scope."}
       >
         <QueryState
           isLoading={postings.isLoading}
@@ -340,6 +371,7 @@ function MinibarPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Reference</TableHead>
+                  <TableHead>Folio</TableHead>
                   <TableHead>Posted</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead className="text-right">Charged</TableHead>
@@ -351,6 +383,7 @@ function MinibarPage() {
                   return (
                     <TableRow key={str(p["id"])}>
                       <TableCell className="font-medium">{str(p["posting_number"], "—")}</TableCell>
+                      <TableCell>{str((folios.data ?? []).find((f) => f["id"] === p["folio_id"])?.["folio_number"], str(p["folio_id"], "—"))}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                         {p["posted_at"] ? new Date(str(p["posted_at"])).toLocaleString() : "—"}
                       </TableCell>

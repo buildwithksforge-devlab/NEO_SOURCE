@@ -18,6 +18,8 @@ import { useAuth } from "@/lib/auth";
 import { depositGate, useDepositPosition } from "@/lib/deposits";
 import { DepositPanel } from "@/components/pms/DepositPanel";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useCheckoutPosition } from "@/lib/checkout-position";
+import { PermittedLink } from "@/components/common/PermittedLink";
 import { useMyOpenShift } from "@/lib/pos-data";
 import { useOpenCashShift } from "@/lib/frontdesk-ops";
 import {
@@ -31,6 +33,7 @@ import {
   FOLIO_CATEGORIES,
   PAYMENT_METHODS,
   money,
+  moneyWithCode,
   titleCase,
   today,
 } from "@/lib/pms";
@@ -321,37 +324,53 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
 
 export function CheckOutDialog({
   reservation,
-  balance,
 }: {
   reservation: Reservation;
-  balance: number;
 }) {
   const { can, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [force, setForce] = useState(false);
   const [notes, setNotes] = useState("");
   const checkOut = useCheckOut();
+  const position = useCheckoutPosition(reservation.id, open);
 
   if (!can("pms", "departures.edit")) return null;
-  const outstanding = balance > 0.009;
+  const outstanding = (position.data?.amountDue ?? 0) > 0;
+  const hasCredit = (position.data?.creditDue ?? 0) > 0;
+  const canOverride = isAdmin || can("pms", "folio.override");
 
   return (
     <ActionDialog
       open={open}
-      setOpen={setOpen}
+      setOpen={(next) => { setForce(false); setNotes(""); setOpen(next); }}
       trigger={<Button size="sm">Check out</Button>}
       title={`Check out ${reservation.confirmation_number}`}
-      description="Settles the stay, releases the room for cleaning and closes the folio."
+      description="Review every guest, corporate and group folio for this stay before releasing the room for cleaning."
       confirmLabel="Complete check-out"
-      disabled={outstanding && !force}
+      disabled={!position.isSuccess || position.isFetching || checkOut.isPending || position.data?.mixedCurrency
+        || hasCredit || (outstanding && (!force || !canOverride || !notes.trim()))}
       onConfirm={() => checkOut.mutateAsync({ reservation: reservation.id, force, notes })}
     >
-      <div className="rounded-lg border border-border/70 p-3 text-sm">
-        <span className="text-muted-foreground">Folio balance</span>
-        <p className={outstanding ? "text-lg font-semibold text-destructive" : "text-lg font-semibold text-success"}>
-          {money(balance)}
-        </p>
-      </div>
+      {position.isPending ? <p className="text-sm text-muted-foreground">Reading all folio balances...</p> : null}
+      {position.isError ? <p role="alert" className="text-sm text-destructive">{position.error.message}</p> : null}
+      {position.data ? <div className="space-y-3">
+        <div className="flex justify-between gap-3 text-sm">
+          <p>{position.data.folios.length} folio(s) for this stay</p>
+          <Button size="sm" variant="outline" disabled={position.isFetching || checkOut.isPending} onClick={() => void position.refetch()}>Refresh balances</Button>
+        </div>
+        {position.data.folios.map((folio) => <div key={folio.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+          <div>
+            <PermittedLink to="/pms/folios/$id" params={{ id: folio.id }} className="font-medium underline">{folio.number}</PermittedLink>
+            <p className="text-xs text-muted-foreground">{titleCase(folio.type)} · {folio.currency}</p>
+          </div>
+          <p className={folio.outstanding === 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
+            {folio.outstanding < 0 ? "Credit / refund due: " : "Amount due: "}{moneyWithCode(Math.abs(folio.outstanding), folio.currency)}
+          </p>
+          {folio.outstanding > 0 ? <RecordPaymentDialog folioId={folio.id} balance={folio.outstanding} /> : null}
+        </div>)}
+        {position.data.mixedCurrency ? <p role="alert" className="text-sm text-destructive">Reconcile mixed currencies before checkout.</p> : null}
+        {hasCredit ? <p role="alert" className="text-sm text-destructive">Resolve each credit through a verified refund or transfer. It cannot cancel another folio's unpaid balance.</p> : null}
+      </div> : null}
       {outstanding ? (
         <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3">
           <div>
@@ -360,12 +379,12 @@ export function CheckOutDialog({
               {isAdmin ? "Requires an authorised override and is written to the audit trail." : "Only authorised staff may override."}
             </p>
           </div>
-          <Switch checked={force} onCheckedChange={setForce} disabled={!isAdmin} />
+          <Switch aria-label="Authorize checkout with an outstanding balance" checked={force} onCheckedChange={setForce} disabled={!canOverride} />
         </div>
       ) : null}
       <div className="space-y-2">
-        <Label>Check-out notes</Label>
-        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        <Label htmlFor={`checkout-notes-${reservation.id}`}>Check-out notes</Label>
+        <Textarea id={`checkout-notes-${reservation.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
       </div>
     </ActionDialog>
   );
@@ -440,7 +459,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
   );
 }
 
-export function RecordPaymentDialog({ folioId, balance }: { folioId: string; balance: number }) {
+export function RecordPaymentDialog({ folioId, balance, balanceLabel = "Outstanding balance" }: { folioId: string; balance: number; balanceLabel?: string }) {
   const { can } = useAuth();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(balance > 0 ? balance : 0);
@@ -510,7 +529,7 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
       <div className="space-y-2">
         <Label>Amount</Label>
         <Input type="number" min={0} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-        <p className="text-xs text-muted-foreground">Outstanding balance {money(balance)}</p>
+        <p className="text-xs text-muted-foreground">{balanceLabel}: {money(balance)}</p>
       </div>
       {isCash && !selfService && routedTill ? (
         <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">

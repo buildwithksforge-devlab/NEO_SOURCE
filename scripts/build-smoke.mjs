@@ -130,6 +130,16 @@ async function smokeRoutes() {
     const payload = await print.json();
     if (!Array.isArray(payload.printers) || payload.printers.length !== 0) throw new Error("Compiled print routing returned an unexpected result");
     console.log("  ✓ managed print route uses request-local bindings and fixed executor; no live request");
+    let commsForwards=0;
+    const summaryId="e98b312a6ceb488a8c655879fd1294414c8ca3f5371063378ad309e1c8c1f433";
+    globalThis.fetch=async(input,init)=>{
+      if(String(input)!==`https://horizon-prime-os.lovable.app/_serverFn/${summaryId}`)throw new Error("Unexpected communication executor");
+      if(new Headers(init?.headers).has("cookie"))throw new Error("Communication relay forwarded cookie");
+      commsForwards++;return Response.json({masked:true});
+    };
+    const comms=await handler.fetch(new Request(`http://localhost:${PORT}/_serverFn/${summaryId}`,{method:"POST",headers:{authorization:"Bearer smoke.payload.signature","content-type":"application/json"},body:"{}"}),{NEO_MANAGED_COMMS_ENABLED:"true"},{waitUntil(){},passThroughOnException(){}});
+    if(comms.status!==200||commsForwards!==1)throw new Error("Compiled communications did not use request-local runtime bindings");
+    console.log("  ✓ managed communication route uses request-local bindings; no email sent");
   } finally {
     globalThis.fetch = originalFetch;
   }

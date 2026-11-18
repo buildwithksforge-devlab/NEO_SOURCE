@@ -12,9 +12,15 @@ export const Route = createFileRoute("/auth/reset-password")({
   head: () => ({
     meta: [
       { title: "Set a new password — NEØ" },
-      { name: "description", content: "Choose a new password for your hospitality workspace account." },
+      {
+        name: "description",
+        content: "Choose a new password for your hospitality workspace account.",
+      },
       { property: "og:title", content: "Set a new password — NEØ" },
-      { property: "og:description", content: "Choose a new password for your hospitality workspace account." },
+      {
+        property: "og:description",
+        content: "Choose a new password for your hospitality workspace account.",
+      },
     ],
   }),
   component: ResetPassword,
@@ -28,6 +34,7 @@ function ResetPassword() {
 
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    if (busy) return;
     if (password !== confirm) {
       toast.error("Passwords do not match");
       return;
@@ -37,32 +44,67 @@ function ResetPassword() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ must_change_password: false })
+          .eq("id", data.user.id);
+        if (profileError) {
+          toast.warning(
+            "Your password changed, but the account change requirement could not be cleared. Sign in with the new password and contact your administrator if prompted again.",
+          );
+          return;
+        }
+      }
+      toast.success("Password updated");
+      navigate({ to: "/workspace" });
+    } catch {
+      toast.error(
+        "The password service response was not received. Try signing in with the new password before repeating the change.",
+      );
+    } finally {
+      setBusy(false);
     }
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      await supabase.from("profiles").update({ must_change_password: false }).eq("id", data.user.id);
-    }
-    toast.success("Password updated");
-    navigate({ to: "/workspace" });
   }
 
   return (
-    <AuthLayout title="Set a new password" subtitle="Choose a strong password you have not used before.">
+    <AuthLayout
+      title="Set a new password"
+      subtitle="Choose a strong password you have not used before."
+    >
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="pw">New password</Label>
-          <Input id="pw" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input
+            id="pw"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="pw2">Confirm password</Label>
-          <Input id="pw2" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <Input
+            id="pw2"
+            type="password"
+            required
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
         </div>
-        <Button type="submit" className="h-12 w-full rounded-xl bg-neo-turquoise font-semibold text-neo-midnight hover:bg-neo-aqua hover:text-neo-white" disabled={busy}>
+        <Button
+          type="submit"
+          className="h-12 w-full rounded-xl bg-neo-turquoise font-semibold text-neo-midnight hover:bg-neo-aqua hover:text-neo-white"
+          disabled={busy}
+        >
           Update password
         </Button>
       </form>

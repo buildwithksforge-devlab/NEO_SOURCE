@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { readViewAccess, VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
+import { requireReservationMoneyPosition, type ReservationMoneyPosition } from "@/lib/reservation-money-position";
 export type CollectionSource = {
   id: string;
   amount: number | string;
@@ -26,8 +27,9 @@ export type ReservationCollection = {
   state: string;
   reference: string | null;
   receivedAt: string | null;
+  depositUse?: "Held for booking" | "Applied to folio" | "Forfeited";
 };
-const received = new Set(["confirmed", "completed", "posted", "paid", "settled"]);
+const received = new Set(["confirmed", "completed", "posted", "paid", "settled", "succeeded", "captured"]);
 /** Presentation of saved collections only. Deposit application is never another receipt. */
 export function reservationCollections(
   deposits: CollectionSource[],
@@ -63,6 +65,8 @@ export function reservationCollections(
       state,
       reference: row.receipt_number ?? row.reference ?? null,
       receivedAt: row.received_at ?? row.paid_at ?? null,
+      ...(kind === "deposit" && ["held", "applied", "forfeited"].includes(row.status)
+        ? {depositUse: (row.status === "held" ? "Held for booking" : row.status === "applied" ? "Applied to folio" : "Forfeited") as NonNullable<ReservationCollection["depositUse"]>} : {}),
     };
   };
   const rows = deposits.map((d) => {
@@ -153,18 +157,7 @@ export function useReservationCollections(reservationId: string, folioIds: strin
   });
 }
 
-export type ReservationCollectionPosition = {
-  currency: string;
-  quote: number;
-  obligation: number;
-  collected: number;
-  pending: number;
-  outstanding: number;
-  credit: number;
-  headroom: number;
-  payment_status: string;
-  deposit_paid: number;
-};
+export type ReservationCollectionPosition = ReservationMoneyPosition;
 export function useReservationCollectionPosition(reservationId: string) {
   const auth = useAuth(),
     { identity, ready } = readViewAccess(auth);
@@ -183,26 +176,7 @@ export function useReservationCollectionPosition(reservationId: string) {
         _reservation: reservationId,
       });
       if (error) throw error;
-      if (
-        !data ||
-        data.reservation_id !== reservationId ||
-        typeof data.currency !== "string" ||
-        !["unpaid", "part-paid", "paid"].includes(data.payment_status)
-      )
-        throw new Error("Reservation collection position could not be verified.");
-      for (const key of [
-        "quote",
-        "obligation",
-        "collected",
-        "pending",
-        "outstanding",
-        "credit",
-        "headroom",
-        "deposit_paid",
-      ])
-        if (typeof data[key] !== "number" || !Number.isFinite(data[key]) || data[key] < 0)
-          throw new Error("Reservation amounts could not be verified.");
-      return data as ReservationCollectionPosition;
+      return requireReservationMoneyPosition(data, reservationId);
     },
   });
 }

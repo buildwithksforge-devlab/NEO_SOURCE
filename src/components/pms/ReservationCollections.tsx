@@ -75,6 +75,7 @@ export function ReservationCollections({
               </p>
               <p className="text-xs text-muted-foreground">
                 {row.state}
+                {row.depositUse ? " · " + row.depositUse : ""}
                 {row.reference ? " · " + row.reference : ""}
                 {row.receivedAt ? " · " + formatDateTime(row.receivedAt) : ""}
               </p>

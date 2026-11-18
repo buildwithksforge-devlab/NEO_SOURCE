@@ -15,6 +15,7 @@ describe("reservation collection evidence", () => {
       kind: "deposit",
       state: "Received",
       amount: 5000,
+      depositUse: "Held for booking",
     }));
   it("deduplicates the same payment fetched by reservation and folio", () =>
     expect(reservationCollections([], [payment, payment])).toHaveLength(1));
@@ -28,6 +29,11 @@ describe("reservation collection evidence", () => {
     expect(reservationCollections([], [{ ...payment, status: "pending" }])[0]?.state).toBe(
       "Awaiting confirmation",
     ));
+  it.each(["succeeded", "captured"])("keeps backend-confirmed provider status %s consistent with the booking total", status => {
+    expect(reservationCollections([], [{...payment,status}])[0]?.state).toBe("Received");
+    expect(reservationCollections([{...deposit,status:"applied",payment_id:"p"}], [{...payment,status}])[0])
+      .toMatchObject({state:"Received",depositUse:"Applied to folio"});
+  });
   it("refunded receipt is explicit", () =>
     expect(reservationCollections([], [{ ...payment, status: "refunded" }])[0]?.state).toBe(
       "Refunded",

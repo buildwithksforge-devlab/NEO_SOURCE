@@ -7,13 +7,14 @@ export function minibarChannelAllowed(channels: unknown): boolean {
 }
 
 export function minibarStoreAllowed(
-  store: { active?: unknown; branch_id?: unknown },
+  store: { active?: unknown; branch_id?: unknown; location_type?: unknown },
   branchId: unknown,
 ): boolean {
   return (
     typeof branchId === "string" &&
     branchId.length > 0 &&
     store.active === true &&
+    store.location_type === "minibar" &&
     store.branch_id === branchId
   );
 }

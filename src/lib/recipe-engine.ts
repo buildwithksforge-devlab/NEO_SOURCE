@@ -27,7 +27,7 @@ export type RecipeSheetGroup = {
   recipe: {
     name: string;
     recipeCode: string | null;
-    recipeType: "menu_item" | "sub_recipe";
+    recipeType: "menu_item" | "sub_recipe" | "direct_sale";
     menuItemId: string | null;
     stationId: string | null;
     outputStockItemId: string | null;
@@ -87,7 +87,7 @@ export function prepareRecipeSheet(
       );
       return null;
     }
-    return String(matches[0]!['id']);
+    return String(matches[0]!["id"]);
   };
   rows.forEach((row, index) => {
     const values = {
@@ -102,13 +102,14 @@ export function prepareRecipeSheet(
     };
     let key = values.code
       ? `code:${norm(values.code)}`
-      : norm(values.name || values.menu) || `missing-identity-row-${index + 2}`;
+      : norm(values.menu || values.name) || `missing-identity-row-${index + 2}`;
     const compatible = [...headers.entries()].filter(
       ([, h]) =>
-        (!values.code || !h['code'] || norm(values.code) === norm(h['code'])) &&
-        ((values.code && h['code'] && norm(values.code) === norm(h['code'])) ||
-          (values.name && h['name'] && norm(values.name) === norm(h['name'])) ||
-          (values.menu && h['menu'] && norm(values.menu) === norm(h['menu']))),
+        (!values.code || !h["code"] || norm(values.code) === norm(h["code"])) &&
+        (!values.menu || !h["menu"] || norm(values.menu) === norm(h["menu"])) &&
+        ((values.code && h["code"] && norm(values.code) === norm(h["code"])) ||
+          (values.name && h["name"] && norm(values.name) === norm(h["name"])) ||
+          (values.menu && h["menu"] && norm(values.menu) === norm(h["menu"]))),
     );
     if (!groups.has(key) && compatible.length === 1) key = compatible[0]![0];
     if (!values.code && compatible.length > 1) {
@@ -161,6 +162,15 @@ export function prepareRecipeSheet(
       "stock_sku",
       "sub_recipe",
     );
+    // Direct sales map the finished stock output, not a second ingredient
+    // consumption. They use one header row with no ingredient columns.
+    if (
+      (values.type || head["type"]) === "direct_sale" &&
+      !ingredient &&
+      !field(row, "quantity", "ingredient_quantity") &&
+      !field(row, "unit", "ingredient_unit")
+    )
+      return;
     const rawType = field(row, "component_type") || "stock_item";
     const componentType = rawType === "sub_recipe" ? "sub_recipe" : "stock_item";
     if (!["stock_item", "sub_recipe"].includes(rawType))
@@ -211,39 +221,54 @@ export function prepareRecipeSheet(
       );
     const h = headers.get(group.key)!;
     const r = group.recipe;
-    r.name = h['name'] || h['menu'] || h['code'] || "";
-    r.recipeCode = h['code'] || null;
-    if (h['type'] && !["menu_item", "sub_recipe"].includes(h['type']))
+    r.name = h["name"] || h["menu"] || h["code"] || "";
+    r.recipeCode = h["code"] || null;
+    if (h["type"] && !["menu_item", "sub_recipe", "direct_sale"].includes(h["type"]))
+      group.errors.push("recipe_type must be menu_item, sub_recipe or direct_sale.");
+    r.recipeType =
+      h["type"] === "sub_recipe"
+        ? "sub_recipe"
+        : h["type"] === "direct_sale"
+          ? "direct_sale"
+          : "menu_item";
+    if (r.recipeType === "direct_sale" && r.components.length)
       group.errors.push(
-        "recipe_type must be menu_item or sub_recipe; use the direct-sale editor for packaged goods.",
+        "Direct-sale products use output_stock_item and yield only; remove ingredient rows to avoid conflicting stock mappings.",
       );
-    r.recipeType = h['type'] === "sub_recipe" ? "sub_recipe" : "menu_item";
-    r.yieldQuantity = Number(h['yield']);
-    r.yieldUnit = h['yieldUnit'] || "";
+    if (r.recipeType === "direct_sale" && !h["output"])
+      group.errors.push("Direct-sale product requires output_stock_item.");
+    r.yieldQuantity = Number(h["yield"]);
+    r.yieldUnit = h["yieldUnit"] || "";
     if (!Number.isFinite(r.yieldQuantity) || r.yieldQuantity <= 0)
       group.errors.push("Recipe yield must be supplied as a positive finite number.");
     if (!r.yieldUnit) group.errors.push("Recipe yield unit is required.");
-    if (r.recipeType === "menu_item")
+    if (r.recipeType !== "sub_recipe")
       r.menuItemId = resolve(
-        h['menu'] || h['name'] || "",
+        h["menu"] || h["name"] || "",
         masters.menuItems,
         ["id", "sku", "name"],
         "Menu item",
         group.errors,
       );
-    else if (h['menu'])
+    else if (h["menu"])
       group.errors.push("A prepared batch/sub-recipe must not attach to a menu item.");
-    if (h['station'])
+    if (h["station"])
       r.stationId = resolve(
-        h['station'],
+        h["station"],
         masters.stations,
         ["id", "code", "name"],
         "Production station",
         group.errors,
       );
-    if (h['output'])
+    else if (r.menuItemId) {
+      const menu = masters.menuItems.find((item) => String(item["id"]) === r.menuItemId);
+      const station = menu?.["station_id"];
+      if (station)
+        r.stationId = resolve(String(station), masters.stations, ["id"], "Menu production station", group.errors);
+    }
+    if (h["output"])
       r.outputStockItemId = resolve(
-        h['output'],
+        h["output"],
         masters.stockItems,
         ["id", "sku", "name"],
         "Output stock item",

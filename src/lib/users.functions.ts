@@ -3,10 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { buildStaffInviteMetadata } from "@/lib/auth-email-metadata";
-import {
-  normaliseStaffAccountInput,
-  validateStaffAccountInput,
-} from "@/lib/staff-account-input";
+import { normaliseStaffAccountInput, validateStaffAccountInput } from "@/lib/staff-account-input";
 
 type CapabilityClient = Pick<SupabaseClient<Database>, "rpc">;
 
@@ -17,15 +14,11 @@ function isNewSupabaseApiKey(value: string): boolean {
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
   return (input, init) => {
     const headers = new Headers(
-      typeof Request !== "undefined" && input instanceof Request
-        ? input.headers
-        : undefined,
+      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
     );
 
     if (init?.headers) {
-      new Headers(init.headers).forEach((value, key) =>
-        headers.set(key, value),
-      );
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     }
 
     if (
@@ -49,11 +42,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
  * from a role name or the organisation-admin flag. `is_org_admin` remains a
  * fallback so an Owner is never locked out of their own workspace.
  */
-async function requireCapability(
-  supabase: CapabilityClient,
-  feature: string,
-  action: string,
-) {
+async function requireCapability(supabase: CapabilityClient, feature: string, action: string) {
   const { data: allowed } = await supabase.rpc("has_permission", {
     _module: "administration",
     _feature: feature,
@@ -76,14 +65,16 @@ async function requireValidAssignment(
   departmentId: string | null,
   roleIds: string[],
 ) {
-  const { error } = await supabase.rpc("neo_validate_role_assignment" as never, {
-    _branch: branchId,
-    _department: departmentId,
-    _role_ids: roleIds ?? [],
-  } as never);
+  const { error } = await supabase.rpc(
+    "neo_validate_role_assignment" as never,
+    {
+      _branch: branchId,
+      _department: departmentId,
+      _role_ids: roleIds ?? [],
+    } as never,
+  );
   if (error) throw new Error(error.message);
 }
-
 
 type CreateInput = {
   email: string;
@@ -101,7 +92,6 @@ type CreateInput = {
   /** Organisational reporting line, chosen from the canonical candidates. */
   reporting_manager_profile_id?: string | null;
 };
-
 
 /**
  * Universal worker provisioning.
@@ -126,12 +116,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
 
     await requireCapability(supabase, "users", "create");
-    await requireValidAssignment(
-      supabase,
-      data.branch_id,
-      data.department_id,
-      data.role_ids,
-    );
+    await requireValidAssignment(supabase, data.branch_id, data.department_id, data.role_ids);
 
     const { data: me } = await supabase
       .from("profiles")
@@ -143,37 +128,25 @@ export const createStaffUser = createServerFn({ method: "POST" })
       throw new Error("No organization");
     }
 
-    const [{ data: org }, { data: property }, { data: role }] =
-      await Promise.all([
-        supabase
-          .from("organizations")
-          .select("name")
-          .eq("id", me.organization_id)
-          .maybeSingle(),
+    const [{ data: org }, { data: property }, { data: role }] = await Promise.all([
+      supabase.from("organizations").select("name").eq("id", me.organization_id).maybeSingle(),
 
-        data.branch_id
-          ? supabase
-              .from("branches")
-              .select("name")
-              .eq("id", data.branch_id)
-              .maybeSingle()
-          : Promise.resolve({
-              data: null as { name: string } | null,
-            }),
+      data.branch_id
+        ? supabase.from("branches").select("name").eq("id", data.branch_id).maybeSingle()
+        : Promise.resolve({
+            data: null as { name: string } | null,
+          }),
 
-        data.primary_role_id ?? data.role_ids[0]
-          ? supabase
-              .from("roles")
-              .select("name")
-              .eq(
-                "id",
-                (data.primary_role_id ?? data.role_ids[0]) as string,
-              )
-              .maybeSingle()
-          : Promise.resolve({
-              data: null as { name: string } | null,
-            }),
-      ]);
+      (data.primary_role_id ?? data.role_ids[0])
+        ? supabase
+            .from("roles")
+            .select("name")
+            .eq("id", (data.primary_role_id ?? data.role_ids[0]) as string)
+            .maybeSingle()
+        : Promise.resolve({
+            data: null as { name: string } | null,
+          }),
+    ]);
 
     const inviteMetadata = buildStaffInviteMetadata({
       full_name: data.full_name,
@@ -197,26 +170,20 @@ export const createStaffUser = createServerFn({ method: "POST" })
     const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
 
     if (!supabaseUrl || !publishableKey) {
-      throw new Error(
-        "Supabase public authentication is not configured on this server",
-      );
+      throw new Error("Supabase public authentication is not configured on this server");
     }
 
-    const signupClient = createClient<Database>(
-      supabaseUrl,
-      publishableKey,
-      {
-        global: {
-          fetch: createSupabaseFetch(publishableKey),
-        },
-        auth: {
-          storage: undefined,
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-        },
+    const signupClient = createClient<Database>(supabaseUrl, publishableKey, {
+      global: {
+        fetch: createSupabaseFetch(publishableKey),
       },
-    );
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
 
     const created = await signupClient.auth.signUp({
       email: data.email,
@@ -237,43 +204,30 @@ export const createStaffUser = createServerFn({ method: "POST" })
      * An empty identities collection is therefore not accepted as evidence
      * that a new worker account was created.
      */
-    if (
-      !newUser?.id ||
-      (Array.isArray(newUser.identities) &&
-        newUser.identities.length === 0)
-    ) {
-      throw new Error(
-        "That email address already belongs to an account.",
-      );
+    if (!newUser?.id || (Array.isArray(newUser.identities) && newUser.identities.length === 0)) {
+      throw new Error("That email address already belongs to an account.");
     }
 
     const newUserId = newUser.id;
 
-    const { data: result, error } = await supabase.rpc(
-      "neo_provision_worker",
-      {
-        _payload: {
-          user_id: newUserId,
-          email: data.email,
-          full_name: data.full_name,
-          staff_id: data.staff_id,
-          phone: data.phone,
-          job_title: data.job_title,
-          branch_id: data.branch_id,
-          department_id: data.department_id,
-          station_id: data.station_id ?? null,
-          role_ids: data.role_ids,
-          primary_role_id:
-            data.primary_role_id ??
-            data.role_ids[0] ??
-            null,
-          reporting_manager_profile_id:
-            data.reporting_manager_profile_id ?? null,
-          employment_status: data.employment_status,
-          idempotency_key: `worker:${data.email.toLowerCase()}`,
-        } as never,
-      },
-    );
+    const { data: result, error } = await supabase.rpc("neo_provision_worker", {
+      _payload: {
+        user_id: newUserId,
+        email: data.email,
+        full_name: data.full_name,
+        staff_id: data.staff_id,
+        phone: data.phone,
+        job_title: data.job_title,
+        branch_id: data.branch_id,
+        department_id: data.department_id,
+        station_id: data.station_id ?? null,
+        role_ids: data.role_ids,
+        primary_role_id: data.primary_role_id ?? data.role_ids[0] ?? null,
+        reporting_manager_profile_id: data.reporting_manager_profile_id ?? null,
+        employment_status: data.employment_status,
+        idempotency_key: `worker:${data.email.toLowerCase()}`,
+      } as never,
+    });
 
     if (error) {
       throw new Error(error.message);
@@ -281,8 +235,7 @@ export const createStaffUser = createServerFn({ method: "POST" })
 
     return {
       id: newUserId,
-      provisioning:
-        (result ?? null) as Record<string, string> | null,
+      provisioning: (result ?? null) as Record<string, string> | null,
       emailConfirmationRequired: !created.data.session,
     };
   });
@@ -297,7 +250,6 @@ type AssignmentInput = {
   role_ids: string[];
   reporting_manager_profile_id?: string | null;
 };
-
 
 /**
  * Single authoritative write path for an employee's assignment.
@@ -316,7 +268,6 @@ export const updateStaffAssignment = createServerFn({ method: "POST" })
 
     await requireCapability(supabase, "users", "edit");
     await requireValidAssignment(supabase, data.branch_id, data.department_id, data.role_ids);
-
 
     const { data: me } = await supabase
       .from("profiles")
@@ -383,9 +334,12 @@ export const updateStaffAssignment = createServerFn({ method: "POST" })
           );
         }
       } else {
-        const { data: meta } = await supabase.rpc("neo_role_reporting_meta" as never, {
-          _role_ids: data.role_ids,
-        } as never);
+        const { data: meta } = await supabase.rpc(
+          "neo_role_reporting_meta" as never,
+          {
+            _role_ids: data.role_ids,
+          } as never,
+        );
         const required = ((meta ?? []) as { manager_required: boolean }[])[0]?.manager_required;
         if (required) {
           reviewRequired = true;
@@ -494,7 +448,9 @@ export const resetStaffPassword = createServerFn({ method: "POST" })
 /** Account status change (activate, deactivate, suspend, reactivate). */
 export const setStaffAccountStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { user_id: string; status: "active" | "inactive" | "suspended" }) => input)
+  .inputValidator(
+    (input: { user_id: string; status: "active" | "inactive" | "suspended" }) => input,
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await requireCapability(supabase, "users", "manage_status");
@@ -574,27 +530,51 @@ export const resendStaffInvitation = createServerFn({ method: "POST" })
     if (!target?.organization_id) throw new Error("User not found in your organization");
     if (!target.email) throw new Error("This account has no email address on file");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const link = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery",
-      email: target.email,
-      options: { redirectTo: data.redirect_to ?? "" },
+    // generateLink creates a secret link; it does not send an email. Use the
+    // normal Auth recovery service after the existing capability/scope check.
+    const redirect = data.redirect_to ? new URL(data.redirect_to) : null;
+    if (
+      !redirect ||
+      redirect.protocol !== "https:" ||
+      ![
+        "https://neo-preview.neo-hospitality.workers.dev",
+        "https://horizon-prime-os.lovable.app",
+      ].includes(redirect.origin)
+    )
+      throw new Error("Choose an approved NEØ setup address.");
+    redirect.pathname = "/auth/reset-password";
+    redirect.search = "";
+    redirect.hash = "";
+    const sent = await supabase.auth.resetPasswordForEmail(target.email, {
+      redirectTo: redirect.toString(),
     });
-    if (link.error) throw new Error(link.error.message);
+    if (sent.error) throw new Error(sent.error.message);
 
-    await supabaseAdmin
+    const profileResult = await supabase
       .from("profiles")
-      .update({ invitation_status: "sent", invited_at: new Date().toISOString(), invited_by: userId })
-      .eq("id", data.user_id);
+      .update({
+        invitation_status: "sent",
+        invited_at: new Date().toISOString(),
+        invited_by: userId,
+      })
+      .eq("id", data.user_id)
+      .eq("organization_id", target.organization_id);
 
-    await supabaseAdmin.from("audit_logs").insert({
+    const auditResult = await supabase.from("audit_logs").insert({
       organization_id: target.organization_id,
       user_id: userId,
       action: "user.invitation_resent",
       module: "administration",
       record_id: data.user_id,
     });
-    return { ok: true, action_link: link.data.properties?.action_link ?? null };
+    return {
+      ok: true,
+      email_requested: true,
+      warning:
+        profileResult.error || auditResult.error
+          ? "The email request was accepted, but invitation history could not be fully updated. Review the account history; do not resend solely to repair that record."
+          : null,
+    };
   });
 
 /**
@@ -869,9 +849,7 @@ export const getStaffSecurityMetadata = createServerFn({ method: "POST" })
       updated_at: u?.updated_at ?? null,
       mfa_factors: factors.length,
       mfa_verified_factors: verified.length,
-      mfa_state: (factors.length > 0 ? "enrolled" : "not_enrolled") as
-        | "enrolled"
-        | "not_enrolled",
+      mfa_state: (factors.length > 0 ? "enrolled" : "not_enrolled") as "enrolled" | "not_enrolled",
       mfa_factor_types: [
         ...new Set(factors.map((f) => (f as { factor_type?: string }).factor_type ?? "unknown")),
       ],
@@ -973,4 +951,3 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
     if (removed.error) throw new Error(removed.error.message);
     return { ok: true };
   });
-

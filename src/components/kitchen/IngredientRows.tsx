@@ -2,7 +2,13 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RECIPE_UNITS, isDiscreteUnit, wholeUnitIssue } from "@/lib/recipe-engine";
 
 export type IngredientDraft = {
@@ -15,7 +21,7 @@ export type IngredientDraft = {
   wasteAllowance: string;
 };
 
-export type ComponentOption = { value: string; label: string };
+export type ComponentOption = { value: string; label: string; unit?: string };
 
 let seq = 0;
 export function emptyIngredientRow(): IngredientDraft {
@@ -35,7 +41,10 @@ export function emptyIngredientRow(): IngredientDraft {
 export function isRowComplete(row: IngredientDraft): boolean {
   const target = row.componentType === "sub_recipe" ? row.subRecipeId : row.stockItemId;
   return (
-    Boolean(target) && Number(row.quantity) > 0 && Boolean(row.unit) && rowWholeUnitIssue(row) === null
+    Boolean(target) &&
+    Number(row.quantity) > 0 &&
+    Boolean(row.unit) &&
+    rowWholeUnitIssue(row) === null
   );
 }
 
@@ -123,7 +132,10 @@ export function IngredientRows({
                   })
                 }
               >
-                <SelectTrigger id={`ing-type-${row.key}`} aria-label={`Ingredient ${index + 1} type`}>
+                <SelectTrigger
+                  id={`ing-type-${row.key}`}
+                  aria-label={`Ingredient ${index + 1} type`}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -142,7 +154,15 @@ export function IngredientRows({
                 onValueChange={(v) =>
                   update(
                     row.key,
-                    row.componentType === "sub_recipe" ? { subRecipeId: v } : { stockItemId: v },
+                    row.componentType === "sub_recipe"
+                      ? {
+                          subRecipeId: v,
+                          unit: subRecipeOptions.find((o) => o.value === v)?.unit || row.unit,
+                        }
+                      : {
+                          stockItemId: v,
+                          unit: stockOptions.find((o) => o.value === v)?.unit || row.unit,
+                        },
                   )
                 }
               >
@@ -150,11 +170,13 @@ export function IngredientRows({
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(row.componentType === "sub_recipe" ? subRecipeOptions : stockOptions).map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
+                  {(row.componentType === "sub_recipe" ? subRecipeOptions : stockOptions).map(
+                    (o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -180,7 +202,10 @@ export function IngredientRows({
                 Unit
               </Label>
               <Select value={row.unit} onValueChange={(v) => update(row.key, { unit: v })}>
-                <SelectTrigger id={`ing-unit-${row.key}`} aria-label={`Ingredient ${index + 1} unit`}>
+                <SelectTrigger
+                  id={`ing-unit-${row.key}`}
+                  aria-label={`Ingredient ${index + 1} unit`}
+                >
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,8 +252,8 @@ export function IngredientRows({
               </p>
             ) : isDiscreteUnit(row.unit) ? (
               <p className="text-xs text-muted-foreground sm:col-span-12">
-                Counted whole: any wastage is recorded as its own whole {row.unit} entry, never added as a
-                fraction.
+                Counted whole: any wastage is recorded as its own whole {row.unit} entry, never
+                added as a fraction.
               </p>
             ) : null}
           </div>

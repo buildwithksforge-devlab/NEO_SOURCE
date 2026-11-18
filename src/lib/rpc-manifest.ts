@@ -732,6 +732,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_gl_settlement_review: "authenticated",
   neo_kitchen_waste_post: "authenticated",
   neo_minibar_post: "authenticated",
+  neo_minibar_post_once: "authenticated",
   neo_procurement_request_price_line: "authenticated",
   neo_production_batch_post: "authenticated",
   neo_stock_live_board: "authenticated",

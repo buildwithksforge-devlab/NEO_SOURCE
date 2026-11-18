@@ -7,6 +7,8 @@
  * canonical ledger path (`inventory_consume_order_item_core`).
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import { recipeCommandError } from "@/lib/recipe-command-error";
+import { recipeStockMappingIssue } from "@/lib/recipe-stock-mapping";
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,7 +21,7 @@ import type { RecipeIngredient, RecipeRecord } from "@/lib/recipe-engine";
 type Row = Record<string, unknown>;
 
 const RECIPE_SELECT =
-  "id, name, recipe_code, recipe_type, status, version, menu_item_id, station_id, output_stock_item_id, branch_id, yield_quantity, yield_unit, prep_target_minutes, preparation_steps, waste_allowance, menu_items(name), operational_stations(name), output_stock_item:stock_items!recipes_output_stock_item_id_fkey(id, name, sku, base_unit, container_type, container_volume_ml, stock_locations:stock_locations!stock_items_default_location_id_fkey(name)), recipe_ingredients!recipe_ingredients_recipe_id_fkey(id, component_type, ingredient_name, stock_item_id, sub_recipe_id, quantity, unit, waste_allowance)";
+  "id, organization_id, name, recipe_code, recipe_type, status, version, menu_item_id, station_id, output_stock_item_id, branch_id, yield_quantity, yield_unit, prep_target_minutes, preparation_steps, waste_allowance, menu_items(id, name, organization_id, branch_id, consumption_mode, stock_item_id, stock_quantity_per_sale, stock_unit, mapped_stock_item:stock_items!menu_items_stock_item_id_fkey(id, organization_id, branch_id)), operational_stations(name), output_stock_item:stock_items!recipes_output_stock_item_id_fkey(id, organization_id, branch_id, name, sku, base_unit, container_type, container_volume_ml, stock_locations:stock_locations!stock_items_default_location_id_fkey(name)), recipe_ingredients!recipe_ingredients_recipe_id_fkey(id, component_type, ingredient_name, stock_item_id, sub_recipe_id, quantity, unit, waste_allowance)";
 
 /**
  * A direct-sale mapping is a complete configuration with no ingredient rows:
@@ -40,6 +42,7 @@ export type DirectStockMapping = {
 export function directStockMapping(row: Row | null | undefined): DirectStockMapping | null {
   if (!row) return null;
   if (String(row["recipe_type"] ?? "") !== "direct_sale") return null;
+  if (recipeStockMappingIssue(row)) return null;
   const item = row["output_stock_item"] as Row | null;
   if (!item) return null;
   const location = item["stock_locations"] as Row | null;
@@ -51,7 +54,7 @@ export function directStockMapping(row: Row | null | undefined): DirectStockMapp
     containerType: (item["container_type"] as string | null) ?? null,
     containerVolumeMl:
       item["container_volume_ml"] == null ? null : Number(item["container_volume_ml"]),
-    perSale: Number(row["yield_quantity"] ?? 1) || 1,
+    perSale: Number(row["yield_quantity"]),
     storeName: (location?.["name"] as string | null) ?? null,
   };
 }
@@ -185,7 +188,7 @@ export function useSaveRecipeMaster() {
         _components: components,
         _attempt: input.imported ? null : attempts.current.get(request)!,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       const id = (data as { recipe_id?: string } | null)?.recipe_id;
       if (!id) throw new Error("The complete recipe save was not confirmed.");
       attempts.current.delete(request);
@@ -253,7 +256,7 @@ export function useSaveRecipeComponent() {
         unit: input.unit.trim(),
         waste_allowance: input.wasteAllowance ?? 0,
       } as never);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
     },
     onSuccess: () => {
       toast.success("Component added.");
@@ -268,7 +271,7 @@ export function useRemoveRecipeComponent() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("recipe_ingredients").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
     },
     onSuccess: () => {
       toast.success("Component removed.");
@@ -304,7 +307,7 @@ export async function bindMenuItemConsumption(
     .from("menu_items")
     .update(patch as never)
     .eq("id", menuItemId);
-  if (error) throw new Error(error.message);
+  if (error) throw recipeCommandError(error);
 }
 
 /** Attach an existing menu-item recipe to a menu item from the menu form. */
@@ -317,7 +320,7 @@ export function useAttachRecipeToMenuItem() {
         .select(RECIPE_SELECT)
         .eq("id", recipeId)
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       const original = data as unknown as Row | null;
       if (!original || original["recipe_type"] !== "menu_item")
         throw new Error("Choose an existing menu-item recipe.");
@@ -430,7 +433,7 @@ export function useSaveRecipeComponents() {
         _components: rows.map(componentPayload),
         _attempt: attempts.current.get(request)!,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       if (!(data as { recipe_id?: string } | null)?.recipe_id)
         throw new Error("The ingredient sheet save was not confirmed.");
       attempts.current.delete(request);
@@ -461,7 +464,7 @@ export function useStationConsumptionReadiness() {
       const { data, error } = await guardedRpc(supabase, "neo_recipe_location_readiness", {
         _branch: branchId ?? null,
       } as never);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return (data ?? []) as unknown as Row[];
     },
   });
@@ -476,7 +479,7 @@ export function useSetStationConsumptionLocation() {
         .from("stock_locations")
         .update({ station_id: input.stationId } as never)
         .eq("id", input.locationId);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return input.locationId;
     },
     onSuccess: () => {
@@ -505,7 +508,7 @@ export function useSetRecipeStation() {
         .from("recipes")
         .update({ station_id: input.stationId } as never)
         .eq("id", input.recipeId);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return input.recipeId;
     },
     onSuccess: () => {
@@ -552,7 +555,7 @@ export function useCreateMenuItemForRecipe() {
         } as never)
         .select("id")
         .single();
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return String((data as unknown as Row)["id"]);
     },
     onError: (e: Error) => toast.error(e.message),
