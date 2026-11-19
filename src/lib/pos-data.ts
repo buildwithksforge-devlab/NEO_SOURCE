@@ -1,6 +1,7 @@
 import { requireVoidResult } from "@/lib/pos-void-result";
 import { rejectBusinessFailure, requireSavedRecord, requirePosPaymentResult, requireMpesaReceiptReviewResult } from "@/lib/durable-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { invalidatePaymentViews } from "@/lib/payment-view-refresh";
 import {POS_OPEN_FILTER} from '@/lib/pos-payment-display';
 import { stableIdempotencyKey, stableIdempotencyUuid } from "@/lib/transaction-scope";
 import { useScopedRealtime } from "@/lib/realtime-scope";
@@ -1207,7 +1208,7 @@ export function usePostRoomCharge() {
     onSuccess: () => {
       toast.success("Charge posted to the guest folio.");
       void qc.invalidateQueries({ queryKey: ["pos"] });
-      void qc.invalidateQueries({ queryKey: ["pms"] });
+      void invalidatePaymentViews(qc);
     },
     onError: (e: Error) => toast.error(e.message),
   });

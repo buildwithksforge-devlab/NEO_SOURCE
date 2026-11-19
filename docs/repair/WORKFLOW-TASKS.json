@@ -1,0 +1,50 @@
+{
+  "updated": "2026-11-19",
+  "active_task": "WF11-T01",
+  "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
+  "tasks": [
+    {
+      "id": "WF11-T01",
+      "chains": ["WF11", "WF18", "WF23"],
+      "title": "Protect unpaid POS-to-room transfers and prevent subsequent POS collection",
+      "status": "IN_PROGRESS",
+      "confirmed_problem": "Reviewed room-transfer source posts the full bill despite prior POS money, replays by key without proving the requested destination/source, and the terminal still offers POS collection after transfer.",
+      "finish_checks": [
+        "An unpaid sent/served bill posts exactly one original-source folio charge with inclusive tax/service/discount components.",
+        "Prior or pending money, routed cash, provider success/uncertainty and active receipt review stop an unallocated transfer.",
+        "Retries match original order, folio, property, currency, components and valid saved line; wrong destination/key/source refuses.",
+        "New POS receipts, late confirmation and routed cash cannot collect the transferred debt again; non-monetary evidence remains recordable.",
+        "Folio/stay ownership and status are checked; all effects roll back on downstream failure; original function owner/grants remain.",
+        "Terminal displays POS collection separately from transferred debt and refreshes Finance/folio views. Tests, TypeScript, build and smoke pass."
+      ],
+      "local_evidence": ["Initial actual-engine and pure-state run: 42 tests passed in 2 files"],
+      "installation": "NOT_INSTALLED; candidate guards unknown installed definitions; read-only preflight required",
+      "live_acceptance": "OPEN",
+      "limits": ["Partial-payment allocation and bills with tips/delivery fees require a separately reconciled allocation workflow; this task refuses them instead of guessing.", "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."]
+    },
+    {
+      "id": "WF13-T01",
+      "chains": ["WF13", "WF14", "WF15", "WF17", "WF18"],
+      "title": "Reconcile existing reservation money by saved IDs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Review the corrected RESERVATION-MONEY-INSPECTION.sql JSON and trace each reported source/application/allocation/journal ID. Do not invent or overwrite balances.",
+      "local_evidence": ["Inspection corrected for absent reservations.currency; 9 PostgreSQL checks passed"],
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF07-T01",
+      "chains": ["WF07", "WF09"],
+      "title": "Reconcile explicit existing station/store links and actual remaining configuration",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Review explicit-link repair postcheck, preserve valid canonical mappings, resolve ambiguous or missing physical stores using actual department ownership; confirm depletion.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF10-T01",
+      "chains": ["WF10"],
+      "title": "Stable item-selection identity after an uncertain successful insert",
+      "status": "QUEUED",
+      "next_action": "Bind one durable item intent to the atomic item/modifier write; recover the saved item after a lost response without creating a duplicate. Retain paid-bill protection."
+    }
+  ]
+}

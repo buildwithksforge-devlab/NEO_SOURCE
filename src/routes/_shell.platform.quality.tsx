@@ -113,9 +113,9 @@ function QualityScreen() {
   return (
     <div className="space-y-6">
       <TruthNotice>
-        Test outcomes are recorded by the person who ran them. A capability that has not been
-        exercised stays “Not run” rather than being assumed to work, and a release is blocked while
-        any critical defect is open.
+        Automated integrity checks and saved Simulation results are logged here with their defects.
+        Manual test evidence and sign-offs remain separate. A capability that has not been exercised
+        stays “Not run”, and a release is blocked while any critical defect is open.
       </TruthNotice>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

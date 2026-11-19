@@ -1,5 +1,177 @@
 # Active execution queue
 
+## Next requested fixes — disappearing GRN and automatic platform checks
+
+Kelvin reports the GRN disappears after receiving, preventing reconciliation and three-way matching. Place this immediately after the in-progress release/account reconciliation. Trace blind count → independent acceptance → durable goods receipt/header/lines → purchase history and reprint → LPO/GRN/supplier invoice match → payable. Test leaving the screen, refreshing, status transitions, partial/rejected/short quantities, repeated requests and property-scoped history. A transient saved-GRN card is insufficient evidence of durable discoverability. Initial source targets: `src/components/inventory/ApprovedReceivingPosting.tsx`, `src/lib/stores-lifecycle.ts`, purchasing receipt/history screens and supplier matching routines.
+
+Next: automate supported checks across the 13 Platform & Readiness surfaces Kelvin listed. Persist run results and evidence; create/update deduplicated defects linked to affected workflows; refresh derived readiness from real results. Keep manual approvals/signoffs identifiable. Check scheduling, role/property scope, stale results and failed runs; do not make live stock/payment/email mutations merely to generate a green status. Existing Simulation runs use `neo_test_runs`, while Quality lists `test_runs`/`defects` and readiness uses `readiness_gates`; investigate that connection before adding another test store or dashboard.
+
+Follow-up account change: 24 targeted tests, full TypeScript, migration numbering, fresh build and built-server smoke passed. Upload is held because concurrent work changed source while the build ran and its fingerprint differs. Preserve that work; the previously verified live build remains `25f97e90e69f9ae0`. Do not label the new account fix deployed until a matching stable artifact is released.
+
+<!-- SYSTEM-WORKFLOW-QUEUE:BEGIN -->
+## Master workflow queue — 19 November
+
+**This is the current execution index.** It covers all departments and audience apps in the established system scope. The dated checkpoints below supply evidence; older task statuses do not override newer verified milestones. The [machine-readable queue](SYSTEM-WORKFLOW-QUEUE.json) contains each chain's next action, dependencies, evidence fields and all historical issue links.
+
+Coverage: **34 end-to-end chains; all 106 original backlog items mapped; zero unmapped items.** This is a scope/traceability check, not a claim that every chain passed. Every chain currently remains OPEN for its outstanding work or live acceptance. Keep completed installation/deployment/printer milestones below completed within their verified scope.
+
+### Verified foundation retained
+
+These are the latest recorded milestones, with their original evidence retained in the dated checkpoints. They are not queued for redevelopment.
+
+- **M01 — INSTALLED_VERIFIED:** 23 shared workflow routines across the returned 28-organisation inspection; preserve 20 shared and 3 reviewed later definitions.
+- **M02 — INSTALLED_VERIFIED:** Atomic recipe save/approval/history, authenticated execution allowed and anonymous denied; actual staff full-chain acceptance remains open.
+- **M03 — INSTALLED_VERIFIED:** 19 November shared checkout and durable Minibar installation, including retry storage and guarded staff execution.
+- **M04 — DEPLOYED_VERIFIED:** neo-preview build 25f97e90e69f9ae0; deployment/version evidence recorded; original Horizon publication separately unverified.
+- **M05 — USER_REPORTED_PHYSICAL_PASS:** Kelvin's successful physical printer test; preserve that setup; other document/station layouts remain open.
+
+### Start here
+
+1. Run the corrected existing-ID reservation inspection and collect the explicit station-store reconciliation result. Identify actual offending records; preserve working setup.
+2. Resolve confirmed money differences and station/stock configuration, then complete the connected workflows below in dependency order.
+3. Record source, installed and live evidence separately. Close individual steps only with their stated evidence, and close a chain only after all applicable common checks pass.
+
+### Every chain must cover these checks
+
+1. Record lineage: trigger and every saved source/destination ID, organization/property, actor and status transition.
+2. Money/units/dates: configured pricing and components, inclusive/exclusive tax, discounts, service, deposits, pending money, rounding, currency, base units and business dates.
+3. Downstream effects: stock/lot/value, room/task/asset state, operational registers and balanced source-linked journals; mark a genuinely inapplicable effect N/A with a reason.
+4. Authority/isolation: real requester/approver/operator roles, organization/property/department/station boundaries and explicit denied cases.
+5. Failure/retry: validation, partial failure/rollback, duplicate clicks, concurrent actions, lost responses, callbacks, reconnect and replay retain the original attempt.
+6. Corrections/history: reject, cancel, void, transfer, return, refund, reversal and supersession follow policy and retain original records/audit.
+7. Outputs: relevant preview/PDF/download/send/print/reprint/retrieval and physical/provider proof; sending/queuing/transport/paper are distinct states.
+8. Installed/deployed acceptance: installed routine/permissions, app/agent build, actual role/browser/device, expected versus observed result and open exceptions.
+
+### Complete workflow register
+
+P0 protects money, access and rollout; P1 covers required operations; P2 covers the broader established product scope. A priority does not remove a chain from the completion queue. Role names are execution roles, not an assertion that a specific employee has been assigned.
+
+| ID | Priority | Chain / responsible roles | End-to-end path | Finish evidence |
+| --- | --- | --- | --- | --- |
+| WF01 | P0 | **Organisation, property and data isolation** — Owner / administrator / scoped staff | Organisation setup → property configuration → role scope → property switch → reads/writes/documents/reports | Existing and new organisations work without fixed hotel IDs; foreign property/organisation access is denied in UI, RPC, storage and reports. |
+| WF02 | P0 | **Staff identity, Users, roles, PIN and devices** — Administrator / supervisor / employee | Invite/create → approve/access → role assignment → sign-in/PIN/device pairing → recovery → suspend/revoke | The intended person has exactly their permitted scope; recovery email really arrives; privileged actions audit; revoked access stops working. |
+| WF03 | P0 | **Shared business configuration and pricing** — Property administrator / Finance | Currency/timezone/business date → tax/service/discount/rate/meal policy → calculation → bill → settlement → journal/report | Configured components propagate once with documented inclusion/exclusion, rounding, units and dates; optional charges need no fixed-name assumptions. |
+| WF04 | P1 | **Purchase request through approved LPO** — Department requester / procurement / approver | Need/requisition → RFQ → supplier quotation → comparison/selection → approval → numbered LPO → supplier dispatch | Approved purchase, supplier, quantities/prices, approvals and actual outbound delivery evidence form one retrievable chain. |
+| WF05 | P1 | **Delivery, blind receiving and GRN** — Receiver / independent reviewer / stock poster / Finance | Supplier delivery note/file → blind count → reconciliation → accepted/rejected/short → approval → GRN → stock/batch/cost → accrual | Only accepted quantities post; repeated/partial deliveries trace to original PO lines; GRN, lots, stock value and accrual agree; finance recovery does not repost stock. |
+| WF06 | P1 | **Supplier invoice, payable and payment** — AP clerk / Finance approver / payer | Supplier invoice → LPO/GRN/price/tax match → variance approval/rejection → payable/journal → schedule → release → settlement/remittance | Original purchase, accepted GRN, invoice, aging, payment and balanced journal agree; duplicate invoice/payment and incorrect journal reuse refuse. |
+| WF07 | P1 | **Stores, station mapping and transfers** — Stores / department issuer / receiving department | Owned item/base unit → physical store → departmental/station mapping → requisition/approval → dispatch → in-transit → receipt/return/cancel | Actual source/destination and authority are correct; base quantities, lots, saved cost and in-transit valuation reconcile without invented mappings. |
+| WF08 | P1 | **Stock counts, adjustments, lots and expiry** — Counter / reviewer / stock controller | Physical count → variance → independent approval → adjustment → lot/expiry coverage → valuation/report | Signed movements and FEFO allocations reconcile to balances; expired/blocked-lot policy is explicit; no silent negative stock or historical cost rewrite. |
+| WF09 | P1 | **Menu, recipes, production and consumption** — Kitchen / Bar / Coffee / Pastry / stock controller | Owned stock/menu binding → manual/import draft → review/activation → units/yield/sub-recipes → produce/sell → consume → waste/return | One intended active version uses owned property stock/store; direct-sale and batch units/costs agree; actual deductions/returns happen once with source IDs. |
+| WF10 | P1 | **POS order and production handoff** — Waiter / cashier / production station / supervisor | Table/channel order → item/modifiers → send → scoped station ticket/display → accept/prepare/ready → serve → approved void/return | Prices/options persist atomically; correct department receives each item; paid/pending-protected lines cannot drift; lost-response item retry cannot duplicate a sale. |
+| WF11 | P0 | **POS collections and settlement** — Cashier / cashier supervisor / Finance / provider | Amount due → cash/card/bank/M-Pesa/QR attempt → pending/confirmation/callback → receipt → allocations → journal → close/refund | Only verified receipts reduce debt once; split tenders, cash change, provider uncertainty, late callbacks and recovery retain the original attempt and source. |
+| WF12 | P1 | **Delivery, rider and remittance** — Guest / dispatcher / production / rider / cashier | Guest order → quote/payment intent → preparation → rider assignment/dispatch → delivery/proof → cash handover/remittance → settlement/refund | Guest, dispatcher and rider see the same scoped order; delivery status does not invent payment; collected cash and remittance/journal agree. |
+| WF13 | P0 | **Availability, quote, reservation and deposit** — Reservations / guest / Finance | Dates/availability → rate/room/meal/tax quote → reservation/confirmation → deposit request → confirmed receipt → held liability/history | Nights, quote, deposit requirement and confirmed money reconcile; availability/property/date checks hold; pending money is separate and retry is once-only. |
+| WF14 | P0 | **Arrival and deposit application** — Front desk / cashier / supervisor | Eligible reservation → identity/deposit gate → room assignment → check-in → stay/folio → one deposit application → first accommodation charge | Reservation, stay, room and folio agree; held deposit transfers without a second receipt/revenue entry; first-night and original liability journals reconcile. |
+| WF15 | P0 | **In-house stay, room move and night audit** — Front desk / night auditor / Finance | Assigned stay → room/type/rate changes → consecutive business-day accommodation → taxes/service → adjustments → audit close | No missing/duplicate nights or double quote charges; room moves preserve ownership, date/rate history and balances; audit refuses incomplete financial evidence. |
+| WF16 | P1 | **Minibar, room service, laundry and guest services** — Housekeeping / station staff / laundry / front desk | Service intake/consumption → correct current stay/room/folio/store → fulfilment/stock → charge → delivery/return → history/journal | Each operational source is billed once with correct quantities, tax/service, stock and durable historical identity; non-folio settlement is accounted for. |
+| WF17 | P0 | **Corporate/group credit and folio allocation** — Front desk / corporate accounts / credit controller / Finance | Corporate/group authority → room/master/guest folios → routing/transfers → deposits/payments → allocation → invoice/credit account → collection | Every included folio and shared master reconciles separately; credit cannot hide another folio's debt; one receipt cannot be allocated twice. |
+| WF18 | P0 | **Departure, refunds and room release** — Front desk / authorized override/refund approver / cashier | Review every folio → settle/refund/authorized credit departure → checkout → release assignments → vacant dirty → issued final history | Each debt/credit has evidence and authority; room transition is saved; maintenance holds survive; repeated checkout/refund cannot duplicate effects. |
+| WF19 | P1 | **Housekeeping, inspection and sellability** — Housekeeping attendant / inspector / front desk | Vacant dirty/in-house task → assign → clean → linen/amenity use → independent inspection → sellable availability | Dirty, uninspected or maintenance-held rooms cannot be sold early; room axes, tasks, consumption and front-desk availability agree. |
+| WF20 | P1 | **Assets, maintenance and room holds** — Requester / engineer / independent verifier / stores | Fault/asset/PM → work order/assignment → hold → parts/work log → completion → independent verification → closure → dirty-room handback | Parts/cost/asset history persist; concurrent work orders retain holds; technician cannot self-release an unverified room; cleaning remains required. |
+| WF21 | P1 | **Events and departmental fulfilment** — Sales / event coordinator / production / Finance | Enquiry → quotation/version → contract/approval → deposit → event booking/BEO → departmental tasks/stock → delivery → final invoice/payment/cancel | Approved event version drives BEO, quantities, assignments and billing; existing invoices are reused; deposits and cancellation/refund obligations reconcile. |
+| WF22 | P1 | **HR, attendance, scheduling and payroll** — HR / employee / supervisor / payroll / Finance | Employee/contract → roster → attendance/leave/approval → payroll inputs → review/release → payout/journal → payslip/history | Authorized employee/period figures reconcile; release gates and payroll privacy hold; staff letters/contracts/schedules and payslips retain source identity. |
+| WF23 | P0 | **Finance, receivables, cashbook and close** — Finance clerk / approver / accountant / night auditor | Operational source → classification/recognition → journal → register/cashbook/AR/AP → reconciliation → shift/business-date/period close → reversal | Revenue, deposits, tax/service/tips, refunds, receivables and liabilities are classified correctly; posted journals balance and reconcile to original records/reports. |
+| WF24 | P1 | **Every required document and lifecycle** — Issuing department / Finance / authorized recipient | Approved saved source/version → preview → numbered issue → PDF/download → print/send → retrieval after status change → reprint/supersession | Correct identity/logo/fields/currency/timezone/amounts and access; all required outputs exist or use an explicit uploaded original; reprint never creates a transaction. |
+| WF25 | P1 | **Printer and production-output routing** — Device administrator / cashier / production station | Document/ticket → browser/OS or paired agent → scoped printer/queue → transport acknowledgement → correct paper → offline/retry/reprint | User-reported working printer is preserved; each required receipt/A4/station output has correct paper/layout and backup behavior; acknowledgement is distinct from paper. |
+| WF26 | P1 | **Approvals, tasks, communications and automation** — Requester / delegated approver / assignee / communications owner | Business trigger → approval/task/rule → correct recipient/scope → provider dispatch → delivery/failure/retry → audit/history/escalation | No false sent/success labels, duplicate outbound action or unauthorized approval; correct record links, provider references and human handoff persist. |
+| WF27 | P1 | **Public guest discovery and self-service** — Guest / reservations / front desk | Property listing → room/menu/event discovery → booking/order → deposit/payment → confirmation → stay requests/folio/documents → departure feedback | Guest sees correct property, quote and saved work across inner routes; private staff/customer data remains protected and failed/expired sessions recover. |
+| WF28 | P1 | **Security, visitors, incidents and handover** — Security officer / supervisor / authorized operations staff | Visitor/vehicle/incident/lost-property intake → assignment/patrol/escalation → authorized closure/return → shift handover → audit/report | Identity/privacy and property limits hold; chain of custody, accountable handover and incident evidence remain linked after closure. |
+| WF29 | P1 | **Reports, dashboards, analytics and AI answers** — Management / department manager / Finance | Saved operational/financial source → scoped facts → period/filter/aggregation → dashboard/report/AI explanation → export → drill-back | Figures, definitions, currency/timezone and filters agree with source/ledger; AI output cites available records and does not fabricate completion. |
+| WF30 | P0 | **Release, runtime and operational reliability** — Release operator / administrator / support | Reviewed source → installed-contract comparison → checks/build/artifact → deploy → live identity → monitoring/live refresh → backup/restore/recovery | App/SQL/agent versions are compatible; no unknown newer repair is overwritten; secrets stay private; real runtime, reconnect, performance and recovery are evidenced. |
+| WF31 | P2 | **CRM, sales, marketing and loyalty** — Sales / marketing / customer-service staff | Customer/lead identity → consent/preferences → enquiry/opportunity → offer/campaign/loyalty → booking/sale → delivery/outcome → account history | Deduplicated scoped identity links the actual booking/sale; consent, eligibility, redemptions and provider outcomes persist without fabricated sends. |
+| WF32 | P2 | **Transport, fleet and operational handoffs** — Dispatcher / driver / asset custodian / Finance | Transport request → vehicle/driver availability → approval/assignment → trip/service/expenses → completion/handover → cost/asset/report | Where configured, assignments, movement, expenses and asset history agree; unauthorized/double allocation and unsupported actions are explicit. |
+| WF33 | P1 | **Supplier/partner account and external handoffs** — Supplier/partner / procurement / account owner | Invitation/access → scoped catalogue/quote/document → order/approval → fulfilment evidence → invoice/account/payment → support/history | External users see only authorized owned records; supplier originals, acknowledgements and account balances connect to the internal purchase/finance chain. |
+| WF34 | P1 | **All audience apps, displays and presentation** — Guest / supplier / rider / employee / display operator | Correct audience entry → sign-in/device/PWA → inner routes/actions → handoff/deep-link → loading/error/empty/offline → back/re-entry/session recovery | Guest, partner, rider, staff and displays finish their intended tasks on mobile/desktop; navigation, accessibility, contrast and OS handoffs are coherent. |
+
+### Execution batches and next actions
+
+Current scoped task: **WF11-T01**. The [task execution ledger](WORKFLOW-TASKS.json) records its confirmed defect, finish checks, test results, installation state and remaining live evidence. Complete or checkpoint that scope before selecting the next independent task.
+
+- **B01:** Preserve deployed/installed milestones; collect corrected reservation inspection and explicit station-store repair results. Chains: WF01, WF07, WF13, WF18, WF30.
+- **B02:** Resolve real money discrepancies and partial-payment room transfers, deposit/nightly/credit/refund evidence. Chains: WF03, WF11, WF13, WF14, WF15, WF17, WF18, WF23.
+- **B03:** Resolve physical store choices, historic ownership and recipe/import/consumption chains. Chains: WF07, WF08, WF09, WF10, WF16.
+- **B04:** Close supplier purchase/receiving/AP/communication/document evidence. Chains: WF04, WF05, WF06, WF24, WF26, WF33.
+- **B05:** Complete guest, delivery, events, housekeeping/maintenance and HR/operational handoffs. Chains: WF12, WF19, WF20, WF21, WF22, WF27, WF28, WF31, WF32.
+- **B06:** Complete Users/provider acceptance, all documents/station prints, apps/reports and final release/recovery evidence. Chains: WF02, WF24, WF25, WF26, WF29, WF30, WF34.
+
+The exact immediate next action for every chain is in the JSON next field. Block only the dependent step when access/configuration/evidence is missing; continue other authorized work. Review unknown or missing product flows rather than silently classifying them as implemented. Record N/A only with a specific reason and agreed scope.
+
+### Required document register — apply WF24/WF25 to each
+
+- POS/customer receipt and corrected/reprint copy.
+- Customer invoice, credit/refund document and account statement.
+- Reservation/booking confirmation and final guest folio.
+- Corporate/group invoice, statement and routing evidence.
+- RFQ/quotation, approved LPO and supplier dispatch evidence.
+- Supplier original delivery note/attachment, blind count/reconciliation record and posted GRN.
+- Supplier invoice/matching/variance decision, statement and remittance advice.
+- Requisition, transfer/dispatch/receipt/return, count/adjustment/stock sheets.
+- Recipe/version/batch/production/waste/return and station preparation tickets.
+- Event quotation, contract/signed original, confirmation, BEO and final bill.
+- Employment/HR letters/contracts, authorized staff records, roster and released payslip.
+- Laundry/service/maintenance/task sheets and handover records.
+- Every management/Finance/department report exporter and filtered export.
+
+Identify the real generator or explicit uploaded-original path first. Confirm transaction identity, source status/version, mandatory fields, branding, currency/timezone, permissions, short/long/multipage cases and retrieval after status changes. Keep ordinary browser printing, automatic station output and external dispatch evidence distinct.
+
+### Evidence and closure
+
+For each step record: chain id; step; case or issue id; source and linked record ids; organisation property department station; actor and role; source commit and app agent build; installed routine hash and grants; expected result; observed result; before after money stock room state; journal and document provider references; retry failure denial evidence; verification time; status and remaining gap.
+
+Use **OPEN → IN PROGRESS → LOCAL VERIFIED → INSTALLED/DEPLOYED VERIFIED → WORKFLOW VERIFIED** as applicable to that step. Configuration/data corrections require before/after source IDs and postcheck; deployment requires actual build/contract evidence; delivery/printing requires the actual provider/device outcome. A passing test or an installed function does not close the downstream workflow. Keep refund/return/cancellation and uncertainty cases in the same chain as the original operation.
+
+The three focused completion gates remain **procurement/supplier/stock integrity**, **documents/physical outputs**, and **PMS/money/room lifecycle**. The broader system also requires the remaining app, HR, event, delivery, security, reporting and operational chains above. Do not mark the system complete while an applicable chain, historical issue or unresolved acceptance exception remains unaccounted for.
+
+Historical traceability: [106-item evidence](NEO-106-EXECUTION-QUEUE-2026-11-07.csv), [launch follow-ups](NEO-LAUNCH-EXECUTION-QUEUE-2026-11-13.md), [product scope](PRODUCT-REPAIR-QUEUE-2026-11-14.md), [workflow code review](WORKFLOW-CODE-REVIEW-2026-11-14.md), [document/procurement/PMS inventory](PROCUREMENT-DOCUMENTS-PMS-ACCEPTANCE-2026-11-16.md). Current facts are reconciled in the newer checkpoints below; older dates are retained as history.
+<!-- SYSTEM-WORKFLOW-QUEUE:END -->
+
+## Verified deployment checkpoint — 19 November
+
+### Subsequent source reconciliation and returned SQL evidence
+
+Kelvin supplied `C:/Users/Kelvin/Downloads/query-results-export-2026-11-19_10-38-48.csv`. Its one audit result confirms canonical mapping for Serene Escape Coffee Station `e18105c0-d62f-421f-89bc-c856110d9950` to existing store `6c43b60b-ebbc-422b-88c1-409cd3415e32`, same organisation/property. Treat the explicit-link repair as executed with this one returned correction, superseding pending statements below. This does not prove station stock depletion or a fresh count of remaining gaps; 17 of the prior 18 are not covered by the returned correction.
+
+Repeatable source comparison: `node scripts/reconcile-source-contracts.mjs` writes `docs/repair/SOURCE-CONTRACT-RECONCILIATION.json`, including route files/imports, direct RPC calls, migration-definition candidates, privileged dependencies and file-level differences against available source bundles. It never loads credentials or imports application modules. Bundle presence does not prove it is the original deployed source. Dynamic wrapper calls, role-specific UI behavior, SQL overloads/live schema and external-provider behavior still require separate evidence.
+
+Latest scan: 1,093 application source files, 408 route files, 56 server-function declarations and 17 files referencing the privileged client. Five available source copies were compared; none contains a TypeScript source file absent from the current tree, with 215–273 differing shared files per copy. All 80 directly named RPCs have a local migration definition; 15 dynamically named calls require wrapper/call-site tracing. This establishes retained source coverage, not semantic parity or live installation. One public workspace resolver intentionally requires the server client for non-guest apps and returns null on backend error; include that in the external-app/runtime investigation rather than treating null as proof that the workspace is unpublished.
+
+Concrete newly found account defect: `resetStaffPassword` ignored errors when persisting forced password change and audit history after Auth succeeded, while the screen always claimed next-sign-in enforcement. Local fix now returns distinct partial outcomes, scopes the profile update to the target organisation, and shows the warning in Users. Five new execution tests plus recovery/menu regression passed (24 tests total). This follow-up is LOCAL, not included in deployed build `25f97e90e69f9ae0`; runtime API-key provisioning remains a separate blocker.
+
+This checkpoint supersedes older deployment, missing-minibar-function and printer-setup assertions below. The overall acceptance gates remain open.
+
+- Shared app deployed successfully at https://neo-preview.neo-hospitality.workers.dev, Cloudflare version `b79e1119-d711-4c5b-b79b-01bab22d3912`. Independent public `/auth` check returned HTTP 200 and prepared source fingerprint `25f97e90e69f9ae0`. The live minibar client calls `neo_minibar_post_once`.
+- User executed the atomic shared checkout/minibar installer: checkout hash `07cc04cb81587b9938de7969fbc2ddf8`, durable retry table/function present, staff execution allowed and anonymous execution denied. Independent anonymous recipe/minibar probes returned 401/42501 (existence and access protection, not staff workflow acceptance).
+- Reviewed existing minibar implementation was preserved while applying property/store guards and retry protection. Focused database checks passed 57 tests; release regression passed 168 tests across 16 files. Totals overlap other historical runs and must not be added. Runtime TypeScript, fresh production build and built-server smoke passed before deployment.
+- Managed communications summary reads and supported print routing are enabled in this release. Privileged Users write routing and outbound email delivery are not certified. The local service-role setting was a public project identifier, not a usable server credential; do not bypass access controls to compensate.
+- Kelvin reports a successful physical printer test. Preserve the working setup. This computer's earlier missing Windows queue or unreachable IP is not evidence that his working printer failed. Required-document PDF, retrieval, reprint and paper-layout acceptance remains open.
+- Tested next SQL: `supabase/repair/2026-11-19/RECONCILE-EXPLICIT-STATION-STORE-LINKS.sql`. Reuses only unique explicit existing same-property station links, preserves valid canonical mappings and audits changes. Tests cover foreign/ambiguous/missing refusal, replay, no new stores and rollback. Live execution/result pending; likely resolves Serene Coffee's explicit legacy link, not all 18 station gaps.
+
+Next queue: obtain station repair result; finish actual departmental store setup for unresolved stations; verify staff recipe save/import/activation and historical ownership cleanup; complete Users/email controlled acceptance; reconcile real reservation money; close procurement, documents and full guest-lifecycle gates. Original Horizon UI publication remains separately unverified; preview deployment does not publish Lovable's original URL.
+
+## Current remaining-work summary — 19 November
+
+This dated summary supersedes yesterday's release-state assertions below. It groups the remaining work; it does not mark the system complete.
+
+| Priority | Remaining work | Current evidence / completion requirement |
+| --- | --- | --- |
+| 1 | Reconcile actual reservation/POS money | Trace existing receipts, held/applied deposits, pending requests, room charges, refunds/credits, nightly charges and journals using actual record IDs. The supplied POS bill's displayed inclusive-tax arithmetic reconciled, but this does not settle reservation logic. The read-only reservation inspection failed live on an absent reservation currency column; corrected below. Returned live findings remain pending. |
+| 2 | Verify matching database and frontend rollout | New public preview build is live; confirm which source it contains and verify the shared checkout/Minibar installer postcheck. An open installer file is not installation evidence. Preserve already installed reviewed shared routines. |
+| 3 | Finish recipe, stock and station/store configuration | Last returned audit found 21 historic foreign-stock recipe outputs, 20 invalid menu links and 18 consuming stations lacking a valid store. Prepared corrections require execution/postcheck evidence, real stock depletion and staff/property-boundary acceptance. |
+| 4 | Verify Users and communications | Privileged staff operations, recovery email delivery and managed runtime/permission/audit parity remain open. |
+| 5 | Close procurement and supplier finance | Real requisition/quotation/approval/LPO/receiving/GRN/invoice/payment chain, supplier communication/archive and stock/value/journal reconciliation remain open. |
+| 6 | Complete documents and physical printing | Required document outputs, PDF/retrieval/reprint checks, actual Windows printer setup and station paper output remain open. Last Windows inventory had only virtual printers. |
+| 7 | Complete staff workflow acceptance | Real roles, cross-property refusals, retries/history and a full guest stay through checkout, cleaning/inspection and laundry still need deployed evidence. No overall completion gate is closed. |
+| 8 | Public apps and external users | Check published property discovery, guest bookings/order/payment/tracking, customer/corporate access, supplier and other public portals against the same property and transaction. Distinguish a failed backend lookup from a legitimately unpublished workspace. Trace supported provider callbacks and duplicate delivery; never infer readiness from a visible landing page. |
+| 9 | Events and departmental handoffs | Quotation → contract → booking/BEO → kitchen/stores/service → final bill → collection/finance; preserve guest/company ownership, changes, deposits and event documents. |
+| 10 | HR, payroll and other operational modules | Account/role/department/station assignment and access removal; staff records/contracts, attendance/leave/payroll where supported; maintenance/assets and operational requests through fulfillment and finance. Inventory actual route capabilities first; do not invent requirements or mark unused modules complete. |
+| 11 | Whole-interface consistency and retirement review | For each implemented role and guest account, inspect navigation, visible actions, permissions, loading/error/empty states, phone/desktop handoffs and linked documents. List unused or duplicate components with callers and replacement evidence before deleting anything. Static inventory is the starting map, not visual/user acceptance. |
+
+Known completed foundation: the returned 18 November audit identified 23 installed shared routines across 28 organisations (20 shared definitions and 3 reviewed later versions), and the atomic recipe save/approval contract is installed. These are retained as completed installation evidence rather than repeatedly queued for redevelopment.
+
+Read-only release check on 19 November: `/auth` HTTP 200, build **`b0af538c9a1475f9`**, different from yesterday's `b33769acc209ed89`. Local HEAD is `6613676` and contains the reservation-money display, checkout and Minibar source repairs; this observation does not independently bind the remote bundle to that commit or prove live SQL installation/business acceptance. Previous blanket "all new local changes are not deployed" statements are superseded by this newer-build observation; precise deployed contents remain to be reconciled.
+
+Inspection correction on 19 November: `RESERVATION-MONEY-INSPECTION.sql` now reads optional reservation currency/summary fields via `to_jsonb(r)` and returns unknown currency as null, rather than referencing missing `r.currency` or inventing a default. **Nine PostgreSQL tests passed**, including the reported schema with no reservation currency column. No live query, business write or installation was performed by this correction. Immediate next step: rerun this corrected read-only inspection and review its actual finding IDs alongside the shared installer postcheck.
+
 ## Authoritative system-wide checkpoint — 18 November
 
 Scope is every existing and future hotel/organisation. Hotel-specific stock corrections are data cleanup, not the shared functionality fix. This checkpoint supersedes historical OPEN/pending/installed statements below without deleting their evidence. No procurement, documents/printing or PMS completion gate is closed.

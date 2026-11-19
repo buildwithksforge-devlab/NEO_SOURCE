@@ -1,4 +1,5 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -232,6 +233,7 @@ function Page() {
       />
 
       <ApprovedReceivingPosting />
+      <ReceivingDocumentHistory />
 
       <QueryState
         isLoading={orders.isLoading}

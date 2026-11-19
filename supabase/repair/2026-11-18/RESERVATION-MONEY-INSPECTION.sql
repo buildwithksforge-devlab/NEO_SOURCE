@@ -106,7 +106,8 @@ WITH seed AS (
   AND (r.id IS NULL OR r.status IS NULL OR r.status NOT IN ('checked-in','checked_in','in-house','in_house')
     OR r.branch_id IS DISTINCT FROM s.branch_id)
 ), sample_cases AS (
- SELECT r.id,r.confirmation_number,r.status,r.currency,r.total_amount,r.balance
+ SELECT r.id,r.confirmation_number,r.status,to_jsonb(r)->>'currency' AS currency,
+   to_jsonb(r)->'total_amount' AS total_amount,to_jsonb(r)->'balance' AS balance
  FROM bookings r ORDER BY EXISTS(SELECT 1 FROM findings issue WHERE issue.reservation_id=r.id) DESC,
    (to_jsonb(r)->>'created_at') DESC NULLS LAST,r.id LIMIT 20
 )

@@ -1,4 +1,5 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
 import { requireReceivingReviewResult } from "@/lib/supply-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 import { useAuth } from "@/lib/auth";
@@ -448,6 +449,7 @@ function Page() {
       ) : null}
 
       <ApprovedReceivingPosting />
+      <ReceivingDocumentHistory />
     </div>
   );
 }

@@ -78,7 +78,17 @@ const bodyHash = (sql) =>
         .replace(/\s/g, ""),
     )
     .digest("hex");
-const allowed = [bodyHash(original), bodyHash(repaired)].map((hash) => `'${hash}'`).join(",");
+// 19 Nov installed definition supplied by user: same reviewed core except the
+// newer location resolver. The repair intentionally replaces both resolver
+// variants with the explicit minibar store, preserving all other behaviour.
+const resolverVariant = original.replace(
+  "public.neo_item_group_store(v_folio.organization_id, v_comp.item_id, v_folio.branch_id)",
+  "public.neo_stock_resolve_location(v_folio.organization_id, v_comp.item_id, v_folio.branch_id, NULL)",
+).replace(/^\s*PERFORM set_config\('neo\.system_posting', '(?:on|off)', true\);\s*$/gm, "");
+if (bodyHash(resolverVariant) !== "02e573b16d42f6eadb1a8fbc3ee9c80a") {
+  throw new Error("Reviewed live minibar resolver variant no longer matches supplied definition");
+}
+const allowed = [bodyHash(original), bodyHash(resolverVariant), bodyHash(repaired)].map((hash) => `'${hash}'`).join(",");
 const migration = `-- STAGED ONLY: future minibar property/store/channel and finite-amount guards.
 -- No historical stock/folio rows are changed. Installed-definition review is required.
 BEGIN;

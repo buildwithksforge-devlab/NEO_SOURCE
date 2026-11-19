@@ -14,6 +14,7 @@ import { SectionTabs, type SectionTab } from "@/components/common/SectionTabs";
 import { AccessDenied } from "@/components/platform/PlatformShared";
 import { useAuth } from "@/lib/auth";
 import { canAccessPath } from "@/lib/nav-permissions";
+import { AutomaticChecksStatus } from "@/components/platform/AutomaticChecksStatus";
 
 export const Route = createFileRoute("/_shell/platform")({
   head: () => ({
@@ -78,6 +79,7 @@ function PlatformLayout() {
         description="Nothing on these screens simulates a provider. An integration is only shown as connected once credentials, sandbox testing, security review and production approval are all recorded."
       />
       <SectionTabs tabs={visible} rootPath="/platform" maxVisible={10} />
+      <AutomaticChecksStatus />
       <Outlet />
     </div>
   );

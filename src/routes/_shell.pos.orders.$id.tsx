@@ -1,6 +1,7 @@
 import { PaymentDialog } from "@/components/pos/PosPaymentDialog";
 import {PosRefundPanel} from "@/components/pos/PosRefundPanel";
 import {outstandingPaidBill} from '@/lib/pos-payment-display';
+import {posRoomTransferState} from '@/lib/pos-room-transfer';
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -215,7 +216,13 @@ function OrderTerminal() {
   // A draft line with no production station would be marked Sent while the
   // kitchen never sees it, so Send is refused until every line can be routed.
   const unroutable = unsent.filter((l) => !l.station_id);
-  const balance = Number(data?.grand_total ?? 0) - Number(data?.paid_total ?? 0);
+  const activeReceiptReview = (data?.pos_payments ?? []).some(payment => receiptReviews.data?.some(review =>
+    review.payment_id === payment.id && ["pending_approval", "approved_pending_execution", "executing", "execution_failed"].includes(review.status)));
+  const roomTransfer = posRoomTransferState(data, activeReceiptReview);
+  const reviewsUnknown = receiptReviews.isPending || receiptReviews.isFetching || receiptReviews.isError;
+  const canTransferRoom = roomTransfer.canTransfer && !reviewsUnknown;
+  const roomTransferReason = reviewsUnknown ? "Receipt reviews could not yet be verified. Refresh before transferring this bill." : roomTransfer.reason;
+  const balance = roomTransfer.amountDue ?? 0;
   const openItems = lines.filter(
     (l) => !["served", "cancelled", "voided"].includes(l.status),
   ).length;
@@ -663,31 +670,35 @@ function OrderTerminal() {
                     <dd>{money(data.grand_total)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Paid</dt>
+                    <dt className="text-muted-foreground">Paid at POS</dt>
                     <dd>{money(data.paid_total)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <dt>Balance</dt>
-                    <dd>{money(balance)}</dd>
+                    <dt>Amount due at POS</dt>
+                    <dd>{roomTransfer.amountDue === null ? "Review money evidence" : money(balance)}</dd>
                   </div>
+                  {roomTransfer.transferred && !roomTransfer.overlap ? <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Transferred to guest folio</dt><dd>{money(data.grand_total)}</dd>
+                  </div> : null}
+                  {roomTransfer.credit > 0 ? <div className="flex justify-between"><dt>POS credit / overpayment</dt><dd>{money(roomTransfer.credit)}</dd></div> : null}
                 </dl>
                 <p className="mt-2 text-xs text-muted-foreground">Included tax is already part of the item prices; do not add it again. Service charge is added after any discount. Preparation and serving statuses do not count as payment.</p>
 
                 <div className="mt-4 grid gap-2">
                   <Button
-                    disabled={!can("pos", "orders.edit") || balance <= 0}
+                    disabled={!can("pos", "orders.edit") || !roomTransfer.canCollect}
                     onClick={() => setPayOpen(true)}
                   >
                     Take payment
                   </Button>
                   <Button
                     variant="outline"
-                    disabled={!can("pos", "orders.approve") || balance <= 0}
+                    disabled={!can("pos", "orders.approve") || !canTransferRoom}
                     onClick={() => setRoomOpen(true)}
                   >
                     <BedDouble className="mr-2 size-4" /> Charge to room
                   </Button>
-                  {can("pos", "orders.edit") && balance > 0 ? (
+                  {can("pos", "orders.edit") && roomTransfer.canCollect ? (
                     <MpesaPromptDialog
                       sourceModule="pos_order"
                       sourceRecordId={data.id}
@@ -697,7 +708,7 @@ function OrderTerminal() {
                     />
                   ) : null}
 
-                  {data.status !== "closed" && Number(data.grand_total) > 0 ? (
+                  {data.status !== "closed" && !roomTransfer.transferred && roomTransfer.amountDue !== null && Number(data.grand_total) > 0 ? (
                     <Button
                       variant="ghost"
                       disabled={reconcile.isPending}
@@ -706,7 +717,8 @@ function OrderTerminal() {
                       Reconcile &amp; close if eligible
                     </Button>
                   ) : null}
-                  {openItems > 0 && balance <= 0 ? (
+                  {roomTransferReason ? <p className="text-xs text-muted-foreground" role={roomTransfer.overlap ? "alert" : undefined}>{roomTransferReason}</p> : null}
+                  {openItems > 0 && !roomTransfer.transferred && roomTransfer.amountDue !== null && balance <= 0 ? (
                     <p className="text-xs text-muted-foreground">
                       {openItems} item(s) are still in preparation. The bill closes once they are
                       served, cancelled or voided.
@@ -764,7 +776,7 @@ function OrderTerminal() {
                                 balance={balance} initialAmount={Number(p.amount)}
                                 onSettled={() => void order.refetch()} />
                             ) : null}
-                            {p.method === "mpesa" && pending && canSubmitReceipt && !reviewing ? (
+                            {p.method === "mpesa" && pending && canSubmitReceipt && !reviewing && !roomTransfer.transferred ? (
                               <Button size="sm" variant="outline" onClick={() => {
                                 setConfirmNote(""); setConfirmReceipt("");
                                 setConfirmPayment({ id: p.id, amount: Number(p.amount), method: p.method });
@@ -772,7 +784,7 @@ function OrderTerminal() {
                                 Submit receipt for review
                               </Button>
                             ) : null}
-                            {p.method !== "mpesa" && canManualConfirm
+                            {p.method !== "mpesa" && canManualConfirm && !roomTransfer.transferred
                               && ["pending", "initiated"].includes(p.status) ? (
                               <Button size="sm" variant="outline" onClick={() => {
                                 setConfirmNote(""); setConfirmReceipt("");
@@ -818,7 +830,7 @@ function OrderTerminal() {
             </DialogContent>
           </Dialog>
           <PaymentDialog
-            open={payOpen}
+            open={payOpen && roomTransfer.canCollect}
             onOpenChange={setPayOpen}
             orderId={data.id}
             branchId={data.branch_id}
@@ -826,13 +838,15 @@ function OrderTerminal() {
             shiftId={shift.data?.id ?? null}
           />
           <RoomChargeDialog
-            open={roomOpen}
+            open={roomOpen && canTransferRoom}
             onOpenChange={setRoomOpen}
             orderId={data.id}
             balance={balance}
+            eligible={canTransferRoom}
+            eligibilityReason={roomTransferReason}
           />
           <Dialog
-            open={Boolean(confirmPayment) && (confirmPayment?.method === "mpesa" ? canSubmitReceipt : canManualConfirm)}
+            open={Boolean(confirmPayment) && !roomTransfer.transferred && (confirmPayment?.method === "mpesa" ? canSubmitReceipt : canManualConfirm)}
             onOpenChange={(open) => {
               if (!open) {
                 setConfirmPayment(null); setConfirmNote(""); setConfirmReceipt("");
@@ -947,11 +961,15 @@ function RoomChargeDialog({
   onOpenChange,
   orderId,
   balance,
+  eligible,
+  eligibilityReason,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
   balance: number;
+  eligible: boolean;
+  eligibilityReason: string | null;
 }) {
   const stays = useCheckedInStays();
   const [stayId, setStayId] = useState<string>("");
@@ -964,8 +982,8 @@ function RoomChargeDialog({
         <DialogHeader>
           <DialogTitle>Charge to guest room</DialogTitle>
           <DialogDescription>
-            Only checked-in stays with an open folio can be charged. {money(balance)} will be posted
-            as a folio line.
+            Transfer this completely unpaid bill once to a checked-in guest’s open folio. {money(balance)} will be posted
+            as a folio line. Recorded or unresolved payments require reconciliation before transfer.
           </DialogDescription>
         </DialogHeader>
         {(stays.data ?? []).length === 0 ? (
@@ -1003,10 +1021,11 @@ function RoomChargeDialog({
           </div>
         )}
         <DialogFooter>
+          {!eligible && eligibilityReason ? <p role="alert" className="text-sm text-destructive">{eligibilityReason}</p> : null}
           <Button
-            disabled={!folio.data || post.isPending}
+            disabled={!eligible || !folio.data || post.isPending}
             onClick={() =>
-              post.mutate(
+              eligible && post.mutate(
                 { orderId, folioId: folio.data!.id },
                 { onSuccess: () => onOpenChange(false) },
               )

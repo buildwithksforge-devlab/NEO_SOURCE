@@ -4,7 +4,7 @@ import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const org=id(1),branch=id(2),other=id(3),folio=id(4),store=id(5),bar=id(6),menu=id(7),stock=id(8),stay=id(9),room=id(10),attempt=id(11);
 const read=(path:string)=>readFileSync(path,"utf8");
-const migration=read("supabase/migrations/20261118110000_minibar_durable_attempts.sql");
+const migration=read("supabase/repair/2026-11-19/INSTALL-SHARED-CHECKOUT-MINIBAR.sql");
 const baseline=read("supabase/migrations/20260924153000_front_office_connected_guards.sql").match(/CREATE OR REPLACE FUNCTION public\.neo_minibar_post\([\s\S]*?\$function\$;/)![0];
 describe("actual minibar engine with durable request wrapper (controlled stock/charge boundaries)",()=>{
  let db:PGlite;
@@ -46,9 +46,18 @@ describe("actual minibar engine with durable request wrapper (controlled stock/c
     INSERT INTO test_charges VALUES($1,$4,$5); RETURN gen_random_uuid(); END $$;
   `);
   await db.exec(read("supabase/migrations/20260922175848_247e4194-c05f-414f-bddb-b52845f98e4d.sql").match(/CREATE OR REPLACE FUNCTION public\.next_document_number\([\s\S]*?\$function\$;/)![0]);
-  await db.exec(baseline);
+  // Reconstruct the exact live variant returned by the user's Lovable query.
+  const live=baseline.replace("public.neo_item_group_store(v_folio.organization_id, v_comp.item_id, v_folio.branch_id)","public.neo_stock_resolve_location(v_folio.organization_id, v_comp.item_id, v_folio.branch_id, NULL)")
+   .replace(/^\s*PERFORM set_config\('neo\.system_posting', '(?:on|off)', true\);\s*$/gm,"");
+  await db.exec(live);
+  expect((await db.query<{hash:string}>("SELECT md5(regexp_replace(regexp_replace(prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) hash FROM pg_proc WHERE oid='neo_minibar_post(uuid,uuid,jsonb,uuid,text)'::regprocedure")).rows[0]!.hash).toBe("02e573b16d42f6eadb1a8fbc3ee9c80a");
   await db.exec(`GRANT EXECUTE ON FUNCTION neo_minibar_post(uuid,uuid,jsonb,uuid,text) TO authenticated;`);
-  await db.exec(read("supabase/migrations/20261116221500_minibar_property_store_guards.sql"));
+  // Installer prerequisites only; full Finance/checkout behaviour is exercised
+  // separately in pms-multi-folio-checkout-postgres.test.ts using real routines.
+  await db.exec(`CREATE TABLE reservations(id uuid);
+   CREATE FUNCTION neo_folio_financial_components(uuid,uuid) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
+   CREATE FUNCTION neo_recipe_sheet_save(jsonb,jsonb,uuid) RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;`);
+  await db.exec(read("supabase/migrations/20260914005249_756324e7-13ed-4ec4-96d5-26b6bec207c5.sql").match(/CREATE OR REPLACE FUNCTION public\.pms_check_out\([\s\S]*?\$function\$;/)![0]);
   await db.exec(migration);
   await db.exec(read("supabase/repair/2026-11-18/pms-minibar-preflight.sql"));
  },30000);

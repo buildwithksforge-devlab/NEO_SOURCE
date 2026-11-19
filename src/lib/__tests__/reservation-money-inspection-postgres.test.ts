@@ -72,4 +72,11 @@ describe("read-only reservation reconciliation discovers existing record IDs fro
   await db.exec("DELETE FROM pos_orders");const result=await inspect();expect(result.seed_found).toBe(false);
   expect(result.coverage).toEqual({reservations:0,folios:0,payments:0,deposits:0});expect(result.existing_reservation_cases).toEqual([]);
  });
+ it("runs against the reported live schema without a reservation currency column and leaves unknown currency explicit",async()=>{
+  await db.exec("ALTER TABLE reservations DROP COLUMN currency");
+  try {
+   const result=await inspect();expect(result.seed_found).toBe(true);expect(result.findings).toEqual([]);
+   expect(result.existing_reservation_cases[0]).toMatchObject({id:reservation,currency:null,total_amount:30000,balance:25000});
+  } finally {await db.exec("ALTER TABLE reservations ADD COLUMN currency text");}
+ });
 });

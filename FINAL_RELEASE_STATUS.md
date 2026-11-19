@@ -1,5 +1,7 @@
 # NEØ final release status — 24 Sep 2026
 
+> Historical bundle report. Current evidence and outstanding acceptance gates are maintained in [the active execution queue](docs/repair/ACTIVE-EXECUTION-QUEUE.md). This file does not certify the current deployment.
+
 This package is the latest certification working source. It is **not yet a production-certified deployment**.
 
 ## Source-side work already completed

@@ -26,3 +26,7 @@ for(const name of readdirSync("supabase/migrations").filter(n=>n.endsWith(".sql"
  if(hash==="02e573b16d42f6eadb1a8fbc3ee9c80a")matches.push(name);
 }
 console.log(JSON.stringify({check:"live-minibar-source-candidate",matching_source_files:matches,meaning:matches.length?"Compare this known source with staged guards":"Installed body is not among the extracted reviewed candidates; preserve and inspect it"}));
+const minibarSource=read("supabase/migrations/20260924153000_front_office_connected_guards.sql").match(/CREATE OR REPLACE FUNCTION public\.neo_minibar_post\([\s\S]*?\$function\$;/)[0];
+const variant=minibarSource.replace("public.neo_item_group_store(v_folio.organization_id, v_comp.item_id, v_folio.branch_id)","public.neo_stock_resolve_location(v_folio.organization_id, v_comp.item_id, v_folio.branch_id, NULL)");
+const liveVariant=variant.replace(/^\s*PERFORM set_config\('neo\.system_posting', '(?:on|off)', true\);\s*$/gm, "");
+console.log(JSON.stringify({check:"minibar-location-variant",original:md5(minibarSource.split("$function$")[1].replace(/--[^\n]*/g,"").replace(/\s/g,"")),variant:md5(liveVariant.split("$function$")[1].replace(/--[^\n]*/g,"").replace(/\s/g,""))}));

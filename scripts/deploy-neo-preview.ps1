@@ -1,4 +1,6 @@
+param([string]$NodePath = 'node', [string]$WranglerPath, [switch]$PrepareOnly, [switch]$DeployPrepared, [switch]$ManagedReadRouting, [string]$VerifiedTypecheckRevision)
 $ErrorActionPreference = "Stop"
+if ($PrepareOnly -and $DeployPrepared) { throw 'Choose prepare or deploy, not both.' }
 
 function Invoke-NeoNode {
     param([string]$Entry, [string[]]$Arguments)
@@ -7,7 +9,7 @@ function Invoke-NeoNode {
         # Windows PowerShell represents native stderr warnings as ErrorRecords.
         # Preserve their text and decide failure using the actual process exit code.
         $ErrorActionPreference = "Continue"
-        & node $Entry @Arguments 2>&1 | ForEach-Object { $_.ToString() }
+        & $NodePath $Entry @Arguments 2>&1 | ForEach-Object { $_.ToString() }
         $nativeExitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $savedPreference
@@ -25,6 +27,10 @@ Set-Location (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tscEntry = Join-Path (Get-Location).Path "node_modules/typescript/bin/tsc"
 $viteEntry = Join-Path (Get-Location).Path "node_modules/vite/bin/vite.js"
 $wranglerEntry = Join-Path (Get-Location).Path "node_modules/wrangler/bin/wrangler.js"
+if ($WranglerPath) {
+    if (!(Test-Path -LiteralPath $WranglerPath)) { throw 'Specified installed Wrangler was not found.' }
+    $wranglerEntry = $WranglerPath
+}
 if (!(Test-Path -LiteralPath $wranglerEntry)) {
     $cachedWrangler = Get-ChildItem (Join-Path $env:LOCALAPPDATA "npm-cache/_npx") -Directory -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
@@ -38,6 +44,16 @@ if (!(Test-Path -LiteralPath $tscEntry) -or !(Test-Path -LiteralPath $viteEntry)
     throw "Install project dependencies before deployment."
 }
 
+if ($DeployPrepared) {
+    Invoke-NeoNode -Entry 'scripts/release-artifact-guard.mjs' -Arguments @('verify')
+    $configPath = '.output/server/wrangler.json'
+    $verify = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($verify.name -ne $EXPECTED_WORKER -or $verify.account_id -ne $EXPECTED_ACCOUNT -or $verify.keep_vars -ne $true) {
+        throw 'Prepared Worker target/runtime preservation differs; deployment blocked.'
+    }
+} else {
+$neoSourceBeforeBuild = & $NodePath 'scripts/release-artifact-guard.mjs' fingerprint
+if ($LASTEXITCODE -ne 0) { throw 'Cannot fingerprint source.' }
 Invoke-NeoNode -Entry "scripts/check-migration-versions.mjs"
 if ($LASTEXITCODE -ne 0) { throw "Migration versions failed. Deployment cancelled." }
 
@@ -51,7 +67,17 @@ Write-Host "WORKER: $EXPECTED_WORKER"
 # Check TypeScript before building.
 Write-Host "`nChecking TypeScript..." -ForegroundColor Yellow
 
-Invoke-NeoNode -Entry $tscEntry -Arguments @("--noEmit")
+if ($VerifiedTypecheckRevision) {
+    $neoCurrentRevision = (git rev-parse HEAD).Trim()
+    $neoApplicationChanges = @(git diff --name-only HEAD -- src package.json package-lock.json vite.config.ts tsconfig.json | Where-Object { $_ -notmatch '/__tests__/' })
+    $neoUntrackedApplication = @(git ls-files --others --exclude-standard -- src | Where-Object { $_ -notmatch '/__tests__/' })
+    if ($neoCurrentRevision -ne $VerifiedTypecheckRevision -or $neoApplicationChanges.Count -gt 0 -or $neoUntrackedApplication.Count -gt 0) {
+        throw 'Application source differs from the previously typechecked revision; full typecheck required.'
+    }
+    Write-Host 'Reusing completed typecheck: same revision and unchanged application source; only repair tooling/test evidence changed.'
+} else {
+    Invoke-NeoNode -Entry $tscEntry -Arguments @("--noEmit")
+}
 
 if ($LASTEXITCODE -ne 0) {
     throw "TypeScript failed. Deployment cancelled."
@@ -92,6 +118,13 @@ $config.compatibility_date = "2026-11-13"
 # Runtime settings belong to the existing Worker. A generated build has no
 # vars; deploying it must not erase saved backend routing or provider settings.
 $config | Add-Member -NotePropertyName "keep_vars" -NotePropertyValue $true -Force
+if ($ManagedReadRouting) {
+    if (!($config.PSObject.Properties.Name -contains 'vars')) {
+        $config | Add-Member -NotePropertyName 'vars' -NotePropertyValue ([pscustomobject]@{})
+    }
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_COMMS_ENABLED' -NotePropertyValue 'true' -Force
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_PRINT_ENABLED' -NotePropertyValue 'true' -Force
+}
 
 # Set the account explicitly.
 if ($config.PSObject.Properties.Name -contains "account_id") {
@@ -125,6 +158,17 @@ if ($verify.account_id -ne $EXPECTED_ACCOUNT) {
 if ($verify.keep_vars -ne $true) {
     throw "Runtime variable preservation disabled. Deployment blocked."
 }
+
+$neoSourceAfterBuild = & $NodePath 'scripts/release-artifact-guard.mjs' fingerprint
+if ($LASTEXITCODE -ne 0 -or $neoSourceAfterBuild -ne $neoSourceBeforeBuild) {
+    throw 'Source changed during build; rebuild before release.'
+}
+Invoke-NeoNode -Entry 'scripts/release-artifact-guard.mjs' -Arguments @('prepare')
+if ($PrepareOnly) { Write-Host 'Validated release prepared; live deployment waits for shared SQL verification.'; return }
+}
+
+Invoke-NeoNode -Entry 'scripts/check-required-rollout-rpcs.mjs'
+Invoke-NeoNode -Entry 'scripts/release-artifact-guard.mjs' -Arguments @('verify')
 
 # Confirm that the original Worker already exists.
 Write-Host "`nChecking original Worker..." -ForegroundColor Yellow

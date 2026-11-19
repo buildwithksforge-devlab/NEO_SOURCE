@@ -4,7 +4,7 @@
 BEGIN;
 DO $guard$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=to_regprocedure('public.neo_minibar_post(uuid,uuid,jsonb,uuid,text)')
- AND r.rolname NOT IN ('anon','authenticated') AND md5(regexp_replace(regexp_replace(p.prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) IN ('c9e52620ae4b5ad21e6854b4994b93b3','e68e6e075ff34c023c793c39a1745a04')) THEN
+ AND r.rolname NOT IN ('anon','authenticated') AND md5(regexp_replace(regexp_replace(p.prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) IN ('a915844bd162aa01add0d7ca60421979','02e573b16d42f6eadb1a8fbc3ee9c80a','c9e52620ae4b5ad21e6854b4994b93b3','e68e6e075ff34c023c793c39a1745a04')) THEN
  RAISE EXCEPTION 'Minibar engine differs from reviewed attempt source; nothing replaced'; END IF;
  IF to_regprocedure('public.next_document_number(text,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Organization-scoped durable document numbering is missing'; END IF;
  IF to_regprocedure('public.neo_minibar_post_once(uuid,uuid,jsonb,uuid,text,uuid)') IS NOT NULL AND NOT EXISTS(SELECT 1 FROM pg_proc p

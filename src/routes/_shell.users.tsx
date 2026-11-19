@@ -445,16 +445,18 @@ function UsersPage() {
     const reason = input.reason.trim();
     try {
       switch (action.id) {
-        case "reset_password":
+        case "reset_password": {
           if (input.password.trim().length < 8) {
             toast.error("The temporary password must be at least 8 characters.");
             return;
           }
-          await resetPasswordFn({
+          const resetResult = await resetPasswordFn({
             data: { user_id: target.id, password: input.password.trim() },
           });
-          toast.success("Temporary password set. It must be changed at next sign-in.");
+          if (resetResult.warning) toast.warning(resetResult.warning);
+          else toast.success("Temporary password set. It must be changed at next sign-in.");
           break;
+        }
         case "require_password_change":
           await requirePasswordFn({ data: { user_id: target.id } });
           toast.success("Password change required at next sign-in");

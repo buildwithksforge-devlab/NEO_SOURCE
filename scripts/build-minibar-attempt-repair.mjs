@@ -17,13 +17,19 @@ const numbering=/  SELECT 'MB-'[\s\S]*?WHERE organization_id = v_folio\.organiza
 if(!numbering.test(repaired))throw new Error("Minibar numbering boundary differs");
 repaired=repaired.replace(numbering,"  SELECT public.next_document_number('minibar_posting','MB',v_folio.branch_id,v_folio.organization_id) INTO v_number;");
 const hash=sql=>createHash("md5").update(sql.split("$function$")[1].replace(/--[^\n]*/g,"").replace(/\s/g,"")).digest("hex");
+const baseline=read("supabase/migrations/20260924153000_front_office_connected_guards.sql").match(/CREATE OR REPLACE FUNCTION public\.neo_minibar_post\([\s\S]*?\$function\$;/)?.[0];
+if(!baseline)throw Error("Reviewed baseline minibar source missing");
+const liveVariant=baseline.replace("public.neo_item_group_store(v_folio.organization_id, v_comp.item_id, v_folio.branch_id)","public.neo_stock_resolve_location(v_folio.organization_id, v_comp.item_id, v_folio.branch_id, NULL)")
+ .replace(/^\s*PERFORM set_config\('neo\.system_posting', '(?:on|off)', true\);\s*$/gm,"");
+if(hash(liveVariant)!=="02e573b16d42f6eadb1a8fbc3ee9c80a")throw Error("Live minibar source reconstruction differs; stop before generating");
+const accepted=[hash(baseline),hash(liveVariant),hash(original),hash(repaired)].map(value=>`'${value}'`).join(",");
 writeFileSync("supabase/migrations/20261118110000_minibar_durable_attempts.sql",`-- STAGED ONLY. Coordinated client/server release: new requests use neo_minibar_post_once.
 -- Old posting signature refuses direct unkeyed requests; grants/owner are retained.
 -- Installation performs no stock movement, folio charge or historical rewrite.
 BEGIN;
 DO $guard$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=to_regprocedure('public.neo_minibar_post(uuid,uuid,jsonb,uuid,text)')
- AND r.rolname NOT IN ('anon','authenticated') AND md5(regexp_replace(regexp_replace(p.prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) IN ('${hash(original)}','${hash(repaired)}')) THEN
+ AND r.rolname NOT IN ('anon','authenticated') AND md5(regexp_replace(regexp_replace(p.prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) IN (${accepted})) THEN
  RAISE EXCEPTION 'Minibar engine differs from reviewed attempt source; nothing replaced'; END IF;
  IF to_regprocedure('public.next_document_number(text,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Organization-scoped durable document numbering is missing'; END IF;
  IF to_regprocedure('public.neo_minibar_post_once(uuid,uuid,jsonb,uuid,text,uuid)') IS NOT NULL AND NOT EXISTS(SELECT 1 FROM pg_proc p

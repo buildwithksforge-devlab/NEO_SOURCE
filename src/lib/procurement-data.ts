@@ -679,23 +679,25 @@ export function useSaveMatchingPolicy() {
 }
 
 /** Recent goods receipts with the accounting consequence each one produced. */
-export function useRecentGoodsReceipts(limit = 25) {
+export function useRecentGoodsReceipts(limit = 25, search = "") {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useProcurementCtx();
   return useQuery({
-    queryKey: ["procurement", "recent-receipts", organizationId, filterKey, limit],
+    queryKey: ["procurement", "recent-receipts", organizationId, filterKey, limit, search.trim()],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(
+      let query = applyTo(
         db
           .from("goods_receipts")
           .select(
-            "id, grn_number, status, received_at, total_value, accrued_value, accrual_journal_id, accrual_error, reversal_journal_id, reversed_at, reversal_reason, suppliers(name), purchase_orders(order_number)",
+            "id, order_id, branch_id, grn_number, status, received_at, total_value, accrued_value, accrual_journal_id, accrual_error, reversal_journal_id, reversed_at, reversal_reason, suppliers(name), purchase_orders(order_number)",
           ),
         "goods_receipts",
-      )
+      ).eq("organization_id", organizationId)
         .order("received_at", { ascending: false })
         .limit(limit);
+      if (search.trim()) query = query.ilike("grn_number", `%${search.trim().replace(/[%_]/g, "")}%`);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as Row[];
     },

@@ -429,12 +429,13 @@ export const resetStaffPassword = createServerFn({ method: "POST" })
     });
     if (res.error) throw new Error(res.error.message);
 
-    await supabaseAdmin
+    const profileResult = await supabaseAdmin
       .from("profiles")
       .update({ must_change_password: true })
-      .eq("id", data.user_id);
+      .eq("id", data.user_id)
+      .eq("organization_id", target.organization_id);
 
-    await supabaseAdmin.from("audit_logs").insert({
+    const auditResult = await supabaseAdmin.from("audit_logs").insert({
       organization_id: target.organization_id,
       user_id: userId,
       action: "user.password_reset",
@@ -442,7 +443,18 @@ export const resetStaffPassword = createServerFn({ method: "POST" })
       record_id: data.user_id,
     });
 
-    return { ok: true };
+    // The password has already changed in Auth. Do not report a failed reset
+    // (and invite a second password change) when a subsequent write fails.
+    return {
+      ok: true,
+      password_changed: true,
+      password_change_required: !profileResult.error,
+      warning: profileResult.error
+        ? "The temporary password was set, but the next-sign-in password-change requirement could not be saved. Review this account before sharing the password; do not reset it again just to repair this step."
+        : auditResult.error
+          ? "The temporary password and change requirement were saved, but the audit record could not be saved. Review account history; do not reset the password again just to repair history."
+          : null,
+    };
   });
 
 /** Account status change (activate, deactivate, suspend, reactivate). */

@@ -713,6 +713,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_beo_set_timings: "authenticated",
   neo_beo_stamp: "authenticated",
   neo_configuration_health: "authenticated",
+  neo_platform_run_checks: "authenticated",
   neo_delivery_bill: "authenticated",
   neo_delivery_claim: "authenticated",
   neo_delivery_pin_board: "authenticated",
