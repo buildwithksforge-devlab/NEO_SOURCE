@@ -200,33 +200,41 @@ export function useFrontOfficeStockNeeds(status = "all") {
   });
 }
 
+export function useFrontOfficeStockCatalogue() {
+  const { organizationId, branchId } = useFrontOfficeContext();
+  return useQuery({
+    queryKey: ["front-office-department", "stock-catalogue", organizationId, branchId],
+    enabled: Boolean(organizationId && branchId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(db, "neo_front_office_need_catalogue", { _branch: branchId });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; name: string; base_unit: string }[];
+    },
+  });
+}
+
 export function useReportStockNeed() {
   const invalidate = useFrontOfficeInvalidate();
   const { branchId } = useFrontOfficeContext();
+  const department = useFrontOfficeDepartment();
   return useMutation({
-    mutationFn: async (input: {
-      item: string;
-      quantity: number;
-      unit?: string;
-      priority?: string;
-      notes?: string;
-    }) => {
-      const { data, error } = await guardedRpc(db, "neo_department_stock_need_create", {
-        _item: input.item,
+    mutationFn: async (input: { itemId: string; quantity: number; priority: string; notes: string }) => {
+      const departmentId = department.data?.["id"];
+      if (!branchId || typeof departmentId !== "string") throw new Error("Select a property with a Front Office department.");
+      const { data, error } = await guardedRpc(db, "neo_front_office_report_catalogue_need", {
+        _branch: branchId,
+        _department: departmentId,
+        _item: input.itemId,
         _quantity: input.quantity,
-        _unit: input.unit ?? "unit",
-        _priority: input.priority ?? "normal",
-        _notes: input.notes ?? null,
-        _module: "front-office",
-        _department: null,
-        _branch: branchId ?? null,
+        _priority: input.priority,
+        _notes: input.notes,
       });
       if (error) throw new Error(error.message);
-      return data as string;
+      return data as FrontOfficeRow;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidate();
-      toast.success("Stock need sent to the Front Office Manager");
+      toast.success(data["requisition_id"] ? "Requisition sent to Stores" : "Stock need sent for manager approval");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -239,7 +247,17 @@ export function useReviewStockNeed() {
       needId: string;
       decision: "acknowledge" | "requisition" | "decline" | "close";
       notes?: string;
+      itemId?: string;
     }) => {
+      if (input.decision === "requisition") {
+        if (!input.itemId) throw new Error("Select the existing catalogue item before sending to Stores.");
+        const { data, error } = await guardedRpc(db, "neo_front_office_requisition_need", {
+          _need: input.needId,
+          _item: input.itemId,
+        });
+        if (error) throw new Error(error.message);
+        return data as FrontOfficeRow;
+      }
       const { data, error } = await guardedRpc(db, "neo_department_stock_need_review", {
         _need: input.needId,
         _decision: input.decision,
