@@ -4,7 +4,7 @@ import { GuestImage } from "@/components/public/GuestImage";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { GuestCardsSkeleton } from "@/components/public/GuestSkeleton";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
-import { useGuestProfile, useGuestReservations, useGuestScreenView } from "@/lib/guest-app";
+import { useGuestProfile, useMyStays, useGuestScreenView } from "@/lib/guest-app";
 import { useGuestActiveStay } from "@/lib/guest-ordering";
 import { useMyGuestHotels } from "@/lib/guest-notifications";
 import { guestDisplayName, orderBucket } from "@/lib/guest-presentation";
@@ -35,7 +35,7 @@ function GuestHome() {
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
-  const reservations = useGuestReservations(ws.organization_id, customerId, ws.branch_id);
+  const reservations = useMyStays(ws.organization_id, ws.branch_id, user?.id);
   const orders = useMyPublicOrders(ws.organization_id, customerId, ws.branch_id);
   const stay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const hotels = useMyGuestHotels(Boolean(user));
@@ -65,7 +65,8 @@ function GuestHome() {
       <div className="neo-guest-home">
         <section className="neo-guest-entry" data-property-photo={Boolean(ws.hero_url)}>
           <div className="neo-guest-entry-copy">
-            <h1>{firstName ? `Welcome, ${firstName}` : "Welcome to Stay & Dine"}</h1>
+            {firstName ? <p className="text-sm font-medium">Welcome, {firstName}</p> : null}
+            <h1>{ws.hotel_name}</h1>
             <div className="neo-guest-entry-actions">
               <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "rooms" }}>Explore the hotel <ChevronRight className="size-4" aria-hidden /></Link>
               <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }}>My stay</Link>
@@ -89,6 +90,7 @@ function GuestHome() {
               if (orders.isError) void orders.refetch();
             }}>Refresh activity</button>} /></div>
         ) : null}
+        <div className="neo-guest-home-tasks">
         {activeOrder ? (
           <Link className="neo-guest-current" to="/guest/$hotelSlug/orders/$orderReference"
             params={{ hotelSlug, orderReference: String(activeOrder["order_number"]) }}>
@@ -96,7 +98,8 @@ function GuestHome() {
             <span><strong>Track your order</strong><small>{statusLabel(activeOrder["order_status"])} · {String(activeOrder["order_number"])}</small></span>
             <ChevronRight aria-hidden />
           </Link>
-        ) : stay.data ? (
+        ) : null}
+        {stay.data ? (
           <Link className="neo-guest-current" to="/guest/$hotelSlug/stay" params={{ hotelSlug }}>
             <span className="neo-guest-current-icon"><BedDouble aria-hidden /></span>
             <span><strong>{stay.data.room_number ? `Room ${stay.data.room_number}` : "Your stay"}</strong><small>Checked in · {stay.data.departure_date}</small></span>
@@ -116,6 +119,7 @@ function GuestHome() {
             <ArrowRight aria-hidden />
           </Link>
         )}
+        </div>
 
         <section className="neo-guest-shortcut-section" aria-labelledby="guest-shortcuts">
           <h2 id="guest-shortcuts">At the hotel</h2>

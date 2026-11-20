@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { BrandButton, PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { Input } from "@/components/ui/input";
@@ -53,14 +53,16 @@ function TripsPage() {
 
   const [category, setCategory] = useState<string>("housekeeping");
   const [description, setDescription] = useState("");
+  const [sent, setSent] = useState(false);
 
   const stay = (reservations.data ?? []).find((r) => isInHouse(r));
 
   async function submitRequest() {
-    if (!description.trim()) return;
+    if (!customerId || !description.trim() || createRequest.isPending) return;
     try {
       await createRequest.mutateAsync({ category, description });
       setDescription("");
+      setSent(true);
       toast.success("Request sent to the team");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send your request");
@@ -104,15 +106,18 @@ function TripsPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-          My trips
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Stays, current room context and every request you have raised.
-        </p>
-      </section>
+      <GuestPageIntro title="Hotel requests" description={`Ask the team at ${ws.hotel_name} for help with your stay.`}>
+        <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="neo-guest-outline-action">My stay</Link>
+        <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} className="neo-guest-outline-action">Transfers</Link>
+        {customerId ? <a href="#guest-requests" className="neo-guest-outline-action">My requests</a> : null}
+      </GuestPageIntro>
 
+      {loading || profile.isLoading ? (
+        <p role="status" className="text-sm text-[var(--guest-muted)]">Loading your hotel requests…</p>
+      ) : profile.isError || !customerId ? (
+        <PublicEmptyState title="Your guest account could not load"
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void profile.refetch()}>Try again</button>} />
+      ) : <>
       {stay ? (
         <GuestSection title="You are in house" description="Current stay context from the property system.">
           <dl className="grid gap-2 text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
@@ -127,13 +132,14 @@ function TripsPage() {
       <MyStaySection organizationId={ws.organization_id} branchId={ws.branch_id} {...(user ? { userId: user.id } : {})} />
 
 
-      <GuestSection title="Request assistance" description="Goes straight to the responsible department.">
+      <GuestSection title="Request assistance" description="Your request goes to the team responsible for the service." surface>
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {requestCategories.map((c) => (
               <button
                 key={c.value}
                 type="button"
+                aria-pressed={category === c.value}
                 onClick={() => setCategory(c.value)}
                 className="rounded-full border px-3 py-1.5 text-xs font-medium"
                 style={{
@@ -147,6 +153,7 @@ function TripsPage() {
           </div>
           <Textarea
             value={description}
+            aria-label="What do you need help with?"
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Tell the team what you need"
             rows={3}
@@ -159,14 +166,18 @@ function TripsPage() {
             )}
             Send request
           </BrandButton>
+          {sent ? <p role="status" className="text-sm">Request sent. <a href="#guest-requests" className="underline">Check its status</a>.</p> : null}
         </div>
       </GuestSection>
 
-      <GuestSection title="My requests">
+      <GuestSection id="guest-requests" title="My requests">
         {requests.isLoading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
           </div>
+        ) : requests.isError ? (
+          <PublicEmptyState title="Requests could not load"
+            action={<button type="button" className="neo-guest-secondary" onClick={() => void requests.refetch()}>Try again</button>} />
         ) : (requests.data?.length ?? 0) === 0 ? (
           <PublicEmptyState title="No requests yet" description="Anything you ask for will be tracked here." />
         ) : (
@@ -222,6 +233,7 @@ function TripsPage() {
           </ul>
         )}
       </GuestSection>
+      </>}
     </GuestScreen>
   );
 }

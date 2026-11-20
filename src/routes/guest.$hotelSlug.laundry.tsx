@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { Loader2, Shirt } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { BrandButton, PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { Input } from "@/components/ui/input";
@@ -118,20 +118,18 @@ function GuestLaundryPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="laundry">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-          <Shirt className="size-6" aria-hidden /> Laundry
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Your items go straight to this hotel's laundry team and follow their normal washing, quality-check and
-          return process.
-        </p>
-      </section>
+      <GuestPageIntro title="Laundry" description={`Send items to the laundry team at ${ws.hotel_name} and follow their progress.`}>
+        <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "services" }} className="neo-guest-outline-action">Hotel services</Link>
+        {customerId ? <a href="#laundry-history" className="neo-guest-outline-action">My laundry</a> : null}
+      </GuestPageIntro>
 
-      {offering.isLoading ? (
+      {loading || profile.isLoading || offering.isLoading ? (
         <div className="flex justify-center py-8">
-          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
+          <Loader2 className="size-5 animate-spin" aria-label="Loading laundry" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : profile.isError || !customerId || offering.isError ? (
+        <PublicEmptyState title="Laundry could not load"
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void Promise.all([profile.refetch(), offering.refetch()])}>Try again</button>} />
       ) : !offering.data?.enabled ? (
         <GuestSection title="Not available yet">
           <PublicEmptyState
@@ -269,7 +267,7 @@ function GuestLaundryPage() {
         </>
       )}
 
-      <GuestSection title="My laundry">
+      <GuestSection id="laundry-history" title="My laundry">
         {mine.isLoading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />

@@ -136,6 +136,24 @@ export function GuestScreen({
   );
 }
 
+export function GuestPageIntro({ title, description, image, children }: {
+  title: string;
+  description?: string;
+  image?: string | null;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="neo-guest-page-intro" data-with-image={Boolean(image)}>
+      <div className="neo-guest-page-intro-copy">
+        <h1 className="neo-pub-display">{title}</h1>
+        {description ? <p>{description}</p> : null}
+        {children ? <div className="neo-guest-page-actions">{children}</div> : null}
+      </div>
+      {image ? <img src={image} alt="" className="neo-guest-page-intro-image" /> : null}
+    </section>
+  );
+}
+
 /**
  * A section of the page — a heading with its content, not a floating card.
  * Only genuinely self-contained content gets a surface of its own.

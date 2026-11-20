@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Car, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
@@ -53,16 +53,23 @@ function TransportPage() {
   const [luggage, setLuggage] = useState(0);
   const [travelReference, setTravelReference] = useState("");
   const [notes, setNotes] = useState("");
+  const [submittedReference, setSubmittedReference] = useState<string | null>(null);
 
   async function submit() {
+    if (request.isPending) return;
+    const pickup = new Date(pickupAt);
     if (!pickupAt || !pickupPoint.trim() || !destination.trim()) {
       toast.error("Pickup time, pickup point and destination are required");
+      return;
+    }
+    if (!Number.isFinite(pickup.getTime()) || pickup.getTime() <= Date.now()) {
+      toast.error("Choose a pickup time in the future");
       return;
     }
     try {
       const result = await request.mutateAsync({
         productId: productId || null,
-        pickupAt: new Date(pickupAt).toISOString(),
+        pickupAt: pickup.toISOString(),
         pickupPoint: pickupPoint.trim(),
         destination: destination.trim(),
         passengers,
@@ -71,6 +78,8 @@ function TransportPage() {
         notes: notes.trim() || null,
       });
       toast.success(`Request ${result.request_number} sent to the concierge`);
+      setSubmittedReference(result.request_number);
+      setPickupAt("");
       setPickupPoint("");
       setDestination("");
       setTravelReference("");
@@ -82,18 +91,26 @@ function TransportPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-          Transport & transfers
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Airport, station and excursion transfers arranged by {ws.hotel_name}. Prices shown are the property's own —
-          nothing is estimated for you.
-        </p>
-      </section>
+      <GuestPageIntro title="Transfers" description={`Arrange a pickup or a trip with ${ws.hotel_name}.`}>
+        <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="neo-guest-outline-action">My stay</Link>
+        {customerId ? <a href="#transfer-history" className="neo-guest-outline-action">My transfer requests</a> : null}
+      </GuestPageIntro>
 
-      {!loading && !user ? (
+      {submittedReference ? (
+        <div role="status" className="neo-guest-task-panel">
+          <p className="font-semibold">Transfer requested · {submittedReference}</p>
+          <p>The concierge will confirm availability and pricing.</p>
+          <a href="#transfer-history" className="neo-guest-outline-action">View request status</a>
+        </div>
+      ) : null}
+
+      {loading || profile.isLoading ? (
+        <p role="status" className="mt-4 text-sm text-[var(--guest-muted)]">Loading transfer options…</p>
+      ) : !user ? (
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to request transport" description="Your transfer requests, property quotes and driver updates stay with your account." />
+      ) : profile.isError || !customerId ? (
+        <PublicEmptyState title="Your guest profile couldn’t load" description="Reload your profile to request transport."
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void profile.refetch()}>Reload profile</button>} />
       ) : (
         <>
           <GuestSection title="Available transfers">
@@ -146,7 +163,7 @@ function TransportPage() {
             )}
           </GuestSection>
 
-          <GuestSection title="Request a transfer">
+          <GuestSection title="Request a transfer" surface>
             <div className="space-y-3">
               <Field label="Pickup time">
                 <input
@@ -218,7 +235,7 @@ function TransportPage() {
             </div>
           </GuestSection>
 
-          <GuestSection title="My transfers">
+          <GuestSection id="transfer-history" title="My transfers">
             {requests.isLoading ? (
               <p className="text-sm text-[var(--guest-muted)]" role="status">Loading your transfers…</p>
             ) : requests.isError ? (

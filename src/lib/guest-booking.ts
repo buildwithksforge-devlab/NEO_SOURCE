@@ -107,6 +107,7 @@ export function useCreateGuestBooking(organizationId: string) {
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["guest-reservations", organizationId] });
+      void client.invalidateQueries({ queryKey: ["guest-my-stays", organizationId] });
       void client.invalidateQueries({ queryKey: ["guest-room-offers", organizationId] });
     },
   });
@@ -158,6 +159,7 @@ export function usePayGuestDeposit(organizationId: string, reference: string) {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["guest-booking-position", organizationId, reference] });
       void client.invalidateQueries({ queryKey: ["guest-reservations", organizationId] });
+      void client.invalidateQueries({ queryKey: ["guest-my-stays", organizationId] });
     },
   });
 }

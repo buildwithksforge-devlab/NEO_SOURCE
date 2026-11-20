@@ -47,6 +47,7 @@ export function SendToPrinterButton({
   documentNumber,
   branchId,
   role,
+  existingJobId,
   label = "Send to printer",
 }: {
   // The queue currently supplies canonical document data only for POS receipts.
@@ -59,6 +60,7 @@ export function SendToPrinterButton({
   branchId?: string | null;
   /** Required printer role, e.g. restaurant, receipt or front_office. */
   role?: string;
+  existingJobId?: string | null;
   label?: string;
 }) {
   const { organizationId, can, isAdmin } = useAuth();
@@ -67,8 +69,10 @@ export function SendToPrinterButton({
 
   const [open, setOpen] = useState(false);
   const [printer, setPrinter] = useState("");
-  const [job, setJob] = useState<string | null>(null);
-  const delivery = usePrintJobDelivery(job, organizationId);
+  const [submittedJobId, setJob] = useState<string | null>(null);
+  const [trackedJobId, setTrackedJobId] = useState<string | null>(null);
+  const job = submittedJobId ?? trackedJobId ?? existingJobId;
+  const delivery = usePrintJobDelivery(open ? job : null, organizationId);
 
   const available = useMemo(
     () =>
@@ -98,12 +102,13 @@ export function SendToPrinterButton({
     setOpen(false);
     setPrinter("");
     setJob(null);
+    setTrackedJobId(null);
   };
 
   const send = () => {
     const target = printer || preferred?.id;
 
-    if (!target) return;
+    if (!target || job || queue.isPending) return;
 
     queue.mutate(
       {
@@ -127,7 +132,10 @@ export function SendToPrinterButton({
 
   return (
     <>
-      <Button size="sm" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="outline" className="gap-2" onClick={() => {
+        setTrackedJobId(existingJobId ?? null);
+        setOpen(true);
+      }}>
         <Printer className="size-4" />
         {label}
       </Button>
@@ -141,7 +149,7 @@ export function SendToPrinterButton({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send to a printer</DialogTitle>
+            <DialogTitle>{job ? "Receipt print status" : "Send to a printer"}</DialogTitle>
             <DialogDescription>
               {job
                 ? "Queued for the trusted property print agent. The queue will update automatically after the printer transport reports its outcome."
@@ -178,6 +186,10 @@ export function SendToPrinterButton({
                 </p>
               </div>
             </div>
+          ) : printers.isLoading ? (
+            <p role="status" className="text-sm text-muted-foreground">Loading property printers…</p>
+          ) : printers.isError ? (
+            <Button variant="outline" onClick={() => void printers.refetch()}>Retry loading printers</Button>
           ) : available.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No active printer matches this property and printer role. Configure the printer's
@@ -210,7 +222,7 @@ export function SendToPrinterButton({
             {job ? (
               <Button onClick={reset}>Close</Button>
             ) : (
-              <Button disabled={available.length === 0 || queue.isPending} onClick={send}>
+              <Button disabled={printers.isError || available.length === 0 || queue.isPending} onClick={send}>
                 {queue.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Queue the print
               </Button>

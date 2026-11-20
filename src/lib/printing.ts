@@ -72,6 +72,7 @@ export type PrintJob = {
 
 export type PosReceiptPrintState = {
   hasCompletedPrint: boolean;
+  inProgressId: string | null;
   latest: {
     id: string;
     status: string;
@@ -202,27 +203,25 @@ export function usePosReceiptPrintState(orderId: string | null | undefined) {
       if (!orderId) {
         return {
           hasCompletedPrint: false,
+          inProgressId: null,
           latest: null,
         };
       }
 
-      const { data, error } = await sb
+      const jobs = () => sb
         .from("print_jobs")
         .select("id, status, is_duplicate, completed_at")
         .eq("order_id", orderId)
-        .eq("document_type", "pos_receipt")
-        .eq("status", "completed")
-        .not("completed_at", "is", null)
-        .order("completed_at", {
-          ascending: false,
-        })
-        .limit(1);
+        .eq("document_type", "pos_receipt");
+      const [completed, inProgress] = await Promise.all([
+        jobs().eq("status", "completed").not("completed_at", "is", null)
+          .order("completed_at", { ascending: false }).limit(1),
+        jobs().in("status", ["queued", "printing"]).order("created_at", { ascending: false }).limit(1),
+      ]);
+      const error = completed.error ?? inProgress.error;
+      if (error) throw new Error(error.message);
 
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const row = data?.[0] ?? null;
+      const row = completed.data?.[0] ?? null;
 
       const latest = row
         ? {
@@ -238,6 +237,7 @@ export function usePosReceiptPrintState(orderId: string | null | undefined) {
 
       return {
         hasCompletedPrint: Boolean(latest?.completed_at),
+        inProgressId: inProgress.data?.[0]?.id ?? null,
         latest,
       };
     },

@@ -30,6 +30,8 @@ import { useApproveOrder } from "@/lib/stores-lifecycle";
 import { useCloseOrder, usePurchaseOrderBoard, type OrderStage, type OrderView } from "@/lib/procurement-orders";
 
 export const Route = createFileRoute("/_shell/procurement/orders")({
+  validateSearch: (search: Record<string, unknown>): { order?: string } =>
+    typeof search.order === "string" ? { order: search.order } : {},
   head: () => ({
     meta: [
       { title: "Purchase orders & receipts — NEØ" },
@@ -66,6 +68,7 @@ const STAGE_LABEL: Record<OrderStage, string> = {
 const qty = (v: number) => (Math.round(v * 1000) / 1000).toLocaleString();
 
 function OrdersPage() {
+  const { order } = Route.useSearch();
   const { tenant } = useTenant();
   const symbol = tenant.regional.currencySymbol;
   const { can } = useAuth();
@@ -75,12 +78,15 @@ function OrdersPage() {
   const approve = useApproveOrder();
   const close = useCloseOrder();
 
-  const [stage, setStage] = useState<OrderStage>("awaiting_approval");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [stageOverride, setStage] = useState<OrderStage | null>(null);
+  const [openOverride, setOpenId] = useState<string | null | undefined>(undefined);
   const [closeFor, setCloseFor] = useState<OrderView | null>(null);
   const [closeReason, setCloseReason] = useState("");
 
   const orders = board.data ?? [];
+  const linkedOrder = orders.find((item) => item.id === order);
+  const stage = stageOverride ?? linkedOrder?.stage ?? "awaiting_approval";
+  const openId = openOverride === undefined ? linkedOrder?.id ?? null : openOverride;
   const byStage = useMemo(() => {
     const map: Record<OrderStage, OrderView[]> = {
       awaiting_approval: [],
@@ -161,6 +167,9 @@ function OrdersPage() {
         }
         skeleton="table"
       >
+        {order && !linkedOrder && board.isSuccess ? (
+          <p role="status" className="mb-3 text-sm text-muted-foreground">That purchase order is unavailable in the current property.</p>
+        ) : null}
         <Tabs value={stage} onValueChange={(v) => setStage(v as OrderStage)}>
           <TabsList className="mb-4 flex-wrap">
             {(Object.keys(STAGE_LABEL) as OrderStage[]).map((key) => (

@@ -60,7 +60,7 @@ function SettingsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Charges & tax" description="Applied when an order is recalculated.">
+        <SectionCard title="Bill settings">
           <div className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="sc">Service charge %</Label>
@@ -73,17 +73,6 @@ function SettingsPage() {
                 }
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="tax">Default tax rate %</Label>
-              <Input
-                id="tax"
-                inputMode="decimal"
-                value={String(form.defaultTaxPercent)}
-                onChange={(e) =>
-                  setForm({ ...form, defaultTaxPercent: Number(e.target.value) || 0 })
-                }
-              />
-            </div>
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="shift">Require an open shift before taking cash</Label>
               <Switch
@@ -92,15 +81,17 @@ function SettingsPage() {
                 onCheckedChange={(v) => setForm({ ...form, enforceShift: v })}
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="footer">Receipt footer</Label>
-              <Input
-                id="footer"
-                value={form.receiptFooter}
-                onChange={(e) => setForm({ ...form, receiptFooter: e.target.value })}
-              />
-            </div>
           </div>
+        </SectionCard>
+
+        <SectionCard title="Sales tax"
+          description="Assign an active profile to a menu item, its category, or the workspace. New sales save the rule and amount on each line.">
+          <Button variant="outline" asChild><Link to="/finance/tax">Manage sales tax</Link></Button>
+        </SectionCard>
+
+        <SectionCard title="Receipt appearance"
+          description="Set the customer feedback link and public payment details on your POS receipt.">
+          <Button variant="outline" asChild><Link to="/admin/documents" hash="pos-receipt">Open receipt settings</Link></Button>
         </SectionCard>
 
         <SectionCard
@@ -124,7 +115,7 @@ function SettingsPage() {
         description="Printer discovery, property/station assignments and the print queue are managed in the Configuration Centre."
       >
         <Button variant="outline" asChild>
-          <Link to="/admin/printers">Open printer configuration</Link>
+            <Link to="/platform/printers">Open printer configuration and queue</Link>
         </Button>
       </SectionCard>
     </div>

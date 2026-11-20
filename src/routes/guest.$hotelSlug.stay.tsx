@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarDays, ChevronRight, Loader2 } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { Input } from "@/components/ui/input";
@@ -47,18 +47,17 @@ function MyStayPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="stay">
-      <section className="neo-guest-stay-heading">
-        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
-          My stay
-        </h1>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <GuestPageIntro title="My stay" description={ws.hotel_name} image={ws.hero_url}>
           <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} className="neo-guest-outline-action">Book a stay</Link>
           {user ? <a href="#link-booking" className="neo-guest-outline-action">Link a booking</a> : null}
           {user ? <Link to="/guest/$hotelSlug/folio" params={{ hotelSlug }} className="neo-guest-outline-action">Room charges</Link> : null}
-        </div>
-      </section>
+          <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} className="neo-guest-outline-action">Transfers</Link>
+          <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "services" }} className="neo-guest-outline-action">Hotel services</Link>
+      </GuestPageIntro>
 
-      {!loading && !user ? (
+      {loading ? (
+        <p role="status" className="mt-4 text-sm text-[var(--guest-muted)]">Checking your guest session…</p>
+      ) : !user ? (
         <GuestSignInPrompt
           hotelSlug={hotelSlug}
           title="Sign in to see your stay"
@@ -72,14 +71,9 @@ function MyStayPage() {
         <PublicEmptyState title="Your bookings couldn’t load" description={`Refresh bookings for ${ws.hotel_name}.`}
           action={<button type="button" className="neo-guest-secondary" onClick={() => void stays.refetch()}>Retry bookings</button>} />
       ) : (stays.data?.length ?? 0) === 0 ? (
-        <GuestSection
-          title="No stay linked yet"
-          description="If you booked another way, confirm it is yours below."
-        >
-          <PublicEmptyState
-            title="Nothing linked to your account"
-            description="Enter your booking reference with the surname, phone or email on the booking."
-          />
+        <GuestSection title="Your bookings">
+          <PublicEmptyState title="No bookings yet"
+            description="Enter your booking reference below if you already booked with the hotel." />
         </GuestSection>
       ) : (
         <GuestSection title="Your bookings">

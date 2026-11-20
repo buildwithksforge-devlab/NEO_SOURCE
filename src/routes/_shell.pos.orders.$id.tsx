@@ -96,6 +96,18 @@ export const Route = createFileRoute("/_shell/pos/orders/$id")({
   ),
 });
 
+function SavedItemTaxes({ snapshot }: { snapshot: unknown }) {
+  if (!snapshot || typeof snapshot !== "object" || !("taxes" in snapshot) || !Array.isArray(snapshot.taxes)) return null;
+  return (
+    <ul className="text-xs text-muted-foreground" aria-label="Saved item taxes before bill discounts">
+      {snapshot.taxes.map((tax, index) => {
+        if (!tax || typeof tax.name !== "string" || typeof tax.amount !== "number") return null;
+        return <li key={`${tax.code}-${index}`}>{tax.name} · {money(tax.amount)} {tax.inclusive ? "included" : "added"}</li>;
+      })}
+    </ul>
+  );
+}
+
 function OrderTerminal() {
   const navigate = useNavigate();
   const { id } = Route.useParams();
@@ -258,7 +270,7 @@ function OrderTerminal() {
               <DocumentPrintButton
                 type="pos_receipt"
                 id={data.id}
-                label="Receipt PDF"
+                label={fiscalAccepted ? "Fiscal Receipt PDF" : "Receipt PDF"}
                 size="default"
               />
 
@@ -271,12 +283,6 @@ function OrderTerminal() {
                       : ""}
                   </span>
 
-                  <DocumentPrintButton
-                    type="pos_receipt"
-                    id={data.id}
-                    label="Fiscal Receipt PDF"
-                    size="default"
-                  />
                 </>
               ) : fiscalEligible && fiscalPending ? (
                 <span className="text-xs text-muted-foreground">
@@ -290,25 +296,31 @@ function OrderTerminal() {
                 />
               ) : null}
 
-              {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
+              {receiptPrintState.isError ? (
+                <Button size="sm" variant="outline" onClick={() => void receiptPrintState.refetch()}>
+                  Reload receipt print status
+                </Button>
+              ) : receiptPrintState.data && !hasCompletedReceiptPrint ? (
                 <SendToPrinterButton
                   type="pos_receipt"
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
                   branchId={data.branch_id}
-                  label="Send to receipt printer"
+                  existingJobId={receiptPrintState.data.inProgressId}
+                  label={receiptPrintState.data.inProgressId ? "Track receipt print" : "Send to receipt printer"}
                 />
               ) : !receiptPrintState.isLoading &&
                 hasCompletedReceiptPrint &&
-                canReprintReceipt ? (
+                (canReprintReceipt || receiptPrintState.data?.inProgressId) ? (
                 <SendToPrinterButton
                   type="pos_receipt"
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
                   branchId={data.branch_id}
-                  label="Reprint receipt"
+                  existingJobId={receiptPrintState.data?.inProgressId}
+                  label={receiptPrintState.data?.inProgressId ? "Track receipt print" : "Reprint receipt"}
                 />
               ) : null}
             </>
@@ -540,6 +552,7 @@ function OrderTerminal() {
                             {titleCase(l.course)} · {l.operational_stations?.name ?? "No station"}
                           </p>
                           <ItemStatusBadge status={l.status} />
+                          <SavedItemTaxes snapshot={(l as typeof l & { sales_tax_snapshot?: unknown }).sales_tax_snapshot} />
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="text-sm">{money(l.line_total)}</span>
@@ -650,7 +663,7 @@ function OrderTerminal() {
 
                 <dl className="mt-4 space-y-1 border-t border-border pt-3 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Items (tax included)</dt>
+                    <dt className="text-muted-foreground">Items (including applicable tax)</dt>
                     <dd>{money(data.subtotal)}</dd>
                   </div>
                   {Number(data.discount_total ?? 0) > 0 ? (
@@ -660,7 +673,7 @@ function OrderTerminal() {
                     </div>
                   ) : null}
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Included tax</dt>
+                    <dt className="text-muted-foreground">Tax on this bill</dt>
                     <dd>{money(data.tax_total)}</dd>
                   </div>
                   <div className="flex justify-between">
@@ -684,7 +697,7 @@ function OrderTerminal() {
                   </div> : null}
                   {roomTransfer.credit > 0 ? <div className="flex justify-between"><dt>POS credit / overpayment</dt><dd>{money(roomTransfer.credit)}</dd></div> : null}
                 </dl>
-                <p className="mt-2 text-xs text-muted-foreground">Included tax is already part of the item prices; do not add it again. Service charge is added after any discount. Preparation and serving statuses do not count as payment.</p>
+                <p className="mt-2 text-xs text-muted-foreground">The tax shown in the bill summary is already reflected in the total. Item tax amounts are shown before bill discounts.</p>
 
                 <div className="mt-4 grid gap-2">
                   <Button

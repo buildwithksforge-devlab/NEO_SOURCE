@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +46,10 @@ export function MenuSalesTaxCard({ itemId, currency, manage }: { itemId: string;
             <option key={profile.id} value={profile.id} disabled={!profile.active}>{profile.name}</option>
           )}
         </select>
+        {preview.isSuccess && preview.data === null ? (
+          <p className="text-muted-foreground">This item still uses its existing tax rate. Select a sales tax profile or set a category or workspace default.</p>
+        ) : null}
+        {manage && <Link to="/finance/tax" className="inline-block text-primary underline">Manage tax profiles</Link>}
         {preview.error && <p role="alert">This profile is unavailable for the item’s property and pricing date.</p>}
         {preview.data && <dl className="space-y-1 rounded-md bg-muted/50 p-2">
           <div className="flex justify-between"><dt>Net before tax</dt><dd>{money(preview.data.net)}</dd></div>

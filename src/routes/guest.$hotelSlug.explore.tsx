@@ -108,7 +108,7 @@ function ExplorePage() {
   const { hotelSlug } = Route.useParams();
   const { section } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { user } = useCustomerSession();
+  const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const activeStay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const customerId = profile.data?.["id"] as string | undefined;
@@ -435,20 +435,23 @@ function ExplorePage() {
           <GuestSection
             title="Laundry"
             description="The hotel's own price list, charged to your room or paid on collection."
+            surface
             action={
-              laundry.data?.enabled ? (
+              !loading && (!user || laundry.data?.enabled) ? (
                 <Link
                   to="/guest/$hotelSlug/laundry"
                   params={{ hotelSlug }}
                   className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
                   style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
                 >
-                  Send laundry
+                  {user ? "Send laundry" : "Open laundry"}
                 </Link>
               ) : undefined
             }
           >
-            {!user ? (
+            {loading ? (
+              <GuestRowsSkeleton rows={2} label="Loading laundry prices" />
+            ) : !user ? (
               <PublicEmptyState
                 title="Sign in to see laundry prices"
                 description="This hotel publishes its laundry list to signed-in guests."
@@ -457,8 +460,8 @@ function ExplorePage() {
               <GuestRowsSkeleton rows={3} label="Loading laundry prices" />
             ) : laundry.isError ? (
               <PublicEmptyState
-                title="Sign in to see laundry prices"
-                description="This hotel publishes its laundry list to signed-in guests."
+                title="Laundry prices could not load"
+                action={<button type="button" className="neo-guest-secondary" onClick={() => void laundry.refetch()}>Try again</button>}
               />
             ) : !laundry.data?.enabled || (laundry.data.items ?? []).length === 0 ? (
               <PublicEmptyState
@@ -492,8 +495,8 @@ function ExplorePage() {
           <GuestSection
             title="Transport"
             description="Transfers the property runs or arranges."
+            surface
             action={
-              (transport.data ?? []).length > 0 ? (
                 <Link
                   to="/guest/$hotelSlug/transport"
                   params={{ hotelSlug }}
@@ -502,10 +505,11 @@ function ExplorePage() {
                 >
                   Request a transfer
                 </Link>
-              ) : undefined
             }
           >
-            {!user ? (
+            {loading ? (
+              <GuestRowsSkeleton rows={2} label="Loading transfers" />
+            ) : !user ? (
               <PublicEmptyState title="Sign in to see transfers" description="You can also contact reception for help with a trip." />
             ) : transport.isLoading ? (
               <GuestRowsSkeleton rows={2} label="Loading transfers" />
@@ -515,7 +519,7 @@ function ExplorePage() {
             ) : (transport.data ?? []).length === 0 ? (
               <PublicEmptyState
                 title="No transfers are published"
-                description="Ask reception and they will quote a transfer for you."
+                description="Request a custom trip and the concierge can provide a quote."
               />
             ) : (
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
