@@ -1,0 +1,701 @@
+﻿
+===== supabase/migrations/20260820113645_1bdb239e-0634-4bed-9f51-20de0bb37f5d.sql =====
+  470:   ('banqueting-staff','pos', ARRAY['orders.view','menu.view']),
+  471: 
+  472:   ('procurement-manager','procurement', ARRAY['view','dashboard.view','create','edit','requests.manage','orders.manage','suppliers.manage','invoices.manage','reports.view','print','export']),
+  473:   ('procurement-manager','stores', ARRAY['view','requisition.view-all','consumption.view']),
+  474:   ('procurement-manager','inventory', ARRAY['dashboard.view','reports.view','items.manage']),
+  475:   ('procurement-manager','finance-ap', ARRAY['view']),
+  476:   ('procurement-manager','reports', ARRAY['view','export']),
+  477:   ('procurement-manager','dashboards', ARRAY['view','customize']),
+  478: 
+  479:   ('procurement-officer','procurement', ARRAY['view','dashboard.view','create','edit','requests.manage','reports.view','print']),
+  480:   ('procurement-officer','stores', ARRAY['view','requisition.view-all']),
+  481:   ('procurement-officer','inventory', ARRAY['dashboard.view']),
+  482: 
+  483:   ('storekeeper','stores', ARRAY['view','create','edit','requisition.view-all','requisition.create','requisition.submit','requisition.review','requisition.issue','requisition.receive','requisition.partial','requisition.discrepancy','requisition.export','consumption.view','consumption.record','mini-store.manage','print','export']),
+  484:   ('storekeeper','inventory', ARRAY['dashboard.view','items.manage','stock.manage','stocktake.manage','transfers.manage','adjustments.manage','reports.view']),
+  485:   ('storekeeper','procurement', ARRAY['view','receiving.manage','dashboard.view','reports.view']),
+  486:   ('storekeeper','reports', ARRAY['view','export']),
+  487:   ('storekeeper','dashboards', ARRAY['view','customize']),
+  488: 
+  489:   ('receiving-clerk','procurement', ARRAY['view','receiving.manage']),
+  490:   ('receiving-clerk','stores', ARRAY['view','requisition.receive','requisition.discrepancy']),
+  491:   ('receiving-clerk','inventory', ARRAY['dashboard.view']),
+  492: 
+  493:   ('human-resources-manager','human-resources', ARRAY['view','create','edit','export','print']),
+  494:   ('human-resources-manager','hr-employees', ARRAY['directory.view','profile.view','create','edit','documents.manage','statutory.view','compensation.view','suspend','terminate','activate']),
+  495:   ('human-resources-manager','hr-attendance', ARRAY['all.view','team.view','correct','correction.approve','configure']),
+  496:   ('human-resources-manager','hr-leave', ARRAY['team.view','approve','types.manage','balance.adjust','medical.view']),
+  497:   ('human-resources-manager','hr-payroll', ARRAY['inputs.view','inputs.edit','labour_cost.view','export']),
+  498:   ('human-resources-manager','hr-performance', ARRAY['review.create','review.conduct','review.approve','kpis.manage','disciplinary.manage','grievances.manage','reports.view']),
+  499:   ('human-resources-manager','hr-recruitment', ARRAY['vacancies.view','vacancy.create','candidates.view','candidates.manage','interview.schedule','candidate.evaluate','candidate.convert']),
+  500:   ('human-resources-manager','hr-scheduling', ARRAY['team.view','roster.create','roster.publish','roster.approve','swap.approve','overtime.approve']),
+
+===== supabase/migrations/20260823121559_101bbdea-7437-44ff-873d-6c028b60a6e7.sql =====
+   15: ) AS m(module, feature)
+   16: CROSS JOIN (VALUES ('view'),('create'),('edit'),('approve'),('reject'),
+   17:                    ('export'),('print'),('delete'),('override'),('void'),('refund')) AS a(action)
+   18: WHERE NOT EXISTS (
+   19:   SELECT 1 FROM public.permissions p
+   20:   WHERE p.module = m.module AND p.feature = m.feature AND p.action = a.action
+   21: );
+   22: 
+   23: -- 2. Role separation: purchasing authority vs custody authority -------------
+   24: DELETE FROM public.role_feature_templates
+   25:  WHERE role_key IN ('procurement-manager','procurement-officer','storekeeper','receiving-clerk')
+   26:    AND module IN ('procurement','stores');
+   27: 
+   28: INSERT INTO public.role_feature_templates (role_key, module, feature, action)
+   29: SELECT t.role_key, t.module, t.feature, a.action
+   30: FROM (VALUES
+   31:   ('procurement-manager','procurement','overview','view,export,print'),
+   32:   ('procurement-manager','procurement','requests','view,create,edit,approve,reject,export,print'),
+   33:   ('procurement-manager','procurement','lpos','view,create,edit,approve,reject,export,print'),
+   34:   ('procurement-manager','procurement','suppliers','view,create,edit,export,print'),
+   35:   ('procurement-manager','stores','overview','view,export'),
+   36:   ('procurement-manager','stores','reconciliation','view,export'),
+   37:   ('procurement-officer','procurement','overview','view'),
+   38:   ('procurement-officer','procurement','requests','view,create,edit'),
+   39:   ('procurement-officer','procurement','lpos','view,create,edit'),
+   40:   ('procurement-officer','procurement','suppliers','view,create,edit'),
+   41:   ('storekeeper','stores','overview','view,create,edit,export,print'),
+   42:   ('storekeeper','stores','issues','view,create,edit,export,print'),
+   43:   ('storekeeper','stores','reconciliation','view,export'),
+   44:   ('storekeeper','procurement','overview','view'),
+   45:   ('storekeeper','procurement','requests','view,create'),
+   46:   ('storekeeper','procurement','receiving','view,create,edit,export,print'),
+   47:   ('receiving-clerk','stores','overview','view'),
+   48:   ('receiving-clerk','procurement','receiving','view,create,edit')
+   49: ) AS t(role_key, module, feature, actions)
+   50: CROSS JOIN LATERAL unnest(string_to_array(t.actions, ',')) AS a(action)
+   51: WHERE EXISTS (SELECT 1 FROM public.permissions p
+   52:                WHERE p.module = t.module AND p.feature = t.feature AND p.action = a.action)
+   53: ON CONFLICT DO NOTHING;
+   54: 
+   55: INSERT INTO public.role_feature_templates (role_key, module, feature, action)
+   56: SELECT 'storekeeper','kitchen','stores', a.action
+   57: FROM (VALUES ('view'),('create'),('edit'),('approve'),('export'),('print')) a(action)
+   58: WHERE EXISTS (SELECT 1 FROM public.permissions p WHERE p.module='kitchen' AND p.feature='stores' AND p.action=a.action)
+   59:   AND NOT EXISTS (SELECT 1 FROM public.role_feature_templates ft
+   60:                    WHERE ft.role_key='storekeeper' AND ft.module='kitchen' AND ft.feature='stores' AND ft.action=a.action);
+   61: 
+   62: -- 3. Per-submission idempotency for procurement/stores write paths ----------
+   63: CREATE TABLE IF NOT EXISTS public.procurement_attempts (
+   64:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   65:   organization_id uuid NOT NULL,
+   66:   action text NOT NULL,
+   67:   attempt_key uuid NOT NULL,
+   68:   record_id uuid,
+   69:   result jsonb NOT NULL DEFAULT '{}'::jsonb,
+   70:   created_by uuid DEFAULT auth.uid(),
+   71:   created_at timestamptz NOT NULL DEFAULT now(),
+   72:   UNIQUE (organization_id, action, attempt_key)
+   73: );
+   74: 
+   75: GRANT SELECT, INSERT ON public.procurement_attempts TO authenticated;
+   76: GRANT ALL ON public.procurement_attempts TO service_role;
+   77: ALTER TABLE public.procurement_attempts ENABLE ROW LEVEL SECURITY;
+   78: 
+   79: DROP POLICY IF EXISTS procurement_attempts_org_read ON public.procurement_attempts;
+   80: CREATE POLICY procurement_attempts_org_read ON public.procurement_attempts
+   81:   FOR SELECT TO authenticated
+   82:   USING (organization_id = public.current_org_id());
+   83: 
+   84: DROP POLICY IF EXISTS procurement_attempts_org_write ON public.procurement_attempts;
+   85: CREATE POLICY procurement_attempts_org_write ON public.procurement_attempts
+   86:   FOR INSERT TO authenticated
+   87:   WITH CHECK (organization_id = public.current_org_id() AND created_by = auth.uid());
+   88: 
+   89: -- 4. Requisition lifecycle --------------------------------------------------
+   90: CREATE OR REPLACE FUNCTION public.neo_procurement_request_submit(_request uuid, _attempt uuid)
+   91: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $fn$
+   92: DECLARE _org uuid := public.current_org_id(); _r record; _prior jsonb;
+   93: BEGIN
+   94:   IF _org IS NULL THEN RAISE EXCEPTION 'no_organisation' USING ERRCODE='42501'; END IF;
+   95:   IF _attempt IS NULL THEN RAISE EXCEPTION 'attempt_key_required' USING ERRCODE='22023'; END IF;
+   96: 
+   97:   SELECT result INTO _prior FROM public.procurement_attempts
+   98:    WHERE organization_id=_org AND action='request.submit' AND attempt_key=_attempt;
+   99:   IF _prior IS NOT NULL THEN RETURN _prior || jsonb_build_object('replayed', true); END IF;
+  100: 
+
+===== supabase/migrations/20261112160000_atomic_blind_receiving_review.sql =====
+    1: BEGIN;
+    2: 
+    3: CREATE OR REPLACE FUNCTION public.neo_blind_receiving_review_queue()
+    4:  RETURNS jsonb
+    5:  LANGUAGE plpgsql
+    6:  STABLE SECURITY DEFINER
+    7:  SET search_path TO 'public', 'pg_temp'
+    8: AS $function$
+    9: DECLARE
+   10:     v_org uuid := public.current_org_id();
+   11:     v_result jsonb;
+   12: BEGIN
+   13:     IF auth.uid() IS NULL OR v_org IS NULL THEN
+   14:         RAISE EXCEPTION 'Authentication and organization required'
+   15:             USING ERRCODE = '42501';
+   16:     END IF;
+   17: 
+   18:     IF NOT (public.is_org_admin() OR public.has_permission('procurement', 'receiving.manage')) THEN
+   19:         RAISE EXCEPTION
+   20:             'Independent receiving review requires administrator authorization'
+   21:             USING ERRCODE = '42501';
+   22:     END IF;
+   23: 
+   24:     SELECT COALESCE(
+   25:         jsonb_agg(
+   26:             jsonb_build_object(
+   27:                 'count_id', c.id,
+   28:                 'purchase_order_id', c.purchase_order_id,
+   29:                 'order_number', po.order_number,
+   30:                 'branch_id', c.branch_id,
+   31:                 'delivery_note', c.supplier_delivery_note,
+   32:                 'submitted_by', c.submitted_by,
+   33:                 'submitted_by_current_user', c.submitted_by = auth.uid(),
+   34:                 'submitted_at', c.submitted_at,
+   35:                 'status', c.status,
+   36:                 'remarks', c.remarks,
+   37:                 'lines', (
+   38:                     SELECT COALESCE(
+   39:                         jsonb_agg(
+   40:                             jsonb_build_object(
+   41:                                 'count_line_id', cl.id,
+   42:                                 'order_line_id', pl.id,
+   43:                                 'item_name', COALESCE(
+   44:                                     (
+   45:                                         SELECT si.name
+   46:                                         FROM public.stock_items si
+   47:                                         WHERE si.id = pl.stock_item_id
+   48:                                           AND si.organization_id = v_org
+   49:                                     ),
+   50:                                     pl.description,
+   51:                                     'Unidentified item'
+   52:                                 ),
+   53:                                 'unit', pl.unit,
+   54:                                 'ordered_quantity', pl.quantity,
+   55:                                 'previously_received', COALESCE(pl.received_quantity, 0),
+   56:                                 'cancelled_quantity', COALESCE(pl.cancelled_quantity, 0),
+   57:                                 'outstanding_quantity', GREATEST(
+   58:                                     COALESCE(pl.quantity, 0)
+   59:                                     - COALESCE(pl.accepted_quantity, 0)
+   60:                                     - COALESCE(pl.cancelled_quantity, 0),
+   61:                                     0
+   62:                                 ),
+   63:                                 'physically_delivered', cl.quantity_delivered,
+   64:                                 'rejected_quantity', cl.quantity_rejected,
+   65:                                 'accepted_quantity',
+   66:                                     cl.quantity_delivered - cl.quantity_rejected,
+   67:                                 'difference',
+   68:                                     (cl.quantity_delivered - cl.quantity_rejected)
+   69:                                     - GREATEST(
+   70:                                         COALESCE(pl.quantity, 0)
+   71:                                         - COALESCE(pl.accepted_quantity, 0)
+   72:                                         - COALESCE(pl.cancelled_quantity, 0),
+   73:                                         0
+   74:                                     ),
+   75:                                 'rejection_reason', cl.rejection_reason,
+   76:                                 'batch_number', cl.batch_number,
+   77:                                 'expiry_date', cl.expiry_date,
+   78:                                 'reconciliation_result', CASE
+   79:                                     WHEN (cl.quantity_delivered - cl.quantity_rejected) >
+   80:                                         GREATEST(
+   81:                                             COALESCE(pl.quantity, 0)
+   82:                                             - COALESCE(pl.accepted_quantity, 0)
+   83:                                             - COALESCE(pl.cancelled_quantity, 0),
+   84:                                             0
+   85:                                         )
+   86:                                     THEN 'excess'
+   87:                                     WHEN (cl.quantity_delivered - cl.quantity_rejected) <
+   88:                                         GREATEST(
+   89:                                             COALESCE(pl.quantity, 0)
+   90:                                             - COALESCE(pl.accepted_quantity, 0)
+   91:                                             - COALESCE(pl.cancelled_quantity, 0),
+   92:                                             0
+   93:                                         )
+   94:                                     THEN 'partial_delivery'
+   95:                                     ELSE 'matched'
+   96:                                 END
+   97:                             )
+   98:                             ORDER BY cl.id
+   99:                         ),
+  100:                         '[]'::jsonb
+  101:                     )
+  102:                     FROM public.neo_blind_receiving_count_lines cl
+  103:                     JOIN public.purchase_order_lines pl
+  104:                       ON pl.id = cl.purchase_order_line_id
+  105:                      AND pl.order_id = c.purchase_order_id
+  106:                     WHERE cl.count_id = c.id
+  107:                 )
+  108:             )
+  109:             ORDER BY c.submitted_at
+  110:         ),
+  111:         '[]'::jsonb
+  112:     )
+  113:     INTO v_result
+  114:     FROM public.neo_blind_receiving_counts c
+  115:     JOIN public.purchase_orders po
+  116:       ON po.id = c.purchase_order_id
+  117:      AND po.organization_id = v_org
+  118:      AND po.branch_id = c.branch_id
+  119:     WHERE c.organization_id = v_org
+  120:       AND c.status IN ('submitted', 'under_review')
+  121:       AND public.neo_branch_in_scope(c.branch_id);
+  122: 
+  123:     RETURN v_result;
+  124: END;
+  125: $function$;
+
+===== supabase/migrations/20261112160000_atomic_blind_receiving_review.sql =====
+  526: CREATE OR REPLACE FUNCTION public.neo_stores_receive_goods(
+  527:   _order uuid, _location uuid, _lines jsonb, _attempt uuid, _notes text DEFAULT NULL,
+  528:   _over_receipt_reason text DEFAULT NULL, _delivery_note text DEFAULT NULL, _supplier_invoice text DEFAULT NULL)
+  529: RETURNS jsonb
+  530: LANGUAGE plpgsql
+  531: SECURITY DEFINER
+  532: SET search_path TO 'public', 'pg_temp'
+  533: AS $$
+  534: DECLARE _org uuid := public.current_org_id(); _p record; _line jsonb; _pl record;
+  535:         _grn uuid; _number text; _prior jsonb; _count integer := 0;
+  536:         _qty numeric; _accepted numeric; _request jsonb; _outstanding numeric; _lreason text; _post jsonb; _partial boolean := false;
+  537: BEGIN
+  538:   IF _org IS NULL THEN RAISE EXCEPTION 'no_organisation' USING ERRCODE='42501'; END IF;
+  539:   IF _attempt IS NULL THEN RAISE EXCEPTION 'attempt_key_required' USING ERRCODE='22023'; END IF;
+  540: 
+  541:   _request := jsonb_build_object('order', _order, 'location', _location, 'lines', _lines,
+  542:     'notes', _notes, 'over_receipt_reason', _over_receipt_reason,
+  543:     'delivery_note', _delivery_note, 'supplier_invoice', _supplier_invoice);
+  544: 
+  545:   IF NOT (public.has_permission('procurement','receiving.manage')
+  546:           OR public.has_permission('procurement','receiving.create')
+  547:           OR public.is_org_admin()) THEN
+  548:     RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE='42501';
+  549:   END IF;
+  550: 
+  551:   SELECT * INTO _p FROM public.purchase_orders WHERE id=_order AND organization_id=_org;
+  552:   IF _p IS NULL THEN RAISE EXCEPTION 'order_not_found' USING ERRCODE='22023'; END IF;
+  553:   IF NOT public.neo_branch_in_scope(_p.branch_id) THEN RAISE EXCEPTION 'branch_out_of_scope' USING ERRCODE='42501'; END IF;
+  554:   SELECT result INTO _prior FROM public.procurement_attempts
+  555:    WHERE organization_id=_org AND action='goods.receive' AND attempt_key=_attempt;
+  556:   IF _prior IS NOT NULL THEN
+  557:     IF (_prior ? 'request' AND _prior->'request' IS DISTINCT FROM _request)
+  558:        OR NOT EXISTS (SELECT 1 FROM public.goods_receipts
+  559:          WHERE id=(_prior->>'receipt_id')::uuid AND organization_id=_org
+  560:            AND order_id=_order AND location_id=_location) THEN
+  561:       RAISE EXCEPTION 'receipt_attempt_input_mismatch' USING ERRCODE='23514';
+  562:     END IF;
+  563:     RETURN _prior || jsonb_build_object('replayed', true);
+  564:   END IF;
+  565: 
+  566:   IF _p.status NOT IN ('approved','pending-delivery','sent','partially-received','partially_received') THEN
+  567:     RAISE EXCEPTION 'order_not_receivable' USING ERRCODE='22023';
+  568:   END IF;
+  569:   IF _location IS NULL OR NOT EXISTS (
+  570:       SELECT 1 FROM public.stock_locations sl WHERE sl.id=_location AND sl.organization_id=_org AND sl.active
+  571:       AND (sl.branch_id IS NULL OR (sl.branch_id=_p.branch_id AND public.neo_branch_in_scope(sl.branch_id)))) THEN
+  572:     RAISE EXCEPTION 'store_location_required' USING ERRCODE='22023';
+  573:   END IF;
+  574:   IF _lines IS NULL OR jsonb_typeof(_lines) <> 'array' OR jsonb_array_length(_lines) = 0 THEN
+  575:     RAISE EXCEPTION 'no_receipt_lines' USING ERRCODE='22023';
+  576:   END IF;
+  577: 
+  578:   PERFORM pg_advisory_xact_lock(hashtextextended('grn:'||_order::text, 7));
+  579:   SELECT result INTO _prior FROM public.procurement_attempts
+  580:    WHERE organization_id=_org AND action='goods.receive' AND attempt_key=_attempt;
+  581:   IF _prior IS NOT NULL THEN
+  582:     IF (_prior ? 'request' AND _prior->'request' IS DISTINCT FROM _request)
+  583:        OR NOT EXISTS (SELECT 1 FROM public.goods_receipts
+  584:          WHERE id=(_prior->>'receipt_id')::uuid AND organization_id=_org
+  585:            AND order_id=_order AND location_id=_location) THEN
+  586:       RAISE EXCEPTION 'receipt_attempt_input_mismatch' USING ERRCODE='23514';
+  587:     END IF;
+  588:     RETURN _prior || jsonb_build_object('replayed', true);
+  589:   END IF;
+  590: 
+  591:   -- Re-read current eligibility under the same order lock used for receiving.
+  592:   SELECT * INTO _p FROM public.purchase_orders WHERE id=_order AND organization_id=_org FOR UPDATE;
+  593:   IF _p.status NOT IN ('approved','pending-delivery','sent','partially-received','partially_received') THEN
+  594:     RAISE EXCEPTION 'order_not_receivable' USING ERRCODE='22023';
+  595:   END IF;
+  596: 
+  597:   -- O03: Prevent one receipt request from repeating the same PO line.
+  598:   IF EXISTS (
+  599:     SELECT 1
+  600:     FROM jsonb_array_elements(_lines) AS entry(line)
+  601:     GROUP BY entry.line->>'order_line_id'
+  602:     HAVING count(*) > 1
+  603:   ) THEN
+  604:     RAISE EXCEPTION 'duplicate_order_line_in_receipt'
+  605:       USING ERRCODE = '23514';
+  606:   END IF;
+  607: 
+  608:   -- O03: Ensure rejected and damaged quantities are valid.
+  609:   IF EXISTS (
+  610:     SELECT 1
+  611:     FROM jsonb_array_elements(_lines) AS entry(line)
+  612:     WHERE COALESCE((entry.line->>'quantity_received')::numeric, 0) < 0
+  613:        OR COALESCE((entry.line->>'quantity_rejected')::numeric, 0) < 0
+  614:        OR COALESCE((entry.line->>'quantity_damaged')::numeric, 0) < 0
+  615:        OR (
+  616:          COALESCE((entry.line->>'quantity_rejected')::numeric, 0)
+  617:          + COALESCE((entry.line->>'quantity_damaged')::numeric, 0)
+  618:        ) > COALESCE((entry.line->>'quantity_received')::numeric, 0)
+  619:   ) THEN
+  620:     RAISE EXCEPTION 'invalid_receipt_quantities'
+  621:       USING ERRCODE = '23514';
+  622:   END IF;
+  623: 
+  624:   _number := public.next_document_number('goods_receipt','GRN', _p.branch_id);
+  625:   INSERT INTO public.goods_receipts (organization_id, branch_id, order_id, supplier_id, location_id,
+  626:     grn_number, status, received_at, received_by, notes, delivery_note_number, supplier_invoice_number)
+  627:   VALUES (_org, _p.branch_id, _order, _p.supplier_id, _location, _number, 'received', now(), auth.uid(),
+  628:           _notes, nullif(btrim(coalesce(_delivery_note,'')),''), nullif(btrim(coalesce(_supplier_invoice,'')),''))
+  629:   RETURNING id INTO _grn;
+  630: 
+  631:   FOR _line IN SELECT * FROM jsonb_array_elements(_lines) LOOP
+  632:     SELECT * INTO _pl FROM public.purchase_order_lines
+  633:      WHERE id = (_line->>'order_line_id')::uuid AND order_id = _order FOR UPDATE;
+  634:     IF _pl IS NULL THEN RAISE EXCEPTION 'order_line_not_on_order' USING ERRCODE='22023'; END IF;
+  635: 
+  636:     _qty := COALESCE((_line->>'quantity_received')::numeric, 0);
+  637:     IF _qty <= 0 THEN CONTINUE; END IF;
+  638: 
+  639:     _lreason := nullif(btrim(coalesce(_line->>'over_receipt_reason', _over_receipt_reason, '')), '');
+  640: 
+  641:     _accepted := _qty - COALESCE((_line->>'quantity_rejected')::numeric,0)
+  642:                       - COALESCE((_line->>'quantity_damaged')::numeric,0);
+  643:     IF nullif(_line->>'location_id','') IS NOT NULL AND NOT EXISTS (
+  644:       SELECT 1 FROM public.stock_locations sl
+  645:        WHERE sl.id=(_line->>'location_id')::uuid AND sl.organization_id=_org AND sl.active
+  646:          AND (sl.branch_id IS NULL OR (sl.branch_id=_p.branch_id AND public.neo_branch_in_scope(sl.branch_id)))
+  647:     ) THEN RAISE EXCEPTION 'receipt_line_location_out_of_scope' USING ERRCODE='42501'; END IF;
+  648:     _outstanding := GREATEST(COALESCE(_pl.quantity,0) - COALESCE(_pl.cancelled_quantity,0) - COALESCE(_pl.accepted_quantity,0),0);
+  649:     IF _accepted > _outstanding THEN
+  650:       RAISE EXCEPTION 'over_receipt_refused: % outstanding on this line, % offered', _outstanding, _accepted
+  651:         USING ERRCODE='23514';
+  652:     END IF;
+  653: 
+  654:     INSERT INTO public.goods_receipt_lines (organization_id, receipt_id, order_line_id, stock_item_id,
+  655:       quantity_ordered, quantity_previously_received, quantity_received, quantity_rejected, quantity_damaged,
+  656:       quantity_accepted, unit, unit_price, batch_number, expiry_date, location_id, notes,
+  657:       rejection_reason, over_receipt_reason)
+  658:     VALUES (_org, _grn, _pl.id, _pl.stock_item_id, _pl.quantity, COALESCE(_pl.received_quantity,0), _qty,
+  659:       COALESCE((_line->>'quantity_rejected')::numeric,0), COALESCE((_line->>'quantity_damaged')::numeric,0),
+  660:       GREATEST(_qty - COALESCE((_line->>'quantity_rejected')::numeric,0)
+  661:                     - COALESCE((_line->>'quantity_damaged')::numeric,0), 0),
+  662:       COALESCE(_line->>'unit', _pl.unit), _pl.unit_price,
+  663:       nullif(_line->>'batch_number',''), (nullif(_line->>'expiry_date',''))::date,
+  664:       COALESCE((nullif(_line->>'location_id',''))::uuid, _location), nullif(_line->>'notes',''),
+  665:       nullif(btrim(coalesce(_line->>'rejection_reason','')),''),
+  666:       CASE WHEN _qty > _outstanding + 0.0001 THEN _lreason ELSE NULL END);
+  667:     _count := _count + 1;
+  668:   END LOOP;
+  669: 
+  670:   IF _count = 0 THEN RAISE EXCEPTION 'no_receipt_lines' USING ERRCODE='22023'; END IF;
+  671: 
+  672:   _post := public.inventory_post_receipt(_grn);
+  673: 
+  674:   SELECT EXISTS (
+  675:     SELECT 1 FROM public.purchase_order_lines pl
+  676:      WHERE pl.order_id=_order
+  677:        AND COALESCE(pl.accepted_quantity,0) + COALESCE(pl.cancelled_quantity,0) < pl.quantity
+  678:   ) INTO _partial;
+  679:   UPDATE public.goods_receipts SET is_partial=_partial WHERE id=_grn;
+  680: 
+  681:   _prior := jsonb_build_object('ok',true,'receipt_id',_grn,'grn_number',_number,
+  682:               'lines',_count,'posting',_post,'partial',_partial,
+  683:               'order_status',(SELECT status FROM public.purchase_orders WHERE id=_order), 'request', _request);
+  684:   INSERT INTO public.procurement_attempts (organization_id, action, attempt_key, record_id, result)
+  685:   VALUES (_org,'goods.receive',_attempt,_grn,_prior);
+  686:   RETURN _prior;
+  687: END $$;
+  688: -- END REVIEWED CORE RECEIVING REPAIR
+  689: 
+  690: COMMIT;
+
+===== supabase/migrations/20261116234000_receiving_queue_handoff.sql =====
+    1: -- STAGED ONLY: preserve installed owner/grants; refuse unreviewed definitions.
+    2: -- No stock, purchase, payment or document identity is created by installation.
+    3: BEGIN;
+    4: DO $guard$ BEGIN
+    5:  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+    6:  WHERE p.oid=to_regprocedure('public.neo_blind_receiving_approved_queue()') AND r.rolname NOT IN ('anon','authenticated')
+    7:  AND md5(regexp_replace(regexp_replace(p.prosrc,'--[^'||chr(10)||']*','','g'),'[[:space:]]','','g')) IN ('322c6b4d910d040b752d372bbd2aad42','976aa7a9092211b2b29eb8639d83872d')) THEN
+    8:  RAISE EXCEPTION 'Receiving queue differs from reviewed source; nothing replaced';
+    9:  END IF;
+   10: END $guard$;
+   11: CREATE TEMP TABLE neo_receiving_document_acl ON COMMIT DROP AS
+   12:  SELECT proowner,coalesce(proacl::text,'') acl FROM pg_proc WHERE oid='public.neo_blind_receiving_approved_queue()'::regprocedure;
+   13: CREATE OR REPLACE FUNCTION public.neo_blind_receiving_approved_queue()
+   14:  RETURNS jsonb
+   15:  LANGUAGE plpgsql
+   16:  STABLE SECURITY DEFINER
+   17:  SET search_path TO 'public', 'pg_temp'
+   18: AS $function$
+   19: DECLARE
+   20:     v_org uuid := public.current_org_id();
+   21:     v_result jsonb;
+   22: BEGIN
+   23:     IF auth.uid() IS NULL OR v_org IS NULL THEN
+   24:         RAISE EXCEPTION 'Authentication and organization required'
+   25:             USING ERRCODE = '42501';
+   26:     END IF;
+   27: 
+   28:     IF NOT coalesce(public.is_org_admin() OR public.has_permission('procurement', 'receiving.manage'), false) THEN
+   29:         RAISE EXCEPTION 'Authorized inventory posting access required'
+   30:             USING ERRCODE = '42501';
+   31:     END IF;
+   32: 
+   33:     SELECT COALESCE(
+   34:         jsonb_agg(
+   35:             jsonb_build_object(
+   36:                 'count_id', c.id,
+   37:                 'purchase_order_id', c.purchase_order_id,
+   38:                 'branch_id', c.branch_id,
+   39:                 'order_number', po.order_number,
+   40:                 'delivery_note', c.supplier_delivery_note,
+   41:                 'submitted_at', c.submitted_at,
+   42:                 'reviewed_at', c.reviewed_at,
+   43:                 'review_notes', c.review_notes,
+   44:                 'status', c.status,
+   45:                 'line_count', (
+   46:                     SELECT count(*)
+   47:                     FROM public.neo_blind_receiving_count_lines cl
+   48:                     WHERE cl.count_id = c.id
+   49:                 ),
+   50:                 'posting_block_reason', CASE
+   51:                     WHEN lower(concat_ws(
+   52:                         ' ',
+   53:                         c.supplier_delivery_note,
+   54:                         c.remarks,
+   55:                         c.review_notes
+   56:                     )) LIKE ANY (ARRAY[
+   57:                         '%virtual test only%',
+   58:                         '%no actual goods%',
+   59:                         '%no real goods%',
+   60:                         '%no physical goods%',
+   61:                         '%simulation only%',
+   62:                         '%no supplier commitment%'
+   63:                     ])
+   64:                     THEN 'This count is marked as virtual/test-only; inventory posting is prohibited.'
+   65:                     ELSE NULL
+   66:                 END
+   67:             )
+   68:             ORDER BY c.reviewed_at
+   69:         ),
+   70:         '[]'::jsonb
+   71:     )
+   72:     INTO v_result
+   73:     FROM public.neo_blind_receiving_counts c
+   74:     JOIN public.purchase_orders po
+   75:       ON po.id = c.purchase_order_id
+   76:      AND po.organization_id = v_org
+   77:      AND po.branch_id = c.branch_id
+   78:     WHERE c.organization_id = v_org
+   79:       AND c.status = 'approved'
+   80:       AND c.posted_grn_id IS NULL
+   81:       AND public.neo_branch_in_scope(c.branch_id)
+   82:       AND c.submitted_by <> auth.uid();
+   83: 
+   84:     RETURN v_result;
+   85: END;
+   86: $function$;
+   87: DO $verify$ BEGIN
+   88:  IF NOT EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN neo_receiving_document_acl old
+   89:  WHERE p.oid='public.neo_blind_receiving_approved_queue()'::regprocedure AND p.proowner=old.proowner AND coalesce(p.proacl::text,'')=old.acl) THEN
+   90:  RAISE EXCEPTION 'Receiving queue owner or grants changed';
+   91:  END IF;
+   92: END $verify$;
+   93: COMMIT;
+
+===== supabase/migrations/20261116235900_inventory_batch_cost_integrity.sql =====
+  175:   INSERT INTO stock_movements (
+  176:     organization_id, branch_id, stock_item_id, location_id, batch_id, movement_type,
+  177:     quantity, unit, unit_cost, value, balance_after, reference_type, reference_id,
+  178:     reason, idempotency_key, performed_by, batch_allocations
+  179:   ) VALUES (
+  180:     v_org, v_location.branch_id, _item, _location, v_batch, _movement_type,
+  181:     v_qty_base, v_item.base_unit, v_cost, v_qty_base * v_cost,
+  182:     (SELECT quantity_on_hand FROM stock_levels WHERE id = v_level.id),
+  183:     _reference_type, _reference_id, _reason, _idempotency_key, auth.uid(), v_allocations
+  184:   ) RETURNING id INTO v_movement;
+  185: 
+  186:   RETURN v_movement;
+  187: END;
+  188: $function$
+  189: ;
+  190: 
+  191: CREATE OR REPLACE FUNCTION public.inventory_post_receipt(_receipt uuid)
+  192: RETURNS jsonb
+  193: LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+  194: AS $function$
+  195: DECLARE v_org uuid:=current_org_id(); r record; l record; v_total numeric:=0; v_lines integer:=0; v_accepted numeric; v_err text;
+  196: BEGIN
+  197:  IF auth.uid() IS NULL OR NOT coalesce(has_permission('procurement','receiving.manage'),false) THEN RAISE EXCEPTION 'Not permitted to receive stock'; END IF;
+  198:  SELECT * INTO r FROM goods_receipts WHERE id=_receipt AND organization_id=v_org FOR UPDATE;
+  199:  IF r IS NULL THEN RAISE EXCEPTION 'Receipt not found'; END IF;
+  200:  IF NOT coalesce(public.neo_branch_in_scope(r.branch_id),false) THEN RAISE EXCEPTION 'Receipt outside authorized property'; END IF;
+  201:  IF r.status IS NULL OR r.status NOT IN ('received','approved','posted') THEN RAISE EXCEPTION 'Receipt is not approved for stock posting'; END IF;
+  202:  IF r.status='posted' AND r.accrual_journal_id IS NOT NULL THEN RETURN jsonb_build_object('status','already-posted','journal_id',r.accrual_journal_id); END IF;
+  203:  IF r.status<>'posted' THEN
+  204:   FOR l IN SELECT * FROM goods_receipt_lines WHERE receipt_id=_receipt LOOP
+  205:    v_accepted:=COALESCE(l.quantity_accepted,GREATEST(COALESCE(l.quantity_received,0)-COALESCE(l.quantity_rejected,0)-COALESCE(l.quantity_damaged,0)-COALESCE(l.quantity_returned,0),0));
+  206:    IF EXISTS(SELECT 1 FROM unnest(ARRAY[l.quantity_received,l.quantity_rejected,l.quantity_damaged,l.quantity_returned]) q
+  207:        WHERE q<0 OR q::text IN ('NaN','Infinity','-Infinity'))
+  208:      OR l.organization_id IS DISTINCT FROM v_org
+  209:      OR v_accepted IS NULL OR v_accepted<0 OR v_accepted::text IN ('NaN','Infinity','-Infinity')
+  210:      OR l.unit_price IS NULL OR l.unit_price<0 OR l.unit_price::text IN ('NaN','Infinity','-Infinity')
+  211:      OR v_accepted>coalesce(l.quantity_received,0)-coalesce(l.quantity_rejected,0)-coalesce(l.quantity_damaged,0)-coalesce(l.quantity_returned,0) THEN
+  212:      RAISE EXCEPTION 'Receipt accepted quantities and cost need reconciliation';
+  213:    END IF;
+  214:    IF l.order_line_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.purchase_order_lines pl
+  215:      WHERE pl.id=l.order_line_id AND pl.order_id=r.order_id AND pl.stock_item_id=l.stock_item_id
+  216:        AND lower(btrim(pl.unit))=lower(btrim(l.unit))) THEN
+  217:      RAISE EXCEPTION 'Receipt line item or unit differs from its original purchase line';
+  218:    END IF;
+  219:    IF v_accepted>0 THEN
+  220:     PERFORM inventory_apply_movement(l.stock_item_id,COALESCE(l.location_id,r.location_id),v_accepted,l.unit,'receipt',
+
+===== src/routes/_shell.procurement.reconciliation.tsx =====
+  250:         <div className="space-y-5">
+  251:           {counts.map((count) => {
+  252:             const submittedByCurrentUser = count.submitted_by_current_user === true;
+  253:             const hasExcess = count.lines.some(
+  254:               (line) => line.reconciliation_result === "excess"
+  255:             );
+  256: 
+  257:             return (
+  258:               <div
+  259:                 key={count.count_id}
+  260:                 className="space-y-4 rounded-xl border p-5"
+  261:               >
+  262:                 <div className="flex flex-wrap justify-between gap-4">
+  263:                   <div>
+  264:                     <h3 className="font-semibold">
+  265:                       {count.order_number}
+  266:                     </h3>
+  267: 
+  268:                     <p className="text-sm text-muted-foreground">
+  269:                       Supplier delivery note: {count.delivery_note}
+  270:                     </p>
+  271: 
+  272:                     <p className="text-xs text-muted-foreground">
+  273:                       Submitted:{" "}
+  274:                       {new Date(count.submitted_at).toLocaleString()}
+  275:                     </p>
+  276:                     {submittedByCurrentUser ? (
+  277:                       <p className="mt-2 text-sm font-medium text-on-tint-warning" role="status">
+  278:                         Submitted by you. Another authorized reviewer must decide this count.
+  279:                       </p>
+  280:                     ) : null}
+  281:                   </div>
+  282: 
+  283:                   <span className="h-fit rounded-full border px-3 py-1 text-xs">
+  284:                     {count.status}
+  285:                   </span>
+  286:                 </div>
+  287: 
+  288:                 <div className="overflow-x-auto">
+  289:                   <table className="w-full min-w-[900px] text-left text-sm">
+  290:                     <thead>
+  291:                       <tr className="border-b text-muted-foreground">
+  292:                         <th className="p-3">PO item</th>
+  293:                         <th className="p-3 text-right">Ordered</th>
+  294:                         <th className="p-3 text-right">Previously received</th>
+  295:                         <th className="p-3 text-right">Outstanding</th>
+  296:                         <th className="p-3 text-right">Delivered</th>
+  297:                         <th className="p-3 text-right">Rejected</th>
+  298:                         <th className="p-3 text-right">Accepted</th>
+  299:                         <th className="p-3 text-right">Variance</th>
+  300:                         <th className="p-3">Batch</th>
+  301:                         <th className="p-3">Expiry</th>
+  302:                         <th className="p-3">Rejection reason</th>
+  303:                         <th className="p-3">Result</th>
+  304:                       </tr>
+  305:                     </thead>
+  306: 
+  307:                     <tbody>
+  308:                       {count.lines.map((line) => (
+  309:                         <tr
+  310:                           key={line.count_line_id}
+  311:                           className="border-b last:border-0"
+  312:                         >
+  313:                           <td className="p-3">
+  314:                             <p className="font-medium">
+  315:                               {line.item_name || "Unidentified item"}
+  316:                             </p>
+  317:                             <p className="text-xs text-muted-foreground">
+  318:                               {line.unit || "Unit not specified"}
+  319:                             </p>
+  320:                           </td>
+  321: 
+  322:                           <td className="p-3 text-right">
+  323:                             {formatQuantity(line.ordered_quantity)}
+  324:                           </td>
+  325: 
+  326:                           <td className="p-3 text-right">
+  327:                             {formatQuantity(line.previously_received)}
+  328:                           </td>
+  329: 
+  330:                           <td className="p-3 text-right">
+  331:                             {formatQuantity(line.outstanding_quantity)}
+  332:                           </td>
+  333: 
+  334:                           <td className="p-3 text-right">
+  335:                             {formatQuantity(line.physically_delivered)}
+  336:                           </td>
+  337: 
+  338:                           <td className="p-3 text-right">
+  339:                             {formatQuantity(line.rejected_quantity)}
+  340:                           </td>
+  341: 
+  342:                           <td className="p-3 text-right">
+  343:                             {formatQuantity(line.accepted_quantity)}
+  344:                           </td>
+  345: 
+  346:                           <td className="p-3 text-right">
+  347:                             {formatQuantity(line.difference)}
+  348:                           </td>
+  349: 
+  350:                           <td className="p-3">
+  351:                             {line.batch_number || "Not entered"}
+  352:                           </td>
+  353:                           <td className="p-3 whitespace-nowrap">
+  354:                             {line.expiry_date || "Not entered"}
+  355:                           </td>
+  356:                           <td className="p-3">
+  357:                             {line.rejection_reason || "Not entered"}
+  358:                           </td>
+  359: 
+  360:                           <td className="p-3">
+  361:                             <span
+  362:                               className={
+  363:                                 line.reconciliation_result === "excess"
+  364:                                   ? "font-semibold text-destructive"
+  365:                                   : line.reconciliation_result ===
+  366:                                       "partial_delivery"
+  367:                                     ? "font-medium text-on-tint-warning"
+  368:                                     : "font-medium text-on-tint-success"
+  369:                               }
+  370:                             >
+  371:                               {line.reconciliation_result.replaceAll("_", " ")}
+  372:                             </span>
+  373:                           </td>
+  374:                         </tr>
+  375:                       ))}
+  376:                     </tbody>
+  377:                   </table>
+  378:                 </div>
+  379: 
+  380:                 {!submittedByCurrentUser ? (
+  381:                   <div className="space-y-3 rounded-lg border p-4">
+  382:                     <p className="text-sm font-semibold">
+  383:                       Independent review decision
+  384:                     </p>
+  385: 
+  386:                     <Textarea
+  387:                       value={notes[count.count_id] ?? ""}
+  388:                       onChange={(event) =>
+  389:                         setNotes((previous) => ({
+  390:                           ...previous,
