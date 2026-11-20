@@ -16,10 +16,13 @@ if(!transferColumn.ok&&(![401,403].includes(transferColumn.status)||transferCode
  throw Error("Required POS room transfer column installation check failed; do not deploy the matching client");
 }
 const uuid="00000000-0000-4000-8000-000000000000";
+const deliveryWorkspace=await fetch(`${origin}/rest/v1/rpc/neo_public_delivery_workspace`,{method:"POST",headers,body:JSON.stringify({_slug:""}),redirect:"manual",signal:AbortSignal.timeout(15000)});
+if(!deliveryWorkspace.ok||(await deliveryWorkspace.json())!==null)throw Error("Public Delivery publication routine installation check failed");
 for(const [name,body] of [
  ["neo_recipe_sheet_save",{_recipe:{},_components:[],_attempt:null}],
  ["neo_minibar_post_once",{_folio:uuid,_location:uuid,_lines:[],_room:null,_notes:null,_attempt:null}],
  ["neo_platform_run_checks",{_branch:uuid}],
+ ["neo_platform_public_app_targets",{_branch:uuid}],
  ["neo_pos_department_menu_availability",{_branch:uuid,_channel:"delivery"}],
  ["neo_guest_active_stay",{_org:uuid,_branch:uuid}],
  ["neo_guest_my_stays",{_org:uuid,_branch:uuid}],

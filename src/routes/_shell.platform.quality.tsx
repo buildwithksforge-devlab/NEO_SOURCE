@@ -48,6 +48,7 @@ import {
   useUatSignoffs,
 } from "@/lib/platform-data";
 import { defectGate, reference } from "@/lib/platform";
+import { PublicAppChecks } from "@/components/platform/PublicAppChecks";
 
 export const Route = createFileRoute("/_shell/platform/quality")({
   component: QualityScreen,
@@ -117,6 +118,8 @@ function QualityScreen() {
         Manual test evidence and sign-offs remain separate. A capability that has not been exercised
         stays “Not run”, and a release is blocked while any critical defect is open.
       </TruthNotice>
+
+      <PublicAppChecks />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Test suites" value={String((suites.data ?? []).length)} />

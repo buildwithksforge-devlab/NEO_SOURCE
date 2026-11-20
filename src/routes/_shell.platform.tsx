@@ -51,6 +51,7 @@ const TABS: readonly SectionTab[] = [
   { to: "/platform/quality", label: "Testing & Defects", icon: FlaskConical },
   { to: "/platform/simulation", label: "Simulation Centre", icon: FlaskConical },
   { to: "/platform/operations", label: "Releases & Monitoring", icon: Activity },
+  { to: "/platform/performance", label: "Performance Monitor", icon: Activity },
   { to: "/platform/support", label: "Support & Knowledge", icon: BookOpen },
 ];
 

@@ -83,10 +83,8 @@ describe("database callable surface", () => {
       .sort();
     // Shared-display calls are restricted bearer-token endpoints. Anonymous
     // execution never makes production tickets publicly readable.
-    // Workspace lookup is resolved by the trusted server client. The only
-    // routine a signed-out visitor may run is the published menu listing, so
-    // the Guest and Delivery storefronts render before an account exists; it
-    // returns published, available items only and no cost, guest or staff data.
+    // The public Delivery projection exposes only published workspace fields.
+    // Its legacy counterpart remains server-only.
     // The branded property entrance is the other deliberate exception: it
     // resolves a hotel's public name, city and logo for its own sign-in page
     // and grants nothing — membership and permissions are decided after login.
@@ -97,6 +95,7 @@ describe("database callable surface", () => {
       "neo_production_display_read",
       "neo_property_doors",
       "neo_property_entrance",
+      "neo_public_delivery_workspace",
       "neo_public_destinations",
       "neo_public_directory",
       "neo_public_experiences",

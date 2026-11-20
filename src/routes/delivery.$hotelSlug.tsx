@@ -15,6 +15,7 @@ export const Route = createFileRoute("/delivery/$hotelSlug")({
     return {
       meta: [
         { title },
+        ...(loaderData?.branch_id ? [{ name: "neo-public-property", content: `delivery:${loaderData.branch_id}` }] : []),
         { name: "description", content: description },
         { property: "og:title", content: title },
         { property: "og:description", content: description },

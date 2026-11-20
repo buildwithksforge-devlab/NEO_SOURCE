@@ -99,6 +99,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // resolved from their real relationship with that hotel.
   neo_public_directory: "anon",
   neo_public_property: "anon",
+  neo_public_delivery_workspace: "anon",
   // Published experience packages for one hotel (active, in-date, price only).
   neo_public_experiences: "anon",
   neo_property_doors: "anon",
@@ -557,6 +558,9 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
 
   // Front Office Ã¢â‚¬â€ department stock needs
   neo_department_stock_need_create: "authenticated",
+  neo_front_office_report_catalogue_need: "authenticated",
+  neo_front_office_requisition_need: "authenticated",
+  neo_front_office_need_catalogue: "authenticated",
   neo_department_stock_need_review: "authenticated",
 
   // Human Resources Ã¢â‚¬â€ employee file, movements and confidential cases
@@ -716,6 +720,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_beo_stamp: "authenticated",
   neo_configuration_health: "authenticated",
   neo_platform_run_checks: "authenticated",
+  neo_platform_public_app_targets: "authenticated",
   neo_delivery_bill: "authenticated",
   neo_delivery_claim: "authenticated",
   neo_delivery_pin_board: "authenticated",

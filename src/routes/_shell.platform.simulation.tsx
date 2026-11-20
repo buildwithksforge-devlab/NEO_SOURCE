@@ -37,6 +37,7 @@ import {
   useCleanTestEnvironment,
   useCreateTestEnvironment,
   useRunSystemTest,
+  useSimulationServiceHealth,
   useTestEnvironments,
   useTestResults,
   useTestRunsHistory,
@@ -147,6 +148,7 @@ function SourceRef({ row }: { row: TestResult }) {
 
 function SimulationCentre() {
   const environments = useTestEnvironments();
+  const service = useSimulationServiceHealth();
   const runs = useTestRunsHistory();
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [detail, setDetail] = useState<TestResult | null>(null);
@@ -167,6 +169,7 @@ function SimulationCentre() {
   const current = (runs.data ?? []).find((r) => r.id === activeRun) ?? null;
   const totals = current?.totals ?? {};
   const running = current?.status === "running";
+  const cannotReachRegistry = service.data?.available === false;
 
   const rows = results.data ?? [];
   const attention = useMemo(
@@ -210,12 +213,12 @@ function SimulationCentre() {
 
       <SectionCard
         title="NEØ System Test"
-        description="Create the isolated workspaces, run every workflow end to end, then remove the workspaces and prove nothing was left behind."
+        description="Create isolated workspaces, run the configured suites and verify cleanup."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              disabled={create.isPending}
+              disabled={create.isPending || cannotReachRegistry}
               onClick={() =>
                 create.mutate(undefined, {
                   onSuccess: () => toast.success("Test environment created"),
@@ -227,7 +230,7 @@ function SimulationCentre() {
               {create.isPending ? "Creating…" : "Create test environment"}
             </Button>
             <Button
-              disabled={run.isPending || active.length < 2}
+              disabled={run.isPending || running || active.length < 2 || cannotReachRegistry || environments.isError}
               onClick={() =>
                 run.mutate(undefined, {
                   onSuccess: (r) => {
@@ -248,7 +251,7 @@ function SimulationCentre() {
             </Button>
             <Button
               variant="ghost"
-              disabled={clean.isPending || active.length === 0}
+              disabled={clean.isPending || running || active.length === 0 || cannotReachRegistry}
               onClick={() =>
                 clean.mutate(undefined, {
                   onSuccess: (r) => {
@@ -272,7 +275,22 @@ function SimulationCentre() {
           </div>
         }
       >
-        {allEnvironments.length === 0 ? (
+        {service.data || service.isError ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+            <p role={cannotReachRegistry || service.isError ? "alert" : "status"}>
+              {cannotReachRegistry ? "The server could not read the test registry. Verify the Supabase server connection to create or run test workspaces."
+                : service.isError ? "The Simulation server connection could not be verified."
+                : "The server can read the isolated test registry."}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => void service.refetch()} disabled={service.isFetching}>Recheck connection</Button>
+          </div>
+        ) : null}
+        {environments.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading test environments…</p>
+        : environments.isError ? <div className="flex flex-wrap items-center gap-2 text-sm" role="alert">
+          <p className="text-destructive">Test environments couldn’t be read.</p>
+          <Button size="sm" variant="outline" onClick={() => void environments.refetch()}>Retry registry</Button>
+        </div>
+        : allEnvironments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No test environment exists yet. Create one to run the system test.
           </p>

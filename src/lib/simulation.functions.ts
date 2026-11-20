@@ -32,6 +32,18 @@ async function admin() {
   return supabaseAdmin;
 }
 
+export const checkSimulationService = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await adminTenant(context as unknown as Ctx);
+    try {
+      const { error } = await (await admin()).from("neo_test_environments").select("id", { head: true }).limit(0);
+      return { available: !error, checkedAt: new Date().toISOString() };
+    } catch {
+      return { available: false, checkedAt: new Date().toISOString() };
+    }
+  });
+
 /** Creates the two isolated QA workspaces with their temporary staff accounts. */
 export const createTestEnvironment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -53,12 +65,13 @@ export const runSystemTest = createServerFn({ method: "POST" })
     const supabaseAdmin = await admin();
     const runner = await import("./simulation/runner.server");
 
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from("neo_test_environments")
       .select("*")
       .eq("control_org_id", org)
       .eq("status", "active")
       .order("created_at", { ascending: false });
+    if (error) throw new Error("Simulation could not read the test registry. Check the server database connection in Simulation Centre.");
     const rows = (data ?? []) as unknown as runnerRow[];
     const primary = rows.find((r) => r.kind === "primary");
     const secondary = rows.find((r) => r.kind === "secondary");
