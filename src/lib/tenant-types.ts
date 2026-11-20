@@ -71,6 +71,11 @@ export type BrandSettings = Timestamps & {
   dashboardBanner: string | null;
   splashImage: string | null;
   logoText: string;
+  receiptFeedbackUrl?: string;
+  receiptPaybill?: string;
+  receiptPaybillAccount?: string;
+  receiptTill?: string;
+  receiptPaymentInstructions?: string;
 };
 
 export type FontKey =

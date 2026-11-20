@@ -22,6 +22,7 @@ import { downloadDocumentPdf, openDocumentPrintWindow } from "@/lib/browser-docu
 export type BusinessDocumentType =
   | "pos_receipt"
   | "invoice"
+  | "credit_note"
   | "folio_statement"
   | "beo"
   | "purchase_order"
@@ -51,6 +52,10 @@ const DOCUMENT_PERMISSIONS: Record<BusinessDocumentType, DocumentPermission> = {
     action: "print",
   },
   invoice: {
+    module: "finance",
+    action: "print",
+  },
+  credit_note: {
     module: "finance",
     action: "print",
   },

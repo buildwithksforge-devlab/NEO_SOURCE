@@ -133,7 +133,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
   }
 
   return (
-    <header className="neo-guest-header sticky top-0 z-40 border-b border-white/10 bg-neo-midnight/95 backdrop-blur">
+    <header className="neo-guest-header z-40 shrink-0">
       <div className="neo-public-wrap flex min-w-0 items-center gap-3 py-3">
         <Link
           to="/guest/$hotelSlug"
@@ -318,23 +318,20 @@ export function GuestFooter({ hotelSlug }: { hotelSlug: string }) {
   ];
 
   return (
-    <footer className="mt-12 border-t border-white/10 bg-neo-midnight pb-[max(env(safe-area-inset-bottom),0px)] text-white">
-      <div className="neo-public-wrap grid gap-8 py-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+    <footer className="neo-guest-footer mt-4 border-t">
+      <div className="neo-public-wrap grid gap-5 py-5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3">
             <PropertyMark ws={ws} size={40} />
             <span className="truncate text-sm font-semibold">{name}</span>
           </div>
-          <p className="neo-public-copy mt-3 max-w-sm text-sm text-white/75">
-            {ws.welcome_message || "Your stay, dining, services and bill in one place."}
-          </p>
         </div>
 
         <div className="min-w-0 text-sm text-white/80">
           <h2 className="text-xs uppercase tracking-[0.2em] text-white/70">Contact</h2>
           <ul className="mt-3 space-y-1.5">
-            {ws.contact_phone ? <li className="truncate">{ws.contact_phone}</li> : null}
-            {ws.contact_email ? <li className="truncate">{ws.contact_email}</li> : null}
+            {ws.contact_phone ? <li><a href={`tel:${ws.contact_phone}`}>{ws.contact_phone}</a></li> : null}
+            {ws.contact_email ? <li><a className="break-all" href={`mailto:${ws.contact_email}`}>{ws.contact_email}</a></li> : null}
             {ws.contact_address ? <li className="neo-public-copy">{ws.contact_address}</li> : null}
             {!ws.contact_phone && !ws.contact_email && !ws.contact_address ? (
               <li>The hotel has not published contact details yet.</li>
@@ -361,8 +358,8 @@ export function GuestFooter({ hotelSlug }: { hotelSlug: string }) {
         </div>
       </div>
 
-      <div className="neo-public-wrap flex flex-col gap-3 border-t border-white/10 py-6 sm:flex-row sm:items-center sm:justify-between">
-        <PoweredByNeo tone="light" />
+      <div className="neo-public-wrap flex flex-col gap-3 border-t py-4 sm:flex-row sm:items-center sm:justify-between">
+        <PoweredByNeo />
         <PublicCreatorCredit />
       </div>
     </footer>

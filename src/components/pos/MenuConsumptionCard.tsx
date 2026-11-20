@@ -7,6 +7,7 @@
  * never required merely to sell something.
  */
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,6 +20,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { useStockItems } from "@/lib/inventory-data";
+import { useStationStores } from "@/lib/station-stock";
+import { usePagePermitted } from "@/components/common/PermittedLink";
 import {
   CONSUMPTION_MODES,
   consumptionModeLabel,
@@ -52,10 +55,18 @@ export function MenuConsumptionCard({
   const save = useSaveRecord("menu_items");
   const items = useStockItems();
   const [search, setSearch] = useState("");
-
-  const mode: ConsumptionMode = (item.consumption_mode as ConsumptionMode) ?? "none";
+  const savedMode = (item.consumption_mode as ConsumptionMode) ?? "none";
+  const [draft, setDraft] = useState<{
+    mode: ConsumptionMode;
+    stockId: string;
+    quantity: string;
+    unit: string;
+  } | null>(null);
+  const mode = draft?.mode ?? savedMode;
   const needsStock = mode === "direct_stock" || mode === "batch";
   const channels = item.consumption_channels ?? [];
+  const { data: stores, isError: storesFailed, isLoading: storesLoading } = useStationStores(item.station_id);
+  const permitted = usePagePermitted();
 
   const stockRows = (items.data ?? []) as Row[];
 
@@ -72,7 +83,18 @@ export function MenuConsumptionCard({
       .slice(0, 60);
   }, [stockRows, search]);
 
-  const selected = stockRows.find((r) => String(r["id"]) === String(item.direct_stock_item_id));
+  const savedMapping = {
+    mode: savedMode,
+    stockId: item.direct_stock_item_id ?? "",
+    quantity: String(item.direct_stock_quantity ?? 1),
+    unit: item.direct_stock_unit ?? "",
+  };
+  const mapping = draft ?? savedMapping;
+  const selected = stockRows.find((r) => String(r["id"]) === mapping.stockId);
+  const choices = selected && !filtered.some((row) => row["id"] === selected["id"]) ? [selected, ...filtered] : filtered;
+  const quantity = Number(mapping.quantity);
+  const valid = !needsStock || (selected !== undefined && selected["active"] !== false
+    && Number.isFinite(quantity) && quantity > 0 && Boolean(mapping.unit.trim()));
   const write = (values: Record<string, unknown>) => save.mutate({ id: item.id, values });
 
   if (!manage) {
@@ -98,13 +120,7 @@ export function MenuConsumptionCard({
         <Label>Inventory method</Label>
         <Select
           value={mode}
-          onValueChange={(v) => {
-            const next: Record<string, unknown> = { consumption_mode: v };
-            if (v !== "direct_stock" && v !== "batch") {
-              next["stock_item_id"] = null;
-            }
-            write(next);
-          }}
+          onValueChange={(value) => setDraft({ ...mapping, mode: value as ConsumptionMode })}
         >
           <SelectTrigger aria-label={`Consumption mode for ${item.name}`}>
             <SelectValue />
@@ -133,21 +149,17 @@ export function MenuConsumptionCard({
               aria-label="Search stock items"
             />
             <Select
-              value={item.direct_stock_item_id ?? ""}
-              onValueChange={(v) =>
-                write({
-                  stock_item_id: v,
-                  stock_unit:
-                    item.direct_stock_unit ??
-                    String(stockRows.find((r) => String(r["id"]) === v)?.["base_unit"] ?? "unit"),
-                })
-              }
+              value={mapping.stockId}
+              onValueChange={(stockId) => {
+                const stock = stockRows.find((row) => String(row["id"]) === stockId);
+                setDraft({ ...mapping, stockId, quantity: "1", unit: String(stock?.["base_unit"] ?? "unit") });
+              }}
             >
               <SelectTrigger aria-label={`Stock item for ${item.name}`}>
                 <SelectValue placeholder={mode === "batch" ? "Choose the prepared batch this sale uses" : "Choose the purchased stock this sale uses"} />
               </SelectTrigger>
               <SelectContent>
-                {filtered.map((r) => (
+                {choices.map((r) => (
                   <SelectItem key={String(r["id"])} value={String(r["id"])}>
                     {String(r["name"])}
                     {r["sku"] ? ` Â· ${String(r["sku"])}` : ""}
@@ -164,7 +176,7 @@ export function MenuConsumptionCard({
               </p>
             ) : (
               <p className="text-xs text-warning">
-                Choose a stock item, or sales of this item will deduct nothing.
+                Choose the stock item before saving this method.
               </p>
             )}
           </div>
@@ -176,35 +188,52 @@ export function MenuConsumptionCard({
                 type="number"
                 min={0}
                 step="0.001"
-                defaultValue={Number(item.direct_stock_quantity ?? 1)}
-                onBlur={(e) => {
-                  const n = Number(e.target.value);
-                  if (n > 0 && n !== Number(item.direct_stock_quantity ?? 1)) {
-                    write({ stock_quantity_per_sale: n });
-                  }
-                }}
+                value={mapping.quantity}
+                onChange={(e) => setDraft({ ...mapping, quantity: e.target.value })}
                 aria-label={`Quantity per sale for ${item.name}`}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Unit</Label>
               <Input
-                defaultValue={item.direct_stock_unit ?? ""}
+                value={mapping.unit}
                 placeholder={String(selected?.["base_unit"] ?? "unit")}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v !== (item.direct_stock_unit ?? "")) write({ stock_unit: v || null });
-                }}
+                onChange={(e) => setDraft({ ...mapping, unit: e.target.value })}
                 aria-label={`Unit for ${item.name}`}
               />
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">             Stock is deducted from the departmental store mapped to this item&apos;s             production station in Kitchen Settings. Menu items cannot override that             property-controlled store.           </p>
+          {mode === "direct_stock" && selected?.["container_volume_ml"] ? (
+            <p className="text-xs text-muted-foreground">For a sealed bottle or can, use one {String(selected["base_unit"] ?? "unit")} per sale. Use a volume unit only for a measured pour.</p>
+          ) : null}
         </div>
       ) : null}
 
       {mode !== "none" ? (
+        <div className="space-y-1 rounded-lg border border-border/60 p-3 text-sm">
+          <p className="font-medium">Departmental stock</p>
+          {storesLoading ? <p>Checking the station’s store…</p> : storesFailed ? <p>Store mapping could not be loaded.</p>
+            : stores?.length ? <p>{stores.map((store) => store.locationName).join(", ")}</p>
+            : <p className="text-warning">Assign this item to a station with a departmental store before selling it.</p>}
+          {permitted("/inventory/requisitions") ? <Link to="/inventory/requisitions" className="inline-flex min-h-11 items-center font-medium text-primary">Department requisitions</Link> : null}
+        </div>
+      ) : null}
+
+      {draft ? <div className="flex flex-wrap gap-2">
+        <Button type="button" disabled={!valid || save.isPending} onClick={() => save.mutate({
+          id: item.id,
+          values: {
+            consumption_mode: mode,
+            stock_item_id: needsStock ? mapping.stockId : null,
+            stock_quantity_per_sale: needsStock ? quantity : 1,
+            stock_unit: needsStock ? mapping.unit.trim() : null,
+          },
+        }, { onSuccess: () => setDraft(null) })}>Save stock mapping</Button>
+        <Button type="button" variant="ghost" disabled={save.isPending} onClick={() => setDraft(null)}>Cancel</Button>
+      </div> : null}
+
+      {savedMode !== "none" ? (
         <div className="space-y-2">
           <Label>Channels that deduct stock</Label>
           <p className="text-xs text-muted-foreground">

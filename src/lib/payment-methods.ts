@@ -131,6 +131,17 @@ export function paymentMethodLabel(value: string | null | undefined): string {
   return canonical.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Methods with an implemented customer checkout and settlement flow. */
+export const DELIVERY_CHECKOUT_METHODS = PAYMENT_METHOD_CATALOGUE.filter(
+  ({ value }) => value === "cash" || value === "mpesa",
+);
+
+export function deliveryPaymentLabel(value: string | null | undefined) {
+  if (normalisePaymentMethod(value) === "cash") return "Cash on delivery";
+  if (value === "pay-on-collection") return "Pay on collection";
+  return paymentMethodLabel(value);
+}
+
 export type MpesaCollectionStatus = {
   ready: boolean;
   configured: boolean;

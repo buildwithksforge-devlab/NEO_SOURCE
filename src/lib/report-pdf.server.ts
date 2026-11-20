@@ -1,5 +1,6 @@
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, PrintScaling, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { embedDocumentFonts } from "./document-fonts.server";
+import { embedDocumentLogo } from "./document-logo.server";
 import { formatReportFact } from "./report-fact-format";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -127,10 +128,12 @@ export async function buildManagementReportPdf(
   const propertyName = branch?.name ?? "All authorised properties";
   const primaryHex = safeHex(branchBrand["primaryColor"] ?? brand["primaryColor"], "#18C4C8");
   const darkHex = safeHex(branchBrand["secondaryColor"] ?? brand["secondaryColor"], "#020A1C");
-  const logoUrl = branch?.logo_url || (brand["logoLight"] as string | undefined) || (brand["logoDark"] as string | undefined);
+  const logoSources = [branch?.logo_url, brand["logoLight"], brand["logoDark"]]
+    .filter((value): value is string => typeof value === "string" && value !== "");
   const currency = String((factPayload["scope"] as Record<string, unknown> | undefined)?.["currency"] ?? regional["currency"] ?? "");
 
   const pdf = await PDFDocument.create();
+  pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   const { regular, bold } = await embedDocumentFonts(pdf);
   const pageSize: [number, number] = [595.28, 841.89];
   const margin = 48;
@@ -140,18 +143,7 @@ export async function buildManagementReportPdf(
   let y = 0;
   let pageNumber = 0;
 
-  let embeddedLogo: Awaited<ReturnType<PDFDocument["embedPng"]>> | null = null;
-  if (logoUrl && /^https?:\/\//.test(logoUrl)) {
-    try {
-      const response = await fetch(logoUrl);
-      if (response.ok) {
-        const bytes = await response.arrayBuffer();
-        embeddedLogo = /png/i.test(response.headers.get("content-type") ?? logoUrl)
-          ? await pdf.embedPng(bytes)
-          : await pdf.embedJpg(bytes);
-      }
-    } catch { embeddedLogo = null; }
-  }
+  const embeddedLogo = await embedDocumentLogo(pdf, logoSources);
 
   const addPage = () => {
     page = pdf.addPage(pageSize);
@@ -162,8 +154,8 @@ export async function buildManagementReportPdf(
     page.drawText(String(organisationName), { x: margin, y: height - 52, size: 10, font: bold, color: dark });
     page.drawText(`Page ${pageNumber}`, { x: width - margin - 36, y: 28, size: 8, font: regular, color: rgb(0.38, 0.4, 0.44) });
     if (embeddedLogo) {
-      const scaled = embeddedLogo.scale(32 / embeddedLogo.height);
-      page.drawImage(embeddedLogo, { x: width - margin - scaled.width, y: height - 67, width: scaled.width, height: 32 });
+      const scaled = embeddedLogo.scaleToFit(110, 32);
+      page.drawImage(embeddedLogo, { x: width - margin - scaled.width, y: height - 67, ...scaled });
     }
     y = height - 90;
   };

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Utensils } from "lucide-react";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BrandButton, useWorkspace } from "@/components/public/PublicAppShell";
 import { useGuestMenuModifiers } from "@/lib/guest-ordering";
@@ -11,13 +10,15 @@ export function DeliveryItemSheet({ item, pending, available = true, disabled = 
   available?: boolean;
   disabled?: boolean;
   onClose: () => void;
-  onAdd: (options: { optionIds: string[]; quantity: number }) => void;
+  onAdd: (options: { optionIds: string[]; quantity: number; specialInstructions?: string; allergyNote?: string }) => void;
   onSignIn?: (() => void) | undefined;
 }) {
   const workspace = useWorkspace();
   const modifiers = useGuestMenuModifiers(workspace.organization_id, [item.id], available && !disabled && !onSignIn);
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
+  const [instructions, setInstructions] = useState("");
+  const [allergy, setAllergy] = useState("");
   const groups = modifiers.data?.[item.id] ?? [];
   const optionTotal = groups.reduce((total, group) => total + group.options.reduce(
     (sum, option) => sum + (selected[group.group_id]?.includes(option.option_id) ? Number(option.extra_charge ?? 0) : 0),
@@ -34,9 +35,9 @@ export function DeliveryItemSheet({ item, pending, available = true, disabled = 
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="neo-delivery-item-sheet max-h-[90dvh] max-w-lg gap-0 overflow-hidden rounded-3xl border-slate-200 bg-white p-0 text-slate-950" style={{ accentColor: workspace.primary_color }}>
         <DialogBody>
-        <div className="grid h-44 place-items-center overflow-hidden bg-slate-100 text-slate-500 sm:h-52">
-          {item.image ? <img src={item.image} alt="" className="size-full object-cover" /> : <Utensils className="size-9" aria-hidden />}
-        </div>
+        {item.image ? <div className="h-40 overflow-hidden bg-slate-100 sm:h-48">
+          <img src={item.image} alt="" className="size-full object-cover" />
+        </div> : null}
         <div className="space-y-5 px-5 py-5">
         <DialogHeader>
           <DialogTitle className="text-2xl">{item.name}</DialogTitle>
@@ -63,6 +64,16 @@ export function DeliveryItemSheet({ item, pending, available = true, disabled = 
             })}
           </fieldset>
         ))}
+        {available && modifiers.isSuccess && !disabled && !onSignIn ? (
+          <div className="grid gap-3">
+            <label className="neo-delivery-item-note">Special instructions
+              <input value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={240} />
+            </label>
+            <label className="neo-delivery-item-note">Allergy note for the kitchen
+              <input value={allergy} onChange={(event) => setAllergy(event.target.value)} maxLength={240} />
+            </label>
+          </div>
+        ) : null}
         </div>
         </DialogBody>
         <div className="neo-delivery-sheet-actions flex shrink-0 flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 pt-3">
@@ -73,7 +84,12 @@ export function DeliveryItemSheet({ item, pending, available = true, disabled = 
           </div> : null}
           {available ? (
             <BrandButton className="flex-1 flex-wrap" disabled={!onSignIn && (pending || disabled || !modifiers.isSuccess || !valid)}
-              onClick={onSignIn ?? (() => onAdd({ optionIds: Object.values(selected).flat(), quantity }))}>
+              onClick={onSignIn ?? (() => onAdd({
+                optionIds: Object.values(selected).flat(),
+                quantity,
+                ...(instructions.trim() ? { specialInstructions: instructions.trim() } : {}),
+                ...(allergy.trim() ? { allergyNote: allergy.trim() } : {}),
+              }))}>
               {onSignIn ? "Sign in to add" : pending ? "Adding…" : <><span>Add to cart</span><span>{money((item.price + optionTotal) * quantity, item.currency)}</span></>}
             </BrandButton>
           ) : <p className="w-full py-2 text-center font-semibold">Currently unavailable</p>}

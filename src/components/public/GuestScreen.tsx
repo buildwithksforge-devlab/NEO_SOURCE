@@ -1,6 +1,6 @@
 import { useGuestDisplayPrefs } from "@/lib/guest-display-preferences";
 import { guestPalette } from "@/lib/public-palette";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { writeLaunchLockup } from "@/lib/brand-cache";
 import { BedDouble, Compass, Home, Receipt, UserRound } from "lucide-react";
@@ -60,6 +60,7 @@ export function GuestScreen({
   const { prefs } = useGuestDisplayPrefs();
   const primary = ws.primary_color || brandFallback.primary;
   const activeTab = tabForScreen[active] ?? active;
+  const scrollFrame = useRef<HTMLDivElement>(null);
 
   // The launch frame opens on this hotel's own lockup next time, not the
   // neutral default. Only values the property already configured are kept.
@@ -78,7 +79,7 @@ export function GuestScreen({
 
   return (
     <div
-      className="neo-public-app neo-guest-app flex min-h-screen flex-col"
+      className="neo-public-app neo-guest-app neo-customer-frame flex flex-col"
       data-guest-appearance={prefs.appearance}
       data-reduced-motion={prefs.reducedMotion}
       data-larger-text={prefs.largerText}
@@ -96,14 +97,15 @@ export function GuestScreen({
     >
       <GuestHeader hotelSlug={hotelSlug} active={active} />
 
-      <PullToRefresh>
-        <main className="neo-public-wrap flex-1 py-5 sm:py-9">
-          <PreviewBanner experience="Guest" />
-          <div className="min-w-0">{children}</div>
-        </main>
-      </PullToRefresh>
-
-      <GuestFooter hotelSlug={hotelSlug} />
+      <div ref={scrollFrame} className="neo-customer-content" data-scroll-restoration-id="guest-body">
+        <PullToRefresh scrollTarget={() => scrollFrame.current}>
+          <main className="neo-public-wrap flex-1 py-5 sm:py-8">
+            <PreviewBanner experience="Guest" />
+            <div className="min-w-0">{children}</div>
+          </main>
+        </PullToRefresh>
+        <GuestFooter hotelSlug={hotelSlug} />
+      </div>
 
       <nav
         aria-label="Guest app"
@@ -139,12 +141,14 @@ export function GuestScreen({
  * Only genuinely self-contained content gets a surface of its own.
  */
 export function GuestSection({
+  id,
   title,
   description,
   action,
   children,
   surface = false,
 }: {
+  id?: string;
   title: string;
   description?: string;
   action?: ReactNode;
@@ -153,7 +157,7 @@ export function GuestSection({
   surface?: boolean;
 }) {
   return (
-    <section className={surface ? "neo-rider-card mt-6 p-5 sm:p-6" : "mt-8"}>
+    <section id={id} className={surface ? "neo-rider-card mt-6 p-5 sm:p-6" : "mt-8"}>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
           <h2

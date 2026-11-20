@@ -5,7 +5,7 @@ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShe
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
-import { money, statusLabel, usePublicOrderByReference } from "@/lib/public-delivery";
+import { money, statusLabel, usePublicOrderByReference, usePublishedDeliveryForGuest } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useCancelGuestOrder, useGuestOrderTracking } from "@/lib/guest-ordering";
 
@@ -44,6 +44,8 @@ function TrackingPage() {
   useGuestScreenView(ws.organization_id, "order-tracking", Boolean(user));
 
   const order = tracking.data;
+  const isDeliveryOrder = order?.fulfilment_type === "delivery" || order?.fulfilment_type === "pickup";
+  const delivery = usePublishedDeliveryForGuest(ws.organization_id, ws.branch_id, hotelSlug, isDeliveryOrder);
   const currency = order?.currency ?? "KES";
 
   return (
@@ -79,6 +81,7 @@ function TrackingPage() {
             <p className="text-lg font-semibold" style={{ color: "var(--pa-accent-ink)" }}>
               {statusLabel(order.order_status)}
             </p>
+            {delivery.data ? <Link to="/delivery/$hotelSlug/track/$orderReference" params={{ hotelSlug: delivery.data.slug, orderReference }} className="neo-guest-outline-action mt-3">Open Delivery tracking &amp; payment</Link> : null}
             <p className="mt-1 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {statusLabel(order.fulfilment_type)} · {statusLabel(order.payment_status)} ·{" "}
               {money(order.grand_total, currency)}

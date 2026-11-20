@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Bike, ChevronRight, Loader2, ShoppingBag, Utensils } from "lucide-react";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
@@ -58,13 +58,10 @@ function OrdersPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
-      <section>
+      <section className="neo-guest-explore-heading">
         <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
           My orders
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Room service, restaurant and delivery orders placed with {ws.hotel_name}.
-        </p>
       </section>
 
       {!loading && !user ? (
@@ -88,7 +85,7 @@ function OrdersPage() {
           />
         </GuestSection>
       ) : (
-        <GuestSection title="Order history" description="Live status straight from the kitchen and dispatch.">
+        <div className="mt-5">
           <div className="neo-guest-segments mb-4" role="group" aria-label="Order status">
             {buckets.map((b) => {
               const selected = b.key === bucket;
@@ -111,41 +108,38 @@ function OrdersPage() {
               description="Switch tabs to see your other orders with this property."
             />
           ) : (
-          <ul className="space-y-3">
-            {visible.map((o) => (
-              <li key={String(o["id"])} className="min-w-0 rounded-xl border border-black/5 p-4">
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+          <ul className="neo-guest-records" aria-label="Order history">
+            {visible.map((o) => {
+              const fulfilment = o["fulfilment_type"];
+              const Icon = fulfilment === "delivery" ? Bike : fulfilment === "pickup" ? ShoppingBag : Utensils;
+              const status = statusLabel(o["order_status"]);
+              return (
+              <li key={String(o["id"])}>
+                <Link to="/guest/$hotelSlug/orders/$orderReference" params={{ hotelSlug, orderReference: String(o["order_number"]) }} className="neo-guest-record">
+                  <span className="neo-guest-record-icon"><Icon className="size-5" aria-hidden /></span>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       <span data-public-id>{String(o["order_number"])}</span>
                     </p>
                     <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
-                      {new Date(String(o["created_at"])).toLocaleString()} ·{" "}
-                      {statusLabel(o["fulfilment_type"])}
+                      {statusLabel(fulfilment)} · {new Date(String(o["created_at"])).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                   </div>
-                  <div className="min-w-0 sm:text-right">
+                  <div className="neo-guest-record-total">
                     <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(o["grand_total"], String(o["currency"] ?? "KES"))}
                     </p>
                     <p className="text-xs font-medium" style={{ color: "var(--pa-accent-ink)" }}>
-                      {statusLabel(o["order_status"])} · {statusLabel(o["payment_status"])}
+                      {status}
                     </p>
-                    <Link
-                      to="/guest/$hotelSlug/orders/$orderReference"
-                      params={{ hotelSlug, orderReference: String(o["order_number"]) }}
-                      className="text-xs underline"
-                      style={{ color: "var(--guest-muted, #52627A)" }}
-                    >
-                      Track order
-                    </Link>
                   </div>
-                </div>
+                  <ChevronRight className="neo-guest-record-arrow size-4" aria-hidden />
+                </Link>
               </li>
-            ))}
+            ); })}
           </ul>
           )}
-        </GuestSection>
+        </div>
       )}
     </GuestScreen>
   );

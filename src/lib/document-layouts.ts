@@ -70,6 +70,13 @@ export const DOCUMENT_LAYOUTS = {
     ],
   },
 
+  credit_note: {
+    family: "sales",
+    detailHeading: "CREDIT OR DEBIT NOTE DETAILS",
+    partyFallback: "Customer",
+    showFiscalSection: true,
+  },
+
   folio_statement: {
     family: "guest",
     detailHeading: "STAY & FOLIO DETAILS",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { Banknote, Loader2, Minus, Plus, Smartphone, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   BrandButton,
@@ -29,7 +29,7 @@ import {
   usePublicZones,
   useSavePublicAddress,
 } from "@/lib/public-delivery";
-import { paymentMethodLabel } from "@/lib/payment-methods";
+import { DELIVERY_CHECKOUT_METHODS, deliveryPaymentLabel } from "@/lib/payment-methods";
 import { mpesaSupportsTotal } from "@/lib/mpesa-application-result";
 
 export const Route = createFileRoute("/delivery/$hotelSlug/checkout")({
@@ -87,14 +87,14 @@ function CheckoutPage() {
   const configuredMethods = !settings.isError && !settings.isPending
     ? [
       ...(fulfilment === "pickup" ? ["pay-on-collection"] : []),
-      ...(Array.isArray(methods) && methods.includes("mpesa") ? ["mpesa"] : []),
-      ...(fulfilment === "delivery" && Array.isArray(methods) && methods.includes("cash")
-        && settings.data?.["cod_enabled"] === true
-        && Number(quote.data?.grand_total) <= Number(settings.data?.["cod_limit"] ?? 0) ? ["cash"] : []),
+      ...DELIVERY_CHECKOUT_METHODS.filter(({ value }) => Array.isArray(methods) && methods.includes(value)
+        && (value !== "cash" || (fulfilment === "delivery" && settings.data?.["cod_enabled"] === true
+          && Number(quote.data?.grand_total) <= Number(settings.data?.["cod_limit"] ?? 0)))).map(({ value }) => value),
     ] : [];
   const [paymentMethod, setPaymentMethod] = useState("");
-  const activeMethod = configuredMethods.includes(paymentMethod) ? paymentMethod : configuredMethods[0] ?? "";
   const mpesaAmountReady = mpesaSupportsTotal(quote.data?.grand_total, quote.data?.currency ?? "KES");
+  const availableMethods = configuredMethods.filter((method) => method !== "mpesa" || mpesaAmountReady);
+  const activeMethod = availableMethods.includes(paymentMethod) ? paymentMethod : availableMethods.length === 1 ? availableMethods[0] : "";
   const [mpesaPhone, setMpesaPhone] = useState("");
   const charge = useDeliveryMpesaCharge();
   const [newAddress, setNewAddress] = useState({
@@ -132,7 +132,7 @@ function CheckoutPage() {
 
   return (
     <PublicAppShell deliveryTab="cart" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
-      <div className="neo-commerce-hero">
+      <div className="neo-delivery-page-heading">
         <div>
           <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="inline-flex min-h-11 items-center text-sm font-semibold text-white/90">← Back to cart</Link>
           <h1 className="neo-commerce-title">Checkout</h1>
@@ -167,6 +167,7 @@ function CheckoutPage() {
           <div className="space-y-4">
             <section className="rounded-2xl bg-white p-4 shadow-sm">
               {items.map((item) => {
+                const quotedLine = quote.data?.lines.find((line) => line["cart_item_id"] === item["id"]);
                 const menuItem =
                   (item["menu_items"] as Row | null) ??
                   menuById.get(String(item["menu_item_id"])) ??
@@ -185,11 +186,13 @@ function CheckoutPage() {
                         {String(menuItem["name"] ?? "Item")}
                       </p>
                       <p className="text-xs" style={{ color: brandFallback.steel }}>
-                        {menuItem["base_price"] != null ? `${money(menuItem["base_price"], quote.data?.currency ?? ws.currency ?? "KES")} base price` : "Priced in the order total"}
+                        {quotedLine ? money(quotedLine["line_total"], quote.data?.currency ?? ws.currency ?? "KES") : menuItem["base_price"] != null ? `${money(menuItem["base_price"], ws.currency ?? "KES")} each` : "Pricing with your order"}
                       </p>
                       {((item["cart_item_modifiers"] as Row[] | undefined) ?? []).map((option) => (
                         <p key={String(option["id"] ?? option["option_id"])} className="text-xs text-slate-600">{String(option["option_name"] ?? "")}</p>
                       ))}
+                      {item["special_instructions"] ? <p className="text-xs text-slate-600">{String(item["special_instructions"])}</p> : null}
+                      {item["allergy_note"] ? <p className="text-xs font-medium text-slate-800">Allergy note: {String(item["allergy_note"])}</p> : null}
                     </div>
                     <div className="neo-quantity-control">
                       <button
@@ -449,7 +452,9 @@ function CheckoutPage() {
             ) : quote.data ? (
               <div className="mt-3 space-y-2 text-sm" style={{ color: brandFallback.steel }}>
                 <Line label="Subtotal" value={money(quote.data.subtotal, quote.data.currency ?? "KES")} />
-                <Line label="Tax" value={money(quote.data.tax_total, quote.data.currency ?? "KES")} />
+                {quote.data.tax_breakdown?.map((tax) =>
+                  <Line key={tax.label} label={tax.label} value={money(tax.amount, quote.data.currency ?? "KES")} />
+                ) ?? (quote.data.tax_total > 0 ? <Line label="Tax included in subtotal" value={money(quote.data.tax_total, quote.data.currency ?? "KES")} /> : null)}
                 {quote.data.service_charge ? (
                   <Line label="Service charge" value={money(quote.data.service_charge, quote.data.currency ?? "KES")} />
                 ) : null}
@@ -459,6 +464,7 @@ function CheckoutPage() {
                 {quote.data.discount_total ? (
                   <Line label="Discount" value={`- ${money(quote.data.discount_total, quote.data.currency ?? "KES")}`} />
                 ) : null}
+                {quote.data.tip_amount > 0 ? <Line label="Tip" value={money(quote.data.tip_amount, quote.data.currency ?? "KES")} /> : null}
                 <div
                   className="flex items-center justify-between border-t border-black/5 pt-2 text-base font-semibold"
                   style={{ color: brandFallback.secondary }}
@@ -477,31 +483,33 @@ function CheckoutPage() {
                   </ul>
                 ) : null}
 
-                <div className="pt-3">
-                  <Label>Payment</Label>
+                <fieldset className="neo-delivery-payment">
+                  <legend className="text-sm font-semibold text-slate-950">Payment method</legend>
                   {settings.isError ? (
                     <button className="mt-1 block min-h-11 text-sm font-semibold underline" onClick={() => void settings.refetch()}>Payment options couldn’t load. Retry</button>
                   ) : settings.isPending ? (
                     <p role="status" className="mt-1">Checking payment options…</p>
                   ) : configuredMethods.length ? (
-                    <select
-                      aria-label="Payment method"
-                      className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-950"
-                      value={activeMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    >
-                      {configuredMethods.map((m) => (
-                        <option key={m} value={m} disabled={m === "mpesa" && !mpesaAmountReady}>
-                          {m === "cash" ? "Cash on delivery" : paymentMethodLabel(m)}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="neo-delivery-payment-options">
+                      {configuredMethods.map((method) => {
+                        const Icon = method === "mpesa" ? Smartphone : method === "cash" ? Banknote : Store;
+                        const disabled = !availableMethods.includes(method);
+                        return <label key={method} className="neo-delivery-payment-option" data-selected={method === activeMethod}>
+                          <Icon className="size-5 shrink-0" aria-hidden />
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-semibold">{deliveryPaymentLabel(method)}</span>
+                            <span className="block text-xs text-slate-600">{disabled ? "Requires a positive whole KES total" : method === "mpesa" ? "Approve a prompt on your phone" : method === "cash" ? "Pay the rider on arrival" : "Pay at the counter"}</span>
+                          </span>
+                          <input type="radio" name="delivery-payment-method" value={method} checked={method === activeMethod} disabled={disabled} onChange={() => setPaymentMethod(method)} />
+                        </label>;
+                      })}
+                    </div>
                   ) : (
                     <p className="mt-1 text-xs text-amber-700">
-                      This property has not set up a way to pay online yet.
+                      No payment method is available for this order.
                     </p>
                   )}
-                </div>
+                </fieldset>
 
 
                 {activeMethod === "mpesa" ? (
@@ -520,7 +528,6 @@ function CheckoutPage() {
                       We send the payment request to this number. Your order is only confirmed once
                       you approve it on your phone.
                     </p>
-                    {!mpesaAmountReady && quote.data ? <p role="alert" className="mt-2 text-xs text-destructive">M-Pesa requires a positive whole KES total. Choose another configured payment method; this total has not been rounded and no prompt has been sent.</p> : null}
                   </div>
                 ) : null}
 

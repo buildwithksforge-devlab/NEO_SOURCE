@@ -41,7 +41,10 @@ function GuestHome() {
   const hotels = useMyGuestHotels(Boolean(user));
   useGuestScreenView(ws.organization_id, "home", Boolean(customerId));
 
-  const firstName = guestDisplayName(profile.data, user?.user_metadata)?.split(/\s+/)[0];
+  const name = guestDisplayName(profile.data, user?.user_metadata);
+  const firstName = name && name.toLowerCase() !== user?.email?.split("@")[0]?.toLowerCase()
+    ? name.split(/\s+/)[0]
+    : null;
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const bookings = (reservations.data ?? [])
@@ -62,14 +65,18 @@ function GuestHome() {
       <div className="neo-guest-home">
         <section className="neo-guest-entry" data-property-photo={Boolean(ws.hero_url)}>
           <div className="neo-guest-entry-copy">
-            <p className="neo-guest-location"><MapPin size={16} aria-hidden />{ws.hotel_name}</p>
-            <h1>{firstName ? `Welcome, ${firstName}` : "Make yourself at home"}</h1>
-            {ws.contact_address ? <p className="neo-guest-address">{ws.contact_address}</p> : null}
+            <h1>{firstName ? `Welcome, ${firstName}` : "Welcome to Stay & Dine"}</h1>
+            <div className="neo-guest-entry-actions">
+              <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "rooms" }}>Explore the hotel <ChevronRight className="size-4" aria-hidden /></Link>
+              <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }}>My stay</Link>
+            </div>
           </div>
           {ws.hero_url ? (
             <GuestImage src={ws.hero_url} alt="" width={960} height={520}
               priority sizes="(min-width: 1024px) 992px, 100vw" className="neo-guest-entry-image" />
-          ) : <div className="neo-guest-entry-art" aria-hidden><ConciergeBell /></div>}
+          ) : (
+            <img src="/neo-guest-welcome-art.jpg" alt="" fetchPriority="high" className="neo-guest-welcome-art" width={1536} height={1024} />
+          )}
         </section>
 
         {activityLoading ? <div className="mt-4"><GuestCardsSkeleton cards={1} label="Loading your activity" /></div> : null}
@@ -147,16 +154,16 @@ function GuestHome() {
           </div>
         </section>
 
-        <GuestSection title="Properties">
+        {otherHotels.length ? <GuestSection title="Your other hotels">
           <div className="neo-guest-activity">
             {otherHotels.map((hotel) => (
               <Link key={hotel.branch_id} to="/guest/$hotelSlug" params={{ hotelSlug: hotel.public_slug }}>
                 <MapPin aria-hidden /><span>{hotel.display_name || hotel.public_slug}</span><ChevronRight aria-hidden />
               </Link>
             ))}
-            <Link to="/"><MapPin aria-hidden /><span>Find another property</span><ChevronRight aria-hidden /></Link>
           </div>
-        </GuestSection>
+        </GuestSection> : null}
+        <Link to="/" className="neo-guest-outline-action mt-5"><MapPin className="size-4" aria-hidden /> Find another property</Link>
       </div>
     </GuestScreen>
   );

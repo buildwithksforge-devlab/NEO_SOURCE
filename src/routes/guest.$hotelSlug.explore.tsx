@@ -7,9 +7,10 @@
  * has not configured says so instead of showing an example.
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { canonicalLink, canonicalUrl, robotsDirective } from "@/lib/route-visibility";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { BedDouble, Bike, Heart, Search, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
+import { BedDouble, Bike, ChevronRight, Heart, Search, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestImage } from "@/components/public/GuestImage";
@@ -17,13 +18,15 @@ import { GuestRowsSkeleton } from "@/components/public/GuestSkeleton";
 import { Input } from "@/components/ui/input";
 import { GUEST_CARD_WIDTHS } from "@/lib/responsive-image";
 import { brandFallback, buttonRadius } from "@/lib/public-apps";
-import { money, usePublicMenu } from "@/lib/public-delivery";
+import { money, usePublicMenu, usePublishedDeliveryForGuest } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useCustomerSession } from "@/lib/public-session";
-import { useGuestFavourites, useToggleFavourite, useTransportProducts } from "@/lib/guest-ordering";
+import { useGuestActiveStay, useGuestFavourites, useToggleFavourite, useTransportProducts } from "@/lib/guest-ordering";
 import { useGuestProfile } from "@/lib/guest-app";
 import { useLaundryOffering } from "@/lib/guest-laundry";
 import { nightsBetween, useRoomOffers } from "@/lib/guest-booking";
+import { fetchPublicPropertyRooms } from "@/lib/front-door";
+import { publishedNightlyRate } from "@/lib/guest-presentation";
 import {
   experienceBasis,
   experienceGuests,
@@ -72,23 +75,6 @@ function isoDay(offset: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** A dish with no photograph gets the property's own colour, not a stock icon. */
-function DishArtwork({ name, tint }: { name: string; tint: string }) {
-  return (
-    <span
-      className="flex size-full items-center justify-center"
-      style={{ background: `linear-gradient(140deg, ${tint}26, ${tint}0d)`, color: tint }}
-    >
-      <span className="flex flex-col items-center gap-1">
-        <UtensilsCrossed className="size-5" aria-hidden />
-        <span className="max-w-[7rem] truncate text-[0.6rem] uppercase tracking-[0.16em]">
-          {name}
-        </span>
-      </span>
-    </span>
-  );
-}
-
 function Pill({
   active,
   tint,
@@ -124,12 +110,20 @@ function ExplorePage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const { user } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
+  const activeStay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const customerId = profile.data?.["id"] as string | undefined;
 
   const tab = section ?? "rooms";
+  const delivery = usePublishedDeliveryForGuest(ws.organization_id, ws.branch_id, hotelSlug, tab === "dining");
   const [category, setCategory] = useState<string | null>(null);
   const [dishSearch, setDishSearch] = useState("");
   const [dishLimit, setDishLimit] = useState(12);
+  const publicRooms = useQuery({
+    queryKey: ["public-rooms", hotelSlug],
+    queryFn: () => fetchPublicPropertyRooms(hotelSlug),
+    enabled: tab === "rooms",
+    staleTime: 60_000,
+  });
   const primary = ws.primary_color || brandFallback.primary;
   const radius = buttonRadius(ws.button_style);
 
@@ -183,18 +177,15 @@ function ExplorePage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="explore">
-      <section className="grid min-w-0 items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <section className="neo-guest-explore-heading neo-guest-discovery-heading">
         <div className="min-w-0">
           <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
-            Explore {ws.hotel_name}
+            {tab === "rooms" ? "Find your room" : tab === "dining" ? "Dining" : tab === "services" ? "Hotel services" : "Experiences"}
           </h1>
-          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-            Find a room, see the menu or arrange a service.
-          </p>
         </div>
       </section>
 
-      <div className="neo-guest-segments mt-5" role="group" aria-label="Explore sections">
+      <div className="neo-guest-segments neo-guest-explore-tabs mt-3" role="group" aria-label="Explore sections">
         {tabs.map((entry) => {
           const Icon = entry.icon;
           return (
@@ -210,8 +201,8 @@ function ExplorePage() {
       {/* --------------------------------------------------------- rooms */}
       {tab === "rooms" ? (
         <GuestSection
-          title="Rooms available"
-          description={`Live availability for ${arrival} → ${departure} (${nights} night, 2 adults). Pick your own dates when you book.`}
+          title={user ? "Available for your dates" : "Rooms at the hotel"}
+          {...(user ? { description: `${arrival} → ${departure} · ${nights} night · 2 adults` } : {})}
           action={
             <Link
               to="/guest/$hotelSlug/book"
@@ -224,10 +215,26 @@ function ExplorePage() {
           }
         >
           {!user ? (
-            <PublicEmptyState
-              title="Sign in to see live room rates"
-              description="This hotel releases live availability and pricing to signed-in guests. You can still open the booking screen to choose dates."
-            />
+            publicRooms.isLoading ? <GuestRowsSkeleton rows={3} label="Loading rooms" />
+              : publicRooms.isError ? <PublicEmptyState title="Rooms couldn’t load" description="Try the public room catalogue again." action={<button type="button" className="neo-guest-outline-action" onClick={() => void publicRooms.refetch()}>Retry</button>} />
+              : !publicRooms.data?.length ? <PublicEmptyState title="No rooms published" description="Contact reception for room options." />
+              : <ul className="neo-guest-room-gallery">
+                {publicRooms.data.map((room) => {
+                  const nightly = publishedNightlyRate(room.from_rate);
+                  return <li key={room.room_type_id}>
+                    <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: room.room_type_id }} className="neo-guest-room-preview">
+                      {room.images?.[0] ? <GuestImage src={room.images[0]} alt="" width={480} height={300} sizes="(min-width: 800px) 35vw, 100vw" className="neo-guest-room-cover" /> : null}
+                      <span className="neo-guest-room-caption">
+                        <span className="min-w-0">
+                          <strong>{room.name}</strong>
+                          <small>{[room.max_occupancy ? `Sleeps ${room.max_occupancy}` : null, room.bed_configuration].filter(Boolean).join(" · ")}</small>
+                        </span>
+                        {nightly !== null ? <span className="neo-guest-room-rate">From {money(nightly, room.currency ?? ws.currency ?? "KES")}</span> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
+                      </span>
+                    </Link>
+                  </li>;
+                })}
+              </ul>
           ) : rooms.isLoading ? (
             <GuestRowsSkeleton rows={3} label="Checking availability" />
           ) : rooms.isError ? (
@@ -242,13 +249,16 @@ function ExplorePage() {
               description="Try other dates on the booking screen, or call reception to check what is held."
             />
           ) : (
-            <ul className="grid gap-4 lg:grid-cols-2">
-              {(rooms.data ?? []).map((offer) => (
+            <ul className="neo-guest-records">
+              {(rooms.data ?? []).map((offer) => {
+                const cover = publicRooms.data?.find((room) => room.room_type_id === offer.room_type_id)?.images?.[0];
+                return (
                 <li
                   key={offer.room_type_id}
-                  className="flex min-w-0 flex-col gap-2 rounded-2xl border border-black/5 bg-white p-5"
                 >
-                  <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                  <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: offer.room_type_id }} className="neo-guest-record" aria-label={`Book ${offer.room_type_name}`}>
+                    {cover ? <GuestImage src={cover} alt="" width={64} height={64} sizes="64px" className="neo-guest-room-thumb" />
+                      : <span className="neo-guest-record-icon"><BedDouble className="size-5" aria-hidden /></span>}
                     <div className="min-w-0">
                       <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {offer.room_type_name}
@@ -264,7 +274,7 @@ function ExplorePage() {
                         {offer.rate_plan_name ? ` · ${offer.rate_plan_name}` : ""}
                       </p>
                     </div>
-                    <div className="min-w-0 sm:text-right">
+                    <div className="neo-guest-record-total">
                       <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(offer.nightly_rate, offer.currency)}
                       </p>
@@ -272,19 +282,9 @@ function ExplorePage() {
                         per night
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-auto pt-3" data-public-actions>
-                    <Link
-                      to="/guest/$hotelSlug/book"
-                      params={{ hotelSlug }}
-                      className="inline-flex min-h-10 items-center px-4 text-sm font-semibold text-white"
-                      style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
-                    >
-                      Book this room
-                    </Link>
-                  </div>
+                  </Link>
                 </li>
-              ))}
+              ); })}
             </ul>
           )}
         </GuestSection>
@@ -293,6 +293,12 @@ function ExplorePage() {
       {/* -------------------------------------------------------- dining */}
       {tab === "dining" ? (
         <>
+          {delivery.data ? (
+            <div className="neo-guest-dining-paths mt-4">
+              {activeStay.data ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug }} search={{ room: true }} className="neo-guest-outline-action">Order to my room</Link> : null}
+              <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">Delivery &amp; collection <ChevronRight className="size-4" aria-hidden /></Link>
+            </div>
+          ) : null}
           {dishes.length ? (
             <div className="relative mt-5">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--guest-muted)]" aria-hidden />
@@ -346,20 +352,18 @@ function ExplorePage() {
                   {(grouped.get(name) ?? []).map((item) => (
                     <li
                       key={String(item["id"])}
-                      className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-black/5 bg-white"
+                      className="neo-guest-dish"
                     >
-                      <GuestImage
-                        src={item["image_url"] ? String(item["image_url"]) : null}
+                      {item["image_url"] ? <GuestImage
+                        src={String(item["image_url"])}
                         alt=""
                         width={480}
                         height={320}
                         widths={GUEST_CARD_WIDTHS}
                         sizes="(min-width: 1280px) 22rem, (min-width: 640px) 45vw, 90vw"
-                        rounded="rounded-none"
-                        className="w-full"
-                        fallback={<DishArtwork name={name} tint={primary} />}
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
+                        className="neo-guest-dish-photo"
+                      /> : null}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                           {String(item["name"])}
                         </p>
@@ -396,7 +400,12 @@ function ExplorePage() {
                                 />
                               </button>
                             ) : null}
-                            <Link
+                            {delivery.data && deliveryMenu.data?.some((dish) => dish["id"] === item["id"]) ||
+                              delivery.data && collectionMenu.data?.some((dish) => dish["id"] === item["id"]) ? (
+                              <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }}
+                                search={{ item: String(item["id"]), mode: deliveryMenu.data?.some((dish) => dish["id"] === item["id"]) ? "delivery" : "pickup" }}
+                                className="neo-guest-outline-action">Order</Link>
+                            ) : delivery.data && !activeStay.data ? <span className="text-xs text-[var(--guest-muted)]">Room service</span> : <Link
                               to="/guest/$hotelSlug/order"
                               params={{ hotelSlug }}
                               search={{ item: String(item["id"]) }}
@@ -404,7 +413,7 @@ function ExplorePage() {
                               style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                             >
                               Order
-                            </Link>
+                            </Link>}
                           </span>
                         </div>
                       </div>

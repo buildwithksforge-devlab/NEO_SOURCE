@@ -703,12 +703,13 @@ const BATCH_POST_REASONS: Record<string, string> = {
   no_output_stock_item:
     "The recipe has no produced stock item, so there is nothing to receive into the store.",
   bad_yield: "The recipe has no yield quantity, so the ingredients cannot be scaled.",
+  department_store_required: "Map the production station for this batch to a departmental store in Kitchen Settings.",
   no_location: "No kitchen store is set for this station. Choose a store first.",
 };
 
 /**
- * Post a completed batch to stock: ingredients out of the store, the produced
- * item in, waste written off. Posting twice does nothing the second time.
+ * Make prepared quantity available for sale. Ingredient stock is posted once,
+ * when fulfilment consumes the batch.
  */
 export function usePostProductionBatch() {
   const qc = useQueryClient();
@@ -725,13 +726,13 @@ export function usePostProductionBatch() {
           BATCH_POST_REASONS[result.reason ?? ""] ?? "That batch could not be posted.",
         );
       }
-      return result as { ok: true; reason?: string; ingredient_lines?: number; produced?: number };
+      return result as { ok: true; reason?: string };
     },
     onSuccess: (result) => {
       toast.success(
         result.reason === "already_posted"
           ? "This production batch was already recorded."
-          : `Posted to stock â€” ${result.ingredient_lines ?? 0} ingredient${result.ingredient_lines === 1 ? "" : "s"} used.`,
+          : "Batch is available for service.",
       );
       void qc.invalidateQueries({ queryKey: ["kitchen", "batches"] });
       void qc.invalidateQueries({ queryKey: ["inventory"] });

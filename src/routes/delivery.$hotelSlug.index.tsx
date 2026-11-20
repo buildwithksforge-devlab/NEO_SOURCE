@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, Loader2, Search, UtensilsCrossed } from "lucide-react";
+import { Bike, Loader2, Plus, Search, Store } from "lucide-react";
 import {
   BrandButton,
   PublicAppShell,
@@ -17,12 +17,15 @@ import {
   useMyPublicCustomer,
   usePublicAddToCart,
   usePublicBranches,
+  usePublicDeliverySettings,
   usePublicMenu,
 } from "@/lib/public-delivery";
 
 export const Route = createFileRoute("/delivery/$hotelSlug/")({
-  validateSearch: (search): { item?: string } =>
-    typeof search["item"] === "string" ? { item: search["item"] } : {},
+  validateSearch: (search): { item?: string; mode?: "delivery" | "pickup" } => ({
+    ...(typeof search["item"] === "string" ? { item: search["item"] } : {}),
+    ...(search["mode"] === "delivery" || search["mode"] === "pickup" ? { mode: search["mode"] } : {}),
+  }),
   component: DeliveryHome,
 });
 
@@ -31,7 +34,7 @@ type Row = Record<string, unknown>;
 function DeliveryHome() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
-  const { item: selectedItemId } = Route.useSearch();
+  const { item: selectedItemId, mode } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { user, loading } = useCustomerSession();
   const customer = useMyPublicCustomer(ws.organization_id, user?.id);
@@ -42,14 +45,22 @@ function DeliveryHome() {
   const activeBranch = branchId ?? (branches.data?.[0]?.["id"] as string | undefined) ?? null;
 
   const cart = useMyPublicCart(ws.organization_id, customerId);
-  const fulfilment = cart.data?.["fulfilment_type"] === "pickup" ? "pickup" : "delivery";
+  const settings = usePublicDeliverySettings(ws.organization_id, activeBranch);
+  const modes = (["delivery", "pickup"] as const).filter((option) => settings.data?.[option === "pickup" ? "pickup_enabled" : "delivery_enabled"] === true);
+  const cartCount = ((cart.data?.["cart_items"] as Row[] | undefined) ?? []).reduce(
+    (sum, line) => sum + Number(line["quantity"] ?? 0), 0,
+  );
+  const fulfilment = cartCount > 0 && cart.data?.["branch_id"] === activeBranch &&
+    (cart.data?.["fulfilment_type"] === "pickup" || cart.data?.["fulfilment_type"] === "delivery")
+    ? cart.data["fulfilment_type"] as "pickup" | "delivery"
+    : mode && modes.includes(mode) ? mode : modes[0] ?? mode ?? "delivery";
   const menu = usePublicMenu(ws.organization_id, activeBranch, fulfilment);
   const addToCart = usePublicAddToCart(ws.organization_id, customerId);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const selectedItem = selectedItemId ? menu.data?.find((item) => item["id"] === selectedItemId) : undefined;
-  const changeSelectedItem = (item?: string) => void navigate({ search: item ? { item } : {}, replace: true, resetScroll: false });
+  const changeSelectedItem = (item?: string) => void navigate({ search: { ...(item ? { item } : {}), mode: fulfilment }, replace: true, resetScroll: false });
 
   const categories = useMemo(() => ["All", ...new Set(((menu.data ?? []) as Row[]).map(
     (item) => String((item["menu_categories"] as Row | null)?.["name"] ?? "Menu"),
@@ -72,31 +83,32 @@ function DeliveryHome() {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [menu.data, query, category]);
 
-  const cartCount = ((cart.data?.["cart_items"] as Row[] | undefined) ?? []).reduce(
-    (sum, i) => sum + Number(i["quantity"] ?? 0),
-    0,
-  );
   const roomServiceCart = cartCount > 0 && cart.data?.["fulfilment_type"] === "room-service";
   const otherBranchCart = cartCount > 0 && Boolean(cart.data?.["branch_id"]) && cart.data?.["branch_id"] !== activeBranch;
-  const cannotAdd = loading || Boolean(user && !customerId) || cart.isLoading || cart.isError || roomServiceCart || otherBranchCart;
+  const cannotAdd = loading || Boolean(user && !customerId) || cart.isLoading || cart.isError || roomServiceCart || otherBranchCart || !modes.includes(fulfilment);
 
   return (
     <PublicAppShell
       homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}
       cartCount={otherBranchCart || roomServiceCart ? 0 : cartCount}
     >
-      <section className="neo-commerce-hero neo-delivery-cover relative overflow-hidden">
+      <section className="neo-commerce-hero neo-delivery-cover neo-delivery-menu-heading relative overflow-hidden">
         {ws.hero_url ? <img src={ws.hero_url} alt="" fetchPriority="high" className="absolute inset-y-0 right-0 h-full w-full object-cover sm:w-3/5" /> : null}
         {ws.hero_url ? <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/55 sm:to-slate-950/10" /> : null}
         <div className="relative z-10 max-w-2xl">
         <h1 className="neo-commerce-title">
-          {ws.welcome_title || `Order from ${ws.hotel_name}`}
+          Order food
         </h1>
-        <p className="neo-commerce-copy mt-3">
-          {ws.welcome_message || "Choose delivery or collection and track your order."}
-        </p>
+        {modes.length ? <div className="neo-delivery-mode-switch" role="group" aria-label="Order fulfilment">
+          {modes.map((option) => {
+            const Icon = option === "pickup" ? Store : Bike;
+            return <button key={option} type="button" aria-pressed={option === fulfilment} disabled={cartCount > 0 && option !== fulfilment}
+              onClick={() => { setCategory("All"); void navigate({ search: { mode: option }, resetScroll: false }); }}>
+              <Icon className="size-4" aria-hidden /> {option === "pickup" ? "Collection" : "Delivery"}
+            </button>;
+          })}
+        </div> : null}
         </div>
-        {!ws.hero_url ? <UtensilsCrossed className="pointer-events-none absolute -bottom-12 -right-8 size-56 rotate-12 text-white/[0.08]" aria-hidden /> : null}
       </section>
 
       <section className="mt-5 space-y-3" aria-label="Find food">
@@ -140,7 +152,7 @@ function DeliveryHome() {
             className="min-h-12 rounded-2xl border-0 bg-white pr-4 pl-11 text-base text-slate-950"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Menu categories">
+        <div className="neo-delivery-categories" role="group" aria-label="Menu categories">
           {categories.map((name) => (
             <button key={name} type="button" onClick={() => setCategory(name)}
               aria-pressed={category === name}
@@ -160,6 +172,9 @@ function DeliveryHome() {
       </div> : null}
 
       <section className="mt-6 space-y-6">
+        {settings.isError ? <PublicEmptyState title="Ordering options couldn’t load" description="Refresh to check whether delivery or collection is available." action={<BrandButton onClick={() => void settings.refetch()}>Retry</BrandButton>} /> : null}
+        {settings.isSuccess && !modes.length ? <PublicEmptyState title="Ordering is closed" description="You can still browse the published menu." /> : null}
+        {selectedItemId && menu.isSuccess && !selectedItem ? <PublicEmptyState title="This dish is unavailable for this menu" description="Choose another fulfilment option or browse the menu." action={<BrandButton onClick={() => changeSelectedItem()}>Browse menu</BrandButton>} /> : null}
         {menu.isLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
@@ -182,7 +197,7 @@ function DeliveryHome() {
               <h2 className="mb-3 text-xl font-bold tracking-tight text-white">
                 {category}
               </h2>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="neo-delivery-menu-grid">
                 {items.map((item) => {
                   const available = String(item["availability"] ?? "available") === "available";
                   return (
@@ -191,9 +206,9 @@ function DeliveryHome() {
                       type="button"
                       aria-haspopup="dialog"
                       onClick={() => changeSelectedItem(String(item["id"]))}
-                      className="neo-delivery-dish group grid min-w-0 grid-cols-[minmax(0,1fr)_33%] overflow-hidden rounded-2xl bg-white text-left sm:flex sm:flex-col-reverse"
+                      className="neo-delivery-dish neo-delivery-menu-item group"
                     >
-                      <span className="flex min-w-0 flex-1 flex-col p-4">
+                      <span className="flex min-w-0 flex-1 flex-col">
                         <span className="break-words text-base font-bold leading-tight text-slate-950">
                           {String(item["name"] ?? "")}
                         </span>
@@ -204,7 +219,7 @@ function DeliveryHome() {
                         ) : null}
                         <span className="mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-3 text-sm font-semibold text-slate-900">
                           <span>{money(item["base_price"], ws.currency ?? "KES")}</span>
-                          {available ? <ChevronRight className="size-4 text-slate-600" aria-hidden /> : <span className="text-xs text-slate-600">Unavailable</span>}
+                          {available ? <span className="neo-delivery-item-add"><Plus className="size-4" aria-hidden /></span> : <span className="text-xs text-slate-600">Unavailable</span>}
                         </span>
                       </span>
                       {item["image_url"] ? (
@@ -212,9 +227,9 @@ function DeliveryHome() {
                           src={String(item["image_url"])}
                           alt=""
                           loading="lazy"
-                          className="size-full min-h-24 object-cover sm:aspect-[4/3] sm:h-auto"
+                          className="neo-delivery-menu-photo"
                         />
-                      ) : <span className="neo-delivery-dish-placeholder grid min-h-24 w-full place-items-center sm:aspect-[4/3]" aria-hidden><UtensilsCrossed className="size-7" /></span>}
+                      ) : null}
                     </button>
                   );
                 })}
@@ -235,7 +250,7 @@ function DeliveryHome() {
         disabled={cannotAdd}
         available={String(selectedItem["availability"] ?? "available") === "available"}
         onSignIn={!user && !loading ? () => {
-          const next = `/delivery/${encodeURIComponent(hotelSlug)}?${new URLSearchParams({ item: String(selectedItem["id"]) })}`;
+          const next = `/delivery/${encodeURIComponent(hotelSlug)}?${new URLSearchParams({ item: String(selectedItem["id"]), mode: fulfilment })}`;
           void navigate({ to: "/guest/$hotelSlug/signin", params: { hotelSlug: ws.guest_slug ?? hotelSlug }, search: { next, mode: undefined } });
         } : undefined}
         onClose={() => changeSelectedItem()}

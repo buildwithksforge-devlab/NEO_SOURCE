@@ -29,9 +29,11 @@ describe("Delivery item options", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Rice" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Chips/ }));
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    fireEvent.change(screen.getByLabelText("Special instructions"), { target: { value: "Sauce on the side" } });
+    fireEvent.change(screen.getByLabelText("Allergy note for the kitchen"), { target: { value: "Peanuts" } });
     expect(add.textContent).toContain("KES 1800");
     fireEvent.click(add);
-    expect(onAdd).toHaveBeenCalledWith({ optionIds: ["chips"], quantity: 2 });
+    expect(onAdd).toHaveBeenCalledWith({ optionIds: ["chips"], quantity: 2, specialInstructions: "Sauce on the side", allergyNote: "Peanuts" });
   });
 
   it("leaves the basket untouched when the options lookup fails", () => {

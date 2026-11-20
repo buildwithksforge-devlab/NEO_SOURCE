@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Heart, Loader2, Minus, Plus, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
@@ -8,8 +7,7 @@ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShe
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
-import { money, usePublicDeliverySettings } from "@/lib/public-delivery";
-import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
+import { money, usePublicDeliverySettings, usePublishedDeliveryForGuest } from "@/lib/public-delivery";
 import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
 import { chooseGuestFulfilment } from "@/lib/guest-presentation";
 import { isPreviewMode } from "@/lib/preview-mode";
@@ -31,8 +29,9 @@ import {
 } from "@/lib/guest-ordering";
 
 export const Route = createFileRoute("/guest/$hotelSlug/order")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { item?: string | undefined; room?: boolean } => ({
     item: typeof search["item"] === "string" ? search["item"] : undefined,
+    ...(search["room"] === true ? { room: true } : {}),
   }),
   head: () => ({
     meta: [
@@ -58,7 +57,7 @@ export const Route = createFileRoute("/guest/$hotelSlug/order")({
 function OrderPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
-  const { item: requestedItem } = Route.useSearch();
+  const { item: requestedItem, room } = Route.useSearch();
   const navigate = useNavigate();
   const preview = isPreviewMode();
 
@@ -82,7 +81,9 @@ function OrderPage() {
   const collectionMenu = useGuestMenu(ws.organization_id, ws.branch_id, "pickup");
   const roomMenu = useGuestMenu(ws.organization_id, ws.branch_id, "room-service", inHouse);
   const menus = { "room-service": roomMenu, pickup: collectionMenu, delivery: deliveryMenu };
-  const defaultMode = chooseGuestFulfilment(inHouse, {
+  const deliveryWorkspace = usePublishedDeliveryForGuest(ws.organization_id, ws.branch_id, hotelSlug);
+  const matchingDelivery = deliveryWorkspace.data;
+  const defaultMode = room && inHouse ? "room-service" : chooseGuestFulfilment(inHouse, {
     "room-service": roomMenu.data, pickup: collectionMenu.data, delivery: deliveryMenu.data,
   }, requestedItem);
 
@@ -110,15 +111,8 @@ function OrderPage() {
   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
   const placeRoomService = usePlaceRoomServiceOrder();
   const placeDelivery = usePlaceDeliveryOrder();
-  const deliveryWorkspace = useQuery({
-    queryKey: ["guest-delivery-workspace", ws.organization_id, ws.branch_id, hotelSlug],
-    enabled: !cartAtAnotherProperty && activeFulfilment !== "room-service" && Boolean(cartId),
-    queryFn: () => resolvePublicWorkspace({ data: { appKey: "delivery", slug: hotelSlug } }),
-  });
   const cartBranch = ws.branch_id ?? (savedBranch as string | null | undefined) ?? null;
   const deliverySettings = usePublicDeliverySettings(ws.organization_id, cartBranch);
-  const matchingDelivery = deliveryWorkspace.data?.organization_id === ws.organization_id &&
-    (deliveryWorkspace.data.branch_id === null || deliveryWorkspace.data.branch_id === cartBranch);
   const acceptedMethods = deliverySettings.data?.["allowed_payment_methods"];
   const cashEnabled = !deliverySettings.isError && Array.isArray(acceptedMethods) && acceptedMethods.includes("cash") &&
     deliverySettings.data?.["cod_enabled"] === true &&
@@ -253,17 +247,24 @@ function OrderPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="explore">
-      <section className="neo-commerce-hero">
-        <span className="neo-commerce-icon"><UtensilsCrossed className="size-5" aria-hidden /></span>
-        <div>
-        <h1 className="neo-commerce-title">
-          Order food
-        </h1>
-        <p className="neo-commerce-copy">From {ws.hotel_name}&apos;s kitchen to your room, pickup or delivery.</p>
-        </div>
+      <section className="neo-guest-explore-heading">
+        <h1 className="neo-public-title">{matchingDelivery ? "Room service" : "Order food"}</h1>
       </section>
 
-      {!loading && !user ? (
+      {matchingDelivery && activeFulfilment !== "room-service" ? (
+        <div className="mt-4">
+          <PublicEmptyState
+            title="Delivery & collection"
+            description={cartItems.length && !cartAtAnotherProperty ? "Your basket is ready to review in Delivery." : "Browse the menu and pay in the Delivery app."}
+            action={cartItems.length && !cartAtAnotherProperty
+              ? <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug: matchingDelivery.slug }} className="neo-guest-outline-action">Review basket</Link>
+              : <Link to="/delivery/$hotelSlug" params={{ hotelSlug: matchingDelivery.slug }} search={requestedItem ? { item: requestedItem, mode: activeFulfilment } : { mode: activeFulfilment }} className="neo-guest-outline-action">Open Delivery</Link>}
+          />
+          {inHouse && cartItems.length === 0 ? (
+            <button type="button" className="neo-guest-outline-action mt-3" onClick={() => void changeFulfilment("room-service")}>Order to my room</button>
+          ) : null}
+        </div>
+      ) : !loading && !user ? (
         <GuestSignInPrompt
           hotelSlug={hotelSlug}
           title="Sign in to order"
@@ -274,7 +275,8 @@ function OrderPage() {
           description="Open the property where you started your basket to review or finish your order." />
       ) : (
         <>
-          <GuestSection title="How would you like it?">
+          <GuestSection title={matchingDelivery ? "Deliver to my room" : "How would you like it?"}>
+            {!matchingDelivery ? (
             <div className="flex flex-wrap gap-2">
               {(
                 ["room-service", "pickup", "delivery"] as FulfilmentType[]
@@ -305,6 +307,7 @@ function OrderPage() {
                 );
               })}
             </div>
+            ) : null}
 
             {activeFulfilment === "room-service" ? (
               <p className="mt-3 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
@@ -582,10 +585,11 @@ function OrderPage() {
                       label="Subtotal"
                       value={money(quote.data.subtotal)}
                     />
-                    <Line
-                      label="Tax"
-                      value={money(quote.data.tax_total)}
-                    />
+                    {quote.data.tax_breakdown?.map((tax) =>
+                      <Line key={tax.label} label={tax.label} value={money(tax.amount)} />
+                    ) ?? (quote.data.tax_total > 0 && (
+                      <Line label="Tax included in subtotal" value={money(quote.data.tax_total)} />
+                    ))}
 
                     {quote.data.service_charge ? (
                       <Line
@@ -870,8 +874,8 @@ function ItemCustomiser({
               allergyNote: allergy.trim() || undefined,
             })
           }
-          className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-          style={{ background: accent }}
+          className="min-h-11 rounded-full px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+          style={{ background: accent, color: "var(--pa-on-primary)" }}
         >
           {busy ? "Adding…" : "Add to basket"}
         </button>

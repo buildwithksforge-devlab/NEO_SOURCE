@@ -26,7 +26,7 @@ export const Route = createFileRoute("/admin/documents")({
 });
 
 function DocumentsPage() {
-  const { tenant, updateDocumentTemplate } = useTenant();
+  const { tenant, updateDocumentTemplate, updateBrand } = useTenant();
   const [activeId, setActiveId] = useState(tenant.documentTemplates[0]?.id ?? "");
   const doc = tenant.documentTemplates.find((t) => t.id === activeId) ?? tenant.documentTemplates[0];
 
@@ -67,6 +67,26 @@ function DocumentsPage() {
 
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="space-y-6">
+            <SectionCard title="POS receipt" description="Public payment details and feedback printed on sales receipts across this workspace.">
+              <div className="space-y-3">
+                {([
+                  ["receiptFeedbackUrl", "Customer feedback link"],
+                  ["receiptPaybill", "M-Pesa Paybill"],
+                  ["receiptPaybillAccount", "Paybill account"],
+                  ["receiptTill", "M-Pesa Till"],
+                  ["receiptPaymentInstructions", "Other payment instructions"],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="space-y-1">
+                    <Label htmlFor={key}>{label}</Label>
+                    <Input id={key} type={key === "receiptFeedbackUrl" ? "url" : "text"}
+                      maxLength={key === "receiptFeedbackUrl" ? 512 : 160}
+                      value={tenant.brand[key] ?? ""}
+                      onChange={(event) => updateBrand({ [key]: event.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
             <SectionCard title="Header" description="Logo placement and heading text">
               <div className="space-y-4">
                 <div className="space-y-2">

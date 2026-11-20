@@ -52,6 +52,7 @@ import { menusForBranch } from "@/lib/menu-scoping";
 import { MenuCatalogueSection, MenuItemFormDialog } from "@/components/pos/MenuCatalogueManager";
 import { MenuItemImage } from "@/components/pos/MenuImageField";
 import { MenuConsumptionCard } from "@/components/pos/MenuConsumptionCard";
+import { MenuSalesTaxCard } from "@/components/pos/MenuSalesTaxCard";
 
 import {
   menuConsumptionReady,
@@ -872,7 +873,8 @@ function MenuPage() {
                         </InspectorField>
                       </InspectorSection>
                       <InspectorSection title="Stock consumption">
-                        <MenuConsumptionCard item={inspected} manage={manage} />
+                        <MenuConsumptionCard key={inspected.id} item={inspected} manage={manage} />
+                        <MenuSalesTaxCard key={`tax-${inspected.id}`} itemId={inspected.id} currency={inspected.currency ?? "KES"} manage={manage} />
                       </InspectorSection>
                       <InspectorSection title="Sales channels">
 

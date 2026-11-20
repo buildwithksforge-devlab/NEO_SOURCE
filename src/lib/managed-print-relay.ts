@@ -143,6 +143,10 @@ export async function forwardManagedPrintRequest(
               : object(result["status"]) &&
                 ["completed", "queued", "failed"].includes(String(result["status"]["status"]));
     if (!valid) return fail(502, "invalid_managed_print_response");
+    if (action === "claim" && object(result["job"])) {
+      const { withReceiptFeedbackGraphic } = await import("./print-receipt-feedback.server");
+      return protectDynamicResponse(Response.json({ ...result, job: withReceiptFeedbackGraphic(result["job"]) }));
+    }
     return protectDynamicResponse(Response.json(result));
   } catch (error) {
     console.error("Managed print transport failed", managedTransportFailure(error));

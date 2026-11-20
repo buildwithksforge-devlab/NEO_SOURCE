@@ -23,6 +23,8 @@ import {
 } from "@/lib/guest-booking";
 
 export const Route = createFileRoute("/guest/$hotelSlug/book")({
+  validateSearch: (search): { room?: string } =>
+    typeof search["room"] === "string" ? { room: search["room"] } : {},
   head: ({ params }) => ({
     meta: [
       { title: "Book a Stay — NEØ Guest" },
@@ -54,6 +56,7 @@ function isoDay(offsetDays: number) {
 function BookPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
+  const { room } = Route.useSearch();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
@@ -64,7 +67,7 @@ function BookPage() {
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [requests, setRequests] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(room ?? null);
   const [confirmed, setConfirmed] = useState<{ reference: string; total: number; quote: RoomOffer } | null>(null);
   // One intent per search, so a double tap or a refresh returns the same stay.
   const intentKey = useMemo(

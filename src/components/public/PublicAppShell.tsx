@@ -168,7 +168,7 @@ export function PublicAppShell({
 
   return (
     <div
-      className={`neo-public-app neo-branded-app flex min-h-screen flex-col ${hotelSlug ? "neo-delivery-app" : ""}`}
+      className={`neo-public-app neo-branded-app flex flex-col ${hotelSlug ? "neo-delivery-app neo-customer-frame" : ""}`}
       style={
         {
           "--pa-background": background,
@@ -182,7 +182,7 @@ export function PublicAppShell({
       }
     >
       <header className="neo-pub-header">
-        <div className="neo-public-wrap grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4">
+        <div className="neo-public-wrap grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
           {homeTo ? (
             <Link to={homeTo.to} params={homeTo.params ?? {}} className="min-w-0 overflow-hidden">
               {brand}
@@ -191,14 +191,20 @@ export function PublicAppShell({
             brand
           )}
           {deliveryLinks ? (
-            <nav aria-label="Delivery app" className="neo-delivery-header-nav hidden lg:flex">
-              {deliveryLinks}
-            </nav>
+            <div className="flex items-center gap-2">
+              <nav aria-label="Delivery app" className="neo-delivery-header-nav hidden lg:flex">
+                {deliveryLinks}
+              </nav>
+              {ws.guest_slug ? (
+                <Link to="/guest/$hotelSlug" params={{ hotelSlug: ws.guest_slug }} className="neo-delivery-guest-link">Stay &amp; Dine</Link>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </header>
 
-      <main className="neo-public-wrap flex-1 py-7 sm:py-10">{children}</main>
+      <div className="neo-customer-content" data-scroll-restoration-id="delivery-body">
+      <main className="neo-public-wrap flex-1 py-5 sm:py-7">{children}</main>
 
       <footer className="neo-pub-footer">
         <div className="neo-public-wrap flex flex-col gap-3 py-8 text-xs sm:flex-row sm:items-center sm:justify-between">
@@ -216,6 +222,7 @@ export function PublicAppShell({
           </div>
         </div>
       </footer>
+      </div>
       {deliveryLinks ? (
         <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
           {deliveryLinks}

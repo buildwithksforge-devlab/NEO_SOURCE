@@ -113,6 +113,37 @@ export const useAccounts = () =>
 
 export const useTaxCodes = () => useList("tax-codes", "tax_codes", "*", (q) => q.order("code"));
 
+export function useSalesTaxProfiles() {
+  const { organizationId } = useFinanceCtx();
+  return useQuery({
+    queryKey: ["finance", "sales-tax-profiles", organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async () => {
+      const { data, error } = await db.from("sales_tax_profiles").select("*")
+        .eq("organization_id", organizationId).order("name");
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string; name: string; active: boolean; workspace_default: boolean; treatment: "standard" | "exempt" | "none";
+        rules: { code: string; compound_on_prior: boolean }[];
+      }[];
+    },
+  });
+}
+
+export function useMenuSalesTaxProfile(itemId: string) {
+  const { organizationId } = useFinanceCtx();
+  return useQuery({
+    queryKey: ["pos", "menu-sales-tax-profile", organizationId, itemId],
+    enabled: Boolean(organizationId),
+    queryFn: async () => {
+      const { data, error } = await db.from("menu_items").select("sales_tax_profile_id")
+        .eq("organization_id", organizationId).eq("id", itemId).single();
+      if (error) throw error;
+      return (data.sales_tax_profile_id ?? "") as string;
+    },
+  });
+}
+
 export const useAccountMappings = () =>
   useList("mappings", "account_mappings", "*", (q) => q.order("source_module").order("event_key"));
 

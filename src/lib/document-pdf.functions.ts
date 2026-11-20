@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const TYPES = new Set([
   "pos_receipt",
   "invoice",
+  "credit_note",
   "folio_statement",
   "beo",
   "purchase_order",

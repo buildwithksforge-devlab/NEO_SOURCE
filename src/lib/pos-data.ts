@@ -1456,12 +1456,12 @@ export const CONSUMPTION_MODES: { value: ConsumptionMode; label: string; hint: s
   {
     value: "batch",
     label: "Prepared batch / container stock",
-    hint: "Use for items prepared in advance and stored as stock, such as pancake batter, pizza sauce, pastry cream or dough. Raw ingredients are consumed during batch production; each sale deducts only the prepared stock.",
+    hint: "Record how much was prepared. Fulfilled sales use that quantity and deduct the matching recipe ingredients from the departmental store.",
   },
   {
     value: "direct_stock",
     label: "Purchased / direct stock",
-    hint: "Use for ready-to-use purchased stock such as sliced bread, buns, tots, bottled drinks or packaged products.",
+    hint: "Use one stock unit per sealed bottle, can or package. Use a volume unit only for a measured pour.",
   },
 ];
 

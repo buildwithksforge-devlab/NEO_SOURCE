@@ -230,12 +230,21 @@ function receiptLines(job) {
     source.meta
     ?? source.metadata
     ?? {};
+  const property = source.property ?? {};
+  const brand = source.identity?.brand ?? {};
+  const staffLabels = {
+    waiter: "Served by", "served by": "Served by", cashier: "Received by",
+    "collected by": "Received by", "received by": "Received by", "checked by": "Checked by",
+  };
+  const footer = new Map();
 
   const output = [
+    property.name ?? source.identity?.trading_name ?? "",
+    property.address ?? "",
     header.title
       ?? job.title
       ?? "NEO RECEIPT",
-  ];
+  ].filter(Boolean);
 
   if (header.number) {
     output.push(`Receipt: ${header.number}`);
@@ -276,7 +285,13 @@ function receiptLines(job) {
 
   output.push("------------------------------------------");
 
+  let paymentsNext = false;
+  let headingShown = false;
   for (const total of totals) {
+    if (paymentsNext && !headingShown) {
+      output.push("PAYMENTS & BALANCE");
+      headingShown = true;
+    }
     if (typeof total === "string") {
       output.push(total);
     } else {
@@ -285,8 +300,15 @@ function receiptLines(job) {
           amount(total.amount)
         }`,
       );
+      if (/^(total|grand total)$/i.test(total.label ?? "")) paymentsNext = true;
     }
   }
+
+  const howToPay = [
+    ["M-Pesa Paybill", brand.receiptPaybill], ["Paybill account", brand.receiptPaybillAccount],
+    ["M-Pesa Till", brand.receiptTill], ["Payment instructions", brand.receiptPaymentInstructions],
+  ].filter(([, value]) => typeof value === "string" && value.trim());
+  if (howToPay.length) output.push("", "HOW TO PAY", ...howToPay.map(([label, value]) => `${label}: ${value}`));
 
   for (const [label, value] of Object.entries(
     metadata,
@@ -296,11 +318,13 @@ function receiptLines(job) {
       && value !== undefined
       && String(value).trim()
     ) {
-      output.push(`${label}: ${value}`);
+      const key = label.toLowerCase().replaceAll("_", " ");
+      if (staffLabels[key]) footer.set(staffLabels[key], value);
+      else if (key !== "qr payload" && typeof value !== "object") output.push(`${label}: ${value}`);
     }
   }
 
-  output.push("", "Thank you");
+  output.push("", ...Array.from(footer, ([label, value]) => `${label}: ${value}`), "Thank you");
   return output;
 }
 
@@ -330,13 +354,34 @@ function render(job) {
 }
 
 function escPos(job) {
+  const rows = job.feedback_qr;
+  let feedback = Buffer.alloc(0);
+  if (Array.isArray(rows) && rows.length >= 21 && rows.length <= 177 &&
+    rows.every((row) => typeof row === "string" && row.length === rows.length && /^[01]+$/.test(row))) {
+    const scale = Math.max(2, Math.min(4, Math.floor(208 / rows.length)));
+    const size = rows.length * scale;
+    const stride = Math.ceil(size / 8);
+    const data = Buffer.alloc(size * stride);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (rows[Math.floor(y / scale)][Math.floor(x / scale)] === "1") {
+          data[y * stride + Math.floor(x / 8)] |= 128 >> (x % 8);
+        }
+      }
+    }
+    feedback = Buffer.concat([
+      Buffer.from("Scan to leave feedback\n", "ascii"),
+      Buffer.from([27, 97, 1, 29, 118, 48, 0, stride & 255, stride >> 8, size & 255, size >> 8]),
+      data, Buffer.from([10, 27, 97, 0]),
+    ]);
+  }
   return Buffer.concat([
     Buffer.from([0x1b, 0x40]),
     Buffer.from(
-      `${render(job)}\n\n\n`,
+      `${render(job)}\n`,
       "ascii",
     ),
-    Buffer.from([0x1d, 0x56, 0x00]),
+    feedback, Buffer.from([10, 10, 0x1d, 0x56, 0x00]),
   ]);
 }
 

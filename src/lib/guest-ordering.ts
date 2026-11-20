@@ -331,20 +331,8 @@ export function useGuestCartMutations(
   return { addItem, setQuantity, updateCart };
 }
 
-export type GuestQuote = {
-  subtotal: number;
-  tax_total: number;
-  discount_total: number;
-  /** The property's configured service charge — the same figure the till applies. */
-  service_charge: number;
-  delivery_fee: number;
-  tip_amount: number;
-  grand_total: number;
-  eta_minutes: number;
-  issues: string[];
-  can_checkout: boolean;
+export type GuestQuote = import("@/lib/public-delivery").Quote & {
   fulfilment_type: string;
-  lines: Row[];
 };
 
 /** Server-authoritative pricing; browser totals are never trusted. */

@@ -6,7 +6,7 @@
  * service: the database issues the document number, computes the money and
  * enforces property scope. Nothing on this path is recomputed client-side.
  */
-import { PDFDocument, rgb, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, PrintScaling, rgb, pushGraphicsState, popGraphicsState, rectangle, clip, endPath, type PDFFont, type PDFPage } from "pdf-lib";
 import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,11 +16,13 @@ import { NEO_SYMBOL_BASE64 } from "./document-symbol";
 import { documentTraceCode } from "./document-trace";
 import { documentLayout } from "./document-layouts";
 import { readFolioChargeComponents } from "./folio-charge-components";
+import { embedDocumentLogo } from "./document-logo.server";
 
 
 export const DOCUMENT_TYPES = [
   "pos_receipt",
   "invoice",
+  "credit_note",
   "folio_statement",
   "beo",
   "purchase_order",
@@ -240,30 +242,16 @@ export async function buildBusinessDocumentPdf(
     documentTimezone = text(branch?.timezone) || documentTimezone;
   }
   const dateLabel = (value: unknown) => formatDocumentDate(value, documentTimezone);
-  const logoUrl =
-    propertyLogo || text(brand["logoLight"]) || text(brand["logoDark"]) || "";
-
-
   const pdf = await PDFDocument.create();
+  pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   const { regular, bold } = await embedDocumentFonts(pdf);
   const [pageWidth, pageHeight]: [number, number] = [595.28, 841.89];
   const margin = 39.7;
+  const footerTop = 138;
+  const bodyBottom = footerTop + 18;
   const contentWidth = pageWidth - margin * 2;
 
-  let embeddedLogo: Awaited<ReturnType<PDFDocument["embedPng"]>> | null = null;
-  if (/^https?:\/\//.test(logoUrl)) {
-    try {
-      const response = await fetch(logoUrl);
-      if (response.ok) {
-        const bytes = await response.arrayBuffer();
-        embeddedLogo = /png/i.test(response.headers.get("content-type") ?? logoUrl)
-          ? await pdf.embedPng(bytes)
-          : await pdf.embedJpg(bytes);
-      }
-    } catch {
-      embeddedLogo = null;
-    }
-  }
+  const embeddedLogo = await embedDocumentLogo(pdf, [propertyLogo, text(brand["logoLight"]), text(brand["logoDark"])]);
 
   let page: PDFPage = pdf.addPage([pageWidth, pageHeight]);
   let pageNumber = 0;
@@ -298,7 +286,7 @@ export async function buildBusinessDocumentPdf(
   };
 
   const ensure = (height: number) => {
-    if (y - height < 48) startPage();
+    if (y - height < bodyBottom) startPage();
   };
 
   const draw = (value: string, x: number, size: number, font: PDFFont, colourValue = dark) => {
@@ -422,6 +410,28 @@ export async function buildBusinessDocumentPdf(
   });
   const descriptionColumn =
     columns.find((column) => column.key === "description") ?? columns[0]!;
+  const seenLabels = new Set<string>();
+  const totals = (Array.isArray(payload.totals) ? payload.totals : []).filter((total) => {
+    if (!total || total.amount === null || total.amount === undefined) return false;
+    const key = text(total.label).toLowerCase();
+    if (!key || seenLabels.has(key)) return false;
+    seenLabels.add(key);
+    return true;
+  });
+  const panelWidth = 240;
+  const boxX = pageWidth - margin - panelWidth;
+  const totalRows = totals.map((total) => {
+    const value = money(total.amount, currency);
+    const size = total.emphasis ? 11 : 9;
+    const font = total.emphasis ? bold : regular;
+    const padding = total.emphasis ? 10 : 4;
+    const valueWidth = font.widthOfTextAtSize(value, size);
+    const labels = wrap(total.label, font, size, panelWidth - valueWidth - 2 * padding - 10);
+    const lineHeight = size + 4;
+    return { total, value, size, font, padding, valueWidth, labels, lineHeight,
+      height: Math.max(1, labels.length) * lineHeight + (total.emphasis ? 19 : 6) };
+  });
+  const summaryReserve = Math.min(220, totalRows.reduce((height, row) => height + row.height, 0));
   const drawHeader = () => {
     page.drawLine({ start: { x: margin, y: y - 6 }, end: { x: pageWidth - margin, y: y - 6 }, thickness: 0.6, color: tableRule });
     for (const column of columns) {
@@ -437,6 +447,7 @@ export async function buildBusinessDocumentPdf(
     }
     y -= 22;
   };
+  const startTablePage = () => { startPage(); drawHeader(); };
 
   if (lines.length) {
     ensure(60);
@@ -458,18 +469,28 @@ export async function buildBusinessDocumentPdf(
       const unitIsColumn = columns.some((column) => column.key === "unit");
       const cells = columns.map((column) => ({ column, font: cellFont(column.key), parts: wrap(cellValue(column.key), cellFont(column.key), 8.5, column.width - 8) }));
       const noteLines = !columns.some((column) => column.key === "note") && line.note ? wrap(text(line.note), regular, 7.5, descriptionColumn.width - 8) : [];
-      const mainHeight = Math.max(1, ...cells.map((cell) => cell.parts.length)) * 12;
-      const rowHeight = mainHeight + noteLines.length * 10 + 10;
-      if (y - rowHeight < 55) { startPage(); drawHeader(); }
-      const rowTop = y;
-      for (const {column,font,parts} of cells) {
-        parts.forEach((part,index) => page.drawText(part, {
-          x: column.align === "right" ? column.x + column.width - 4 - font.widthOfTextAtSize(part,8.5) : column.x,
-          y: rowTop - index * 12, size: 8.5, font, color: inkBlack,
-        }));
+      const mainLines = Math.max(1, ...cells.map((cell) => cell.parts.length));
+      const rowHeight = mainLines * 12 + noteLines.length * 10 + 10;
+      const lastRowReserve = lineIndex === lines.length - 1 ? summaryReserve + 16 : 0;
+      if (y - Math.min(rowHeight + lastRowReserve, pageHeight - bodyBottom - 168) < bodyBottom) startTablePage();
+      for (let index = 0; index < mainLines; index++) {
+        if (y - 16 < bodyBottom) startTablePage();
+        for (const { column, font, parts } of cells) {
+          const part = parts[index];
+          if (!part) continue;
+          page.drawText(part, {
+            x: column.align === "right" ? column.x + column.width - 4 - font.widthOfTextAtSize(part, 8.5) : column.x,
+            y, size: 8.5, font, color: inkBlack,
+          });
+        }
+        y -= 12;
       }
-      noteLines.forEach((part,index)=>page.drawText(part,{ x:descriptionColumn.x,y:rowTop-mainHeight-index*10,size:7.5,font:regular,color:muted }));
-      y = rowTop - rowHeight;
+      for (const note of noteLines) {
+        if (y - 14 < bodyBottom) startTablePage();
+        page.drawText(note, { x: descriptionColumn.x, y, size: 7.5, font: regular, color: muted });
+        y -= 10;
+      }
+      y -= 10;
       page.drawLine({ start:{x:margin,y:y+6},end:{x:pageWidth-margin,y:y+6},thickness:0.35,dashArray:[1,2],color:rule });
     }
     y -= 16;
@@ -479,69 +500,23 @@ export async function buildBusinessDocumentPdf(
   // Each named figure appears once. A repeated label, or a second line that
   // merely restates the emphasised balance, is dropped so the band below is
   // the only place the amount owed is stated.
-  const totalsRaw = (Array.isArray(payload.totals) ? payload.totals : []).filter(
-  (total) => total && total.amount !== null && total.amount !== undefined,
-);
-
-const seenLabels = new Set<string>();
-
-const totals = totalsRaw.filter((total) => {
-  const key = String(total.label ?? "").trim().toLowerCase();
-
-  if (seenLabels.has(key)) {
-    return false;
-  }
-
-  seenLabels.add(key);
-
-  return true;
-});
-
-if (totals.length) {
-  const panelWidth = 240;
-  const boxX = pageWidth - margin - panelWidth;
-  ensure(totals.length * 16 + 30);
-
-  for (const total of totals) {
-    if (total.emphasis) y -= 8;
-    const value = money(total.amount, currency);
-    const size = total.emphasis ? 11 : 9;
-    const font = total.emphasis ? bold : regular;
-
-    if (total.emphasis) {
-      page.drawRectangle({
-        x: boxX,
-        y: y - 6,
-        width: panelWidth,
-        height: 22,
-        color: brown,
-      });
+  if (totalRows.length) {
+    ensure(summaryReserve);
+    for (const { total, value, size, font, padding, valueWidth, labels, lineHeight, height } of totalRows) {
+      ensure(height);
+      const top = y - (total.emphasis ? 8 : 0);
+      const colour = total.emphasis ? rgb(1, 1, 1) : inkBlack;
+      if (total.emphasis) {
+        page.drawRectangle({ x: boxX, y: y - height + 14, width: panelWidth, height: height - 10, color: brown });
+      }
+      labels.forEach((label, index) => page.drawText(label, {
+        x: boxX + padding, y: top - index * lineHeight, size, font, color: colour,
+      }));
+      page.drawText(value, { x: pageWidth - margin - padding - valueWidth, y: top, size, font, color: colour });
+      y -= height;
     }
-
-    page.drawText(total.label, {
-      x: boxX + (total.emphasis ? 10 : 4),
-      y: total.emphasis ? y + 1 : y,
-      size,
-      font,
-      color: total.emphasis ? rgb(1, 1, 1) : inkBlack,
-    });
-
-    const width = font.widthOfTextAtSize(value, size);
-
-    page.drawText(value, {
-      x: pageWidth - margin - width - (total.emphasis ? 10 : 4),
-      y: total.emphasis ? y + 1 : y,
-      size,
-      font,
-      color: total.emphasis ? rgb(1, 1, 1) : dark,
-    });
-
-    y -= total.emphasis ? 34 : 18;
-
+    y -= 8;
   }
-
-  y -= 8;
-}
 
   // ---- Payment information, terms and operational detail ----
   const shownInHeader = new Set(["due_date", "reservation", "confirmation", "reference", "room", "stay"]);
@@ -561,8 +536,9 @@ if (totals.length) {
     for (const [label, value] of meta) {
       const body = typeof value === "object" ? JSON.stringify(value) : String(value);
       const wrapped = wrap(`${label.replace(/_/g, " ")}: ${body}`, regular, 8.5, contentWidth);
-      ensure(wrapped.length * 11 + 6);
+      ensure(Math.min(wrapped.length * 11 + 6, 120));
       for (const part of wrapped) {
+        ensure(14);
         draw(part, margin, 8.5, regular, dark);
         y -= 11;
       }
@@ -605,8 +581,12 @@ if (totals.length) {
   }
 
   // A real footer region, with the same three contact columns as the preview.
-  if (y < 148) startPage();
-  const footerTop = 138;
+  let footerSymbol: Awaited<ReturnType<PDFDocument["embedPng"]>> | undefined;
+  try {
+    footerSymbol = await pdf.embedPng(Buffer.from(NEO_SYMBOL_BASE64,"base64"));
+  } catch { /* Branding artwork never invalidates the document. */ }
+  for (const footerPage of pdf.getPages()) {
+  page = footerPage;
   page.drawLine({ start:{x:margin,y:footerTop},end:{x:pageWidth-margin,y:footerTop},thickness:0.6,color:brown });
   const contactColumns = [["Phone",text(property["phone"])],["Mail",text(property["email"])],["Address",addressParts]];
   contactColumns.forEach(([label,value],index)=>{
@@ -628,10 +608,8 @@ if (totals.length) {
   const signature="Powered by NEØ",credit="Built by AI, Data & Marketing by Wambui";
   page.drawText(signature,{x:(pageWidth-regular.widthOfTextAtSize(signature,6.75))/2,y:58,size:6.75,font:regular,color:muted});
   page.drawText(credit,{x:(pageWidth-regular.widthOfTextAtSize(credit,6))/2,y:47,size:6,font:regular,color:muted});
-  try {
-    const symbol=await pdf.embedPng(Buffer.from(NEO_SYMBOL_BASE64,"base64"));
-    page.drawImage(symbol,{x:pageWidth-margin-26,y:39,width:26,height:26});
-  } catch { /* Branding artwork never invalidates an otherwise printable record. */ }
+  if (footerSymbol) page.drawImage(footerSymbol,{x:pageWidth-margin-26,y:39,width:26,height:26});
+  }
 
   pdf.setTitle(`${documentTitle} ${documentNumber}`);
   pdf.setAuthor(organisation);

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
 import { requireGuestOrderResult } from "@/lib/guest-order-result";
+import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
 
 type Row = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ export type Quote = {
   currency?: string;
   subtotal: number;
   tax_total: number;
+  tax_breakdown?: { label: string; amount: number }[] | null;
   discount_total: number;
   /** The property's configured service charge — the same figure the till applies. */
   service_charge: number;
@@ -37,6 +39,18 @@ export type Quote = {
 
 function keys(organizationId: string) {
   return ["public-delivery", organizationId] as const;
+}
+
+export function usePublishedDeliveryForGuest(organizationId: string, branchId: string | null, slug: string, enabled = true) {
+  return useQuery({
+    queryKey: [...keys(organizationId), "published-workspace", branchId, slug],
+    enabled: enabled && Boolean(branchId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const workspace = await resolvePublicWorkspace({ data: { appKey: "delivery", slug } });
+      return workspace?.organization_id === organizationId && workspace.branch_id === branchId ? workspace : null;
+    },
+  });
 }
 
 /** Branches of this organisation that participate in delivery/pickup. */
@@ -175,6 +189,7 @@ export function usePublicAddToCart(organizationId: string, customerId?: string |
       menuItemId: string;
       quantity?: number;
       specialInstructions?: string;
+      allergyNote?: string;
       optionIds?: string[];
       fulfilment?: "delivery" | "pickup";
     }) => {
@@ -186,7 +201,7 @@ export function usePublicAddToCart(organizationId: string, customerId?: string |
         _menu_item: input.menuItemId,
         _quantity: input.quantity ?? 1,
         _special_instructions: input.specialInstructions ?? null,
-        _allergy_note: null,
+        _allergy_note: input.allergyNote ?? null,
         _branch: input.branchId,
         _options: input.optionIds ?? [],
       });

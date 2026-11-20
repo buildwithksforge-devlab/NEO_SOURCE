@@ -118,7 +118,8 @@ export const Route = createFileRoute("/api/public/print-agent/$action")({
           ) {
             return response({ error: "invalid_database_response" }, 502);
           }
-          return response({ job });
+          const { withReceiptFeedbackGraphic } = await import("@/lib/print-receipt-feedback.server");
+          return response({ job: withReceiptFeedbackGraphic(job) });
         }
 
         if (params.action === "finish") {

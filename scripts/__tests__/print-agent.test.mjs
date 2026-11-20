@@ -125,6 +125,32 @@ test("lost completion acknowledgement surfaces as an error without a second phys
     );
   });
 });
+test("POS receipts send split payment instructions and a feedback raster before cutting", async () => {
+  await tcpFixture(async (address, chunks, received) => {
+    const feedback = Array.from({ length: 29 }, (_, row) => row === 8 ? "0".repeat(8) + "1" + "0".repeat(20) : "0".repeat(29));
+    const api = mockApi({
+      job_id: jobId, claim_id: claimId, document_type: "pos_receipt",
+      feedback_qr: feedback,
+      payload: { document: {
+        document: { title: "Receipt", number: "FIXTURE" },
+        property: { name: "Fixture property" },
+        identity: { brand: { receiptPaybill: "123456", receiptTill: "654321" } },
+        totals: [{ label: "Total", amount: 120 }, { label: "Cash", amount: 120 }],
+        meta: { Waiter: "Fixture server" },
+      } },
+      printer: { connection_type: "network", address },
+    });
+    await withFetch(api.fetch, async () => processPrinter(config, { id: "receipt", name: "Fixture" }));
+    await received;
+    const bytes = Buffer.concat(chunks);
+    for (const label of ["PAYMENTS & BALANCE", "HOW TO PAY", "M-Pesa Paybill: 123456", "M-Pesa Till: 654321", "Served by: Fixture server"]) {
+      assert.ok(bytes.includes(Buffer.from(label)), label);
+    }
+    const raster = bytes.indexOf(Buffer.from([29, 118, 48, 0]));
+    assert.ok(raster > bytes.indexOf(Buffer.from("Scan to leave feedback")));
+    assert.ok(bytes.lastIndexOf(Buffer.from([29, 86, 0])) > raster);
+  });
+});
 test("unsupported connection is reported as not_printed and never as completed", async () => {
   const api = mockApi({
     job_id: jobId,

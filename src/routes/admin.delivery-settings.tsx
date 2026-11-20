@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { useBranchScope } from "@/lib/branches";
-import { PAYMENT_METHOD_CATALOGUE } from "@/lib/payment-methods";
+import { DELIVERY_CHECKOUT_METHODS, deliveryPaymentLabel } from "@/lib/payment-methods";
 import { useDeliverySettings, useSaveDeliverySettings, useCreateDeliverySettings } from "@/lib/delivery-data";
 
 export const Route = createFileRoute("/admin/delivery-settings")({
@@ -174,10 +174,10 @@ function DeliverySettingsPage() {
 
       <Section
         title="Payment"
-        description="Only the methods ticked here are offered at checkout. A provider-backed method still needs its provider connected before it can collect."
+        description="Choose the methods available to customers at online checkout. Collection orders can also be paid at the property."
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          {PAYMENT_METHOD_CATALOGUE.filter((m) => m.value !== "room-charge").map((method) => (
+          {DELIVERY_CHECKOUT_METHODS.map((method) => (
             <label key={method.value} className="flex items-start gap-3 rounded-lg border p-3">
               <Switch
                 checked={methods.includes(method.value)}
@@ -185,15 +185,14 @@ function DeliverySettingsPage() {
                 disabled={!canEdit}
               />
               <span>
-                <span className="block text-sm font-medium">{method.label}</span>
+                <span className="block text-sm font-medium">{deliveryPaymentLabel(method.value)}</span>
                 <span className="block text-xs text-muted-foreground">{method.hint}</span>
               </span>
             </label>
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Charging to a room is offered automatically to a guest with a verified stay, and is not
-          set here.
+          Room charges are handled in Stay &amp; Dine for eligible in-house guests. Staff-recorded tenders are managed in the main workspace.
         </p>
         <Toggle
           label="Cash on delivery"

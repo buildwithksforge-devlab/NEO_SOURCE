@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2, MapPin, PackageCheck } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import { useState } from "react";
+import { deliveryPaymentLabel } from "@/lib/payment-methods";
 import { toast } from "sonner";
 import {
   BrandButton,
@@ -86,8 +87,7 @@ function TrackPage() {
 
   return (
     <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
-      <div className="neo-commerce-hero">
-        <span className="neo-commerce-icon"><PackageCheck className="size-5" aria-hidden /></span>
+      <div className="neo-delivery-page-heading">
         <div><h1 className="neo-commerce-title">Track your order</h1><p className="neo-commerce-copy">{orderReference}</p></div>
       </div>
 
@@ -112,22 +112,23 @@ function TrackPage() {
         </div>
       ) : (
         <div className="mt-4 space-y-4">
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+          <section className="neo-delivery-progress rounded-2xl bg-white p-5">
+            <h2 className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
               {statusLabel(status)}
-            </p>
+            </h2>
             <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
               Placed {new Date(String(order.data["created_at"])).toLocaleString()}
               {order.data["estimated_delivery_at"]
-                ? ` Â· Expected ${new Date(String(order.data["estimated_delivery_at"])).toLocaleTimeString()}`
+                ? ` · Expected ${new Date(String(order.data["estimated_delivery_at"])).toLocaleTimeString()}`
                 : ""}
             </p>
+            {canRetryPayment ? <a href="#delivery-payment" className="mt-3 inline-flex min-h-11 items-center rounded-full border border-slate-200 px-3 text-sm font-semibold text-slate-900">Payment options</a> : null}
 
-            <ol aria-label="Order progress" className="mt-5 space-y-3">
+            <ol aria-label="Order progress" className="mt-4">
               {steps.map((step, index) => {
                 const done = activeIndex >= 0 && index <= activeIndex;
                 return (
-                  <li key={step.key} aria-current={index === activeIndex ? "step" : undefined} className="flex items-center gap-3">
+                  <li key={step.key} aria-current={index === activeIndex ? "step" : undefined} data-reached={done} className="flex items-center gap-3">
                     <span
                       className="size-2.5 rounded-full"
                       style={{ background: done ? ws.primary_color : brandFallback.mist }}
@@ -144,11 +145,7 @@ function TrackPage() {
             </ol>
           </section>
 
-          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} />
-
-          <DeliveryPinCard orderId={String(order.data["id"] ?? "")} />
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm text-sm">
+          <section id="delivery-payment" className="rounded-2xl bg-white p-5 shadow-sm text-sm">
             <div className="flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Total</span>
               <span className="font-semibold" style={{ color: brandFallback.secondary }}>
@@ -158,7 +155,7 @@ function TrackPage() {
             <div className="mt-2 flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Payment</span>
               <span className="text-right" style={{ color: brandFallback.secondary }}>
-                {String(order.data["payment_method"] ?? "—")} · {String(order.data["payment_status"] ?? "—")}
+                {deliveryPaymentLabel(paymentMethod)} · {statusLabel(paymentStatus)}
               </span>
             </div>
 
@@ -301,6 +298,8 @@ function TrackPage() {
               </div>
             ) : null}
           </section>
+          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} />
+          <DeliveryPinCard orderId={String(order.data["id"] ?? "")} />
         </div>
       )}
     </PublicAppShell>
