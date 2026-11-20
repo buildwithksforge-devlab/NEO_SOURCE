@@ -71,7 +71,7 @@ export function SendToPrinterButton({
   const [printer, setPrinter] = useState("");
   const [submittedJobId, setJob] = useState<string | null>(null);
   const [trackedJobId, setTrackedJobId] = useState<string | null>(null);
-  const job = submittedJobId ?? trackedJobId ?? existingJobId;
+  const job = submittedJobId ?? trackedJobId ?? existingJobId ?? null;
   const delivery = usePrintJobDelivery(open ? job : null, organizationId);
 
   const available = useMemo(

@@ -146,9 +146,7 @@ describe("physical print-agent contract", () => {
       "neo-print-raw.ps1",
     );
 
-    expect(agent).toContain(
-      "Buffer.from([0x1d, 0x56, 0x00])",
-    );
+    expect(agent).toMatch(/Buffer\.from\(\[(?:10, 10, )?0x1d, 0x56, 0x00\]\)/);
 
     expect(rawBridge).toContain(
       'pDataType = "RAW"',

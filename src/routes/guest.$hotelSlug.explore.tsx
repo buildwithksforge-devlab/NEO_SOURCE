@@ -461,6 +461,7 @@ function ExplorePage() {
             ) : laundry.isError ? (
               <PublicEmptyState
                 title="Laundry prices could not load"
+                description="Refresh the property’s current prices."
                 action={<button type="button" className="neo-guest-secondary" onClick={() => void laundry.refetch()}>Try again</button>}
               />
             ) : !laundry.data?.enabled || (laundry.data.items ?? []).length === 0 ? (

@@ -319,7 +319,7 @@ function OrderTerminal() {
                   documentNumber={data.order_number}
                   role="restaurant"
                   branchId={data.branch_id}
-                  existingJobId={receiptPrintState.data?.inProgressId}
+                  existingJobId={receiptPrintState.data?.inProgressId ?? null}
                   label={receiptPrintState.data?.inProgressId ? "Track receipt print" : "Reprint receipt"}
                 />
               ) : null}

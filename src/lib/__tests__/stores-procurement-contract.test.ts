@@ -160,12 +160,20 @@ describe("scope and privilege", () => {
       "neo_procurement_request_decide",
       "neo_procurement_order_from_request",
       "neo_procurement_order_approve",
-      "neo_stores_receive_goods",
+      "neo_blind_receiving_orders",
+      "neo_submit_blind_receiving_count",
+      "neo_receiving_custody_queue",
+      "neo_accept_receiving_custody",
+      "neo_blind_receiving_review_queue",
+      "neo_blind_receiving_decide",
+      "neo_blind_receiving_approved_queue",
+      "neo_post_approved_blind_receiving",
       "neo_stores_issue",
       "neo_stores_low_stock_scan",
     ]) {
       expect(RPC_MANIFEST[name], `${name} missing from the manifest`).toBe("authenticated");
     }
+    expect(RPC_MANIFEST["neo_stores_receive_goods"]).toBeUndefined();
   });
 });
 

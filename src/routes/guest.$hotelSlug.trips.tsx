@@ -116,6 +116,7 @@ function TripsPage() {
         <p role="status" className="text-sm text-[var(--guest-muted)]">Loading your hotel requests…</p>
       ) : profile.isError || !customerId ? (
         <PublicEmptyState title="Your guest account could not load"
+          description="Refresh your account to send and track requests."
           action={<button type="button" className="neo-guest-secondary" onClick={() => void profile.refetch()}>Try again</button>} />
       ) : <>
       {stay ? (
@@ -177,6 +178,7 @@ function TripsPage() {
           </div>
         ) : requests.isError ? (
           <PublicEmptyState title="Requests could not load"
+            description="Refresh to see the latest updates from the hotel."
             action={<button type="button" className="neo-guest-secondary" onClick={() => void requests.refetch()}>Try again</button>} />
         ) : (requests.data?.length ?? 0) === 0 ? (
           <PublicEmptyState title="No requests yet" description="Anything you ask for will be tracked here." />

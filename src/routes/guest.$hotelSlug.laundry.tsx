@@ -129,6 +129,7 @@ function GuestLaundryPage() {
         </div>
       ) : profile.isError || !customerId || offering.isError ? (
         <PublicEmptyState title="Laundry could not load"
+          description="Refresh your guest account and the hotel’s laundry offering."
           action={<button type="button" className="neo-guest-secondary" onClick={() => void Promise.all([profile.refetch(), offering.refetch()])}>Try again</button>} />
       ) : !offering.data?.enabled ? (
         <GuestSection title="Not available yet">

@@ -139,7 +139,7 @@ export function GuestScreen({
 export function GuestPageIntro({ title, description, image, children }: {
   title: string;
   description?: string;
-  image?: string | null;
+  image?: string | null | undefined;
   children?: ReactNode;
 }) {
   return (

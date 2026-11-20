@@ -31,7 +31,7 @@ import { useCloseOrder, usePurchaseOrderBoard, type OrderStage, type OrderView }
 
 export const Route = createFileRoute("/_shell/procurement/orders")({
   validateSearch: (search: Record<string, unknown>): { order?: string } =>
-    typeof search.order === "string" ? { order: search.order } : {},
+    typeof search["order"] === "string" ? { order: search["order"] } : {},
   head: () => ({
     meta: [
       { title: "Purchase orders & receipts — NEØ" },
