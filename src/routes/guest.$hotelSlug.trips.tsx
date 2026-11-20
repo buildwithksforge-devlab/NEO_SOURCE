@@ -46,9 +46,9 @@ function TripsPage() {
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
-  const reservations = useGuestReservations(ws.organization_id, customerId);
-  const requests = useGuestRequests(ws.organization_id, customerId);
-  const createRequest = useCreateGuestRequest(ws.organization_id);
+  const reservations = useGuestReservations(ws.organization_id, customerId, ws.branch_id);
+  const requests = useGuestRequests(ws.organization_id, ws.branch_id, customerId);
+  const createRequest = useCreateGuestRequest(ws.organization_id, ws.branch_id);
   useGuestScreenView(ws.organization_id, "trips", Boolean(customerId));
 
   const [category, setCategory] = useState<string>("housekeeping");
@@ -124,7 +124,7 @@ function TripsPage() {
         </GuestSection>
       ) : null}
 
-      <MyStaySection organizationId={ws.organization_id} enabled={Boolean(customerId)} />
+      <MyStaySection organizationId={ws.organization_id} branchId={ws.branch_id} {...(user ? { userId: user.id } : {})} />
 
 
       <GuestSection title="Request assistance" description="Goes straight to the responsible department.">
@@ -240,9 +240,9 @@ function Line({ label, value }: { label: string; value: string }) {
  * they have proved is theirs. Everything shown here is decided by the hotel's
  * own records — never by what the browser claims.
  */
-function MyStaySection({ organizationId, enabled }: { organizationId: string; enabled: boolean }) {
-  const stays = useMyStays(organizationId, enabled);
-  const verify = useVerifyStay(organizationId);
+function MyStaySection({ organizationId, branchId, userId }: { organizationId: string; branchId: string | null; userId?: string }) {
+  const stays = useMyStays(organizationId, branchId, userId);
+  const verify = useVerifyStay(organizationId, branchId);
   const [reference, setReference] = useState("");
   const [detail, setDetail] = useState("");
 

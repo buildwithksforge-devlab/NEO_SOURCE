@@ -8,12 +8,13 @@
  */
 import { useState } from "react";
 import { canonicalLink, canonicalUrl, robotsDirective } from "@/lib/route-visibility";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { BedDouble, Bike, Heart, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { BedDouble, Bike, Heart, Search, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestImage } from "@/components/public/GuestImage";
 import { GuestRowsSkeleton } from "@/components/public/GuestSkeleton";
+import { Input } from "@/components/ui/input";
 import { GUEST_CARD_WIDTHS } from "@/lib/responsive-image";
 import { brandFallback, buttonRadius } from "@/lib/public-apps";
 import { money, usePublicMenu } from "@/lib/public-delivery";
@@ -30,6 +31,10 @@ import {
 } from "@/lib/guest-experiences";
 
 export const Route = createFileRoute("/guest/$hotelSlug/explore")({
+  validateSearch: (search): { section?: TabKey } => {
+    const section = tabs.find((entry) => entry.key === search["section"])?.key;
+    return section ? { section } : {};
+  },
   head: ({ params }) => ({
     meta: [
       { title: "Explore the hotel — NEØ Guest" },
@@ -115,12 +120,16 @@ function Pill({
 function ExplorePage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
+  const { section } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { user } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
 
-  const [tab, setTab] = useState<TabKey>("rooms");
+  const tab = section ?? "rooms";
   const [category, setCategory] = useState<string | null>(null);
+  const [dishSearch, setDishSearch] = useState("");
+  const [dishLimit, setDishLimit] = useState(12);
   const primary = ws.primary_color || brandFallback.primary;
   const radius = buttonRadius(ws.button_style);
 
@@ -140,7 +149,13 @@ function ExplorePage() {
     tab === "rooms" && Boolean(user),
   );
 
-  const menu = usePublicMenu(ws.organization_id, ws.branch_id, "room-service");
+  const roomMenu = usePublicMenu(ws.organization_id, ws.branch_id, "room-service", tab === "dining");
+  const collectionMenu = usePublicMenu(ws.organization_id, ws.branch_id, "pickup", tab === "dining");
+  const deliveryMenu = usePublicMenu(ws.organization_id, ws.branch_id, "delivery", tab === "dining");
+  const catalogues = [roomMenu, collectionMenu, deliveryMenu];
+  const menuPending = catalogues.some((menu) => menu.isLoading);
+  const menuFailed = catalogues.some((menu) => menu.isError);
+  const dishes = [...new Map(catalogues.flatMap((menu) => menu.data ?? []).map((item) => [item["id"], item])).values()];
   const favourites = useGuestFavourites(ws.organization_id, customerId);
   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
   const favouriteByItem = new Map(
@@ -149,19 +164,21 @@ function ExplorePage() {
 
   // Both of these lists are released by the hotel to signed-in guests only.
   const laundry = useLaundryOffering(ws.organization_id, user ? ws.branch_id : null);
-  const transport = useTransportProducts(ws.organization_id);
+  const transport = useTransportProducts(ws.organization_id, ws.branch_id, tab === "services" && Boolean(customerId));
 
   // Experiences are published marketing content: readable before sign-in.
   const experiences = usePublicExperiences(ws.branch_id ?? undefined);
 
+  const categoryOf = (item: Record<string, unknown>) => (item["menu_categories"] as { name?: string } | null)?.name ?? "Menu";
+  const categories = [...new Set(dishes.map(categoryOf))];
+  const searchTerm = dishSearch.trim().toLowerCase();
+  const matchedDishes = dishes.filter((item) => (!category || category === categoryOf(item)) &&
+    `${String(item["name"] ?? "")} ${String(item["description"] ?? "")}`.toLowerCase().includes(searchTerm));
   const grouped = new Map<string, Record<string, unknown>[]>();
-  for (const item of menu.data ?? []) {
-    const name =
-      ((item["menu_categories"] as { name?: string } | null)?.name as string | undefined) ?? "Menu";
+  for (const item of matchedDishes.slice(0, dishLimit)) {
+    const name = categoryOf(item);
     grouped.set(name, [...(grouped.get(name) ?? []), item]);
   }
-  const categories = [...grouped.keys()];
-  const shown = category && grouped.has(category) ? [category] : categories;
   const nights = nightsBetween(arrival, departure);
 
   return (
@@ -172,20 +189,20 @@ function ExplorePage() {
             Explore {ws.hotel_name}
           </h1>
           <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-            Rooms, dining, services and experiences — prices and availability exactly as the
-            property publishes them.
+            Find a room, see the menu or arrange a service.
           </p>
         </div>
       </section>
 
-      <div className="neo-scroll-x mt-6 flex gap-2">
+      <div className="neo-guest-segments mt-5" role="group" aria-label="Explore sections">
         {tabs.map((entry) => {
           const Icon = entry.icon;
           return (
-            <Pill key={entry.key} active={tab === entry.key} tint={primary} onClick={() => setTab(entry.key)}>
+            <button type="button" key={entry.key} aria-pressed={tab === entry.key}
+              onClick={() => void navigate({ search: { section: entry.key }, resetScroll: false })}>
               <Icon className="size-4" aria-hidden />
               {entry.label}
-            </Pill>
+            </button>
           );
         })}
       </div>
@@ -215,8 +232,9 @@ function ExplorePage() {
             <GuestRowsSkeleton rows={3} label="Checking availability" />
           ) : rooms.isError ? (
             <PublicEmptyState
-              title="Sign in to see live room rates"
-              description="This hotel releases live availability and pricing to signed-in guests. You can still open the booking screen to choose dates."
+                title="Room rates couldn’t load"
+                description="Try again to see live availability for these dates."
+                action={<button className="neo-guest-secondary" onClick={() => void rooms.refetch()}>Retry room rates</button>}
             />
           ) : (rooms.data ?? []).length === 0 ? (
             <PublicEmptyState
@@ -275,9 +293,16 @@ function ExplorePage() {
       {/* -------------------------------------------------------- dining */}
       {tab === "dining" ? (
         <>
+          {dishes.length ? (
+            <div className="relative mt-5">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--guest-muted)]" aria-hidden />
+              <Input type="search" aria-label="Search dishes" placeholder="Search dishes" value={dishSearch}
+                onChange={(event) => { setDishSearch(event.target.value); setDishLimit(12); }} className="min-h-11 pl-10" />
+            </div>
+          ) : null}
           {categories.length > 1 ? (
             <div className="neo-scroll-x mt-6 flex gap-2">
-              <Pill active={category === null} tint={primary} onClick={() => setCategory(null)}>
+              <Pill active={category === null} tint={primary} onClick={() => { setCategory(null); setDishLimit(12); }}>
                 All
               </Pill>
               {categories.map((name) => (
@@ -285,7 +310,7 @@ function ExplorePage() {
                   key={name}
                   active={category === name}
                   tint={primary}
-                  onClick={() => setCategory(name)}
+                  onClick={() => { setCategory(name); setDishLimit(12); }}
                 >
                   {name}
                 </Pill>
@@ -293,10 +318,15 @@ function ExplorePage() {
             </div>
           ) : null}
 
-          {menu.isLoading ? (
+          {menuPending && !dishes.length ? (
             <div className="mt-6">
               <GuestRowsSkeleton rows={5} label="Loading the menu" />
             </div>
+          ) : menuFailed && !dishes.length ? (
+            <PublicEmptyState title="Menus couldn’t load" description="Refresh to see what the kitchen publishes here."
+              action={<button type="button" className="neo-guest-secondary" onClick={() => {
+                catalogues.filter((menu) => menu.isError).forEach((menu) => void menu.refetch());
+              }}>Retry menus</button>} />
           ) : categories.length === 0 ? (
             <div className="mt-6">
               <PublicEmptyState
@@ -304,8 +334,13 @@ function ExplorePage() {
                 description="Dining opens here as soon as the kitchen publishes its dishes. Reception can take your order in the meantime."
               />
             </div>
+          ) : matchedDishes.length === 0 ? (
+            <PublicEmptyState title="No matching dishes" description="Try another dish or category."
+              action={<button type="button" className="neo-guest-secondary" onClick={() => {
+                setDishSearch(""); setCategory(null); setDishLimit(12);
+              }}>Clear filters</button>} />
           ) : (
-            shown.map((name) => (
+            [...grouped.keys()].map((name) => (
               <GuestSection key={name} title={name}>
                 <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {(grouped.get(name) ?? []).map((item) => (
@@ -335,7 +370,7 @@ function ExplorePage() {
                         ) : null}
                         <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pt-3">
                           <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-                            {money(item["base_price"])}
+                            {money(item["base_price"], ws.currency ?? "KES")}
                           </span>
                           <span className="flex min-w-0 items-center gap-1">
                             {customerId ? (
@@ -352,7 +387,7 @@ function ExplorePage() {
                                     favouriteId: favouriteByItem.get(String(item["id"])) ?? null,
                                   })
                                 }
-                                className="grid min-h-9 min-w-9 place-items-center rounded-full"
+                                className="grid min-h-11 min-w-11 place-items-center rounded-full"
                                 style={{ color: "var(--pa-accent-ink)" }}
                               >
                                 <Heart
@@ -365,7 +400,7 @@ function ExplorePage() {
                               to="/guest/$hotelSlug/order"
                               params={{ hotelSlug }}
                               search={{ item: String(item["id"]) }}
-                              className="inline-flex min-h-9 items-center px-3 text-xs font-semibold"
+                              className="inline-flex min-h-11 items-center px-3 text-xs font-semibold"
                               style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                             >
                               Order
@@ -379,6 +414,9 @@ function ExplorePage() {
               </GuestSection>
             ))
           )}
+          {matchedDishes.length > dishLimit ? (
+            <button type="button" className="neo-guest-secondary mt-5" onClick={() => setDishLimit((limit) => limit + 12)}>Show more dishes</button>
+          ) : null}
         </>
       ) : null}
 
@@ -458,8 +496,13 @@ function ExplorePage() {
               ) : undefined
             }
           >
-            {transport.isLoading ? (
+            {!user ? (
+              <PublicEmptyState title="Sign in to see transfers" description="You can also contact reception for help with a trip." />
+            ) : transport.isLoading ? (
               <GuestRowsSkeleton rows={2} label="Loading transfers" />
+            ) : transport.isError ? (
+              <PublicEmptyState title="Transfers couldn’t load" description="Try again to see the property’s transfers."
+                action={<button className="neo-guest-secondary" onClick={() => void transport.refetch()}>Retry transfers</button>} />
             ) : (transport.data ?? []).length === 0 ? (
               <PublicEmptyState
                 title="No transfers are published"

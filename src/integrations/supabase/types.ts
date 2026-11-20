@@ -30799,6 +30799,7 @@ export type Database = {
           order_type: string
           organization_id: string
           paid_total: number
+          room_transfer_paid_total: number | null
           payment_status: string
           room_id: string | null
           sent_at: string | null

@@ -17,7 +17,7 @@ export function useAutomaticPlatformChecks() {
     refetchIntervalInBackground: false,
     retry: false,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(supabase as never, 'neo_platform_run_checks', { _branch: branchId });
+      const { data, error } = await guardedRpc(supabase as never, "neo_platform_run_checks", { _branch: branchId });
       if (error) throw Object.assign(new Error(error.message), { code: error.code });
       const result = data as { run_id?: string; finished_at?: string; failed?: number; blocked?: number; status?: string; cached?: boolean } | null;
       if (!result?.run_id || !result.finished_at) throw new Error('Automatic check results were not saved.');

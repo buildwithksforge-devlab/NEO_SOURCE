@@ -6,7 +6,6 @@ import {
 } from "@/lib/procurement-data";
 import { useRaiseReorderRequest, usePostReceipt, usePostTransfer, useCloseStockTake } from "@/lib/inventory-data";
 import { useAdvanceSupplierPayment, useReleasePaymentSchedule } from "@/lib/finance-data";
-import { useReceiveGoods } from "@/lib/stores-lifecycle";
 import {
   requireMatchResult,
   requireSupplierPaymentResult,
@@ -118,21 +117,6 @@ describe("saved supply-chain result boundaries", () => {
     expect(m.warning).toHaveBeenCalledWith(expect.stringContaining("Finance accrual"));
     expect(m.success).not.toHaveBeenCalled();
     expect(m.invalidate).toHaveBeenCalledWith({ queryKey: ["finance-posting"] });
-  });
-  it("atomic receiving preserves a partial Finance handoff", async () => {
-    const data = {
-      ok: true,
-      receipt_id: id,
-      grn_number: "TEST-GRN",
-      posting: { status: "pending-finance" },
-    };
-    m.rpc.mockResolvedValue({ data, error: null });
-    const hook = mutation(useReceiveGoods());
-    await hook.onSuccess(
-      await hook.mutationFn({ orderId: id, locationId: id, lines: [], attemptKey: id }),
-    );
-    expect(m.warning).toHaveBeenCalledWith(expect.stringContaining("Finance accrual"));
-    expect(m.success).not.toHaveBeenCalled();
   });
   it.each([
     null,

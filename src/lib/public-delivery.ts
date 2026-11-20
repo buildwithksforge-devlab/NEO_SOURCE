@@ -107,9 +107,11 @@ export function usePublicMenu(
   organizationId: string,
   branchId: string | null,
   fulfilment: "delivery" | "pickup" | "room-service" = "delivery",
+  enabled = true,
 ) {
   return useQuery({
     queryKey: [...keys(organizationId), "menu", branchId ?? "all", fulfilment],
+    enabled,
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_public_menu", {
         _org: organizationId,
@@ -155,6 +157,7 @@ export function useMyPublicCart(organizationId: string, customerId?: string | nu
         .select(
           "*, cart_items(*, menu_items(name, base_price, image_url, availability, available_delivery), cart_item_modifiers(*))",
         )
+        .eq("organization_id", organizationId)
         .eq("customer_id", customerId)
         .eq("status", "active")
         .maybeSingle();
@@ -172,24 +175,28 @@ export function usePublicAddToCart(organizationId: string, customerId?: string |
       menuItemId: string;
       quantity?: number;
       specialInstructions?: string;
+      optionIds?: string[];
+      fulfilment?: "delivery" | "pickup";
     }) => {
       guardPreview();
       if (!customerId) throw new Error("Sign in to start an order");
       const { error } = await guardedRpc(sb, "neo_guest_cart_add_item", {
         _org: organizationId,
-        _fulfilment: "delivery",
+        _fulfilment: input.fulfilment ?? "delivery",
         _menu_item: input.menuItemId,
         _quantity: input.quantity ?? 1,
         _special_instructions: input.specialInstructions ?? null,
         _allergy_note: null,
         _branch: input.branchId,
-        _options: [],
+        _options: input.optionIds ?? [],
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Added to your order");
       void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -206,7 +213,11 @@ export function usePublicUpdateCartItem() {
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -223,7 +234,11 @@ export function usePublicUpdateCart() {
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -245,6 +260,7 @@ export function usePublicPlaceOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { cartId: string; paymentMethod: string }) => {
+      guardPreview();
       const { data, error } = await guardedRpc(sb, "delivery_place_order", {
         _cart: input.cartId,
         _payment_method: input.paymentMethod,
@@ -252,7 +268,11 @@ export function usePublicPlaceOrder() {
       if (error) throw new Error(error.message);
       return requireGuestOrderResult(data);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -273,20 +293,20 @@ export function useDeliveryMpesaCharge() {
   });
 }
 
-export function useMyPublicOrders(organizationId: string, customerId?: string | null) {
+export function useMyPublicOrders(organizationId: string, customerId?: string | null, branchId?: string | null) {
   return useQuery({
-    queryKey: [...keys(organizationId), "orders", customerId ?? "none"],
+    queryKey: [...keys(organizationId), "orders", customerId ?? "none", branchId ?? "all"],
     enabled: Boolean(customerId),
     queryFn: async () => {
-      const { data, error } = await sb
+      let query = sb
         .from("delivery_orders")
         .select(
-          "id, order_number, order_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, branch_id",
+          "id, order_number, order_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, scheduled_for, branch_id",
         )
         .eq("organization_id", organizationId)
-        .eq("customer_id", customerId)
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .eq("customer_id", customerId);
+      if (branchId) query = query.eq("branch_id", branchId);
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(50);
       if (error) throw new Error(error.message);
       return (data ?? []) as Row[];
     },
@@ -294,19 +314,20 @@ export function useMyPublicOrders(organizationId: string, customerId?: string | 
 }
 
 /** Tracking by order reference — RLS still decides what the caller may read. */
-export function usePublicOrderByReference(organizationId: string, reference?: string) {
+export function usePublicOrderByReference(organizationId: string, reference?: string, branchId?: string | null) {
   return useQuery({
-    queryKey: [...keys(organizationId), "track", reference ?? "none"],
+    queryKey: [...keys(organizationId), "track", reference ?? "none", branchId ?? "all"],
     enabled: Boolean(reference),
     queryFn: async () => {
-      const { data, error } = await sb
+      let query = sb
         .from("delivery_orders")
         .select(
           "id, order_number, order_status, kitchen_status, dispatch_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, contact_name, rider_id, branch_id",
         )
         .eq("organization_id", organizationId)
-        .eq("order_number", reference)
-        .maybeSingle();
+        .eq("order_number", reference);
+      if (branchId) query = query.eq("branch_id", branchId);
+      const { data, error } = await query.maybeSingle();
       if (error) throw new Error(error.message);
       return (data as Row | null) ?? null;
     },
@@ -350,7 +371,9 @@ export function useSavePublicAddress(organizationId: string, customerId?: string
 /** Human label for every status in the delivery / pickup lifecycle. */
 export const orderStatusLabels: Record<string, string> = {
   draft: "Order received",
+  "pending-payment": "Payment pending",
   "payment-pending": "Payment pending",
+  "payment-verification": "Verifying payment",
   placed: "Order received",
   confirmed: "Confirmed",
   accepted: "Accepted",

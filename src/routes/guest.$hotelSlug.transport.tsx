@@ -40,9 +40,9 @@ function TransportPage() {
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
-  const products = useTransportProducts(ws.organization_id);
-  const requests = useMyTransportRequests(ws.organization_id, customerId);
-  const request = useRequestTransport(ws.organization_id);
+  const products = useTransportProducts(ws.organization_id, ws.branch_id, Boolean(customerId));
+  const requests = useMyTransportRequests(ws.organization_id, ws.branch_id, customerId);
+  const request = useRequestTransport(ws.organization_id, ws.branch_id);
   useGuestScreenView(ws.organization_id, "transport", Boolean(customerId));
 
   const [productId, setProductId] = useState<string>("");
@@ -101,6 +101,9 @@ function TransportPage() {
               <div className="flex justify-center py-6">
                 <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
               </div>
+            ) : products.isError ? (
+              <PublicEmptyState title="Transfers couldn’t load" description={`Try again to see transfers for ${ws.hotel_name}.`}
+                action={<button className="neo-guest-secondary" onClick={() => void products.refetch()}>Retry transfers</button>} />
             ) : (products.data?.length ?? 0) === 0 ? (
               <PublicEmptyState
                 title="No published transfers"
@@ -216,7 +219,15 @@ function TransportPage() {
           </GuestSection>
 
           <GuestSection title="My transfers">
-            {(requests.data?.length ?? 0) === 0 ? (
+            {requests.isLoading ? (
+              <p className="text-sm text-[var(--guest-muted)]" role="status">Loading your transfers…</p>
+            ) : requests.isError ? (
+              <PublicEmptyState
+                title="Your transfer history couldn’t load"
+                description="Try again to see requests at this property."
+                action={<button type="button" className="neo-guest-secondary" onClick={() => void requests.refetch()}>Retry transfer history</button>}
+              />
+            ) : (requests.data?.length ?? 0) === 0 ? (
               <PublicEmptyState title="No transfers yet" description="Requests you send appear here with live status." />
             ) : (
               <ul className="space-y-2">

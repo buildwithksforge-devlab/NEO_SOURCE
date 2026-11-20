@@ -101,7 +101,7 @@ function OrderTerminal() {
   const { id } = Route.useParams();
   const { can } = useAuth();
   const order = usePosOrder(id);
-  const stockOut = usePosStockAvailability(order.data?.branch_id);
+  const stockOut = usePosStockAvailability(order.data?.branch_id, order.data?.order_type);
   const [stockIssue, setStockIssue] = useState<string | null>(null);
   const removeDraftOrder = useRemoveDraftOrder();
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -426,7 +426,9 @@ function OrderTerminal() {
                           <StatusPill tone="destructive">No production station</StatusPill>
                         ) : null}
                         {stockOut.data?.has(m.id) && m.availability === "available" ? (
-                          <StatusPill tone="destructive">Out of stock</StatusPill>
+                          <StatusPill tone="destructive">
+                            {stockOut.data.get(m.id)?.startsWith("Out of stock:") ? "Out of stock" : "Stock check"}
+                          </StatusPill>
                         ) : null}
                       </StockAwareMenuItem>
                     ))}
@@ -678,7 +680,7 @@ function OrderTerminal() {
                     <dd>{roomTransfer.amountDue === null ? "Review money evidence" : money(balance)}</dd>
                   </div>
                   {roomTransfer.transferred && !roomTransfer.overlap ? <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Transferred to guest folio</dt><dd>{money(data.grand_total)}</dd>
+                    <dt className="text-muted-foreground">Balance transferred to guest folio</dt><dd>{money(roomTransfer.transferredBalance ?? 0)}</dd>
                   </div> : null}
                   {roomTransfer.credit > 0 ? <div className="flex justify-between"><dt>POS credit / overpayment</dt><dd>{money(roomTransfer.credit)}</dd></div> : null}
                 </dl>
@@ -841,6 +843,7 @@ function OrderTerminal() {
             open={roomOpen && canTransferRoom}
             onOpenChange={setRoomOpen}
             orderId={data.id}
+            branchId={data.branch_id}
             balance={balance}
             eligible={canTransferRoom}
             eligibilityReason={roomTransferReason}
@@ -960,6 +963,7 @@ function RoomChargeDialog({
   open,
   onOpenChange,
   orderId,
+  branchId,
   balance,
   eligible,
   eligibilityReason,
@@ -967,11 +971,12 @@ function RoomChargeDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
+  branchId: string | null;
   balance: number;
   eligible: boolean;
   eligibilityReason: string | null;
 }) {
-  const stays = useCheckedInStays();
+  const stays = useCheckedInStays(branchId);
   const [stayId, setStayId] = useState<string>("");
   const folio = useOpenFolioForStay(stayId || undefined);
   const post = usePostRoomCharge();
@@ -982,8 +987,8 @@ function RoomChargeDialog({
         <DialogHeader>
           <DialogTitle>Charge to guest room</DialogTitle>
           <DialogDescription>
-            Transfer this completely unpaid bill once to a checked-in guest’s open folio. {money(balance)} will be posted
-            as a folio line. Recorded or unresolved payments require reconciliation before transfer.
+            Post the sale to a checked-in guest’s open folio and apply any confirmed POS receipts.
+            The amount added to the guest’s balance is {money(balance)}.
           </DialogDescription>
         </DialogHeader>
         {(stays.data ?? []).length === 0 ? (

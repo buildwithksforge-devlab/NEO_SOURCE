@@ -3,7 +3,14 @@ import {posRoomTransferState} from "../pos-room-transfer";
 const bill={status:"served",folio_post_status:"not-posted",folio_id:null,grand_total:7261.5,paid_total:0,payment_status:"unpaid",pos_payments:[]};
 describe("POS room transfer and collection boundary",()=>{
  it("allows a completely unpaid served bill without requiring payment before production",()=>expect(posRoomTransferState(bill)).toMatchObject({canTransfer:true,canCollect:true,amountDue:7261.5}));
- it("does not offer the remaining partial debt as a full-bill room charge",()=>expect(posRoomTransferState({...bill,paid_total:2000,payment_status:"partial"})).toMatchObject({canTransfer:false,canCollect:true,amountDue:5261.5}));
+ it("offers a partially paid bill only when confirmed tenders match",()=>{
+  const partial={...bill,paid_total:2000,payment_status:"partial"};
+  expect(posRoomTransferState(partial)).toMatchObject({canTransfer:false,canCollect:true,amountDue:5261.5});
+  const verified={...partial,pos_payments:[{status:"confirmed",amount:2000}]};
+  expect(posRoomTransferState(verified)).toMatchObject({canTransfer:true,amountDue:5261.5});
+  expect(posRoomTransferState({...verified,folio_post_status:"posted",folio_id:"folio",room_transfer_paid_total:2000}))
+   .toMatchObject({canTransfer:false,canCollect:false,overlap:false,transferredBalance:5261.5});
+ });
  it.each(["confirmed","pending","initiated","processing","unknown"])("refuses a room transfer with saved payment status %s",status=>expect(posRoomTransferState({...bill,pos_payments:[{status}]}).canTransfer).toBe(false));
  it("allows final failed attempts but keeps active receipt review blocked",()=>{
   const failed={...bill,pos_payments:[{status:"failed"}]};expect(posRoomTransferState(failed).canTransfer).toBe(true);

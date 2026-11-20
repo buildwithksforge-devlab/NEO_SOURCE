@@ -33,7 +33,7 @@ function GuestAppLayout() {
   useTrackEntry(hotelSlug, "stay_dine");
   if (!workspace) return <WorkspaceNotFound appLabel="Guest App" />;
   return (
-    <PublicWorkspaceProvider workspace={workspace}>
+    <PublicWorkspaceProvider key={workspace.id} workspace={workspace}>
       <Outlet />
     </PublicWorkspaceProvider>
   );

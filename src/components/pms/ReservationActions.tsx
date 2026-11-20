@@ -30,7 +30,7 @@ import {
 import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
 
 import {
-  FOLIO_CATEGORIES,
+  MANUAL_FOLIO_CATEGORIES,
   PAYMENT_METHODS,
   money,
   moneyWithCode,
@@ -398,6 +398,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
   const [quantity, setQuantity] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
   const [tax, setTax] = useState(0);
+  const [chargeIntent, setChargeIntent] = useState(() => crypto.randomUUID());
   const post = usePostCharge();
 
   if (!can("pms", "folios.create")) return null;
@@ -412,12 +413,14 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
         </Button>
       }
       title="Post a charge"
-      description="Charges are posted once — a duplicate submission is ignored by the posting service."
+      description="Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked."
       confirmLabel="Post charge"
-      disabled={!description.trim() || unitPrice <= 0}
-      onConfirm={() =>
-        post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax })
-      }
+      disabled={post.isPending || !description.trim() || !Number.isFinite(unitPrice) || unitPrice <= 0
+        || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(tax) || tax < 0}
+      onConfirm={async () => {
+        await post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax, chargeIntent });
+        setChargeIntent(crypto.randomUUID());
+      }}
     >
       <div className="space-y-2">
         <Label>Category</Label>
@@ -426,7 +429,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {FOLIO_CATEGORIES.map((c) => (
+            {MANUAL_FOLIO_CATEGORIES.map((c) => (
               <SelectItem key={c} value={c}>
                 {titleCase(c)}
               </SelectItem>

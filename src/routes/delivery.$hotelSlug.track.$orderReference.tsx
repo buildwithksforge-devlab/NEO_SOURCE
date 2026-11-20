@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin, PackageCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,7 @@ const DELIVERY_STEPS = [
   { key: "placed", label: "Order received" },
   { key: "confirmed", label: "Confirmed by restaurant" },
   { key: "in-preparation", label: "Being prepared" },
+  { key: "ready-for-pickup", label: "Ready for the rider" },
   { key: "rider-assigned", label: "Rider assigned" },
   { key: "out-for-delivery", label: "On the way" },
   { key: "delivered", label: "Delivered" },
@@ -44,14 +45,30 @@ const PICKUP_STEPS = [
   { key: "completed", label: "Collected" },
 ];
 
+const commonMilestones: Record<string, string> = {
+  draft: "placed",
+  "pending-payment": "placed",
+  "payment-pending": "placed",
+  "payment-verification": "placed",
+  accepted: "confirmed",
+  ready: "ready-for-pickup",
+  "awaiting-rider": "ready-for-pickup",
+  "en-route": "out-for-delivery",
+  arrived: "out-for-delivery",
+};
+
 function TrackPage() {
   const ws = useWorkspace();
   const { hotelSlug, orderReference } = Route.useParams();
-  const order = usePublicOrderByReference(ws.organization_id, orderReference);
+  const order = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id);
 
   const status = String(order.data?.["order_status"] ?? "");
-  const steps = String(order.data?.["fulfilment_type"] ?? "delivery") === "pickup" ? PICKUP_STEPS : DELIVERY_STEPS;
-  const activeIndex = steps.findIndex((s) => s.key === status);
+  const isPickup = order.data?.["fulfilment_type"] === "pickup";
+  const steps = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
+  const milestone = status === "collected" ? (isPickup ? "completed" : "out-for-delivery")
+    : status === "completed" || status === "delivered" ? (isPickup ? "completed" : "delivered")
+    : commonMilestones[status] ?? status;
+  const activeIndex = steps.findIndex((s) => s.key === milestone);
 
   const charge = useDeliveryMpesaCharge();
   const [retryPhone, setRetryPhone] = useState("");
@@ -69,22 +86,26 @@ function TrackPage() {
 
   return (
     <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
-      <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
-        Order {orderReference}
-      </h1>
+      <div className="neo-commerce-hero">
+        <span className="neo-commerce-icon"><PackageCheck className="size-5" aria-hidden /></span>
+        <div><h1 className="neo-commerce-title">Track your order</h1><p className="neo-commerce-copy">{orderReference}</p></div>
+      </div>
 
       {order.isLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
         </div>
+      ) : order.isError ? (
+        <div className="mt-4"><PublicEmptyState title="Tracking couldn’t refresh" description="Use the same order reference when you retry."
+          action={<button className="neo-commerce-primary" onClick={() => void order.refetch()}>Retry tracking</button>} /></div>
       ) : !order.data ? (
         <div className="mt-4">
           <PublicEmptyState
             title="Order not found"
             description="We could not find this order reference. Sign in with the account used to order, or check the reference."
             action={
-              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }}>
-                <BrandButton>My orders</BrandButton>
+              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }} className="neo-commerce-primary">
+                My orders
               </Link>
             }
           />
@@ -102,11 +123,11 @@ function TrackPage() {
                 : ""}
             </p>
 
-            <ol className="mt-5 space-y-3">
+            <ol aria-label="Order progress" className="mt-5 space-y-3">
               {steps.map((step, index) => {
                 const done = activeIndex >= 0 && index <= activeIndex;
                 return (
-                  <li key={step.key} className="flex items-center gap-3">
+                  <li key={step.key} aria-current={index === activeIndex ? "step" : undefined} className="flex items-center gap-3">
                     <span
                       className="size-2.5 rounded-full"
                       style={{ background: done ? ws.primary_color : brandFallback.mist }}
@@ -136,10 +157,22 @@ function TrackPage() {
             </div>
             <div className="mt-2 flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Payment</span>
-              <span style={{ color: brandFallback.secondary }}>
-                {String(order.data["payment_method"] ?? "â€”")} Â· {String(order.data["payment_status"] ?? "â€”")}
+              <span className="text-right" style={{ color: brandFallback.secondary }}>
+                {String(order.data["payment_method"] ?? "—")} · {String(order.data["payment_status"] ?? "—")}
               </span>
             </div>
+
+            {paymentStatus === "paid" ? (
+              <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-emerald-950" role="status">
+                <p className="font-semibold">Payment confirmed</p>
+                <p className="mt-1">Use order {orderReference} when requesting your receipt.</p>
+                {ws.contact_email ? (
+                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`mailto:${ws.contact_email}?subject=${encodeURIComponent(`Receipt for ${orderReference}`)}`}>Request receipt from the property</a>
+                ) : ws.contact_phone ? (
+                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`tel:${ws.contact_phone}`}>Call the property for a receipt</a>
+                ) : null}
+              </div>
+            ) : null}
 
             {canRetryPayment ? (
               <div className="mt-4 border-t border-black/5 pt-4">
@@ -283,7 +316,12 @@ function TrackPage() {
 function LiveDeliveryCard({ organizationId, reference }: { organizationId: string; reference: string }) {
   const live = useDeliveryLive(organizationId, reference);
   const data = live.data;
-  if (!data) return null;
+  if (!data) return live.isError ? (
+    <section className="neo-commerce-surface p-5 text-sm text-slate-700">
+      <p>Live location couldn’t refresh. Follow the order progress above.</p>
+      <button className="mt-2 min-h-11 font-semibold underline" onClick={() => void live.refetch()}>Retry location</button>
+    </section>
+  ) : null;
 
   const destination = data.destination;
   const courier = data.courier;
@@ -345,7 +383,8 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
               This property does not share rider locations. You will still see each step above as
               your order moves.
             </p>
-          ) : location ? (
+          ) : location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)
+            && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180 ? (
             <>
               <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
                 {stale ? "Last known position" : "Rider position"}
@@ -357,13 +396,12 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
                 {stale ? " â€” the signal has dropped, so this may have moved." : ""}
               </p>
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
+                href={`https://maps.apple.com/?ll=${location.latitude},${location.longitude}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-block text-sm font-medium"
-                style={{ color: brandFallback.primary }}
+                className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--pa-accent-ink)]"
               >
-                Open position in maps
+                <MapPin className="size-4" aria-hidden /> Open saved position in Maps
               </a>
             </>
           ) : (

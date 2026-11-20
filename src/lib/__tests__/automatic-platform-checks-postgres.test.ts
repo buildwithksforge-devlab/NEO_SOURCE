@@ -35,7 +35,7 @@ describe('automatic platform evidence and defects', () => {
    INSERT INTO branches VALUES('${id(2)}','${id(1)}',true),('${id(4)}','${id(3)}',true);
    SELECT set_config('test.org','${id(1)}',false),set_config('test.actor','${id(10)}',false),set_config('test.allow','true',false);`);
  });
- const run = async () => (await db.query<{r:any}>(`SELECT neo_platform_run_checks('${id(2)}') r`)).rows[0].r;
+ const run = async () => (await db.query<{r:any}>(`SELECT neo_platform_run_checks('${id(2)}') r`)).rows[0]!.r;
  it('saves real checks and reuses a recent run without duplicates', async () => {
   expect(await run()).toMatchObject({passed:4,failed:0,blocked:0,cached:false});
   expect(await run()).toMatchObject({cached:true});

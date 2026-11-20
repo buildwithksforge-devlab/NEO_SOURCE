@@ -69,6 +69,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // Blind receiving: database authorization remains mandatory.
   neo_blind_receiving_orders: "authenticated",
   neo_submit_blind_receiving_count: "authenticated",
+  neo_receiving_custody_queue: "authenticated",
+  neo_accept_receiving_custody: "authenticated",
   neo_blind_receiving_review_queue: "authenticated",
   neo_blind_receiving_decide: "authenticated",
   neo_blind_receiving_approved_queue: "authenticated",
@@ -309,7 +311,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_procurement_order_from_request: "authenticated",
   neo_purchase_request_from_reorder: "authenticated",
   neo_procurement_order_approve: "authenticated",
-  neo_stores_receive_goods: "authenticated",
 
   // Platform Ã¢â‚¬â€ tenant-scale indexing classification and standing coverage guard
   neo_index_class: "authenticated",
@@ -654,6 +655,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_settings_presence: "authenticated",
   neo_mpesa_settings_get: "authenticated",
   neo_pos_menu_availability: "authenticated",
+  neo_pos_department_menu_availability: "authenticated",
   neo_mpesa_settings_save: "authenticated",
   neo_mpesa_record_check: "authenticated",
   neo_mpesa_collection_start: "authenticated",

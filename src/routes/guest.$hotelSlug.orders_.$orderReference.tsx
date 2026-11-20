@@ -5,7 +5,7 @@ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShe
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
-import { money, statusLabel } from "@/lib/public-delivery";
+import { money, statusLabel, usePublicOrderByReference } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useCancelGuestOrder, useGuestOrderTracking } from "@/lib/guest-ordering";
 
@@ -38,7 +38,8 @@ function TrackingPage() {
   const ws = useWorkspace();
   const { hotelSlug, orderReference } = Route.useParams();
   const { user, loading } = useCustomerSession();
-  const tracking = useGuestOrderTracking(ws.organization_id, orderReference);
+  const orderAtProperty = usePublicOrderByReference(ws.organization_id, user ? orderReference : undefined, ws.branch_id);
+  const tracking = useGuestOrderTracking(ws.organization_id, orderAtProperty.data ? orderReference : undefined);
   const cancel = useCancelGuestOrder(ws.organization_id, orderReference);
   useGuestScreenView(ws.organization_id, "order-tracking", Boolean(user));
 
@@ -58,15 +59,18 @@ function TrackingPage() {
 
       {!loading && !user ? (
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to track this order" description="Order details and live fulfilment progress are private to the account that placed it." />
-      ) : tracking.isLoading ? (
+      ) : loading || orderAtProperty.isLoading || tracking.isLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : orderAtProperty.isError || tracking.isError ? (
+        <PublicEmptyState title="Tracking couldn’t load" description="Retry to refresh the status of this order."
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void (orderAtProperty.isError ? orderAtProperty.refetch() : tracking.refetch())}>Retry tracking</button>} />
       ) : !order ? (
         <GuestSection title="Order not found">
           <PublicEmptyState
             title="We can't show this order"
-            description="It either doesn't exist or it belongs to another account."
+            description="Check the order reference and the property you ordered from."
           />
         </GuestSection>
       ) : (

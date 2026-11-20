@@ -117,6 +117,11 @@ export const FOLIO_CATEGORIES = [
   "miscellaneous",
 ] as const;
 
+const STOCK_SALE_FOLIO_CATEGORIES = new Set(["restaurant", "coffee-station", "bar", "room-service"]);
+export const MANUAL_FOLIO_CATEGORIES = FOLIO_CATEGORIES.filter(
+  (category) => !STOCK_SALE_FOLIO_CATEGORIES.has(category),
+);
+
 export const GUEST_REQUEST_CATEGORIES = [
   "housekeeping",
   "maintenance",

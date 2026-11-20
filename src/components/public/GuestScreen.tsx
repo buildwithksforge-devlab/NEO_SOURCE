@@ -15,8 +15,8 @@ const tabs = [
   { key: "home", label: "Home", icon: Home, to: "/guest/$hotelSlug" },
   { key: "explore", label: "Explore", icon: Compass, to: "/guest/$hotelSlug/explore" },
   { key: "orders", label: "Orders", icon: Receipt, to: "/guest/$hotelSlug/orders" },
-  { key: "stay", label: "My Stay", icon: BedDouble, to: "/guest/$hotelSlug/stay" },
-  { key: "profile", label: "Profile", icon: UserRound, to: "/guest/$hotelSlug/profile" },
+  { key: "stay", label: "Stay", icon: BedDouble, to: "/guest/$hotelSlug/stay" },
+  { key: "profile", label: "Account", icon: UserRound, to: "/guest/$hotelSlug/profile" },
 ] as const;
 
 export type GuestTab =
@@ -27,6 +27,15 @@ export type GuestTab =
   | "settings"
   | "notifications"
   | "account";
+
+const tabForScreen: Partial<Record<GuestTab, (typeof tabs)[number]["key"]>> = {
+  book: "stay",
+  trips: "stay",
+  laundry: "explore",
+  settings: "profile",
+  notifications: "profile",
+  account: "profile",
+};
 
 /**
  * The hotel companion shell.
@@ -49,6 +58,7 @@ export function GuestScreen({
   const { prefs } = useGuestDisplayPrefs();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const primary = ws.primary_color || brandFallback.primary;
+  const activeTab = tabForScreen[active] ?? active;
 
   // The launch frame opens on this hotel's own lockup next time, not the
   // neutral default. Only values the property already configured are kept.
@@ -86,7 +96,7 @@ export function GuestScreen({
       <GuestHeader hotelSlug={hotelSlug} active={active} />
 
       <PullToRefresh>
-        <main className="neo-public-wrap flex-1 py-7 sm:py-10">
+        <main className="neo-public-wrap flex-1 py-5 sm:py-9">
           <PreviewBanner experience="Guest" />
           <div className="min-w-0 pb-24 lg:pb-4">{children}</div>
         </main>
@@ -96,24 +106,24 @@ export function GuestScreen({
 
       <nav
         aria-label="Guest app"
-        className="neo-guest-tabbar fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="neo-app-dock neo-guest-tabbar lg:hidden"
       >
-        <ul className="mx-auto flex w-full max-w-5xl">
+        <ul className="contents">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive =
-              tab.key === active || (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
+              tab.key === activeTab || (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
             return (
-              <li key={tab.key} className="flex-1">
+              <li key={tab.key}>
                 <Link
                   to={tab.to}
                   params={{ hotelSlug }}
+                  activeOptions={{ exact: true }}
+                  className="min-h-11"
                   aria-current={isActive ? "page" : undefined}
-                  className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-3 text-[0.7rem] font-medium"
-                  style={{ color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)" }}
                 >
                   <Icon className="size-5" aria-hidden />
-                  <span className="w-full truncate text-center">{tab.label}</span>
+                  <span className="w-full text-center">{tab.label}</span>
                 </Link>
               </li>
             );

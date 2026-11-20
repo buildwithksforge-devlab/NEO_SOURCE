@@ -1,3 +1,4 @@
+import { ReceivingCustody } from "@/components/inventory/ReceivingCustody";
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
 import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
 import { useEffect, useRef, useState } from "react";
@@ -80,7 +81,7 @@ function Page() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["procurement"] });
       toast.success(
-        "Blind receiving count submitted. Awaiting reconciliation."
+        "Blind receiving count submitted. Awaiting the Storekeeper count."
       );
       setPendingConfirmation(null);
       setSelected(null);
@@ -232,6 +233,7 @@ function Page() {
         description="Count what physically arrived. Purchase order quantities and prices are hidden until the receiving count is submitted."
       />
 
+      <ReceivingCustody />
       <ApprovedReceivingPosting />
       <ReceivingDocumentHistory />
 

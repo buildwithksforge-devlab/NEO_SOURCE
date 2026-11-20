@@ -45,10 +45,10 @@ function ProfilePage() {
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customer = profile.data;
   const customerId = customer?.["id"] as string | undefined;
-  const reservations = useGuestReservations(ws.organization_id, customerId);
-  const requests = useGuestRequests(ws.organization_id, customerId);
+  const reservations = useGuestReservations(ws.organization_id, customerId, ws.branch_id);
+  const requests = useGuestRequests(ws.organization_id, ws.branch_id, customerId);
   const addresses = useGuestAddresses(ws.organization_id, customerId);
-  const stay = useGuestActiveStay(ws.organization_id, Boolean(user));
+  const stay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const update = useUpdateGuestProfile(ws.organization_id);
   useGuestScreenView(ws.organization_id, "profile", Boolean(customerId));
 

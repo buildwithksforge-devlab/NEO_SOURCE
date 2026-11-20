@@ -48,7 +48,7 @@ function GuestLaundryPage() {
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
   const offering = useLaundryOffering(ws.organization_id, ws.branch_id);
-  const stays = useMyStays(ws.organization_id, Boolean(customerId));
+  const stays = useMyStays(ws.organization_id, ws.branch_id, user?.id);
   const mine = useMyLaundry(ws.organization_id, Boolean(customerId));
   const place = usePlaceLaundryOrder(ws.organization_id);
   useGuestScreenView(ws.organization_id, "laundry", Boolean(customerId));

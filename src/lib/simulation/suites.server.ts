@@ -495,21 +495,40 @@ export async function suiteShortageProcurement(ctx: SuiteContext) {
     const list = (lines ?? []) as { id: string; stock_item_id: string; quantity: number; unit_price: number }[];
     t.must("the order has lines", list.length > 0);
 
-    await expectOk(storekeeper, "neo_stores_receive_goods", {
+    const clerk = client(ctx, "receiving_clerk");
+    const manager = client(ctx, "owner");
+    const submitted = (await expectOk(clerk, "neo_submit_blind_receiving_count", {
       _order: ctx.state["purchaseOrderId"],
       _location: ctx.a.seed["storeLocationId"],
-      _lines: list.map((l) => ({
-        order_line_id: l.id,
-        stock_item_id: l.stock_item_id,
-        quantity_received: l.quantity,
-        quantity_accepted: l.quantity,
-        quantity_rejected: 0,
-        unit_price: l.unit_price ?? 550,
-      })),
-      _attempt: crypto.randomUUID(),
-      _notes: "System test receipt",
       _delivery_note: `TEST-${ctx.runRef}-DN`,
+      _lines: list.map((line) => ({
+        order_line_id: line.id,
+        quantity_delivered: line.quantity,
+        quantity_rejected: 0,
+      })),
+      _remarks: "System test receipt",
+    })) as { count_id: string };
+    const queue = (await expectOk(storekeeper, "neo_receiving_custody_queue", {})) as {
+      count_id: string;
+      lines: { line_id: string; order_line_id: string }[];
+    }[];
+    const delivery = queue.find((row) => row.count_id === submitted.count_id);
+    if (!delivery) throw new Error("Storekeeper could not load the submitted delivery");
+    await expectOk(storekeeper, "neo_accept_receiving_custody", {
+      _count_id: submitted.count_id,
+      _lines: delivery.lines.map((line) => ({
+        line_id: line.line_id,
+        delivered: list.find((item) => item.id === line.order_line_id)?.quantity,
+        rejected: 0,
+      })),
     });
+    await expectOk(manager, "neo_blind_receiving_decide", {
+      _count_id: submitted.count_id,
+      _decision: "approved",
+      _notes: "Matched Storekeeper count and custody",
+    });
+    t.must("approval leaves stock unchanged", (await stockOnHand(ctx)) === before);
+    await expectOk(manager, "neo_post_approved_blind_receiving", { _count_id: submitted.count_id });
 
     const after = await stockOnHand(ctx);
     t.must("stock increased after receiving", after > before, `> ${before}`, after);

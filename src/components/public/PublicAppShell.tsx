@@ -1,6 +1,7 @@
-import { primaryInk } from "@/lib/public-palette";
-import { createContext, useContext, type ReactNode } from "react";
+import { accessibleAccent, normalizedHex, primaryInk } from "@/lib/public-palette";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { Receipt, ShoppingBag, Utensils } from "lucide-react";
 import {
   brandFallback,
   brandInitials,
@@ -69,12 +70,18 @@ export function PoweredByNeo({ tone = "muted" }: { tone?: "muted" | "light" }) {
   );
 }
 
-export function BrandMark({ workspace, size = 40 }: { workspace: PublicWorkspace; size?: number }) {
+export function BrandMark({ workspace, size = 40 }: {
+  workspace: Pick<PublicWorkspace, "hotel_name" | "app_name" | "logo_url" | "button_style" | "primary_color">;
+  size?: number;
+}) {
   const label = workspace.hotel_name || workspace.app_name || "Workspace";
-  if (workspace.logo_url) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const logo = workspace.logo_url;
+  if (logo && logo !== failedLogo) {
     return (
       <img
-        src={workspace.logo_url}
+        src={logo}
+        onError={() => setFailedLogo(logo)}
         alt={`${label} logo`}
         style={{ height: size }}
         className="w-auto max-w-[160px] object-contain"
@@ -107,15 +114,23 @@ export function PublicAppShell({
   children,
   nav,
   homeTo,
+  cartCount = 0,
 }: {
   children: ReactNode;
   nav?: ReactNode;
   homeTo?: { to: string; params?: Record<string, string> };
+  cartCount?: number;
 }) {
   const ws = useWorkspace();
-  const primary = ws.primary_color || brandFallback.primary;
-  const secondary = ws.secondary_color || brandFallback.secondary;
-  const background = ws.background_color || brandFallback.background;
+  const primary = normalizedHex(ws.primary_color || brandFallback.primary);
+  const secondary = normalizedHex(ws.secondary_color || brandFallback.secondary, brandFallback.secondary);
+  const background = normalizedHex(ws.background_color || brandFallback.background, brandFallback.background);
+  const hotelSlug = homeTo?.to === "/delivery/$hotelSlug" ? homeTo.params?.["hotelSlug"] : undefined;
+  const destinations = [
+    { to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
+    { to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
+    { to: "/delivery/$hotelSlug/orders", label: "Orders", icon: Receipt },
+  ] as const;
 
   const brand = (
     <span className="flex min-w-0 items-center gap-3">
@@ -133,11 +148,13 @@ export function PublicAppShell({
 
   return (
     <div
-      className="neo-public-app flex min-h-screen flex-col"
+      className={`neo-public-app neo-branded-app flex min-h-screen flex-col ${hotelSlug ? "neo-delivery-app" : ""}`}
       style={
         {
-          background,
+          "--pa-background": background,
           "--pa-primary": primary,
+          "--pa-on-primary": primaryInk(primary),
+          "--pa-accent-ink": accessibleAccent(primary, "#FFFFFF"),
           "--pa-secondary": secondary,
           "--pa-muted": brandFallback.steel,
           "--pa-radius": buttonRadius(ws.button_style),
@@ -153,7 +170,7 @@ export function PublicAppShell({
           ) : (
             brand
           )}
-          {nav ? <div className="neo-scroll-x min-w-0 max-w-[52vw]">{nav}</div> : null}
+          {nav ? <div className={`neo-scroll-x min-w-0 max-w-[52vw] ${hotelSlug ? "hidden lg:block" : ""}`}>{nav}</div> : null}
         </div>
       </header>
 
@@ -175,6 +192,24 @@ export function PublicAppShell({
           </div>
         </div>
       </footer>
+      {hotelSlug ? (
+        <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
+          {destinations.map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} params={{ hotelSlug }} activeOptions={{ exact: label === "Menu" }}>
+              <span className="relative">
+                <Icon aria-hidden className="size-5" />
+                {label === "Cart" && cartCount > 0 ? (
+                  <>
+                    <span className="neo-app-cart-count" aria-hidden>{cartCount}</span>
+                    <span className="sr-only">{cartCount} {cartCount === 1 ? "item" : "items"} in</span>
+                  </>
+                ) : null}
+              </span>
+              <span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }
@@ -202,7 +237,7 @@ export function BrandButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
+      className={`inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
       style={{
         borderRadius: buttonRadius(ws.button_style),
         background: variant === "solid" ? primary : "transparent",

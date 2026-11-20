@@ -24,10 +24,17 @@ const itemClass =
  */
 export function PropertySelector({ className }: { className?: string }) {
   const navigate = useNavigate();
-  const { branches, orgWide, canManage, activeBranchId, loading, setActiveBranchId } =
+  const { branches, orgWide, canManage, activeBranchId, loading, failed, setActiveBranchId, refetch } =
     useBranchScope();
 
   const manage = () => void navigate({ to: "/admin/branches" });
+
+  if (failed && branches.length === 0) {
+    return <button type="button" onClick={() => void refetch()}
+      className={cn("inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-3 text-xs font-medium", className)}>
+      <Building2 className="size-4" aria-hidden /> Retry properties
+    </button>;
+  }
 
   if (!loading && branches.length === 0) {
     return canManage ? (
@@ -55,6 +62,7 @@ export function PropertySelector({ className }: { className?: string }) {
   return (
     <Select
       value={activeBranchId}
+      disabled={loading}
       onValueChange={(v) => (v === MANAGE ? manage() : setActiveBranchId(v))}
     >
       {/* Presentation only — the value, options and switching behaviour above

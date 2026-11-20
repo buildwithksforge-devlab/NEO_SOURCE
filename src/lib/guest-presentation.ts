@@ -30,3 +30,30 @@ export function calendarNights(arrival: string, departure: string) {
   const a=day(arrival),d=day(departure);
   return Number.isFinite(a)&&Number.isFinite(d)&&d>a ? (d-a)/86400000 : 0;
 }
+
+const activeOrderStatuses = new Set([
+  "pending", "placed", "pending-payment", "payment-pending", "payment-verification", "confirmed", "accepted",
+  "preparing", "in-preparation", "ready", "ready-for-pickup", "awaiting-rider", "rider-assigned", "dispatched",
+  "on-the-way", "out-for-delivery", "en-route", "arrived", "picked-up",
+]);
+const cancelledOrderStatuses = new Set(["cancelled", "rejected", "declined", "failed", "delivery-failed", "returned"]);
+
+export function orderBucket(status: unknown, scheduledFor?: unknown, fulfilment?: unknown) {
+  const value = String(status ?? "").toLowerCase().replaceAll("_", "-");
+  if (cancelledOrderStatuses.has(value)) return "cancelled";
+  if (!activeOrderStatuses.has(value) && !(value === "collected" && fulfilment === "delivery")) return "completed";
+  return scheduledFor && new Date(String(scheduledFor)).getTime() > Date.now() ? "scheduled" : "active";
+}
+
+type GuestFulfilment = "room-service" | "pickup" | "delivery";
+
+export function chooseGuestFulfilment(
+  inHouse: boolean,
+  published: Record<GuestFulfilment, readonly { id: string }[] | undefined>,
+  requestedItem?: string,
+): GuestFulfilment {
+  const priority: GuestFulfilment[] = inHouse ? ["room-service", "delivery", "pickup"] : ["delivery", "pickup"];
+  return priority.find((mode) => requestedItem && published[mode]?.some((item) => item.id === requestedItem))
+    ?? priority.find((mode) => published[mode]?.length)
+    ?? (inHouse ? "room-service" : "delivery");
+}

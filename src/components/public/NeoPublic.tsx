@@ -8,7 +8,7 @@
  *
  * Presentation only — it never decides what a person may see or do.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { NEO_WORDMARK_SRC } from "@/components/brand/NeoIdentity";
 import { GUEST_HERO_WIDTHS, responsiveSrcSet } from "@/lib/responsive-image";
@@ -17,11 +17,13 @@ import { GUEST_HERO_WIDTHS, responsiveSrcSet } from "@/lib/responsive-image";
 export function PublicSurface({
   children,
   className = "",
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
-  return <div className={`neo-pub ${className}`}>{children}</div>;
+  return <div className={`neo-pub ${className}`} style={style}>{children}</div>;
 }
 
 /** Minimal top chrome: the NEØ mark, and at most one action. */

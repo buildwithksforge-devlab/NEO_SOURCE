@@ -1,4 +1,3 @@
-import { requireGoodsReceiptResult } from "@/lib/supply-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
 /**
  * Stores â†” Procurement lifecycle.
@@ -27,20 +26,6 @@ export type LifecycleResult = Record<string, unknown>;
 export function newAttemptKey(): string {
   return crypto.randomUUID();
 }
-
-export type ReceiptLineInput = {
-  order_line_id: string;
-  quantity_received: number;
-  quantity_rejected?: number;
-  rejection_reason?: string;
-  quantity_damaged?: number;
-  unit_price?: number;
-  batch_number?: string;
-  expiry_date?: string;
-  notes?: string;
-  /** Written justification for exceeding the outstanding quantity on THIS line. */
-  over_receipt_reason?: string;
-};
 
 export type IssueLineInput = { stock_item_id: string; quantity: number; unit?: string };
 
@@ -172,49 +157,6 @@ export function useSetRequestLinePrice() {
     onSuccess: () => {
       const refresh = invalidate();
       toast.success("Estimated price saved");
-      return refresh;
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-}
-
-/* -------------------------------- receiving ------------------------------- */
-
-export function useReceiveGoods() {
-  const invalidate = useLifecycleInvalidate();
-  return useMutation({
-    mutationFn: async (input: {
-      orderId: string;
-      locationId: string;
-      lines: ReceiptLineInput[];
-      attemptKey: string;
-      notes?: string;
-      overReceiptReason?: string;
-      deliveryNoteNumber?: string;
-      supplierInvoiceNumber?: string;
-    }) => {
-      const { data, error } = await guardedRpc(db, "neo_stores_receive_goods", {
-        _order: input.orderId,
-        _location: input.locationId,
-        _lines: input.lines,
-        _attempt: input.attemptKey,
-        _notes: input.notes ?? null,
-        _over_receipt_reason: input.overReceiptReason ?? null,
-        _delivery_note: input.deliveryNoteNumber ?? null,
-        _supplier_invoice: input.supplierInvoiceNumber ?? null,
-      });
-      if (error) throw new Error(error.message);
-      return requireGoodsReceiptResult(data) as LifecycleResult;
-    },
-    onSuccess: (data) => {
-      const refresh = invalidate();
-      if ((data["posting"] as LifecycleResult)?.["status"] === "pending-finance")
-        toast.warning("Goods received into stock; Finance accrual still needs attention.");
-      else
-        replayNote(
-          data,
-          `${String(data["grn_number"] ?? "Delivery")} received${data["partial"] === true ? " (partial)" : ""} and posted to stock`,
-        );
       return refresh;
     },
     onError: (e: Error) => toast.error(e.message),

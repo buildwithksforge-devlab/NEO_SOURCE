@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { usePublishedDeliveryLink } from "@/lib/public-apps-data";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ function PublicExperiencePage() {
   const branches = useBranches();
   const queryClient = useQueryClient();
   const [branchId, setBranchId] = useState<string | null>(null);
+  const deliveryLink = usePublishedDeliveryLink(branchId);
 
   useEffect(() => {
     if (!branchId && branches.data?.length) setBranchId(branches.data[0]!.id);
@@ -159,7 +161,7 @@ function PublicExperiencePage() {
     ? [
         { label: "Hotel front door", url: `${origin}/start/${slug}` },
         { label: "Stay & Dine", url: `${origin}/guest/${slug}` },
-        { label: "Order food / delivery", url: `${origin}/delivery/${slug}` },
+        ...(deliveryLink ? [{ label: "Order food / delivery", url: deliveryLink }] : []),
         { label: "Partner portal", url: `${origin}/partner/${slug}` },
         { label: "Rider app", url: `${origin}/rider` },
       ]

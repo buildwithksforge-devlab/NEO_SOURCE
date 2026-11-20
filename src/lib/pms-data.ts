@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { DEFAULT_PMS_SETTINGS, type PmsSettings, today } from "@/lib/pms";
+import { stableIdempotencyKey } from "@/lib/transaction-scope";
 
 /* ------------------------------------------------------------------ *
  * Reference data
@@ -446,6 +447,7 @@ export function usePostCharge() {
       quantity: number;
       unitPrice: number;
       tax: number;
+      chargeIntent: string;
     }) => {
       const { data, error } = await guardedRpc(supabase, "pms_post_room_charge", {
         _folio: input.folio,
@@ -456,9 +458,12 @@ export function usePostCharge() {
         _tax: input.tax,
         _source_module: "pms",
         _source_record_id: "",
-        _idempotency_key: crypto.randomUUID(),
+        _idempotency_key: stableIdempotencyKey("pms", "reservation-charge", [
+          input.chargeIntent, input.folio, input.category, input.description, input.quantity, input.unitPrice, input.tax,
+        ]),
       });
       if (error) throw error;
+      if (typeof data !== "string" || !data) throw new Error("The charge did not return its saved folio line.");
       return data;
     },
     onSuccess: () => {

@@ -50,12 +50,12 @@ export type ActiveStay = {
 };
 
 /** The signed-in guest's in-house stay, if any. */
-export function useGuestActiveStay(organizationId: string, enabled = true) {
+export function useGuestActiveStay(organizationId: string, branchId: string | null, userId?: string) {
   return useQuery({
-    queryKey: ["guest-stay", organizationId],
-    enabled,
+    queryKey: ["guest-stay", organizationId, branchId, userId],
+    enabled: Boolean(userId && branchId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(sb, "neo_guest_active_stay", { _org: organizationId });
+      const { data, error } = await guardedRpc(sb, "neo_guest_active_stay", { _org: organizationId, _branch: branchId });
       if (error) throw new Error(error.message);
       return (data as ActiveStay | null) ?? null;
     },
@@ -112,16 +112,16 @@ export type GuestReceipt = {
  * carries only guest-facing fields: no internal notes, source records, staff
  * ids or accounting references.
  */
-export function useGuestBill(organizationId: string, enabled = true, awaitingProvider = false) {
+export function useGuestBill(organizationId: string, branchId: string | null, userId?: string, awaitingProvider = false) {
   return useQuery({
-    queryKey: ["guest-bill", organizationId],
-    enabled,
+    queryKey: ["guest-bill", organizationId, branchId, userId],
+    enabled: Boolean(userId && branchId),
     // A sent STK request is not money. Refresh until the provider callback
     // changes the server projection; reopening the tab also refetches it.
     refetchInterval: awaitingProvider ? 5_000 : false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(sb, "neo_guest_folio_projection", { _org: organizationId });
+      const { data, error } = await guardedRpc(sb, "neo_guest_folio_projection", { _org: organizationId, _branch: branchId });
       if (error) throw new Error(error.message);
       const payload = (data ?? {}) as { folios?: GuestFolio[]; payments?: GuestReceipt[] };
       return {
@@ -141,16 +141,17 @@ export function useGuestBill(organizationId: string, enabled = true, awaitingPro
  * app. Nothing is faked: with no configured collection contract the screen
  * says so and points the guest at the front desk.
  */
-export function useGuestPaymentAvailability(organizationId: string) {
+export function useGuestPaymentAvailability(organizationId: string, enabled = true) {
   return useQuery({
     queryKey: ["guest-payment-availability", organizationId],
+    enabled,
     queryFn: async () => {
       // The integration table itself is staff-only, so availability is asked
       // of a guarded routine that answers with a boolean and nothing else.
       const { data, error } = await guardedRpc(sb, "neo_guest_payment_availability", {
         _org: organizationId,
       });
-      if (error) return { available: false as const, reason: "not-configured" as const };
+      if (error) throw new Error(error.message);
       const payload = (data ?? {}) as { available?: boolean };
       return {
         available: Boolean(payload.available),
@@ -181,9 +182,11 @@ export function useGuestMenu(
   organizationId: string,
   branchId: string | null,
   fulfilment: FulfilmentType,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ["guest-menu", organizationId, branchId ?? "all", fulfilment],
+    enabled,
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_public_menu", {
         _org: organizationId,
@@ -214,11 +217,11 @@ export type GuestModifierGroup = {
  * option name and the extra charge a guest would pay are exposed — no costs,
  * recipes or internal configuration.
  */
-export function useGuestMenuModifiers(organizationId: string, itemIds: string[]) {
+export function useGuestMenuModifiers(organizationId: string, itemIds: string[], enabled = true) {
   const key = [...itemIds].sort().join(",");
   return useQuery({
     queryKey: ["guest-menu-modifiers", organizationId, key],
-    enabled: itemIds.length > 0,
+    enabled: enabled && itemIds.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_public_menu_modifiers", {
@@ -260,6 +263,7 @@ export function useGuestCartMutations(
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["guest-cart"] });
     void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    void qc.invalidateQueries({ queryKey: ["public-delivery"] });
   };
 
   /**
@@ -541,14 +545,16 @@ export const transportStatusLabels: Record<string, string> = {
   declined: "Declined",
 };
 
-export function useTransportProducts(organizationId: string) {
+export function useTransportProducts(organizationId: string, branchId: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ["transport-products", organizationId],
+    queryKey: ["transport-products", organizationId, branchId ?? "unassigned"],
+    enabled: enabled && Boolean(branchId),
     queryFn: async () => {
       const { data, error } = await sb
         .from("transport_products")
         .select("id, name, category, description, base_price, currency, max_passengers, branch_id")
         .eq("organization_id", organizationId)
+        .or(`branch_id.eq.${branchId},branch_id.is.null`)
         .eq("active", true)
         .order("display_order");
       if (error) throw new Error(error.message);
@@ -557,10 +563,10 @@ export function useTransportProducts(organizationId: string) {
   });
 }
 
-export function useMyTransportRequests(organizationId: string, customerId?: string | null) {
+export function useMyTransportRequests(organizationId: string, branchId: string | null, customerId?: string | null) {
   return useQuery({
-    queryKey: ["transport-requests", organizationId, customerId ?? "none"],
-    enabled: Boolean(customerId),
+    queryKey: ["transport-requests", organizationId, branchId, customerId ?? "none"],
+    enabled: Boolean(customerId && branchId),
     refetchInterval: 60_000,
     queryFn: async () => {
       const { data, error } = await sb
@@ -569,6 +575,7 @@ export function useMyTransportRequests(organizationId: string, customerId?: stri
           "id, request_number, category, status, pickup_at, pickup_point, destination, passengers, luggage_count, travel_reference, notes, quoted_amount, currency, created_at",
         )
         .eq("organization_id", organizationId)
+        .eq("branch_id", branchId)
         .eq("customer_id", customerId)
         .order("pickup_at", { ascending: false })
         .limit(30);
@@ -578,7 +585,7 @@ export function useMyTransportRequests(organizationId: string, customerId?: stri
   });
 }
 
-export function useRequestTransport(organizationId: string) {
+export function useRequestTransport(organizationId: string, branchId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -592,8 +599,10 @@ export function useRequestTransport(organizationId: string) {
       notes?: string | null;
     }) => {
       guardPreview();
+      if (!branchId) throw new Error("Choose a property before requesting a transfer");
       const { data, error } = await guardedRpc(sb, "neo_guest_request_transport", {
         _org: organizationId,
+        _branch: branchId,
         _product: input.productId,
         _pickup_at: input.pickupAt,
         _pickup_point: input.pickupPoint,

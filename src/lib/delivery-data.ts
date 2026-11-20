@@ -1267,12 +1267,11 @@ export function useRiderNotifications(riderId?: string | null, limit = 60) {
 }
 
 export function useMyDeliveries(riderId?: string) {
-  const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery({
-    queryKey: ["delivery", "rider-orders", riderId, filterKey],
+    queryKey: ["delivery", "rider-orders", riderId],
     enabled: Boolean(riderId),
     queryFn: async () => {
-      const { data, error } = await applyTo(sb.from("delivery_orders").select(ORDER_SELECT), "delivery_orders")
+      const { data, error } = await sb.from("delivery_orders").select(ORDER_SELECT)
         .eq("rider_id", riderId)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -1919,8 +1918,10 @@ export type RiderIdentity = {
  * It never reveals another rider, a guest or the staff directory.
  */
 export function useRiderIdentity() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["delivery", "rider-identity"],
+    queryKey: ["delivery", "rider-identity", user?.id],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_rider_me");
       if (error) throw new Error(error.message);

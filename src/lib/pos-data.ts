@@ -27,19 +27,31 @@ import {
 import { withGuardCapture } from "@/lib/guard-violations";
 
 /** Advisory only: the database stock gate still validates quantities when sending. */
-export function usePosStockAvailability(branchId: string | null | undefined) {
+export function usePosStockAvailability(branchId: string | null | undefined, channel?: string) {
   const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none"],
+    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none", channel ?? "none"],
     enabled: Boolean(organizationId && branchId),
     refetchInterval: 30_000,
     queryFn: async () => {
-      const { data, error } = await guardedRpc<Array<{ menu_item_id: string; available: boolean; reason: string | null }>>(
-        supabase, "neo_pos_menu_availability", { _branch: branchId },
-      );
-      if (error) throw error;
+      type Availability = { menu_item_id: string; available: boolean; reason: string | null }[];
+      const [department, commitments] = await Promise.all([
+        guardedRpc<Availability>(supabase, "neo_pos_department_menu_availability", {
+          _branch: branchId, _channel: channel ?? null,
+        }),
+        guardedRpc<Availability>(
+          supabase, "neo_pos_menu_availability", { _branch: branchId },
+        ),
+      ]);
+      if (department.error && department.error.code !== "PGRST202") throw department.error;
+      if (commitments.error && !["PGRST202", "42883"].includes(commitments.error.code ?? "")) throw commitments.error;
+      if (department.error && commitments.error) throw department.error;
+      if ((!department.error && !Array.isArray(department.data)) ||
+          (!commitments.error && !Array.isArray(commitments.data))) {
+        throw new Error("Departmental stock availability could not be verified.");
+      }
       const unavailable = new Map<string, string>();
-      for (const row of data ?? []) {
+      for (const row of [...(commitments.data ?? []), ...(department.data ?? [])]) {
         if (row.available === false) unavailable.set(row.menu_item_id, row.reason || "Out of stock");
       }
       return unavailable;
@@ -456,15 +468,16 @@ export function usePrinterProfiles() {
 }
 
 /** Checked-in stays only — the sole valid target for a room charge. */
-export function useCheckedInStays() {
+export function useCheckedInStays(branchId: string | null) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["pos", "checked-in-stays", organizationId, filterKey],
-    enabled: Boolean(organizationId),
+    queryKey: ["pos", "checked-in-stays", organizationId, filterKey, branchId],
+    enabled: Boolean(organizationId && branchId),
     queryFn: async () => {
       const { data, error } = await applyTo(supabase.from("stays").select("id, branch_id, status, expected_departure, checked_in_at, rooms(room_number), customers(id, full_name)"), "stays")
-        .eq("status", "in-house");
+        .eq("branch_id", branchId!)
+        .in("status", ["in-house", "checked-in", "in_house", "checked_in"]);
       if (error) throw error;
       return data ?? [];
     },

@@ -12,6 +12,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Monitor, Smartphone, Tablet } from "lucide-react";
 import { toast } from "sonner";
+import { usePublishedDeliveryLink } from "@/lib/public-apps-data";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +114,7 @@ function ExperienceStudioPage() {
   const branches = useBranches();
   const queryClient = useQueryClient();
   const [branchId, setBranchId] = useState<string | null>(null);
+  const deliveryLink = usePublishedDeliveryLink(branchId);
   const [section, setSection] = useState<SectionKey>("overview");
   const [device, setDevice] = useState<"phone" | "tablet" | "desktop">("phone");
 
@@ -628,7 +630,7 @@ function ExperienceStudioPage() {
                     {[
                       { label: "Hotel front door", url: `${origin}/start/${slug}` },
                       { label: "Stay & Dine", url: `${origin}/guest/${slug}` },
-                      { label: "Food delivery", url: `${origin}/delivery/${slug}` },
+                      ...(deliveryLink ? [{ label: "Food delivery", url: deliveryLink }] : []),
                       { label: "Partner portal", url: `${origin}/partner/${slug}` },
                       { label: "Rider app", url: `${origin}/rider` },
                     ].map((link) => {

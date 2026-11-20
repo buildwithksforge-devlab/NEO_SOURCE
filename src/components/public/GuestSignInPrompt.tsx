@@ -20,7 +20,7 @@ export function GuestSignInPrompt({
   description: string;
 }) {
   const ws = useWorkspace();
-  const next = useRouterState({ select: (s) => s.location.pathname });
+  const next = useRouterState({ select: (s) => s.location.href });
   const primary = ws.primary_color || brandFallback.primary;
 
   return (
@@ -43,7 +43,7 @@ export function GuestSignInPrompt({
       <div className="flex min-w-0 flex-wrap items-center gap-2" data-public-actions>
         <Link
           to="/guest/$hotelSlug/signin"
-          params={{ hotelSlug }}
+          params={{ hotelSlug: ws.guest_slug ?? hotelSlug }}
           search={{ next, mode: undefined }}
           className="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-white"
           style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
@@ -52,7 +52,7 @@ export function GuestSignInPrompt({
         </Link>
         <Link
           to="/guest/$hotelSlug/signin"
-          params={{ hotelSlug }}
+          params={{ hotelSlug: ws.guest_slug ?? hotelSlug }}
           search={{ next, mode: "register" }}
           className="inline-flex min-h-11 items-center px-3 text-sm font-medium"
           style={{ color: "var(--pa-accent-ink)" }}

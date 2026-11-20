@@ -10,13 +10,16 @@ import {
   useSendPartnerMessage,
   type PartnerThread,
 } from "@/lib/partner-messaging";
-import { fetchPropertyForVisitor } from "@/lib/front-door";
-import { PoweredByNeo } from "@/components/public/PublicAppShell";
+import { fetchPropertyForVisitor, type PublicProperty } from "@/lib/front-door";
+import { BrandMark, PoweredByNeo } from "@/components/public/PublicAppShell";
+import { brandFallback } from "@/lib/public-apps";
+import { normalizedHex, primaryInk } from "@/lib/public-palette";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { useNeoSignOut, useNeoSwitchAccount } from "@/lib/session-exit";
 import { useAuth } from "@/lib/auth";
 import { Display, PublicSurface, PublicTopBar } from "@/components/public/NeoPublic";
 import { useTrackEntry } from "@/lib/traffic";
+import { useCustomerSession } from "@/lib/public-session";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
@@ -84,17 +87,12 @@ function PartnerPortal() {
   useTrackEntry(propertySlug, "partner");
   const [selected, setSelected] = useState<string | null>(null);
   const [section, setSection] = useState<PartnerSection>("overview");
-  // A visitor with no session should be offered sign-in, not told they lack a
-  // relationship — the hotel may well have granted them one.
-  const session = useQuery({
-    queryKey: ["neo-partner-session"],
-    queryFn: async () => Boolean((await supabase.auth.getUser()).data.user),
-    staleTime: 30_000,
-  });
+  const { user, loading: sessionLoading } = useCustomerSession();
 
 
   const property = useQuery({
-    queryKey: ["neo-visitor-property", propertySlug],
+    queryKey: ["neo-visitor-property", propertySlug, user?.id],
+    enabled: !sessionLoading,
     queryFn: () => fetchPropertyForVisitor(propertySlug),
     staleTime: 60_000,
   });
@@ -102,8 +100,8 @@ function PartnerPortal() {
   const branchId = property.data?.branch_id ?? null;
 
   const context = useQuery({
-    queryKey: ["neo-partner-context", branchId],
-    enabled: Boolean(branchId),
+    queryKey: ["neo-partner-context", branchId, user?.id],
+    enabled: Boolean(branchId && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_partner_context", {
         _branch: branchId,
@@ -114,11 +112,11 @@ function PartnerPortal() {
   });
 
   const relationships = context.data?.allowed ? context.data.relationships : [];
-  const active = selected ?? relationships[0]?.id ?? null;
+  const active = relationships.find((relationship) => relationship.id === selected)?.id ?? relationships[0]?.id ?? null;
 
   const records = useQuery({
-    queryKey: ["neo-partner-records", branchId, active],
-    enabled: Boolean(branchId && active),
+    queryKey: ["neo-partner-records", branchId, active, user?.id],
+    enabled: Boolean(branchId && active && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_partner_records", {
         _branch: branchId,
@@ -129,12 +127,26 @@ function PartnerPortal() {
     },
   });
 
-  if (property.isLoading || context.isLoading) {
+  if (property.isLoading || sessionLoading || context.isLoading) {
     return (
       <Shell title="Partner portal">
         <div className="flex items-center gap-2 text-sm text-white/70">
           <Loader2 className="size-4 animate-spin" /> Checking your access…
         </div>
+      </Shell>
+    );
+  }
+
+  if (property.isError || context.isError) {
+    return (
+      <Shell title={property.data?.property_name ?? "Partner portal"} property={property.data}>
+        <Panel>
+          <p role="alert" className="text-sm text-white/85">Partner access couldn’t be checked.</p>
+          <button className="neo-commerce-primary mt-4" onClick={() => {
+            if (property.isError) void property.refetch();
+            if (context.isError) void context.refetch();
+          }}>Retry</button>
+        </Panel>
       </Shell>
     );
   }
@@ -151,13 +163,13 @@ function PartnerPortal() {
 
   if (!context.data?.allowed) {
     const reason =
-      session.data === false
+      !user
         ? "not_signed_in"
         : context.data && !context.data.allowed
           ? context.data.reason
           : "no_relationship";
     return (
-      <Shell title={property.data.property_name}>
+      <Shell title={property.data.property_name} property={property.data}>
         <Panel>
           <h2 className="text-base font-semibold text-white">Partner access not available</h2>
           <p className="mt-2 text-sm text-white/70">{refusal[reason] ?? refusal["no_relationship"]}</p>
@@ -185,7 +197,7 @@ function PartnerPortal() {
   const data = records.data;
 
   return (
-    <Shell title={property.data.property_name} section={section} onSection={setSection}>
+    <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}>
       <section className="neo-partner-hero">
         <span className="grid size-12 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" /></span>
         <div className="min-w-0"><p className="neo-commerce-eyebrow">Private relationship</p><h1 className="mt-1 text-2xl font-bold text-white">Partner workspace</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/75">Purchase orders, deliveries, invoices and hotel messages for this relationship only.</p></div>
@@ -522,16 +534,23 @@ function PartnerIdentityMenu() {
 function Shell({
   title,
   children,
+  property,
   section,
   onSection,
 }: {
   title: string;
   children: React.ReactNode;
+  property?: PublicProperty | null | undefined;
   section?: PartnerSection;
   onSection?: (next: PartnerSection) => void;
 }) {
+  const primary = normalizedHex(property?.brand?.primary || brandFallback.primary);
+  const secondary = normalizedHex(property?.brand?.accent || brandFallback.secondary, brandFallback.secondary);
+  const background = normalizedHex(property?.brand?.surface || brandFallback.background, brandFallback.background);
   return (
-    <PublicSurface>
+    <PublicSurface className="neo-branded-app" style={{
+      "--pa-primary": primary, "--pa-on-primary": primaryInk(primary), "--pa-secondary": secondary, "--pa-background": background,
+    } as React.CSSProperties}>
       <PublicTopBar
         homeTo="/"
         width="max-w-4xl"
@@ -539,7 +558,11 @@ function Shell({
       />
       <PullToRefresh>
        <main className="mx-auto w-full max-w-4xl min-w-0 px-5 pb-20 pt-8">
-         <Display className="break-words text-3xl sm:text-5xl">{title}</Display>
+         <div className="flex min-w-0 items-center gap-4">
+           {property ? <BrandMark workspace={{ hotel_name: title, app_name: "Partner portal",
+             logo_url: property.media?.logo_url || property.logo_url, primary_color: primary, button_style: "rounded" }} /> : null}
+           <Display className="min-w-0 break-words text-3xl sm:text-5xl">{title}</Display>
+         </div>
         {section && onSection ? (
           <nav
             aria-label="Partner sections"
@@ -552,7 +575,7 @@ function Shell({
                 onClick={() => onSection(s.key)}
                 aria-current={s.key === section ? "page" : undefined}
                 className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                  s.key === section ? "bg-white text-[#020A1C] shadow-sm" : "bg-white/10 text-white/80 hover:bg-white/15"
+                  s.key === section ? "bg-[var(--pa-primary)] text-[var(--pa-on-primary)] shadow-sm" : "bg-white/10 text-white/85 hover:bg-white/15"
                 }`}
               >
                 {s.label}

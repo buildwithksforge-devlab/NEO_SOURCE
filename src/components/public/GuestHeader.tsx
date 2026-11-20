@@ -109,7 +109,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
   const { user } = useCustomerSession();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const stay = useGuestActiveStay(ws.organization_id, Boolean(user));
+  const stay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const notifications = useGuestNotifications(
     ws.organization_id,
@@ -133,7 +133,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-neo-midnight/95 backdrop-blur">
+    <header className="neo-guest-header sticky top-0 z-40 border-b border-white/10 bg-neo-midnight/95 backdrop-blur">
       <div className="neo-public-wrap flex min-w-0 items-center gap-3 py-3">
         <Link
           to="/guest/$hotelSlug"
@@ -193,7 +193,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
               to="/guest/$hotelSlug/notifications"
               params={{ hotelSlug }}
               aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
-              className="relative grid size-10 place-items-center rounded-full border border-white/12 text-white/70 hover:text-white"
+              className="relative grid size-11 place-items-center rounded-full border border-white/12 text-white/70 hover:text-white"
             >
               <Bell className="size-4" aria-hidden />
               {unread > 0 ? (
@@ -219,7 +219,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/12 px-2.5 text-sm text-white/85"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/12 px-2.5 text-sm text-white/85"
                 aria-label="Profile menu"
               >
                 <span

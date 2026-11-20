@@ -226,6 +226,7 @@ export async function buildThermalReceiptPdf(
   const metaSource = payload.meta ?? {};
   const lines = Array.isArray(payload.lines) ? payload.lines : [];
   const rawTotals = Array.isArray(payload.totals) ? payload.totals : [];
+  const chargedToRoom = document.status === "charged-to-room";
 
   const documentNumber = clean(document.number) || "Unnumbered";
   const documentTitle = clean(document.title) || "Receipt";
@@ -295,6 +296,12 @@ export async function buildThermalReceiptPdf(
 
     seenTotalLabels.add(key);
     return true;
+  }).map((total) => {
+    if (!chargedToRoom) return total;
+    const label = total.label.trim().toLowerCase();
+    if (label === "balance") return { ...total, label: "Transferred to guest folio" };
+    if (label === "paid") return { ...total, label: "Paid at POS" };
+    return total;
   });
 
   const pdf = await PDFDocument.create();
@@ -306,6 +313,8 @@ export async function buildThermalReceiptPdf(
   const contentWidth = paperWidth - margin * 2;
   const amountWidth = 72;
   const itemWidth = contentWidth - amountWidth - 8;
+  const itemLineHeight = Math.ceil(Math.max(bold.heightAtSize(8.5), regular.heightAtSize(8.5))) + 1;
+  const noteLineHeight = Math.ceil(regular.heightAtSize(7)) + 1;
 
   const black = rgb(0.05, 0.05, 0.05);
   const muted = rgb(0.35, 0.35, 0.35);
@@ -343,12 +352,10 @@ export async function buildThermalReceiptPdf(
       detailParts.push(`@ ${unitPrice}`);
     }
 
-    const note = clean(line.note);
-    if (note) detailParts.push(note);
-
     const detailHeight = detailParts.reduce((height, part) => height + wrap(part, regular, 7.1, contentWidth - 5).length * 9, 0);
+    const noteHeight = wrap(clean(line.note), regular, 7, itemWidth).length * noteLineHeight;
 
-    return Math.max(1, descriptionLines.length) * 10 + detailHeight + 7;
+    return Math.max(1, descriptionLines.length) * itemLineHeight + detailHeight + noteHeight + 7;
   };
 
   const propertyNameLines = wrap(propertyName, bold, 11.5, contentWidth);
@@ -545,6 +552,7 @@ export async function buildThermalReceiptPdf(
   y -= 3;
   lineRule(true);
 
+  y -= 4;
   drawCentered("RECEIPT", 10, bold);
   y -= 13;
 
@@ -595,7 +603,7 @@ export async function buildThermalReceiptPdf(
     for (const [index, part] of descriptionLines.entries()) {
       page.drawText(part, {
         x: margin,
-        y: rowTop - index * 10,
+        y: rowTop - index * itemLineHeight,
         size: 8.5,
         font: index === 0 ? bold : regular,
         color: black,
@@ -614,7 +622,7 @@ export async function buildThermalReceiptPdf(
       });
     }
 
-    y = rowTop - Math.max(1, descriptionLines.length) * 10;
+    y = rowTop - Math.max(1, descriptionLines.length) * itemLineHeight;
 
     const quantity = qty(line.quantity);
     const unitPrice = money(line.unit_price, currency);
@@ -648,7 +656,7 @@ export async function buildThermalReceiptPdf(
     if (note) {
       for (const part of wrap(note, regular, 7, itemWidth)) {
         drawLeft(part, margin + 5, 7, regular, muted);
-        y -= 8;
+        y -= noteLineHeight;
       }
     }
 

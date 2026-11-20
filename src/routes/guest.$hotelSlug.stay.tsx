@@ -37,8 +37,8 @@ function MyStayPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { user, loading } = useCustomerSession();
-  const stays = useMyStays(ws.organization_id, Boolean(user));
-  const verify = useVerifyStay(ws.organization_id);
+  const stays = useMyStays(ws.organization_id, ws.branch_id, user?.id);
+  const verify = useVerifyStay(ws.organization_id, ws.branch_id);
   const [reference, setReference] = useState("");
   const [detail, setDetail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -66,6 +66,9 @@ function MyStayPage() {
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : stays.isError ? (
+        <PublicEmptyState title="Your bookings couldn’t load" description={`Refresh bookings for ${ws.hotel_name}.`}
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void stays.refetch()}>Retry bookings</button>} />
       ) : (stays.data?.length ?? 0) === 0 ? (
         <GuestSection
           title="No stay linked yet"

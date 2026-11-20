@@ -45,6 +45,8 @@ type ReviewCount = {
   delivery_note: string;
   submitted_by: string;
   submitted_by_current_user?: boolean;
+  custody_status: "pending" | "matched" | "discrepancy" | "own-custody";
+  custody_lines: Array<{ line_id: string; delivered: string; rejected: string; batch: string; expiry: string | null }> | null;
   submitted_at: string;
   status: string;
   remarks: string | null;
@@ -64,7 +66,7 @@ function formatQuantity(value: number) {
 }
 
 function Page() {
-  const { organizationId, user, permissionsLoaded, can } = useAuth();
+  const { organizationId, user, permissionsLoaded } = useAuth();
   const { branchId, filterKey } = useActivePropertyFilter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -214,7 +216,7 @@ function Page() {
 
       <SectionCard
         title="Independent receiving review"
-        description="Review the original physical counts. Reviewers with receiving posting authority create the GRN on approval. Otherwise, a receiving manager posts the approved count in the section below."
+        description="Compare the original count and the Storekeeper count. Reject discrepancies with a reason and have the delivery recounted."
       >
         <div className="mb-4 flex justify-end">
           <Button
@@ -249,7 +251,7 @@ function Page() {
 
         <div className="space-y-5">
           {counts.map((count) => {
-            const submittedByCurrentUser = count.submitted_by_current_user === true;
+            const submittedByCurrentUser = count.submitted_by_current_user === true || count.submitted_by === user?.id;
             const hasExcess = count.lines.some(
               (line) => line.reconciliation_result === "excess"
             );
@@ -377,6 +379,20 @@ function Page() {
                   </table>
                 </div>
 
+                <p className="text-sm" role="status">
+                  {count.custody_status === "matched" && "Storekeeper count matched and custody recorded."}
+                  {count.custody_status === "pending" && "Awaiting independent Storekeeper count."}
+                  {count.custody_status === "own-custody" && "Another reviewer must approve this delivery."}
+                  {count.custody_status === "discrepancy" && "Storekeeper count differs. Reject with a reason and have the delivery recounted."}
+                </p>
+                {count.custody_status === "discrepancy" && count.custody_lines?.map((line) => (
+                  <p key={line.line_id} className="text-sm text-muted-foreground">
+                    Storekeeper count for {count.lines.find((item) => item.count_line_id === line.line_id)?.item_name ?? "purchase item"}
+                    {" · "}{line.delivered} delivered · {line.rejected} rejected
+                    {line.batch ? ` · Batch ${line.batch}` : ""}
+                    {line.expiry ? ` · Expiry ${line.expiry}` : ""}
+                  </p>
+                ))}
                 {!submittedByCurrentUser ? (
                   <div className="space-y-3 rounded-lg border p-4">
                     <p className="text-sm font-semibold">
@@ -404,10 +420,10 @@ function Page() {
                       </Button>
 
                       <Button
-                        disabled={decide.isPending || hasExcess}
+                        disabled={decide.isPending || hasExcess || count.custody_status !== "matched"}
                         onClick={() => submitDecision(count, "approved")}
                       >
-                        {can("procurement", "receiving.manage") ? "Approve & Post GRN" : "Approve Count"}
+                        Approve Count
                       </Button>
                     </div>
 
@@ -419,9 +435,7 @@ function Page() {
                     )}
 
                     <p className="text-xs text-muted-foreground">
-                      The original physical count stays immutable. Rejection preserves the count
-                      and review reason. Approval creates the GRN when you have posting authority;
-                      otherwise a receiving manager completes the posting below.
+                      Approval makes the delivery eligible for GRN posting.
                     </p>
                   </div>
                 ) : null}

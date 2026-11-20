@@ -8,6 +8,9 @@ import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel, useMyPublicOrders } from "@/lib/public-delivery";
 import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
+import { orderBucket } from "@/lib/guest-presentation";
+
+export { orderBucket } from "@/lib/guest-presentation";
 
 export const Route = createFileRoute("/guest/$hotelSlug/orders")({
   head: () => ({
@@ -27,19 +30,6 @@ export const Route = createFileRoute("/guest/$hotelSlug/orders")({
 
 type Row = Record<string, unknown>;
 
-/** Guest-facing grouping of an order's real status. */
-const ACTIVE = ["pending", "confirmed", "accepted", "preparing", "ready", "dispatched", "on_the_way", "picked_up"];
-const CANCELLED = ["cancelled", "rejected", "declined", "failed"];
-const COMPLETED = ["completed", "delivered", "collected", "closed", "served"];
-
-export function orderBucket(status: unknown, scheduledFor?: unknown) {
-  const value = String(status ?? "").toLowerCase();
-  if (CANCELLED.includes(value)) return "cancelled" as const;
-  if (COMPLETED.includes(value)) return "completed" as const;
-  if (scheduledFor && new Date(String(scheduledFor)).getTime() > Date.now()) return "scheduled" as const;
-  return ACTIVE.includes(value) ? ("active" as const) : ("completed" as const);
-}
-
 const buckets = [
   { key: "active", label: "Active" },
   { key: "scheduled", label: "Scheduled" },
@@ -54,13 +44,13 @@ function OrdersPage() {
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
-  const orders = useMyPublicOrders(ws.organization_id, customerId);
+  const orders = useMyPublicOrders(ws.organization_id, customerId, ws.branch_id);
   useGuestScreenView(ws.organization_id, "orders", Boolean(customerId));
 
   const grouped = useMemo(() => {
     const out: Record<string, Row[]> = { active: [], scheduled: [], completed: [], cancelled: [] };
     for (const o of orders.data ?? []) {
-      out[orderBucket(o["order_status"], o["scheduled_for"])]?.push(o as Row);
+      out[orderBucket(o["order_status"], o["scheduled_for"], o["fulfilment_type"])]?.push(o as Row);
     }
     return out;
   }, [orders.data]);
@@ -87,6 +77,9 @@ function OrdersPage() {
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : orders.isError || profile.isError ? (
+        <PublicEmptyState title="Orders couldn’t load" description={`Try again to see orders for ${ws.hotel_name}.`}
+          action={<button className="neo-guest-secondary" onClick={() => void (profile.isError ? profile.refetch() : orders.refetch())}>Retry orders</button>} />
       ) : (orders.data?.length ?? 0) === 0 ? (
         <GuestSection title="Order history">
           <PublicEmptyState
@@ -96,22 +89,15 @@ function OrdersPage() {
         </GuestSection>
       ) : (
         <GuestSection title="Order history" description="Live status straight from the kitchen and dispatch.">
-          <div className="neo-scroll-x -mx-1 mb-4 flex gap-2 px-1" role="tablist" aria-label="Order status">
+          <div className="neo-guest-segments mb-4" role="group" aria-label="Order status">
             {buckets.map((b) => {
               const selected = b.key === bucket;
               return (
                 <button
                   key={b.key}
                   type="button"
-                  role="tab"
-                  aria-selected={selected}
+                  aria-pressed={selected}
                   onClick={() => setBucket(b.key)}
-                  className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium"
-                  style={{
-                    borderColor: selected ? ws.primary_color : "rgba(0,0,0,0.1)",
-                    background: selected ? ws.primary_color : "transparent",
-                    color: selected ? "var(--pa-on-primary)" : "var(--guest-muted)",
-                  }}
                 >
                   {b.label}
                   <span className="text-xs opacity-80">{(grouped[b.key] ?? []).length}</span>

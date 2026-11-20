@@ -29,10 +29,9 @@ function FolioPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { user, loading } = useCustomerSession();
-  // Ownership is resolved inside the database routine from the signed-in
-  // account, so no customer id ever leaves the browser.
-  const bill = useGuestBill(ws.organization_id, Boolean(user));
-  const paymentAvailability = useGuestPaymentAvailability(ws.organization_id);
+  // The database resolves ownership from the signed-in account.
+  const bill = useGuestBill(ws.organization_id, ws.branch_id, user?.id);
+  const paymentAvailability = useGuestPaymentAvailability(ws.organization_id, Boolean(user));
   useGuestScreenView(ws.organization_id, "folio", Boolean(user));
 
   const list = bill.data?.folios ?? [];
@@ -53,12 +52,19 @@ function FolioPage() {
         </p>
       </section>
 
-      {!loading && !user ? (
-        <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your bill" description="Your folio, confirmed payments and receipts are visible only to your account." />
-      ) : bill.isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
+      {loading || bill.isLoading ? (
+        <div className="flex justify-center py-10 text-[var(--guest-muted)]" role="status">
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+          <span className="sr-only">Loading your bill</span>
         </div>
+      ) : !user ? (
+        <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your bill" description="Your folio, confirmed payments and receipts are visible only to your account." />
+      ) : bill.isError ? (
+        <PublicEmptyState
+          title="Your bill couldn’t load"
+          description="Try again to view charges and payments at this property."
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void bill.refetch()}>Retry bill</button>}
+        />
       ) : list.length === 0 ? (
         <GuestSection title="Folios">
           <PublicEmptyState
@@ -78,7 +84,8 @@ function FolioPage() {
                       key={f.id}
                       type="button"
                       onClick={() => setSelected(f.id)}
-                      className="rounded-full border px-3 py-1.5 text-xs font-medium"
+                      aria-pressed={isActive}
+                      className="min-h-11 rounded-full border px-3 py-1.5 text-sm font-medium"
                       style={{
                         borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.1)",
                         color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)",

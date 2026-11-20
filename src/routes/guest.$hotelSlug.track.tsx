@@ -31,7 +31,7 @@ function TrackOrderPage() {
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
-  const orders = useMyPublicOrders(ws.organization_id, customerId);
+  const orders = useMyPublicOrders(ws.organization_id, customerId, ws.branch_id);
   useGuestScreenView(ws.organization_id, "track-order", Boolean(customerId));
 
   const live = (orders.data ?? []).filter(

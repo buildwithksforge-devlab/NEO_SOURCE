@@ -38,11 +38,15 @@ describe("connected guest commerce", () => {
     for (const path of [
       "src/routes/guest.$hotelSlug.order.tsx",
       "src/routes/guest.$hotelSlug.account.tsx",
-      "src/routes/delivery.$hotelSlug.index.tsx",
       "src/routes/delivery.$hotelSlug.cart.tsx",
     ]) {
       expect(read(path)).not.toContain("CustomerAuthPanel");
       expect(read(path)).toContain("GuestSignInPrompt");
     }
+    const deliveryMenu = read("src/routes/delivery.$hotelSlug.index.tsx");
+    expect(deliveryMenu).not.toContain("CustomerAuthPanel");
+    expect(deliveryMenu).toContain('to: "/guest/$hotelSlug/signin"');
+    expect(deliveryMenu).toContain('new URLSearchParams({ item: String(selectedItem["id"]) })');
+    expect(deliveryMenu).toContain("search: { next, mode: undefined }");
   });
 });

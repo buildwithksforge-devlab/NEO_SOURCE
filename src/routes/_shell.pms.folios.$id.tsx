@@ -38,7 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, FolioStatusBadge, PmsGuard, QueryState } from "@/components/pms/PmsShared";
 import {
-  FOLIO_CATEGORIES,
+  MANUAL_FOLIO_CATEGORIES,
   formatDateTime,
   moneyWithCode as money,
   titleCase,
@@ -524,7 +524,7 @@ function PostChargeDialog({
   onClose: () => void;
 }) {
   const post = usePostFolioCharge();
-  const [category, setCategory] = useState(String(FOLIO_CATEGORIES[0]));
+  const [category, setCategory] = useState("miscellaneous");
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
@@ -545,8 +545,7 @@ function PostChargeDialog({
         <DialogHeader>
           <DialogTitle>Post a charge</DialogTitle>
           <DialogDescription>
-            The posting carries its source module, actor and an idempotency key, so a repeated click
-            cannot double-charge the guest.
+            Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -557,7 +556,7 @@ function PostChargeDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {FOLIO_CATEGORIES.map((c) => (
+                {MANUAL_FOLIO_CATEGORIES.map((c) => (
                   <SelectItem key={c} value={c}>
                     {titleCase(c)}
                   </SelectItem>

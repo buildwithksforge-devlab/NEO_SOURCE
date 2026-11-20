@@ -142,7 +142,7 @@ function GoLivePage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Overall" value={readinessLabels[readiness.isError ? "unknown" : readiness.data?.status ?? "unknown"]} />
+        <StatCard label="Live configuration" value={readinessLabels[readiness.isError ? "unknown" : readiness.data?.status ?? "unknown"]} />
         <StatCard label="Ready" value={String(counts.ready)} />
         <StatCard label="Needs attention" value={String(counts.attention)} />
         <StatCard label="Blocked" value={String(counts.blocked)} />
@@ -156,7 +156,7 @@ function GoLivePage() {
 
         <TabsContent value="checks" className="mt-4">
           <SectionCard
-            title="Operational readiness"
+            title="Live property checks"
             description="POS → KDS, menu → recipe → station, employee → rider, event → billing → finance."
           >
             {readiness.isError ? (

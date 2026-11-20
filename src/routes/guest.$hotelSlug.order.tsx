@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Heart, Loader2, Minus, Plus, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
@@ -7,8 +8,10 @@ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShe
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
-import { money } from "@/lib/public-delivery";
+import { money, usePublicDeliverySettings } from "@/lib/public-delivery";
+import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
 import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
+import { chooseGuestFulfilment } from "@/lib/guest-presentation";
 import { isPreviewMode } from "@/lib/preview-mode";
 import {
   fulfilmentLabels,
@@ -63,33 +66,36 @@ function OrderPage() {
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
 
-  const stay = useGuestActiveStay(ws.organization_id, Boolean(customerId));
+  const stay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const inHouse = Boolean(stay.data?.reservation_id);
 
   const cart = useGuestCart(ws.organization_id, customerId);
   const cartId = cart.data?.["id"] as string | undefined;
+  const savedBranch = cart.data?.["branch_id"];
+  const cartAtAnotherProperty = Boolean(ws.branch_id && savedBranch && savedBranch !== ws.branch_id);
   const cartItems =
     (cart.data?.["cart_items"] as Record<string, unknown>[] | undefined) ?? [];
 
   const [fulfilment, setFulfilment] = useState<FulfilmentType | null>(null);
   const savedFulfilment = cart.data?.["fulfilment_type"];
+  const deliveryMenu = useGuestMenu(ws.organization_id, ws.branch_id, "delivery");
+  const collectionMenu = useGuestMenu(ws.organization_id, ws.branch_id, "pickup");
+  const roomMenu = useGuestMenu(ws.organization_id, ws.branch_id, "room-service", inHouse);
+  const menus = { "room-service": roomMenu, pickup: collectionMenu, delivery: deliveryMenu };
+  const defaultMode = chooseGuestFulfilment(inHouse, {
+    "room-service": roomMenu.data, pickup: collectionMenu.data, delivery: deliveryMenu.data,
+  }, requestedItem);
 
   const activeFulfilment: FulfilmentType =
     fulfilment ??
-    (savedFulfilment === "pickup" ||
+    (cartItems.length > 0 && (savedFulfilment === "pickup" ||
     savedFulfilment === "delivery" ||
-    savedFulfilment === "room-service"
+    savedFulfilment === "room-service")
       ? savedFulfilment
-      : inHouse
-        ? "room-service"
-        : "delivery");
+      : defaultMode);
 
-  const menu = useGuestMenu(
-    ws.organization_id,
-    ws.branch_id ?? null,
-    activeFulfilment,
-  );
-  const quote = useGuestQuote(cartId);
+  const menu = menus[activeFulfilment];
+  const quote = useGuestQuote(cartAtAnotherProperty ? undefined : cartId);
   const { addItem, setQuantity, updateCart } = useGuestCartMutations(
     ws.organization_id,
     customerId,
@@ -104,6 +110,19 @@ function OrderPage() {
   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
   const placeRoomService = usePlaceRoomServiceOrder();
   const placeDelivery = usePlaceDeliveryOrder();
+  const deliveryWorkspace = useQuery({
+    queryKey: ["guest-delivery-workspace", ws.organization_id, ws.branch_id, hotelSlug],
+    enabled: !cartAtAnotherProperty && activeFulfilment !== "room-service" && Boolean(cartId),
+    queryFn: () => resolvePublicWorkspace({ data: { appKey: "delivery", slug: hotelSlug } }),
+  });
+  const cartBranch = ws.branch_id ?? (savedBranch as string | null | undefined) ?? null;
+  const deliverySettings = usePublicDeliverySettings(ws.organization_id, cartBranch);
+  const matchingDelivery = deliveryWorkspace.data?.organization_id === ws.organization_id &&
+    (deliveryWorkspace.data.branch_id === null || deliveryWorkspace.data.branch_id === cartBranch);
+  const acceptedMethods = deliverySettings.data?.["allowed_payment_methods"];
+  const cashEnabled = !deliverySettings.isError && Array.isArray(acceptedMethods) && acceptedMethods.includes("cash") &&
+    deliverySettings.data?.["cod_enabled"] === true &&
+    Number(quote.data?.grand_total) <= Number(deliverySettings.data?.["cod_limit"] ?? 0);
 
   useGuestScreenView(ws.organization_id, "order", Boolean(customerId));
 
@@ -116,6 +135,7 @@ function OrderPage() {
   const [paymentIntent, setPaymentIntent] = useState<
     "room-charge" | "pay-at-property"
   >("room-charge");
+  const activePaymentIntent = stay.data?.can_charge_to_room ? paymentIntent : "pay-at-property";
 
   const busy = placeRoomService.isPending || placeDelivery.isPending;
 
@@ -134,9 +154,9 @@ function OrderPage() {
   );
 
   async function changeFulfilment(next: FulfilmentType) {
-    if (next === activeFulfilment || updateCart.isPending || busy) return;
+    if ((cartAtAnotherProperty && cartItems.length > 0) || next === activeFulfilment || updateCart.isPending || busy) return;
 
-    if (!cartId) {
+    if (!cartId || cartItems.length === 0) {
       // Adding the first item creates a cart with the selected type.
       setFulfilment(next);
       setCustomising(null);
@@ -164,10 +184,11 @@ function OrderPage() {
   async function checkout() {
     if (
       !cartId ||
+      cartAtAnotherProperty ||
       updateCart.isPending ||
       cart.data?.["fulfilment_type"] !== activeFulfilment ||
-      quote.data?.fulfilment_type !== activeFulfilment ||
-      quote.data?.can_checkout !== true
+      (!matchingDelivery || activeFulfilment === "room-service") &&
+        (quote.data?.fulfilment_type !== activeFulfilment || quote.data?.can_checkout !== true)
     ) {
       return;
     }
@@ -176,7 +197,7 @@ function OrderPage() {
       if (activeFulfilment === "room-service") {
         const result = await placeRoomService.mutateAsync({
           cartId,
-          paymentIntent,
+          paymentIntent: activePaymentIntent,
         });
 
         toast.success(
@@ -195,6 +216,11 @@ function OrderPage() {
         return;
       }
 
+      if (matchingDelivery && deliveryWorkspace.data) {
+        void navigate({ to: "/delivery/$hotelSlug/checkout", params: { hotelSlug: deliveryWorkspace.data.slug } });
+        return;
+      }
+      if (activeFulfilment === "delivery" && !cashEnabled) return;
       const result = await placeDelivery.mutateAsync({
         cartId,
         paymentMethod:
@@ -221,22 +247,20 @@ function OrderPage() {
     !updateCart.isPending &&
     Boolean(cartId) &&
     cart.data?.["fulfilment_type"] === activeFulfilment &&
-    quote.data?.fulfilment_type === activeFulfilment &&
-    quote.data?.can_checkout === true;
+    (activeFulfilment !== "room-service" && matchingDelivery ||
+      quote.data?.fulfilment_type === activeFulfilment && quote.data?.can_checkout === true &&
+      (activeFulfilment === "room-service" || (deliveryWorkspace.isSuccess && (activeFulfilment === "pickup" || cashEnabled))));
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="explore">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1
-          className="text-2xl font-semibold"
-          style={{ color: "var(--guest-text, #07142D)" }}
-        >
+      <section className="neo-commerce-hero">
+        <span className="neo-commerce-icon"><UtensilsCrossed className="size-5" aria-hidden /></span>
+        <div>
+        <h1 className="neo-commerce-title">
           Order food
         </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Straight to {ws.hotel_name}&apos;s kitchen — the same order the chefs
-          and cashiers see.
-        </p>
+        <p className="neo-commerce-copy">From {ws.hotel_name}&apos;s kitchen to your room, pickup or delivery.</p>
+        </div>
       </section>
 
       {!loading && !user ? (
@@ -245,6 +269,9 @@ function OrderPage() {
           title="Sign in to order"
           description="Your basket, saved dishes, checkout and live order updates stay with your hotel account."
         />
+      ) : cartAtAnotherProperty && cartItems.length ? (
+        <PublicEmptyState title="Your basket is at another property"
+          description="Open the property where you started your basket to review or finish your order." />
       ) : (
         <>
           <GuestSection title="How would you like it?">
@@ -252,26 +279,28 @@ function OrderPage() {
               {(
                 ["room-service", "pickup", "delivery"] as FulfilmentType[]
               ).map((option) => {
-                const disabled = option === "room-service" && !inHouse;
                 const isActive = option === activeFulfilment;
+                const unavailable = menus[option].isSuccess && menus[option].data.length === 0;
+                const disabled = (option === "room-service" && !inHouse) || unavailable;
 
                 return (
                   <button
                     key={option}
                     type="button"
+                    aria-pressed={isActive}
                     disabled={disabled || updateCart.isPending || busy}
                     onClick={() => void changeFulfilment(option)}
-                    className="rounded-full border px-3.5 py-2 text-xs font-medium disabled:opacity-40"
+                    className="min-h-11 rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-60"
                     style={{
                       borderColor: isActive
                         ? ws.primary_color
                         : "rgba(0,0,0,0.1)",
-                      color: isActive
-                        ? ws.primary_color
-                        : brandFallback.steel,
+                      color: isActive ? "var(--pa-on-primary)" : "var(--guest-text)",
+                      background: isActive ? "var(--pa-primary)" : "var(--guest-surface)",
                     }}
                   >
                     {fulfilmentLabels[option]}
+                    {unavailable ? " unavailable" : ""}
                   </button>
                 );
               })}
@@ -297,6 +326,9 @@ function OrderPage() {
                   style={{ color: "var(--guest-muted, #52627A)" }}
                 />
               </div>
+            ) : menu.isError ? (
+              <PublicEmptyState title="The menu couldn’t load" description="Try refreshing this property’s menu."
+                action={<button className="neo-guest-secondary" onClick={() => void menu.refetch()}>Retry menu</button>} />
             ) : (menu.data?.length ?? 0) === 0 ? (
               <PublicEmptyState
                 title="Nothing available for this option"
@@ -402,10 +434,12 @@ function OrderPage() {
                                   )
                                 }
                                 disabled={addItem.isPending || updateCart.isPending}
-                                className="rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+                                aria-expanded={activeCustomiser === item.id}
+                                className="min-h-11 min-w-11 rounded-full px-3 py-1.5 text-sm font-semibold"
                                 style={{
                                   background:
                                     ws.primary_color || brandFallback.primary,
+                                  color: "var(--pa-on-primary)",
                                 }}
                               >
                                 Add
@@ -621,7 +655,7 @@ function OrderPage() {
                           type="radio"
                           name="payment-intent"
                           value={option.value}
-                          checked={paymentIntent === option.value}
+                          checked={activePaymentIntent === option.value}
                           onChange={() =>
                             setPaymentIntent(option.value)
                           }
@@ -650,21 +684,24 @@ function OrderPage() {
                   </div>
                 ) : null}
 
+                {activeFulfilment !== "room-service" && deliveryWorkspace.isError ? (
+                  <button className="mt-3 min-h-11 text-sm font-semibold underline" onClick={() => void deliveryWorkspace.refetch()}>Checkout couldn’t load. Retry</button>
+                ) : activeFulfilment === "delivery" && deliveryWorkspace.isSuccess && !matchingDelivery && !cashEnabled ? (
+                  <p className="mt-3 text-sm text-amber-800">Delivery payment is unavailable for this basket. Choose collection or contact the property.</p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void checkout()}
                   disabled={!canPlaceOrder}
-                  className="mt-5 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                  style={{
-                    background:
-                      ws.primary_color || brandFallback.primary,
-                  }}
+                  className="neo-commerce-primary mt-5 w-full"
                 >
                   {busy
                     ? "Sending to the kitchen…"
                     : preview
                       ? "Preview only"
-                      : "Place order"}
+                      : activeFulfilment !== "room-service" && matchingDelivery
+                        ? "Continue to checkout"
+                        : "Place order"}
                 </button>
               </>
             )}

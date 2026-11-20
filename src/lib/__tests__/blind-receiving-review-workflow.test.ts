@@ -539,4 +539,95 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
         .rows[0],
     ).toEqual({ received_quantity: "10", accepted_quantity: "10" });
   });
+
+  it("requires a separate matched custody count and guarded approval before posting", async () => {
+    const count = id(901);
+    const discrepancy = id(902);
+    const countLine = id(903);
+    const discrepancyLine = id(904);
+    const keeper = id(905);
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql
+        AS $$ SELECT current_setting('test.actor')::uuid $$;
+      CREATE OR REPLACE FUNCTION is_active_staff() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+      CREATE FUNCTION has_permission(text,text,text) RETURNS boolean LANGUAGE sql AS $$
+        SELECT CASE WHEN $1='stores' AND $2='issues' THEN auth.uid()='${keeper}'::uuid
+            WHEN $1='procurement' AND $2='receiving' AND $3='create' THEN auth.uid()='${submitter}'::uuid
+            WHEN $1='procurement' AND $2='orders' AND $3='approve' THEN auth.uid()='${reviewer}'::uuid
+            ELSE false END
+      $$;
+      ALTER TABLE neo_blind_receiving_counts ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+        ALTER COLUMN status SET DEFAULT 'submitted';
+      ALTER TABLE neo_blind_receiving_count_lines ALTER COLUMN id SET DEFAULT gen_random_uuid();
+      ALTER TABLE purchase_order_lines ADD COLUMN organization_id uuid;
+      UPDATE purchase_order_lines SET organization_id = '${org}';
+      ALTER TABLE goods_receipts ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE goods_receipt_lines ENABLE ROW LEVEL SECURITY;
+      INSERT INTO neo_blind_receiving_counts(id,organization_id,branch_id,purchase_order_id,
+        receiving_location_id,supplier_delivery_note,status,submitted_by) VALUES
+        ('${count}','${org}','${branch}','${order}','${store}','DN-CUSTODY','submitted','${submitter}'),
+        ('${discrepancy}','${org}','${branch}','${order}','${store}','DN-DIFFERENT','submitted','${submitter}');
+      INSERT INTO neo_blind_receiving_count_lines(id,count_id,purchase_order_line_id,quantity_delivered,
+        quantity_rejected,rejection_reason,batch_number,expiry_date) VALUES
+        ('${countLine}','${count}','${line}',8,2,'Damaged','B-1','2027-01-01'),
+        ('${discrepancyLine}','${discrepancy}','${line}',8,2,'Damaged','B-1','2027-01-01');
+    `);
+    await db.exec(readFileSync("supabase/migrations/20261119200000_receiving_custody_gate.sql", "utf8"));
+    const actor = async (user: string) => {
+      await db.exec("RESET ROLE");
+      await db.query("SELECT set_config('test.actor',$1,false)", [user]);
+      await db.exec("SET ROLE authenticated");
+    };
+    const custody = (key: string, item: string, delivered: number) => db.query(
+      "SELECT neo_accept_receiving_custody($1,$2::jsonb) accepted",
+      [key, JSON.stringify([{ line_id: item, delivered, rejected: 2, batch: "B-1", expiry: "2027-01-01" }])],
+    );
+    const decide = (key: string, decision: string) =>
+      db.query<{ result: Record<string, unknown> }>("SELECT neo_blind_receiving_decide($1,$2,'Checked') result", [key, decision]);
+    await actor(reviewer);
+    await expect(decide(count, "approved")).rejects.toThrow(/matching custody/);
+    await expect(custody(count, countLine, 8)).rejects.toThrow(/Storekeeper custody authorization/);
+    await expect(receive(8, 2)).rejects.toThrow(/permission denied/);
+    await expect(db.query("SELECT inventory_apply_movement($1,$2,8,'kg','receipt')", [item, store]))
+      .rejects.toThrow(/Receipt stock movements/);
+
+    await actor(keeper);
+    const queue = await db.query<{ rows: Array<{ lines: Array<Record<string, unknown>> }> }>(
+      "SELECT neo_receiving_custody_queue() rows",
+    );
+    expect(queue.rows[0]?.rows).toHaveLength(2);
+    expect(queue.rows[0]?.rows[0]?.lines[0]).toEqual({ line_id: expect.any(String), order_line_id: line, item_name: "Rice", unit: "kg" });
+    await expect(custody(count, countLine, 1)).rejects.toThrow(/one valid/);
+    await expect(custody(count, countLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
+    await expect(custody(count, countLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
+    await custody(discrepancy, discrepancyLine, 7);
+    await expect(decide(count, "approved")).rejects.toThrow(/Independent review authorization/);
+    await expect(db.query("SELECT neo_post_approved_blind_receiving($1)", [count]))
+      .rejects.toThrow(/independent Storekeeper custody/);
+
+    await actor(reviewer);
+    await expect(decide(discrepancy, "approved")).rejects.toThrow(/matching custody/);
+    await expect(decide(discrepancy, "rejected")).resolves.toMatchObject({ rows: [{ result: { status: "rejected" } }] });
+    await actor(submitter);
+    const recount = (note: string) => db.query(
+      "SELECT neo_submit_blind_receiving_count($1,$2,$3,$4::jsonb) result",
+      [order, store, note, JSON.stringify([{ order_line_id: line, quantity_delivered: 7 }])],
+    );
+    await expect(recount("DN-DIFFERENT")).resolves.toMatchObject({ rows: [{ result: { status: "submitted" } }] });
+    await expect(recount("dn-different")).rejects.toThrow(/already been recorded/);
+    await actor(reviewer);
+    await expect(decide(count, "approved")).resolves.toMatchObject({ rows: [{ result: { status: "approved", stock_posted: false } }] });
+    await db.exec("RESET ROLE");
+    await expect(db.query("SELECT * FROM movement_evidence")).resolves.toMatchObject({ rows: [] });
+
+    await actor(reviewer);
+    const post = () => db.query<{ result: Record<string, unknown> }>("SELECT neo_post_approved_blind_receiving($1) result", [count]);
+    const posted = (await post()).rows[0]?.result;
+    expect(posted).toMatchObject({ status: "posted", grn_id: expect.any(String) });
+    expect((await post()).rows[0]?.result).toMatchObject({ replayed: true, grn_id: posted?.["grn_id"] });
+    await db.exec("RESET ROLE");
+    expect((await db.query("SELECT quantity FROM movement_evidence")).rows).toEqual([{ quantity: "6" }]);
+    expect((await db.query("SELECT batch_number, expiry_date::text, quantity_accepted FROM goods_receipt_lines")).rows)
+      .toEqual([{ batch_number: "B-1", expiry_date: "2027-01-01", quantity_accepted: "6" }]);
+  }, 30000);
 });

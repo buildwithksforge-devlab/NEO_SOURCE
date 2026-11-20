@@ -16,10 +16,10 @@ export function ReceivingDocumentHistory() {
     {receipts.isError ? <p role="alert" className="mt-3 text-destructive">Saved GRNs could not be loaded. {receipts.error instanceof Error ? receipts.error.message : 'Refresh to retry.'}</p>
       : receipts.isPending ? <p className="mt-3">Loading saved GRNs…</p>
       : !receipts.data?.length ? <p className="mt-3 text-muted-foreground">No saved GRNs found for this property.</p>
-      : <ul className="mt-3 space-y-3">{receipts.data.map(receipt => <li key={String(receipt.id)} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-        <div><p className="font-medium">{String(receipt.grn_number || receipt.id)}</p><p className="text-sm text-muted-foreground">{String(receipt.status ?? 'Unknown status')} · {String(receipt.received_at ?? '')}</p></div>
-        <div className="flex flex-wrap items-center gap-3"><DocumentPrintButton type="goods_receipt" id={String(receipt.id)} label="Open / reprint GRN" />
-          {receipt.order_id ? <Link to="/lpos/$id" params={{ id: String(receipt.order_id) }} className="text-sm underline">Purchase, reconciliation & invoices</Link> : <span className="text-sm text-destructive">Purchase link needs review</span>}
+      : <ul className="mt-3 space-y-3">{receipts.data.map(receipt => <li key={String(receipt['id'])} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+        <div><p className="font-medium">{String(receipt['grn_number'] || receipt['id'])}</p><p className="text-sm text-muted-foreground">{String(receipt['status'] ?? 'Unknown status')} · {String(receipt['received_at'] ?? '')}</p></div>
+        <div className="flex flex-wrap items-center gap-3"><DocumentPrintButton type="goods_receipt" id={String(receipt['id'])} label="Open / reprint GRN" />
+          {receipt['order_id'] ? <Link to="/lpos/$id" params={{ id: String(receipt['order_id']) }} className="text-sm underline">Purchase, reconciliation & invoices</Link> : <span className="text-sm text-destructive">Purchase link needs review</span>}
         </div>
       </li>)}</ul>}
   </SectionCard>;

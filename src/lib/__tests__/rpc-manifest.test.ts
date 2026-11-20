@@ -65,6 +65,8 @@ describe("database callable surface", () => {
     "neo_index_class",
     "neo_index_coverage_scan",
     "neo_rbac_model_health",
+    // The durable Minibar wrapper calls this engine in SQL and preserves its legacy grants.
+    "neo_minibar_post",
   ]);
 
   it("does not keep manifest entries with no remaining call site", () => {
