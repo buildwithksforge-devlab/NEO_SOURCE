@@ -35,17 +35,19 @@ export function ReceivingCustody() {
     },
   });
 
-  if (queue.isError) {
-    return <p role="alert">Storekeeper custody queue could not be loaded. {queue.error.message}</p>;
-  }
-
   const counts = (queue.data ?? []).filter((count) => !branchId || count.branch_id === branchId);
-  if (counts.length === 0) return null;
   return (
     <SectionCard title="Storekeeper count and custody"
       description="Count the delivery independently. Record the quantities physically received and rejected, plus batch and expiry where applicable.">
       <div className="space-y-4">
-        {counts.map((count) => (
+        {queue.isError ? (
+          <div className="space-y-3">
+            <p role="alert">Storekeeper custody queue could not be loaded. {queue.error.message}</p>
+            <Button variant="outline" onClick={() => void queue.refetch()}>Retry</Button>
+          </div>
+        ) : queue.isPending ? <p role="status">Loading custody queue…</p>
+          : counts.length === 0 ? <p className="text-sm text-muted-foreground">No deliveries are waiting for an independent count at this property.</p>
+          : counts.map((count) => (
           <CustodyForm key={count.count_id} count={count}
             onAccepted={() => invalidateSupplyViews(queryClient)} />
         ))}

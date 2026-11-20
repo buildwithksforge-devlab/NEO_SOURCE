@@ -7,12 +7,11 @@ import { Input } from "@/components/ui/input";
 import { useGuestBookingPosition, usePayGuestDeposit } from "@/lib/guest-booking";
 import {
   BrandButton,
-  PublicAppShell,
   PublicEmptyState,
   useWorkspace,
 } from "@/components/public/PublicAppShell";
 import { supabase } from "@/integrations/supabase/client";
-import { brandFallback } from "@/lib/public-apps";
+import { GuestScreen } from "@/components/public/GuestScreen";
 import { money } from "@/lib/public-delivery";
 
 export const Route = createFileRoute("/guest/$hotelSlug/reservations/$reservationReference")({
@@ -60,7 +59,10 @@ function ReservationDetail() {
   });
 
   return (
-    <PublicAppShell homeTo={{ to: "/guest/$hotelSlug", params: { hotelSlug } }}>
+    <GuestScreen hotelSlug={hotelSlug} active="stay">
+      <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="mb-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold">
+        <span aria-hidden>←</span> Back to My Stay
+      </Link>
       <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         Reservation {reservationReference}
       </h1>
@@ -69,20 +71,23 @@ function ReservationDetail() {
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : reservation.isError ? (
+        <div className="mt-4">
+          <PublicEmptyState
+            title="Reservation couldn’t load"
+            description="Try loading your booking again."
+            action={<BrandButton onClick={() => void reservation.refetch()}>Retry</BrandButton>}
+          />
+        </div>
       ) : !reservation.data ? (
         <div className="mt-4">
           <PublicEmptyState
             title="Reservation not available"
             description="Sign in with the details used when booking, or contact the hotel to confirm this reference."
-            action={
-              <Link to="/guest/$hotelSlug" params={{ hotelSlug }}>
-                <BrandButton>Back to my stay</BrandButton>
-              </Link>
-            }
           />
         </div>
       ) : (
-        <section className="neo-rider-card mt-4 space-y-2 p-5 text-sm">
+        <dl className="neo-rider-card mt-4 space-y-2 p-5 text-sm">
           <Detail label="Status" value={String(reservation.data["status"])} />
           <Detail label="Arrival" value={String(reservation.data["arrival_date"])} />
           <Detail label="Departure" value={String(reservation.data["departure_date"])} />
@@ -97,13 +102,13 @@ function ReservationDetail() {
           {reservation.data["special_requests"] ? (
             <Detail label="Special requests" value={String(reservation.data["special_requests"])} />
           ) : null}
-        </section>
+        </dl>
       )}
 
       {reservation.data ? (
         <DepositPanel organizationId={ws.organization_id} reference={reservationReference} />
       ) : null}
-    </PublicAppShell>
+    </GuestScreen>
   );
 }
 
@@ -123,9 +128,11 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
       <h2 className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         Deposit
       </h2>
-      <Detail label="Deposit required" value={money(p.required)} />
-      <Detail label="Paid so far" value={money(p.paid)} />
-      <Detail label="Still to pay" value={money(outstanding)} />
+      <dl className="space-y-2">
+        <Detail label="Deposit required" value={money(p.required)} />
+        <Detail label="Paid so far" value={money(p.paid)} />
+        <Detail label="Still to pay" value={money(outstanding)} />
+      </dl>
 
       {outstanding <= 0 ? (
         <p style={{ color: "var(--guest-muted, #52627A)" }}>Your deposit is settled in full. Thank you.</p>
@@ -171,11 +178,11 @@ function DepositPanel({ organizationId, reference }: { organizationId: string; r
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-black/5 pb-2 last:border-0">
-      <span style={{ color: "var(--guest-muted, #52627A)" }}>{label}</span>
-      <span className="font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
+    <div className="flex items-start justify-between gap-4 border-b border-[color:var(--guest-border)] pb-2 last:border-0">
+      <dt className="shrink-0" style={{ color: "var(--guest-muted, #52627A)" }}>{label}</dt>
+      <dd className="min-w-0 text-right font-medium [overflow-wrap:anywhere]" style={{ color: "var(--guest-text, #07142D)" }}>
         {value}
-      </span>
+      </dd>
     </div>
   );
 }

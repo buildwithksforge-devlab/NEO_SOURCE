@@ -158,12 +158,13 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
 
         <nav aria-label="Guest navigation" className="ml-auto hidden items-center gap-1 lg:flex">
           {guestDesktopNav.map((entry) => {
-            const isActive = entry.key === active;
+            const isActive = entry.key === (active === "trips" ? "stay" : active);
             return (
               <Link
                 key={entry.key}
                 to={entry.to}
                 params={{ hotelSlug }}
+                activeOptions={{ exact: true }}
                 aria-current={isActive ? "page" : undefined}
                 className="min-h-9 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
                 style={{

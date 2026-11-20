@@ -35,6 +35,7 @@ export function PageHeader({
   icon: Icon,
   meta,
   plain = false,
+  className,
 }: {
   title: string;
   description?: string;
@@ -46,12 +47,14 @@ export function PageHeader({
   meta?: ReactNode;
   /** Opt out of the hero band for embedded/print contexts. */
   plain?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "mb-5 grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-3 overflow-hidden sm:mb-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-4",
         plain ? "" : "neo-page-hero",
+        className,
       )}
     >
       <div className="flex min-w-0 items-start gap-3">

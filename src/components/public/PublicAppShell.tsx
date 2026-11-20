@@ -112,14 +112,14 @@ export function BrandMark({ workspace, size = 40 }: {
  */
 export function PublicAppShell({
   children,
-  nav,
   homeTo,
   cartCount = 0,
+  deliveryTab = "menu",
 }: {
   children: ReactNode;
-  nav?: ReactNode;
   homeTo?: { to: string; params?: Record<string, string> };
   cartCount?: number;
+  deliveryTab?: "menu" | "cart" | "orders";
 }) {
   const ws = useWorkspace();
   const primary = normalizedHex(ws.primary_color || brandFallback.primary);
@@ -127,10 +127,30 @@ export function PublicAppShell({
   const background = normalizedHex(ws.background_color || brandFallback.background, brandFallback.background);
   const hotelSlug = homeTo?.to === "/delivery/$hotelSlug" ? homeTo.params?.["hotelSlug"] : undefined;
   const destinations = [
-    { to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
-    { to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
-    { to: "/delivery/$hotelSlug/orders", label: "Orders", icon: Receipt },
+    { key: "menu", to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
+    { key: "cart", to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
+    { key: "orders", to: "/delivery/$hotelSlug/orders", label: "Orders", icon: Receipt },
   ] as const;
+  const deliveryLinks = hotelSlug ? destinations.map(({ key, to, label, icon: Icon }) => (
+    <Link
+      key={key}
+      to={to}
+      params={{ hotelSlug }}
+      aria-current={deliveryTab === key ? "page" : undefined}
+      activeOptions={{ exact: true }}
+    >
+      <span className="relative">
+        <Icon aria-hidden className="size-5" />
+        {key === "cart" && cartCount > 0 ? (
+          <>
+            <span className="neo-app-cart-count" aria-hidden>{cartCount}</span>
+            <span className="sr-only">{cartCount} {cartCount === 1 ? "item" : "items"} in</span>
+          </>
+        ) : null}
+      </span>
+      <span>{label}</span>
+    </Link>
+  )) : null;
 
   const brand = (
     <span className="flex min-w-0 items-center gap-3">
@@ -170,7 +190,11 @@ export function PublicAppShell({
           ) : (
             brand
           )}
-          {nav ? <div className={`neo-scroll-x min-w-0 max-w-[52vw] ${hotelSlug ? "hidden lg:block" : ""}`}>{nav}</div> : null}
+          {deliveryLinks ? (
+            <nav aria-label="Delivery app" className="neo-delivery-header-nav hidden lg:flex">
+              {deliveryLinks}
+            </nav>
+          ) : null}
         </div>
       </header>
 
@@ -192,22 +216,9 @@ export function PublicAppShell({
           </div>
         </div>
       </footer>
-      {hotelSlug ? (
+      {deliveryLinks ? (
         <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
-          {destinations.map(({ to, label, icon: Icon }) => (
-            <Link key={to} to={to} params={{ hotelSlug }} activeOptions={{ exact: label === "Menu" }}>
-              <span className="relative">
-                <Icon aria-hidden className="size-5" />
-                {label === "Cart" && cartCount > 0 ? (
-                  <>
-                    <span className="neo-app-cart-count" aria-hidden>{cartCount}</span>
-                    <span className="sr-only">{cartCount} {cartCount === 1 ? "item" : "items"} in</span>
-                  </>
-                ) : null}
-              </span>
-              <span>{label}</span>
-            </Link>
-          ))}
+          {deliveryLinks}
         </nav>
       ) : null}
     </div>

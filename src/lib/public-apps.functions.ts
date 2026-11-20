@@ -22,6 +22,7 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         return null;
       }
 
+      const heroUrl = property.media?.hero_url || property.cover_image_url || null;
       return {
         id: property.branch_id,
         organization_id: property.organization_id,
@@ -32,8 +33,8 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         app_name: "Stay & Dine",
         hotel_name: property.property_name,
         logo_url: property.media?.logo_url || property.logo_url || null,
-        icon_url:
-          property.media?.hero_url || property.cover_image_url || null,
+        icon_url: heroUrl,
+        hero_url: heroUrl,
         currency: property.currency ?? null,
         primary_color: property.brand?.primary || brandFallback.primary,
         secondary_color: property.brand?.accent || brandFallback.secondary,

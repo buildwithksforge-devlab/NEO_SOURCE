@@ -1,5 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { SectionTabs } from "@/components/common/SectionTabs";
+import { useAuth } from "@/lib/auth";
+import { canAccessPath } from "@/lib/nav-permissions";
 
 export const Route = createFileRoute("/_shell/procurement")({
   head: () => ({
@@ -34,9 +36,11 @@ const TABS = [
 ];
 
 function ProcurementLayout() {
+  const { can, permissionsLoaded } = useAuth();
+  const tabs = permissionsLoaded ? TABS.filter(({ to }) => canAccessPath(can, to)) : [];
   return (
     <div>
-      <SectionTabs tabs={TABS} rootPath="/procurement" />
+      <SectionTabs tabs={tabs} rootPath="/procurement" />
       <Outlet />
     </div>
   );

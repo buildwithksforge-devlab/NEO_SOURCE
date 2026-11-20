@@ -120,7 +120,7 @@ function CheckoutPage() {
 
   if (!loading && !user) {
     return (
-      <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+      <PublicAppShell deliveryTab="cart" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
         <GuestSignInPrompt
           hotelSlug={hotelSlug}
           title="Sign in to continue"
@@ -131,7 +131,7 @@ function CheckoutPage() {
   }
 
   return (
-    <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+    <PublicAppShell deliveryTab="cart" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
       <div className="neo-commerce-hero">
         <div>
           <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="inline-flex min-h-11 items-center text-sm font-semibold text-white/90">← Back to cart</Link>

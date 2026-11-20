@@ -17,6 +17,7 @@ function CartPage() {
   const cart = useMyPublicCart(ws.organization_id, customerId);
   const cartBranch = cart.data?.["branch_id"] as string | null | undefined;
   const differentProperty = Boolean(ws.branch_id && cartBranch && cartBranch !== ws.branch_id);
+  const roomService = cart.data?.["fulfilment_type"] === "room-service";
   const cartId = differentProperty ? undefined : cart.data?.["id"] as string | undefined;
   const menu = usePublicMenu(ws.organization_id, ws.branch_id ?? cartBranch ?? null,
     cart.data?.["fulfilment_type"] === "pickup" ? "pickup" : "delivery");
@@ -27,9 +28,9 @@ function CartPage() {
   const count = items.reduce((sum, item) => sum + Number(item["quantity"] ?? 0), 0);
   const currency = quote.data?.currency ?? String(cart.data?.["currency"] ?? "KES");
 
-  if (!loading && !user) return <PublicAppShell homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}}><GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your cart" description="Your cart follows your account securely across this hotel app." /></PublicAppShell>;
+  if (!loading && !user) return <PublicAppShell deliveryTab="cart" homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}}><GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your cart" description="Your cart follows your account securely across this hotel app." /></PublicAppShell>;
 
-  return <PublicAppShell homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}} cartCount={differentProperty ? 0 : count}>
+  return <PublicAppShell deliveryTab="cart" homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}} cartCount={differentProperty || roomService ? 0 : count}>
     <div className="neo-commerce-hero">
       <span className="neo-commerce-icon"><ShoppingBag className="size-5" /></span>
       <div><h1 className="neo-commerce-title">Cart</h1><p className="neo-commerce-copy">Review what you’re ordering from {ws.hotel_name || ws.app_name}.</p></div>
@@ -39,7 +40,7 @@ function CartPage() {
         action={<button className="neo-commerce-primary" onClick={() => void (customer.isError ? customer.refetch() : cart.refetch())}>Retry</button>} />
       : items.length > 0 && differentProperty ?
       <PublicEmptyState title="Your cart is at another property" description="Open the Delivery link for the property where you started this cart to continue." />
-      : items.length > 0 && cart.data?.["fulfilment_type"] === "room-service" ?
+      : items.length > 0 && roomService ?
       <PublicEmptyState title="Your basket is for room service" description="Review it in Stay & Dine."
         action={<Link to="/guest/$hotelSlug/order" params={{ hotelSlug: ws.guest_slug ?? hotelSlug }} search={{ item: undefined }} className="neo-commerce-primary">Open room service</Link>} />
       : items.length===0 ?
@@ -60,7 +61,10 @@ function CartPage() {
           </article>})}
         </section>
         <aside className="neo-commerce-summary lg:sticky lg:top-24 lg:self-start"><h2 className="font-semibold text-slate-950">Order summary</h2><div className="mt-4 space-y-2 text-sm text-slate-600"><div className="flex justify-between"><span>Items</span><span>{count}</span></div>{quote.data && !quote.isError ? <><div className="flex justify-between"><span>Subtotal</span><span>{money(quote.data.subtotal, currency)}</span></div><div className="flex justify-between border-t border-black/5 pt-3 text-base font-bold text-slate-950"><span>Estimated total</span><span>{money(quote.data.grand_total, currency)}</span></div></>:quote.isError ? <button className="min-h-11 font-semibold underline" onClick={() => void quote.refetch()}>Total unavailable. Retry pricing</button> : null}</div>
-          <Link to="/delivery/$hotelSlug/checkout" params={{hotelSlug}} className="neo-commerce-primary mt-5 w-full">Continue to checkout <ArrowRight className="size-4"/></Link>
+          <div className="neo-delivery-cart-action">
+            {quote.data && !quote.isError ? <strong className="neo-delivery-cart-total">{money(quote.data.grand_total, currency)}</strong> : null}
+            <Link to="/delivery/$hotelSlug/checkout" params={{hotelSlug}} className="neo-commerce-primary w-full">Continue to checkout <ArrowRight className="size-4" aria-hidden /></Link>
+          </div>
           <Link to="/delivery/$hotelSlug" params={{hotelSlug}} className="mt-3 block text-center text-sm font-semibold text-slate-600 hover:text-slate-950">Continue browsing</Link>
         </aside>
       </div>}

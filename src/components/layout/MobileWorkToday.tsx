@@ -9,11 +9,9 @@
  * permissions do not already reach.
  */
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ClipboardList } from "lucide-react";
 import { attentionItems, orderWork, useMyWork, type WorkTone } from "@/lib/my-work";
 import { useBranchScope } from "@/lib/branches";
-import { useAuth } from "@/lib/auth";
-import { greetingFor } from "@/lib/greeting";
 import { cn } from "@/lib/utils";
 
 const toneClass: Record<WorkTone, string> = {
@@ -24,40 +22,45 @@ const toneClass: Record<WorkTone, string> = {
 };
 
 export function MobileWorkToday() {
-  const { profile } = useAuth();
   const scope = useBranchScope();
   const branchId = scope.activeBranchId === "all" ? null : scope.activeBranchId;
   const myWork = useMyWork(branchId);
 
   const all = myWork.data?.items ?? [];
   const needing = attentionItems(all);
-  const shown = (needing.length ? needing : orderWork(all)).slice(0, 5);
+  const shown = (needing.length ? needing : orderWork(all)).slice(0, 3);
 
-  if (myWork.isPending || myWork.error || myWork.data?.authorised !== true) return null;
+  if (myWork.data?.authorised === false) return null;
 
   return (
-    <section className="mb-4 lg:hidden">
-      <h1 className="text-lg font-semibold">{greetingFor(profile?.full_name ?? "there")}</h1>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        {needing.length
-          ? `${needing.length} thing${needing.length === 1 ? "" : "s"} need you${
-              scope.activeBranch?.name ? ` at ${scope.activeBranch.name}` : ""
-            }.`
-          : "Nothing is waiting on you right now."}
-      </p>
-
-      {shown.length === 0 ? (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+    <section className="neo-shift-overview mb-5 lg:hidden" aria-labelledby="shift-work-title">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+        <h2 id="shift-work-title" className="flex items-center gap-2 text-base font-semibold">
+          <ClipboardList className="size-4 text-primary" aria-hidden /> My work
+        </h2>
+        <Link to="/my-work" className="inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-primary">
+          View all <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
+      </div>
+      {myWork.isError ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 text-sm">
+          <p role="alert">My work couldn’t load.</p>
+          <button type="button" className="min-h-11 font-semibold text-primary" onClick={() => void myWork.refetch()}>Retry</button>
+        </div>
+      ) : myWork.isPending ? (
+        <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground" role="status">Loading your work…</p>
+      ) : shown.length === 0 ? (
+        <div className="flex items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground">
           <CheckCircle2 className="size-4 text-primary" aria-hidden />
-          You are clear for now.
+          Nothing is waiting on you.
         </div>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="divide-y divide-border border-t border-border">
           {shown.map((item) => (
             <li key={item.id}>
               <Link
                 to={item.route as never}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3.5"
+                className="flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
               >
                 <span
                   className={cn(
@@ -68,8 +71,8 @@ export function MobileWorkToday() {
                   {item.value}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{item.label}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="block text-sm font-medium">{item.label}</span>
+                  <span className="block text-xs text-muted-foreground">
                     {item.detail}
                   </span>
                 </span>
@@ -80,12 +83,6 @@ export function MobileWorkToday() {
         </ul>
       )}
 
-      <Link
-        to="/my-work"
-        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
-      >
-        All my work <ArrowRight className="size-3.5" aria-hidden />
-      </Link>
     </section>
   );
 }

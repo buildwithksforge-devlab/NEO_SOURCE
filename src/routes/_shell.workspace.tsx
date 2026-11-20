@@ -287,7 +287,6 @@ function OperationsDashboard() {
   return (
     <>
       <WorkplaceSetupNotice />
-      <MobileWorkToday />
       <DashboardFrame
         spec={spec}
         scope={scope}
@@ -300,8 +299,8 @@ function OperationsDashboard() {
           name: dashboard.name,
         }))}
         activeKey={activeKey}
+        shiftOverview={<><ClockDock /><MobileWorkToday /></>}
       />
-      <ClockDock />
     </>
   );
 }

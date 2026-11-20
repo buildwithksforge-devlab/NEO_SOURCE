@@ -171,8 +171,8 @@ function WorkspaceLayout() {
       <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
 
       <div data-shell-main className="neo-shell-main flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Topbar onOpenSidebar={() => setMobileOpen(true)} />
-        <div className="neo-page-gutter shrink-0 border-b border-border bg-background py-1">
+        <Topbar onOpenSidebar={() => setMobileOpen(true)} mobileBack={<BackNavigation compact />} />
+        <div className="neo-page-gutter hidden shrink-0 border-b border-border bg-background py-1 lg:block">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <BackNavigation />
             <AppInstallButton />
@@ -192,6 +192,11 @@ function WorkspaceLayout() {
                 <RouteAccessGate>
                   <Outlet />
                 </RouteAccessGate>
+                <div className="neo-work-credit mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-border py-4 lg:hidden">
+                  <PoweredByNeoSignature />
+                  <CreatorCredit className="text-[0.7rem] opacity-70" />
+                  <AppInstallButton />
+                </div>
               </div>
             </main>
           </PullToRefresh>
@@ -200,7 +205,7 @@ function WorkspaceLayout() {
         {/* Footer chrome sits outside the scroll column, so the signature and
             the creator credit stay pinned to the bottom of the frame on every
             page instead of drifting with long content. */}
-        <footer className="neo-safe-b neo-page-gutter shrink-0 border-t border-border bg-background/95 py-3 backdrop-blur">
+        <footer className="neo-safe-b neo-page-gutter hidden shrink-0 border-t border-border bg-background/95 py-3 backdrop-blur lg:block">
           <div className="neo-shell-bleed flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <PoweredByNeoSignature />
             <CreatorCredit className="text-[0.7rem] opacity-70" />

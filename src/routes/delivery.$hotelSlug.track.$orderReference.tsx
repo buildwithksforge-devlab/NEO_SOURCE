@@ -85,7 +85,7 @@ function TrackPage() {
     !["cancelled", "rejected", "delivered", "completed"].includes(status);
 
   return (
-    <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+    <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
       <div className="neo-commerce-hero">
         <span className="neo-commerce-icon"><PackageCheck className="size-5" aria-hidden /></span>
         <div><h1 className="neo-commerce-title">Track your order</h1><p className="neo-commerce-copy">{orderReference}</p></div>

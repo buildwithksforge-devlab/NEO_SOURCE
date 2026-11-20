@@ -7,10 +7,10 @@
  * reach, and it disappears entirely on large screens where the rail is shown.
  */
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Search } from "lucide-react";
-import { navigationForAccess } from "@/lib/nav-permissions";
+import { BriefcaseBusiness, House, LayoutDashboard, LayoutGrid, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { cn } from "@/lib/utils";
+import { canAccessPath } from "@/lib/nav-permissions";
+import { resolveWorkHome } from "@/lib/work-home";
 
 export function WorkMobileBar({
   onOpenNav,
@@ -19,53 +19,49 @@ export function WorkMobileBar({
   onOpenNav: () => void;
   onOpenSearch: () => void;
 }) {
-  const { isAdmin, can, permissionsLoaded } = useAuth();
+  const { access, can, canModule, permissionsLoaded } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const groups = navigationForAccess(can, isAdmin, permissionsLoaded);
-  // The first destinations of the first permitted groups: whatever this role
-  // actually holds, in the order the canonical navigation already defines.
-  const quick = groups.flatMap((g) => g.items).slice(0, 3);
-
-  if (!permissionsLoaded && quick.length === 0) return null;
+  const home = permissionsLoaded
+    ? resolveWorkHome({
+        accessScope: access.accessScope,
+        dashboardKey: access.dashboardKey,
+        canModule,
+        canOpen: (route) => canAccessPath(can, route),
+      }).route
+    : "/workspace";
+  const matches = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
+  const links = [
+    { to: home, label: "Home", icon: House },
+    home === "/my-work"
+      ? { to: "/workspace", label: "Dashboard", icon: LayoutDashboard }
+      : { to: "/my-work", label: "My work", icon: BriefcaseBusiness },
+  ];
+  const activeTo = links.find((item) => matches(item.to))?.to;
 
   return (
-    <nav
-      aria-label="Work navigation"
-      className="neo-safe-b sticky bottom-0 z-30 flex items-stretch gap-1 border-t border-border bg-card/95 px-2 py-1.5 backdrop-blur lg:hidden"
-    >
-      <button
-        type="button"
-        onClick={onOpenNav}
-        className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-      >
-        <Menu className="size-4" aria-hidden />
-        Menu
-      </button>
-      {quick.map((item) => {
-        const active = pathname === item.to;
-        return (
+    <div className="neo-work-dock-wrap shrink-0 lg:hidden">
+      <nav aria-label="Work navigation" className="neo-app-dock neo-work-dock">
+        {links.map((item) => (
           <Link
             key={item.to}
             to={item.to}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[0.68rem] font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-              active ? "bg-primary/10 text-primary" : "text-muted-foreground",
-            )}
+            aria-current={activeTo === item.to ? "page" : undefined}
+            activeOptions={{ exact: true }}
+            title={item.label}
           >
-            <item.icon className="size-4 shrink-0" aria-hidden />
-            <span className="w-full truncate text-center">{item.label}</span>
+            <item.icon className="size-5 shrink-0" aria-hidden />
+            <span className="w-full truncate">{item.label}</span>
           </Link>
-        );
-      })}
-      <button
-        type="button"
-        onClick={onOpenSearch}
-        className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-      >
-        <Search className="size-4" aria-hidden />
-        Search
-      </button>
-    </nav>
+        ))}
+        <button type="button" onClick={onOpenSearch} aria-haspopup="dialog">
+          <Search className="size-5" aria-hidden />
+          Search
+        </button>
+        <button type="button" onClick={onOpenNav} aria-haspopup="dialog">
+          <LayoutGrid className="size-5" aria-hidden />
+          Menu
+        </button>
+      </nav>
+    </div>
   );
 }

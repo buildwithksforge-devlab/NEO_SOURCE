@@ -110,14 +110,14 @@ function GuestLaundryPage() {
 
   if (!loading && !user) {
     return (
-      <GuestScreen hotelSlug={hotelSlug} active="trips">
+      <GuestScreen hotelSlug={hotelSlug} active="laundry">
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to use laundry" description="See the hotel's live price list and keep every request with your stay history." />
       </GuestScreen>
     );
   }
 
   return (
-    <GuestScreen hotelSlug={hotelSlug} active="trips">
+    <GuestScreen hotelSlug={hotelSlug} active="laundry">
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h1 className="flex items-center gap-2 text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           <Shirt className="size-6" aria-hidden /> Laundry

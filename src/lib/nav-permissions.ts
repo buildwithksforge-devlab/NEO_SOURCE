@@ -117,6 +117,7 @@ export function hasApprovalAuthority(can: CanFn): boolean {
 
 function surfacePermitted(can: CanFn, to: string): boolean {
   if (to === "/approvals") return hasApprovalAuthority(can);
+  if (to === "/inventory/receiving") return true;
   for (const gate of NAV_SURFACE_GATES) {
     const matches = gate.prefixes.some((p) => to === p || to.startsWith(`${p}/`));
     if (!matches) continue;

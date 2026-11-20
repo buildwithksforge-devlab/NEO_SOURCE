@@ -60,15 +60,15 @@ function GuestHome() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="home">
       <div className="neo-guest-home">
-        <section className="neo-guest-entry">
+        <section className="neo-guest-entry" data-property-photo={Boolean(ws.hero_url)}>
           <div className="neo-guest-entry-copy">
             <p className="neo-guest-location"><MapPin size={16} aria-hidden />{ws.hotel_name}</p>
             <h1>{firstName ? `Welcome, ${firstName}` : "Make yourself at home"}</h1>
             {ws.contact_address ? <p className="neo-guest-address">{ws.contact_address}</p> : null}
           </div>
-          {ws.hero_url || ws.icon_url ? (
-            <GuestImage src={ws.hero_url || ws.icon_url} alt="" width={480} height={440}
-              priority sizes="(min-width: 640px) 340px, 38vw" className="neo-guest-entry-image" />
+          {ws.hero_url ? (
+            <GuestImage src={ws.hero_url} alt="" width={960} height={520}
+              priority sizes="(min-width: 1024px) 992px, 100vw" className="neo-guest-entry-image" />
           ) : <div className="neo-guest-entry-art" aria-hidden><ConciergeBell /></div>}
         </section>
 

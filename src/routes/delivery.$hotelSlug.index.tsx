@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, Loader2, Search, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ChevronRight, Loader2, Search, UtensilsCrossed } from "lucide-react";
 import {
   BrandButton,
   PublicAppShell,
@@ -84,21 +84,6 @@ function DeliveryHome() {
     <PublicAppShell
       homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}
       cartCount={otherBranchCart || roomServiceCart ? 0 : cartCount}
-      nav={
-        <div className="flex items-center gap-2">
-          <Link
-            to="/delivery/$hotelSlug/orders"
-            params={{ hotelSlug }}
-            className="neo-pub-navlink whitespace-nowrap text-white/85"
-          >
-            My orders
-          </Link>
-          <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="neo-commerce-primary">
-              <ShoppingBag className="size-4" />
-              {cartCount > 0 ? cartCount : "Cart"}
-          </Link>
-        </div>
-      }
     >
       <section className="neo-commerce-hero neo-delivery-cover relative overflow-hidden">
         {ws.hero_url ? <img src={ws.hero_url} alt="" fetchPriority="high" className="absolute inset-y-0 right-0 h-full w-full object-cover sm:w-3/5" /> : null}

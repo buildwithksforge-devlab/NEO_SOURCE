@@ -1,7 +1,7 @@
 import { useGuestDisplayPrefs } from "@/lib/guest-display-preferences";
 import { guestPalette } from "@/lib/public-palette";
 import { useEffect, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { writeLaunchLockup } from "@/lib/brand-cache";
 import { BedDouble, Compass, Home, Receipt, UserRound } from "lucide-react";
 import { useWorkspace } from "@/components/public/PublicAppShell";
@@ -23,6 +23,7 @@ export type GuestTab =
   | (typeof tabs)[number]["key"]
   | "book"
   | "laundry"
+  | "favourites"
   | "trips"
   | "settings"
   | "notifications"
@@ -32,6 +33,7 @@ const tabForScreen: Partial<Record<GuestTab, (typeof tabs)[number]["key"]>> = {
   book: "stay",
   trips: "stay",
   laundry: "explore",
+  favourites: "explore",
   settings: "profile",
   notifications: "profile",
   account: "profile",
@@ -56,7 +58,6 @@ export function GuestScreen({
 }) {
   const ws = useWorkspace();
   const { prefs } = useGuestDisplayPrefs();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const primary = ws.primary_color || brandFallback.primary;
   const activeTab = tabForScreen[active] ?? active;
 
@@ -98,7 +99,7 @@ export function GuestScreen({
       <PullToRefresh>
         <main className="neo-public-wrap flex-1 py-5 sm:py-9">
           <PreviewBanner experience="Guest" />
-          <div className="min-w-0 pb-24 lg:pb-4">{children}</div>
+          <div className="min-w-0">{children}</div>
         </main>
       </PullToRefresh>
 
@@ -111,8 +112,7 @@ export function GuestScreen({
         <ul className="contents">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive =
-              tab.key === activeTab || (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
+            const isActive = tab.key === activeTab;
             return (
               <li key={tab.key}>
                 <Link

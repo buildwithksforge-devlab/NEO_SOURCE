@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -62,6 +62,7 @@ export function DashboardFrame({
   greeting,
   dashboards,
   activeKey,
+  shiftOverview,
 }: {
   spec: DashboardSpec;
   scope: DashboardScope;
@@ -71,6 +72,7 @@ export function DashboardFrame({
   greeting: string;
   dashboards: { key: string; name: string }[];
   activeKey: string;
+  shiftOverview?: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -132,6 +134,7 @@ export function DashboardFrame({
   return (
     <div>
       <PageHeader
+        className="neo-dashboard-hero"
         eyebrow={`${spec.name} · ${spec.scopeHint} scope`}
         title={greeting}
         description={spec.purpose}
@@ -167,6 +170,8 @@ export function DashboardFrame({
           </>
         }
       />
+
+      {shiftOverview}
 
       {/*
         Shared filter surface plus one stable control slot.

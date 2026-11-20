@@ -3,16 +3,17 @@ import { useCanGoBack, useRouter, useRouterState } from "@tanstack/react-router"
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function BackNavigation() {
+export function BackNavigation({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const canGoBack = useCanGoBack();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
-    <nav aria-label="Page navigation" className="flex min-w-0 flex-wrap items-center gap-2">
+    <nav aria-label="Page navigation" className="flex shrink-0 items-center">
       <Button
         type="button"
         variant="ghost"
-        className="min-h-11 gap-2"
+        size={compact ? "icon" : "default"}
+        className={compact ? "size-10 rounded-full" : "min-h-11 gap-2"}
         aria-label={canGoBack ? "Go back" : "Back to workspace"}
         disabled={!canGoBack && pathname === "/workspace"}
         onClick={() => {
@@ -21,7 +22,7 @@ export function BackNavigation() {
         }}
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Back
+        {compact ? null : "Back"}
       </Button>
     </nav>
   );

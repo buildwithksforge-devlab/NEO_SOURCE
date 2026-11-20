@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronDown, LogOut, X } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 import { NeoGlyph } from "@/components/brand/NeoGlyph";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NavSearch } from "./NavSearch";
@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { isStaffPinSession } from "@/lib/staff-pin-login";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 export function SidebarContent({
   onNavigate,
@@ -25,11 +26,16 @@ export function SidebarContent({
   const { isAdmin, can, permissionsLoaded } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const groups = navigationForAccess(can, isAdmin, permissionsLoaded);
+  const navId = useId();
+  const activePath = groups
+    .flatMap((group) => group.items)
+    .filter(({ to }) => pathname === to || pathname.startsWith(`${to}/`))
+    .sort((a, b) => b.to.length - a.to.length)[0]?.to;
+  const activeGroup = groups.find((group) => group.items.some((item) => item.to === activePath))?.title;
   const [expanded, setExpanded] = useState<string[]>([]);
   useEffect(() => {
-    const activeGroup = groups.find((group) => group.items.some((item) => item.to === pathname));
-    if (activeGroup) setExpanded((previous) => previous.includes(activeGroup.title) ? previous : [...previous, activeGroup.title]);
-  }, [groups, pathname]);
+    if (activeGroup) setExpanded((previous) => previous.includes(activeGroup) ? previous : [...previous, activeGroup]);
+  }, [activeGroup, pathname]);
 
 
   return (
@@ -77,25 +83,26 @@ export function SidebarContent({
           {!permissionsLoaded && groups.length === 0 ? (
             <SidebarNavSkeleton collapsed={collapsed} />
           ) : null}
-          {groups.map((group) => (
+          {groups.map((group, index) => (
             <div key={group.title}>
               {collapsed ? (
                 <div className="mx-auto mb-2 h-px w-6 bg-sidebar-border" />
               ) : (
                 <button type="button" aria-expanded={expanded.includes(group.title)}
-                  aria-controls={`neo-nav-${group.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}
+                  aria-controls={`${navId}-${index}`}
                   onClick={() => setExpanded((previous) => previous.includes(group.title) ? previous.filter((title) => title !== group.title) : [...previous, group.title])}
                   className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[0.7rem] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground">
                   <span className="truncate">{group.title}</span>
                   <span className="ml-2 flex shrink-0 items-center gap-1.5"><span className="text-[0.6rem] tabular-nums opacity-70">{group.items.length}</span><ChevronDown className={cn("size-3.5 transition-transform", expanded.includes(group.title) && "rotate-180")} aria-hidden /></span>
                 </button>
               )}
-              <ul id={`neo-nav-${group.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} className={cn("space-y-0.5", !collapsed && !expanded.includes(group.title) && "hidden")}>
+              <ul id={`${navId}-${index}`} className={cn("space-y-0.5", !collapsed && !expanded.includes(group.title) && "hidden")}>
                 {group.items.map((item) => {
-                  const active = pathname === item.to;
+                  const active = activePath === item.to;
                   const link = (
                     <Link
                       to={item.to}
+                      activeOptions={{ exact: true }}
                       onClick={onNavigate}
                       aria-current={active ? "page" : undefined}
                       className={cn(
@@ -208,24 +215,12 @@ function SidebarUser({ collapsed }: { collapsed: boolean }) {
 }
 
 export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
-      <button
-        aria-label="Close navigation"
-        onClick={onClose}
-        className="absolute inset-0 bg-foreground/50 backdrop-blur-sm"
-      />
-      <div className="absolute inset-y-0 left-0 w-72 shadow-lift">
-        <button
-          onClick={onClose}
-          aria-label="Close navigation"
-          className="absolute -right-11 top-3 rounded-lg bg-card p-2 text-foreground shadow-elegant"
-        >
-          <X className="size-4" />
-        </button>
+    <Sheet open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <SheetContent side="left" aria-describedby={undefined} className="neo-work-menu !w-[min(90vw,23rem)] gap-0 overflow-hidden bg-sidebar p-0 lg:hidden">
+        <SheetTitle className="sr-only">Work menu</SheetTitle>
         <SidebarContent onNavigate={onClose} />
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }
