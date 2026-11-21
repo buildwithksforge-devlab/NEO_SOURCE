@@ -21,8 +21,6 @@ export type AddItemChoice = {
   modifiers: {
     group_id: string;
     option_id: string;
-    group_name: string;
-    option_name: string;
     extra_charge: number;
   }[];
 };
@@ -70,8 +68,6 @@ export function AddItemDialog({
         out.push({
           group_id: g.id,
           option_id: option.id,
-          group_name: g.name,
-          option_name: option.name,
           extra_charge: Number(option.extra_charge ?? 0),
         });
       }
@@ -101,7 +97,7 @@ export function AddItemDialog({
     });
 
   return (
-    <Dialog open={Boolean(item)} onOpenChange={onOpenChange}>
+    <Dialog open={Boolean(item)} onOpenChange={(open) => { if (!busy) onOpenChange(open); }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{item?.name ?? "Add item"}</DialogTitle>
@@ -110,7 +106,7 @@ export function AddItemDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <fieldset className="space-y-4" disabled={busy}>
           <div className="space-y-1.5">
             <Label htmlFor="add-item-quantity">Quantity</Label>
             <Input
@@ -175,7 +171,7 @@ export function AddItemDialog({
             </p>
           ) : null}
           {groups.isError ? <p role="alert" className="text-sm text-destructive">Item choices could not be loaded. Refresh before adding this item.</p> : null}
-        </div>
+        </fieldset>
 
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>

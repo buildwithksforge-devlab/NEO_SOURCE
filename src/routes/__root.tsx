@@ -92,7 +92,6 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
-      { name: "neo-build-id", content: buildInfo.sourceId },
       { charSet: "utf-8" },
       { name: "neo-build-id", content: buildInfo.sourceId },
       { name: "viewport", content: "width=device-width, initial-scale=1" },

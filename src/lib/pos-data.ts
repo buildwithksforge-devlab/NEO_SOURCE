@@ -25,6 +25,7 @@ import {
   type PosSettings,
 } from "@/lib/pos";
 import { withGuardCapture } from "@/lib/guard-violations";
+import { savePosItemSelection } from "@/lib/pos-item-selection";
 
 /** Advisory only: the database stock gate still validates quantities when sending. */
 export function usePosStockAvailability(branchId: string | null | undefined, channel?: string) {
@@ -628,44 +629,50 @@ export function useAddOrderItem() {
       course: string;
       instructions?: string;
       allergyNote?: string;
-      modifiers?: { group_id: string; option_id: string; group_name: string; option_name: string; extra_charge: number }[];
+      modifiers?: { group_id: string; option_id: string; extra_charge: number }[];
     }) => {
+      const actor = ctx.userId;
+      if (!actor || !ctx.organization_id) throw new Error("Sign in to the workspace before adding an item.");
       const modTotal = (input.modifiers ?? []).reduce((s, m) => s + Number(m.extra_charge ?? 0), 0);
       const unit = Number(input.item.base_price ?? 0);
       const taxRate = Number(input.item.tax_rate ?? 0);
       const total = lineTotal(input.quantity, unit, modTotal);
       const taxAmount = Number(((total * taxRate) / (100 + taxRate)).toFixed(2));
 
-      const { data, error } = await supabase
-        .from("pos_order_items")
-        .insert({
-          organization_id: ctx.organization_id,
-          order_id: input.orderId,
-          menu_item_id: input.item.id,
-          station_id: input.item.station_id,
-          item_name: input.item.name,
-          item_description: input.item.description,
-          course: input.course,
-          quantity: input.quantity,
-          unit_price: unit,
-          modifier_total: modTotal,
-          selection_modifiers: (input.modifiers ?? []).map((m) => ({
-            group_id: m.group_id, option_id: m.option_id,
-          })),
-          tax_rate: taxRate,
-          tax_amount: taxAmount,
-          line_total: total,
-          special_instructions: input.instructions ?? null,
-          allergy_note: input.allergyNote ?? null,
-          created_by: ctx.userId,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
+      const selection = {
+        organization_id: ctx.organization_id,
+        order_id: input.orderId,
+        menu_item_id: input.item.id,
+        station_id: input.item.station_id,
+        item_name: input.item.name,
+        item_description: input.item.description,
+        course: input.course,
+        quantity: input.quantity,
+        unit_price: unit,
+        modifier_total: modTotal,
+        selection_modifiers: (input.modifiers ?? [])
+          .map(({ group_id, option_id }) => ({ group_id, option_id }))
+          .sort((a, b) => a.option_id.localeCompare(b.option_id)),
+        tax_rate: taxRate,
+        tax_amount: taxAmount,
+        line_total: total,
+        special_instructions: input.instructions ?? null,
+        allergy_note: input.allergyNote ?? null,
+        created_by: actor,
+      };
 
       // Database triggers validate catalogue choices, save modifier rows and
       // recalculate totals in the same transaction as this item insert.
-      return data;
+      return savePosItemSelection(selection, {
+        insert: (row) => supabase.from("pos_order_items").insert(row).select("id").single(),
+        find: (id) => supabase.from("pos_order_items").select("id")
+          .eq("id", id)
+          .eq("organization_id", selection.organization_id)
+          .eq("order_id", selection.order_id)
+          .eq("menu_item_id", selection.menu_item_id)
+          .eq("created_by", actor)
+          .maybeSingle(),
+      }, window.sessionStorage);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["pos", "order"] });

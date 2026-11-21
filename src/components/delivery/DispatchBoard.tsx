@@ -12,7 +12,7 @@ import { AssignRiderDialog } from "@/components/delivery/AssignRiderDialog";
 import { useAuth } from "@/lib/auth";
 import { money, riderEligibility, riderStatusTone, shortDateTime, titleCase } from "@/lib/delivery";
 import { useDispatchBoard } from "@/lib/delivery-data";
-import { useCourierConnected, useCourierJobs, useSendToCourier } from "@/lib/delivery-dispatch-gateway";
+import { useCourierConnections, useCourierJobs, useSendToCourier } from "@/lib/delivery-dispatch-gateway";
 import { RpcAccessNotice } from "@/components/common/RpcAccessNotice";
 import { requiresReauthentication } from "@/lib/rpc-telemetry";
 
@@ -29,7 +29,7 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
   const riders = board.data?.riders ?? [];
   const eligibleRiders = riders.filter((r) => riderEligibility(r).eligible);
   const queue = board.data?.queue ?? [];
-  const courier = useCourierConnected();
+  const courier = useCourierConnections();
   const jobs = useCourierJobs(queue.map((o) => o.order_id));
   const sendToCourier = useSendToCourier();
   const accessBlocked = requiresReauthentication(board.error);
@@ -58,7 +58,10 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
           empty={<EmptyState title="Nothing waiting" description="Every live order already has a rider assigned." />}
         >
           <div className="space-y-3">
-            {queue.map((order) => (
+            {queue.map((order) => {
+              const job = jobs.data?.get(order.order_id);
+              const connected = courier.data?.get(order.branch_id) ?? courier.data?.get(null);
+              return (
               <div
                 key={order.order_id}
                 className="rounded-lg border border-border/60 bg-card/40 p-3 sm:flex sm:items-center sm:justify-between sm:gap-4"
@@ -85,23 +88,24 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
                     >
                       Assign rider
                     </Button>
-                    {courier.data?.connected ? (
+                    {job || connected ? (
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={sendToCourier.isPending || Boolean(jobs.data?.get(order.order_id))}
+                        disabled={sendToCourier.isPending || Boolean(job)}
                         onClick={() => sendToCourier.mutate({ orderId: order.order_id })}
                       >
                         <Truck className="mr-1.5 h-4 w-4" />
-                        {jobs.data?.get(order.order_id)
-                          ? `Courier: ${titleCase(String(jobs.data.get(order.order_id)?.state ?? ""))}`
+                        {job
+                          ? `Courier: ${titleCase(job.state)}`
                           : "Send to courier"}
                       </Button>
                     ) : null}
                   </div>
                 ) : null}
               </div>
-            ))}
+              );
+            })}
 
           </div>
         </QueryState>
