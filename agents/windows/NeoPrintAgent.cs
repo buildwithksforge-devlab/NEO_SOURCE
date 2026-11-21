@@ -61,7 +61,7 @@ namespace NeoPrintAgent {
    };
    var taxReceipt=ReceiptRenderer.Render(job);
    check(System.Array.IndexOf(taxReceipt,"TAX BREAKDOWN")>=0&&System.Array.IndexOf(taxReceipt,"Total tax: KES 18.30")<System.Array.IndexOf(taxReceipt,"Total: KES 120.00")
-    &&taxReceipt.Contains("Total tax: KES 18.30"),"Named taxes total separately before amount due");
+    &&taxReceipt.Contains("Total tax: KES 18.30")&&taxReceipt.Contains("VAT - Included: KES 16.27"),"Named taxes total separately before amount due");
    var bytes=PrinterTransport.EscPos(job);check(bytes[0]==27&&bytes[1]==64,"ESC/POS initialize");check(bytes[bytes.Length-3]==29,"ESC/POS cut");
    check(bytes[5]==29&&bytes[6]==118&&bytes[7]==48,"Logo raster precedes receipt text");
    var brandedText=Encoding.ASCII.GetString(bytes);
@@ -149,7 +149,7 @@ namespace NeoPrintAgent {
      taxTotal+=tax;
     }
     if(hasTotal&&!hasPaymentHeading) {add("PAYMENTS & BALANCE");hasPaymentHeading=true;}
-    add(label+": "+Money(Program.Get(row,"amount"),currency));
+    add(label.Replace(" \u00b7 "," - ")+": "+Money(Program.Get(row,"amount"),currency));
     if(label.Equals("Total",StringComparison.OrdinalIgnoreCase)||label.Equals("Grand total",StringComparison.OrdinalIgnoreCase)) hasTotal=true;
    }
    if(taxRows>0)addTaxTotal();

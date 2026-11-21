@@ -315,7 +315,7 @@ function receiptLines(job) {
       output.push(total);
     } else {
       output.push(
-        `${label}: ${
+        `${label.replace(/\s*·\s*/g, " - ")}: ${
           amount(total.amount)
         }`,
       );

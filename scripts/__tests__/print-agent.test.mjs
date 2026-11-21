@@ -151,6 +151,8 @@ test("POS receipts send split payment instructions and a feedback raster before 
     const breakdown = bytes.indexOf(Buffer.from("TAX BREAKDOWN"));
     const taxTotal = bytes.indexOf(Buffer.from("Total tax:"));
     assert.ok(breakdown >= 0 && taxTotal > breakdown);
+    assert.ok(bytes.includes(Buffer.from("Catering levy - Included:")));
+    assert.ok(bytes.includes(Buffer.from("VAT - Included:")));
     assert.ok(bytes.includes(Buffer.from("18.30")));
     assert.ok(bytes.indexOf(Buffer.from("PAYMENTS & BALANCE")) > taxTotal);
     for (const label of ["PAYMENTS & BALANCE", "HOW TO PAY", "M-Pesa Paybill: 123456", "M-Pesa Till: 654321", "Served by: Fixture server"]) {
