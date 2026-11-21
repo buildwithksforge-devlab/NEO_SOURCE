@@ -126,20 +126,26 @@ export function usePublicMenu(
   return useQuery({
     queryKey: [...keys(organizationId), "menu", branchId ?? "all", fulfilment],
     enabled,
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(sb, "neo_public_menu", {
-        _org: organizationId,
-        _branch: branchId,
-        _fulfilment: fulfilment,
-      });
-      if (error) throw new Error(error.message);
       // Preserve the embedded-category shape the public screens already read.
-      return ((data ?? []) as Row[]).map((row) => ({
+      return (await loadPublicMenu(organizationId, branchId, fulfilment)).map((row) => ({
         ...row,
         menu_categories: row["category_name"] ? { name: row["category_name"] } : null,
       })) as Row[];
     },
   });
+}
+
+export async function loadPublicMenu(organizationId: string, branchId: string | null, fulfilment: string) {
+  const args = { _org: organizationId, _branch: branchId, _fulfilment: fulfilment };
+  const stock = await guardedRpc<Row[]>(sb, "neo_public_menu_with_stock", args);
+  // Support the existing published menu during an app-first database rollout.
+  const result = stock.error && ["PGRST202", "42883"].includes(stock.error.code ?? "")
+    ? await guardedRpc<Row[]>(sb, "neo_public_menu", args)
+    : stock;
+  if (result.error) throw new Error(result.error.message);
+  return result.data ?? [];
 }
 
 

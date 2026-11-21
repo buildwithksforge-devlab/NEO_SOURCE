@@ -82,6 +82,25 @@ describe("departmental POS menu stock", () => {
     const sale = readFileSync("supabase/migrations/20261114013000_shared_workspace_workflows.sql", "utf8");
     await db.exec(sale.match(/CREATE OR REPLACE FUNCTION public\.inventory_consume_order_item_core[\s\S]*?\$function\$;/)![0]);
     await db.exec(readFileSync("supabase/migrations/20261120170000_department_batch_inventory_alignment.sql", "utf8"));
+    await db.exec(`
+      ALTER TABLE branches ADD COLUMN active boolean DEFAULT true;
+      ALTER TABLE menu_items
+        ADD COLUMN description text, ADD COLUMN base_price numeric DEFAULT 120, ADD COLUMN tax_rate numeric,
+        ADD COLUMN image_url text, ADD COLUMN prep_minutes integer, ADD COLUMN category_id uuid,
+        ADD COLUMN availability text DEFAULT 'available', ADD COLUMN active_from date, ADD COLUMN active_to date,
+        ADD COLUMN available_room_service boolean DEFAULT true, ADD COLUMN available_takeaway boolean DEFAULT true,
+        ADD COLUMN available_delivery boolean DEFAULT true, ADD COLUMN display_order integer;
+      ALTER TABLE pos_orders ADD COLUMN order_source text;
+      CREATE TABLE menu_categories(id uuid,organization_id uuid,name text);
+      CREATE TABLE neo_public_experience(branch_id uuid,organization_id uuid,public_slug text);
+      CREATE TABLE public_workspaces(branch_id uuid,organization_id uuid,app_key text,published boolean);
+      CREATE FUNCTION neo_platform_tenant_active(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+      CREATE FUNCTION neo_public_property(text) RETURNS jsonb LANGUAGE sql AS $$
+        SELECT jsonb_build_object('branch_id','${branch}','publicly_listed',true,'doors',jsonb_build_object('stay_dine',true))
+        WHERE $1='test-hotel' $$;
+      INSERT INTO neo_public_experience VALUES ('${branch}','${org}','test-hotel');
+    `);
+    await db.exec(readFileSync("supabase/migrations/20261121123000_public_menu_department_stock.sql", "utf8"));
   }, 15000);
 
   afterAll(async () => db?.close());
@@ -97,6 +116,39 @@ describe("departmental POS menu stock", () => {
       { menu_item_id: direct, available: false, reason: expect.stringContaining("Bottle in Department Store") },
       { menu_item_id: dish, available: false, reason: expect.stringContaining("Flour in Department Store") },
     ]);
+  });
+
+  it("exposes only public stock status and leaves unpublished and unrelated properties hidden", async () => {
+    await db.exec("SET ROLE anon");
+    try {
+      const publicMenu = await db.query(
+        "SELECT id, availability FROM neo_public_menu_with_stock($1,$2,'pickup') ORDER BY id", [org, branch],
+      );
+      expect(publicMenu.rows).toEqual([
+        { id: direct, availability: "out-of-stock" }, { id: dish, availability: "out-of-stock" },
+        { id: service, availability: "available" },
+      ]);
+      expect((await db.query("SELECT * FROM neo_public_menu_with_stock($1,$2,'pickup')", [id(88), branch])).rows).toEqual([]);
+      await expect(db.query("SELECT * FROM neo_department_menu_stock($1,$2,'takeaway')", [org, branch])).rejects.toThrow(/permission denied/i);
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+  });
+
+  it("blocks a public checkout once the requested quantity exceeds the station store", async () => {
+    await db.exec(`BEGIN;
+      INSERT INTO stock_levels VALUES ('${org}','${bottle}','${department}',2);
+      INSERT INTO pos_orders VALUES ('${order}','${org}','${branch}','confirmed','takeaway','ORDER-001','customer-app');
+      INSERT INTO pos_order_items VALUES ('${bottleLine}','${org}','${order}','${direct}','${bar}','confirmed',1);
+      SAVEPOINT second_line;`);
+    try {
+      await expect(db.exec(`INSERT INTO pos_order_items VALUES ('${batchLine}','${org}','${order}','${direct}','${bar}','confirmed',2)`))
+        .rejects.toThrow(/not enough stock/);
+      await db.exec("ROLLBACK TO SAVEPOINT second_line");
+      expect((await db.query("SELECT id FROM pos_order_items")).rows).toEqual([{ id: bottleLine }]);
+    } finally {
+      await db.exec("ROLLBACK");
+    }
   });
 
   it("clears shortages when the department is stocked and flags a route to Main Store", async () => {

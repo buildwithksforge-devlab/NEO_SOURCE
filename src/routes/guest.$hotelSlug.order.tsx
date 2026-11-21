@@ -320,7 +320,6 @@ function OrderPage() {
 
           <GuestSection
             title="Menu"
-            description="Published, currently available items only."
           >
             {menu.isLoading ? (
               <div className="flex justify-center py-6">
@@ -350,12 +349,14 @@ function OrderPage() {
 
                     <ul className="mt-2 space-y-2">
                       {items.map((item) => {
+                        const soldOut = item.availability !== "available";
                         const favouriteId =
                           favouriteByItem.get(item.id) ?? null;
 
                         return (
                           <li
                             key={item.id}
+                            data-sold-out={soldOut}
                             className="flex flex-wrap items-center gap-3 rounded-xl border border-black/5 p-3"
                           >
                             {item.image_url ? (
@@ -436,8 +437,8 @@ function OrderPage() {
                                       : item.id,
                                   )
                                 }
-                                disabled={addItem.isPending || updateCart.isPending}
-                                aria-expanded={activeCustomiser === item.id}
+                                disabled={soldOut || addItem.isPending || updateCart.isPending}
+                                aria-expanded={!soldOut && activeCustomiser === item.id}
                                 className="min-h-11 min-w-11 rounded-full px-3 py-1.5 text-sm font-semibold"
                                 style={{
                                   background:
@@ -445,11 +446,11 @@ function OrderPage() {
                                   color: "var(--pa-on-primary)",
                                 }}
                               >
-                                Add
+                                {soldOut ? "Out of stock" : "Add"}
                               </button>
                             </span>
 
-                            {activeCustomiser === item.id ? (
+                            {!soldOut && activeCustomiser === item.id ? (
                               <ItemCustomiser
                                 groups={
                                   (modifiers.data ?? {})[item.id] ?? []

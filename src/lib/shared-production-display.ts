@@ -210,6 +210,40 @@ export async function pairSharedDisplay(
   window.location.replace("/station-screen");
 }
 
+export async function issueSharedDisplayActivation(branch: string, stations: string[], label: string) {
+  const { data, error } = await guardedRpc<{ ok: boolean; code: string; expires_at: string }>(
+    supabase, "neo_production_display_activation_issue",
+    { _branch: branch, _stations: stations, _label: label, _read_only: false },
+  );
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !/^neods_[0-9a-f]{32}$/.test(data.code) || !data.expires_at) {
+    throw new Error("The display activation code could not be created.");
+  }
+  return data;
+}
+
+export async function activateSharedDisplay(code: string) {
+  const { data, error } = await guardedRpc<{ ok: boolean; token: string; session_id: string; expires_at: string }>(
+    supabase, "neo_production_display_activation_claim", { _code: code.trim().toLowerCase() },
+  );
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !/^[0-9a-f]{64}$/.test(data.token) || !data.session_id ||
+    !(Date.parse(data.expires_at) > Date.now())) {
+    throw new Error("The station display session could not be confirmed.");
+  }
+  try {
+    window.localStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
+    window.localStorage.setItem(DISPLAY_EXPIRY_STORAGE_KEY, data.expires_at);
+    if (window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== data.token) {
+      throw new Error("This browser could not retain the display session.");
+    }
+  } catch (error) {
+    clearSharedDisplayToken();
+    throw error;
+  }
+  window.location.replace("/station-screen");
+}
+
 /** Shared screens never retain an authenticated operator browser session. */
 export async function ensureSharedScreenSignedOut() {
   const { data, error } = await supabase.auth.getSession();

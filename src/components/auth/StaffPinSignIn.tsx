@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { activateSharedDisplay } from "@/lib/shared-production-display";
 import { Delete, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   clearTrustedStaffDevice,
+  activateTrustedStaffDevice,
   readTrustedStaffDevice,
   signInWithStaffPin,
 } from "@/lib/staff-pin-login";
@@ -16,6 +19,8 @@ export function StaffPinSignIn() {
     readTrustedStaffDevice(),
   );
   const [pin, setPin] = useState("");
+  const [activationCode, setActivationCode] = useState("");
+  const [activating, setActivating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(
     null,
@@ -75,7 +80,30 @@ export function StaffPinSignIn() {
     }
   }
 
-  if (!device) {
+  async function activateDevice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setFormError(null);
+    setBusy(true);
+    try {
+      if (/^neods_[0-9a-f]{32}$/i.test(activationCode)) {
+        await activateSharedDisplay(activationCode);
+        setActivationCode("");
+        return;
+      }
+      const activated = await activateTrustedStaffDevice(activationCode);
+      setDevice(activated);
+      setActivating(false);
+      setActivationCode("");
+      toast.success(`Device authorised for ${activated.propertyName}`);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "This device could not be activated.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!device || activating) {
     return (
       <section
         data-neo-staff-pin-login
@@ -89,21 +117,33 @@ export function StaffPinSignIn() {
 
             <div className="space-y-2">
               <h2 className="font-semibold text-neo-midnight">
-                This device is not yet authorised
+                {device ? "Activate a station display" : "This device is not yet authorised"}
               </h2>
 
               <p className="text-sm leading-relaxed text-neo-steel">
-                An authorised workforce administrator must first sign
-                in normally, select this property, and authorise this
-                browser for staff PIN access.
+                Ask your administrator for a one-use activation code for this device.
               </p>
             </div>
           </div>
         </div>
 
-        <p className="text-center text-xs text-neo-steel">
-          Personal PINs never grant access to an untrusted device.
-        </p>
+        <form onSubmit={activateDevice} className="space-y-3">
+          <label htmlFor="staff-device-activation" className="text-sm font-semibold">Device activation code</label>
+          <Input id="staff-device-activation" type="password" maxLength={38} value={activationCode}
+            autoComplete="off" spellCheck={false} disabled={busy}
+            onChange={(event) => setActivationCode(event.target.value.trim())} />
+          {formError ? <p role="alert" className="text-sm text-destructive">{formError}</p> : null}
+          <Button className="min-h-11 w-full" disabled={busy || !/^(?:neods_)?[0-9a-f]{32}$/i.test(activationCode)}>
+            {busy ? "Activating…" : "Activate device"}
+          </Button>
+        </form>
+        <Link to="/device-authorisation" className="flex min-h-11 items-center justify-center text-sm font-semibold text-neo-aqua">
+          Manage device authorisation
+        </Link>
+        {device ? <button type="button" disabled={busy} className="min-h-11 w-full text-sm font-semibold"
+          onClick={() => { setActivating(false); setActivationCode(""); setFormError(null); }}>
+          Back to staff PIN
+        </button> : null}
       </section>
     );
   }
@@ -238,6 +278,10 @@ export function StaffPinSignIn() {
         )}
       </Button>
 
+      <button type="button" disabled={busy} onClick={() => { setActivating(true); setFormError(null); }}
+        className="min-h-11 w-full text-sm font-semibold text-neo-aqua">
+        Enter an activation code
+      </button>
       <button
         type="button"
         disabled={busy}

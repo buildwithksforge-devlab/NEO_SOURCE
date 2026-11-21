@@ -112,6 +112,7 @@ describe("sales tax profiles, documents and ledger", () => {
     await db.exec(migration("20261120172000_sales_tax_profiles"));
     await db.exec(migration("20261120173100_sales_tax_pos_documents_and_posting"));
     await db.exec(migration("20261120173200_sales_tax_finance_summary"));
+    await db.exec(migration("20261121123300_pos_receipt_saved_tax_rates"));
     await db.exec(`
       INSERT INTO organizations VALUES ('${org}');
       INSERT INTO chart_of_accounts(id,organization_id,code,category,name) VALUES
@@ -161,11 +162,32 @@ describe("sales tax profiles, documents and ledger", () => {
       posting: [{ code: "2042", credit: 2.03 }, { code: "2041", credit: 16.27 }],
       receipt: [
         { label: "Net before tax", amount: 101.7 },
-        { label: "Catering levy (LEVY) · Included", amount: 2.03 },
-        { label: "VAT · Included", amount: 16.27 },
+        { label: "2% Catering levy (LEVY) · Included", amount: 2.03 },
+        { label: "16% VAT · Included", amount: 16.27 },
         { label: "Total", amount: 120 },
       ],
     });
+  });
+
+  it("keeps two saved VAT rates on separate rows without changing the tax ledger total", async () => {
+    await db.exec("BEGIN");
+    try {
+      await db.exec(`
+        UPDATE tax_codes SET rate=0.08 WHERE code='VAT';
+        INSERT INTO pos_order_items(id,organization_id,order_id,menu_item_id,unit_price,quantity,line_total)
+        VALUES ('82f10000-0000-4000-8000-000000000015','${org}','${order}','${menu}',120,1,120);
+        UPDATE pos_orders SET subtotal=240 WHERE id='${order}';
+      `);
+      const { rows } = await db.query<{ result: { label: string; amount: number }[]; vat: string }>(`
+        SELECT neo_pos_sales_tax_receipt('${order}','[{"label":"Tax","amount":29.21},{"label":"Total","amount":240}]')
+          AS result,(SELECT sum(amount) FROM neo_pos_saved_sales_taxes('${order}',240,240) WHERE code='VAT') AS vat
+      `);
+      const vatRows = rows[0]?.result.filter((row) => row.label.includes(" VAT ")) ?? [];
+      expect(vatRows.map((row) => row.label)).toEqual(["8% VAT · Included","16% VAT · Included"]);
+      expect(vatRows.reduce((sum,row) => sum+row.amount,0)).toBeCloseTo(Number(rows[0]?.vat),2);
+    } finally {
+      await db.exec("ROLLBACK");
+    }
   });
 
   it("returns the same tax and payable amount from the installed app checkout routine", async () => {

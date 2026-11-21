@@ -207,6 +207,24 @@ export async function buildBusinessDocumentPdf(
     }));
   }
 
+  const property = payload.property ?? {};
+  const branchId = (payload as unknown as { branch_id?: string | null }).branch_id ?? null;
+  if (branchId && (!property["logo_url"] || !property["timezone"])) {
+    const { data: branch } = await supabase
+      .from("branches")
+      .select("logo_url, timezone")
+      .eq("id", branchId)
+      .maybeSingle();
+    payload.property = {
+      ...property,
+      logo_url: property["logo_url"] || branch?.logo_url,
+      timezone: branch?.timezone || property["timezone"],
+    };
+  }
+  return renderBusinessDocumentPdf(payload, input.type, branchId);
+}
+
+export async function renderBusinessDocumentPdf(payload: Payload, type: BusinessDocumentType, branchId: string | null) {
   const identity = payload.identity ?? {};
   const property = payload.property ?? {};
   const brand = (identity["brand"] ?? {}) as Record<string, unknown>;
@@ -223,24 +241,8 @@ export async function buildBusinessDocumentPdf(
   const tableRule = rgb(0.29, 0.44, 0.65);
   const inkBlack = rgb(0.07, 0.07, 0.07);
 
-  /**
-   * Property-facing outputs lead with the property's own mark when it has one
-   * configured; only then do they fall back to the organisation logo. The
-   * branch is read by id from the payload, so one property's mark can never
-   * appear on another property's document.
-   */
-  const branchId = (payload as unknown as { branch_id?: string | null }).branch_id ?? null;
-  let propertyLogo = text(property["logo_url"]);
-  let documentTimezone = text(property["timezone"]) || text(identity["timezone"]) || "UTC";
-  if (branchId && (!propertyLogo || !property["timezone"])) {
-    const { data: branch } = await supabase
-      .from("branches")
-      .select("logo_url, timezone")
-      .eq("id", branchId)
-      .maybeSingle();
-    propertyLogo ||= text(branch?.logo_url);
-    documentTimezone = text(branch?.timezone) || documentTimezone;
-  }
+  const propertyLogo = text(property["logo_url"]);
+  const documentTimezone = text(property["timezone"]) || text(identity["timezone"]) || "UTC";
   const dateLabel = (value: unknown) => formatDocumentDate(value, documentTimezone);
   const pdf = await PDFDocument.create();
   pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
@@ -259,7 +261,7 @@ export async function buildBusinessDocumentPdf(
 
   const documentNumber = text(payload.document?.number) || "Unnumbered";
   const documentTitle = text(payload.document?.title) || "Document";
-  const layout = documentLayout(input.type);
+  const layout = documentLayout(type);
 
   const startPage = () => {
     if (pageNumber > 0) page = pdf.addPage([pageWidth, pageHeight]);
@@ -354,7 +356,7 @@ export async function buildBusinessDocumentPdf(
     }
   });
   const trace = documentTraceCode({ organizationId: text(identity["organisation_id"]) || null,
-    propertyId: branchId, documentType: input.type, documentNumber });
+    propertyId: branchId, documentType: type, documentNumber });
   if (trace) {
     metaY -= 3;
     page.drawText(trace, { x: metaRight - regular.widthOfTextAtSize(trace, 6), y: metaY,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bike, ChevronRight, Loader2, ShoppingBag, Utensils } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
@@ -58,11 +58,7 @@ function OrdersPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
-      <section className="neo-guest-explore-heading">
-        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
-          My orders
-        </h1>
-      </section>
+      <GuestPageIntro title="My orders" description={ws.hotel_name} />
 
       {!loading && !user ? (
         <GuestSignInPrompt

@@ -22,9 +22,16 @@ beforeEach(() => rpc.mockReset());
 
 describe("published Delivery links", () => {
   it("uses the publication's canonical slug and Guest handoff without a service credential", async () => {
-    rpc.mockResolvedValue({ data: workspace, error: null });
-    expect(await resolve(" HOTEL ")).toEqual(workspace);
-    expect(rpc).toHaveBeenCalledExactlyOnceWith("neo_public_delivery_workspace", { _slug: "hotel" });
+    rpc.mockResolvedValueOnce({ data: workspace, error: null });
+    rpc.mockResolvedValueOnce({ data: {
+      branch_id: "branch", organization_id: "org", property_name: "Canonical hotel",
+      media: { logo_url: "https://hotel.example/logo.webp" },
+    }, error: null });
+    expect(await resolve(" HOTEL ")).toEqual({
+      ...workspace, hotel_name: "Canonical hotel", logo_url: "https://hotel.example/logo.webp",
+    });
+    expect(rpc).toHaveBeenNthCalledWith(1, "neo_public_delivery_workspace", { _slug: "hotel" });
+    expect(rpc).toHaveBeenNthCalledWith(2, "neo_public_property", { _slug: "hotel" });
   });
 
   it("distinguishes an unknown link from a failed database lookup", async () => {

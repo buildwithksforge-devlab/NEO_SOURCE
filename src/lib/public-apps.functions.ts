@@ -33,7 +33,7 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         app_name: "Stay & Dine",
         hotel_name: property.property_name,
         logo_url: property.media?.logo_url || property.logo_url || null,
-        icon_url: heroUrl,
+        icon_url: null,
         hero_url: heroUrl,
         currency: property.currency ?? null,
         primary_color: property.brand?.primary || brandFallback.primary,
@@ -61,7 +61,18 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         _slug: data.slug,
       } as never);
       if (error) throw new Error("Delivery publication could not be checked. Try again.");
-      return workspace as PublicWorkspace | null;
+      const delivery = workspace as PublicWorkspace | null;
+      if (!delivery?.guest_slug) return delivery;
+      const { fetchPublicProperty } = await import("@/lib/front-door");
+      const property = await fetchPublicProperty(delivery.guest_slug).catch(() => null);
+      if (!property || property.organization_id !== delivery.organization_id || property.branch_id !== delivery.branch_id) {
+        return delivery;
+      }
+      return {
+        ...delivery,
+        hotel_name: property.property_name,
+        logo_url: property.media?.logo_url || property.logo_url || delivery.logo_url,
+      };
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

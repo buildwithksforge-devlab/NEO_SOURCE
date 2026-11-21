@@ -30,6 +30,9 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   current_org_id: "authenticated",
   neo_device_admin_list: "authenticated",
   neo_device_activation_issue: "authenticated",
+  neo_device_activation_claim: "anon",
+  neo_production_display_activation_issue: "authenticated",
+  neo_production_display_activation_claim: "anon",
   neo_staff_pin_admin: "authenticated",
   neo_delivery_mpesa_till_claim_submit: "authenticated",
   // Staff operations use authenticated sessions.
@@ -149,6 +152,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_transport_set_status: "authenticated",
   // Signed-out storefront browsing (published, available menu items only).
   neo_public_menu: "anon",
+  neo_public_menu_with_stock: "anon",
+  neo_partner_lpo_payload: "authenticated",
   neo_public_menu_modifiers: "authenticated",
   neo_guest_cart_add_item: "authenticated",
   neo_guest_folio_projection: "authenticated",

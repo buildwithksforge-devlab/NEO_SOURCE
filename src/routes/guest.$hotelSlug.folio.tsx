@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Loader2, Receipt } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
@@ -9,6 +11,8 @@ import { useCustomerSession } from "@/lib/public-session";
 import { money } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useGuestBill, useGuestPaymentAvailability } from "@/lib/guest-ordering";
+import { exportGuestBillDocument } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf } from "@/lib/browser-document";
 
 export const Route = createFileRoute("/guest/$hotelSlug/folio")({
   head: () => ({
@@ -37,20 +41,29 @@ function FolioPage() {
   const list = bill.data?.folios ?? [];
   const payments = bill.data?.payments ?? [];
   const [selected, setSelected] = useState<string | null>(null);
+  const [downloadId, setDownloadId] = useState<string | null>(null);
+  const exportDocument = useServerFn(exportGuestBillDocument);
   const activeFolio = list.find((f) => f.id === selected) ?? list[0];
   const currency = activeFolio?.currency ?? "KES";
   const lines = activeFolio?.lines ?? [];
 
+  async function download(kind: "folio" | "receipt", id: string) {
+    if (downloadId) return;
+    setDownloadId(id);
+    try {
+      const result = await exportDocument({ data: { slug: hotelSlug, id, kind } });
+      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      downloadDocumentPdf(new Blob([bytes], { type: "application/pdf" }), result.filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The PDF could not be downloaded.");
+    } finally {
+      setDownloadId(null);
+    }
+  }
+
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-          My bill
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Everything posted to your account at {ws.hotel_name}, exactly as the property's ledger holds it.
-        </p>
-      </section>
+      <GuestPageIntro title="My bill" description={ws.hotel_name} />
 
       {loading || bill.isLoading ? (
         <div className="flex justify-center py-10 text-[var(--guest-muted)]" role="status">
@@ -102,6 +115,10 @@ function FolioPage() {
           <GuestSection
             title={`Folio ${activeFolio?.folio_number ?? ""}`}
             description={`Opened ${activeFolio?.opened_at ? new Date(activeFolio.opened_at).toLocaleDateString() : "—"} · ${activeFolio?.status ?? ""}`}
+            action={activeFolio?.folio_number ? <button type="button" className="neo-guest-outline-action"
+              disabled={Boolean(downloadId)} onClick={() => void download("folio", activeFolio.id)}>
+              {downloadId === activeFolio.id ? "Preparing PDF…" : "Download statement"}
+            </button> : null}
           >
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Figure label="Net charges" value={money(activeFolio?.net_revenue, currency)} />
@@ -178,8 +195,12 @@ function FolioPage() {
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {money(p.amount, p.currency ?? "KES")}
+                    {p.receipt_number ? <button type="button" className="neo-guest-outline-action"
+                      disabled={Boolean(downloadId)} onClick={() => void download("receipt", p.id)}>
+                      {downloadId === p.id ? "Preparing PDF…" : "Download PDF"}
+                    </button> : null}
                   </span>
                 </li>
               ))}

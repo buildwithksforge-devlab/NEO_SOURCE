@@ -26,8 +26,8 @@ describe('thermal receipt actual PDF layout',()=>{
    Object.assign(payload.meta,{Waiter:'Sample waiter','Collected by':'Sample cashier','Checked by':'Sample manager'});
    payload.lines=Array.from({length:42},(_,index)=>({description:`Lunch item ${index+1} with a wrapping description`,quantity:1,unit_price:45,total:45}));
    payload.totals=[
-    {label:"Net before tax",amount:1601.88},{label:"VAT · Included",amount:256.20},
-    {label:"Catering levy · Included",amount:31.92},{label:"Total",amount:1890,emphasis:true},
+    {label:"Net before tax",amount:1601.70},{label:"16% VAT · Included",amount:256.27},
+    {label:"2% Catering levy · Included",amount:32.03},{label:"Total",amount:1890,emphasis:true},
     {label:"Tendered",amount:2000},{label:"Change",amount:110},
    ];
   }
@@ -56,8 +56,9 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered).toContain('M-Pesa Paybill:');
    expect(rendered).toContain('M-Pesa Till:');
    expect(rendered).toContain('TAX BREAKDOWN');
+   expect(rendered.join(' ')).toContain('16% VAT · Included');
    expect(rendered).toContain('Total tax');
-   expect(rendered).toContain('KES 288.12');
+   expect(rendered).toContain('KES 288.30');
    expect(rendered.indexOf('Total tax')).toBeLessThan(rendered.indexOf('TOTAL'));
    expect(rendered.indexOf('Served by:')).toBeGreaterThan(rendered.indexOf('HOW TO PAY'));
    const pdf=await PDFDocument.load(Buffer.from(result.base64,'base64'));

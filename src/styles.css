@@ -2895,3 +2895,29 @@ html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system
   color: #873a2a;
   border-color: transparent;
 }
+[data-sold-out="true"] :is(.neo-guest-dish-photo, .neo-delivery-menu-photo, img) {
+  filter: grayscale(.7) blur(.65px);
+  opacity: .65;
+}
+.neo-delivery-dish[data-sold-out="true"] { cursor: not-allowed; }
+.neo-sold-out-label {
+  color: #5f554c;
+  background: #eee8e1;
+  border-radius: .55rem;
+  padding: .3rem .5rem;
+  font-size: .75rem;
+  font-weight: 650;
+}
+.neo-guest-room-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.75rem;
+  margin: 0 .75rem .75rem;
+  padding: .55rem .85rem;
+  background: #873a2a;
+  color: #fff;
+  border-radius: .7rem;
+  font-size: .84rem;
+  font-weight: 650;
+}

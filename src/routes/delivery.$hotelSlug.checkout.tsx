@@ -117,6 +117,8 @@ function CheckoutPage() {
   }, [customer.data]);
 
   const items = (cart.data?.["cart_items"] as Row[] | undefined) ?? [];
+  const knownSoldOut = (item: Row) => menuById.get(String(item["menu_item_id"]))?.["availability"] === "out-of-stock";
+  const hasSoldOut = items.some(knownSoldOut);
 
   if (!loading && !user) {
     return (
@@ -177,6 +179,7 @@ function CheckoutPage() {
                   <div
                     key={String(item["id"])}
                     className="flex items-center gap-3 border-b border-black/5 py-3 last:border-0"
+                    data-sold-out={knownSoldOut(item)}
                   >
                     <div className="min-w-0 flex-1">
                       <p
@@ -185,6 +188,7 @@ function CheckoutPage() {
                       >
                         {String(menuItem["name"] ?? "Item")}
                       </p>
+                      {knownSoldOut(item) ? <span className="neo-sold-out-label">Out of stock</span> : null}
                       <p className="text-xs" style={{ color: brandFallback.steel }}>
                         {quotedLine ? money(quotedLine["line_total"], quote.data?.currency ?? ws.currency ?? "KES") : menuItem["base_price"] != null ? `${money(menuItem["base_price"], ws.currency ?? "KES")} each` : "Pricing with your order"}
                       </p>
@@ -210,7 +214,7 @@ function CheckoutPage() {
                       <button
                         type="button"
                         aria-label="Increase quantity"
-                        disabled={updateItem.isPending}
+                        disabled={updateItem.isPending || knownSoldOut(item)}
                         className="rounded-full border border-black/10 p-1.5"
                         onClick={() =>
                           updateItem.mutate({ id: String(item["id"]), quantity: qty + 1 })
@@ -534,7 +538,7 @@ function CheckoutPage() {
                 <BrandButton
                   className="mt-3 w-full"
                   disabled={
-                    !quote.data.can_checkout || quote.isFetching || settings.isFetching ||
+                    !quote.data.can_checkout || quote.isFetching || settings.isFetching || hasSoldOut ||
                     !enabledModes.some((mode) => mode === fulfilment) ||
                     (fulfilment === "delivery" && (!deliveryAddressReady || zones.isFetching || addresses.isFetching)) ||
                     updateCart.isPending || updateItem.isPending ||
@@ -545,7 +549,7 @@ function CheckoutPage() {
                     (activeMethod === "mpesa" && (!mpesaAmountReady || mpesaPhone.replace(/\D/g, "").length < 9))
                   }
                   onClick={async () => {
-                    if (!cartId || !activeMethod) return;
+                    if (!cartId || !activeMethod || hasSoldOut) return;
                     let res;
                     try {
                       res = await placeOrder.mutateAsync({ cartId, paymentMethod: activeMethod });

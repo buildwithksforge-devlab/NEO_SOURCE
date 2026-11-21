@@ -113,7 +113,18 @@ export async function pairTrustedStaffDevice(
   );
 
   if (error) throw new Error(error.message);
+  return saveTrustedStaffDevice(data);
+}
 
+export async function activateTrustedStaffDevice(value: string): Promise<TrustedStaffDevice> {
+  const code = value.trim().toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(code)) throw new Error("Enter the 32-character activation code from your administrator.");
+  const { data, error } = await guardedRpc<PairResult>(supabase, "neo_device_activation_claim", { _code: code });
+  if (error) throw new Error(error.message);
+  return saveTrustedStaffDevice(data);
+}
+
+function saveTrustedStaffDevice(data: PairResult | null): TrustedStaffDevice {
   const token = data?.device_token ?? "";
 
   if (

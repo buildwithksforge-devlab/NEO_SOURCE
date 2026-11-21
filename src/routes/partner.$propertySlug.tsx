@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Handshake, Loader2, MessageSquareText, PackageCheck, ShoppingBag } from "lucide-react";
@@ -20,6 +22,8 @@ import { useAuth } from "@/lib/auth";
 import { Display, PublicSurface, PublicTopBar } from "@/components/public/NeoPublic";
 import { useTrackEntry } from "@/lib/traffic";
 import { useCustomerSession } from "@/lib/public-session";
+import { exportPartnerPurchaseOrder } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf } from "@/lib/browser-document";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
@@ -92,6 +96,8 @@ function PartnerPortal() {
   useTrackEntry(propertySlug, "partner");
   const [selected, setSelected] = useState<string | null>(null);
   const [messageSubject, setMessageSubject] = useState("");
+  const [downloadingOrder, setDownloadingOrder] = useState<string | null>(null);
+  const exportOrder = useServerFn(exportPartnerPurchaseOrder);
   const { section = "overview" } = Route.useSearch();
   const navigate = Route.useNavigate();
   const setSection = (next: PartnerSection) => void navigate({ search: { section: next } });
@@ -121,6 +127,19 @@ function PartnerPortal() {
 
   const relationships = context.data?.allowed ? context.data.relationships : [];
   const active = relationships.find((relationship) => relationship.id === selected)?.id ?? relationships[0]?.id ?? null;
+  async function downloadOrder(number: string) {
+    if (!branchId || !active || downloadingOrder) return;
+    setDownloadingOrder(number);
+    try {
+      const result = await exportOrder({ data: { branch: branchId, relationship: active, number } });
+      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      downloadDocumentPdf(new Blob([bytes], { type: "application/pdf" }), result.filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The purchase order could not be downloaded.");
+    } finally {
+      setDownloadingOrder(null);
+    }
+  }
 
   const records = useQuery({
     queryKey: ["neo-partner-records", branchId, active, user?.id],
@@ -283,7 +302,8 @@ function PartnerPortal() {
       ) : null}
 
       {data && section === "orders" ? (
-        <PartnerRecordsList kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout} />
+        <PartnerRecordsList kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
+          onDownload={(number) => void downloadOrder(number)} downloading={downloadingOrder} />
       ) : null}
       {data && section === "deliveries" ? (
         <PartnerRecordsList kind="deliveries" rows={data.deliveries ?? []} currency={currency} onAsk={askAbout} />
@@ -361,11 +381,13 @@ function formatPartnerDate(value: unknown) {
   return Number.isFinite(date.getTime()) ? partnerDate.format(date) : "—";
 }
 
-function PartnerRecordsList({ kind, rows, currency, onAsk }: {
+function PartnerRecordsList({ kind, rows, currency, onAsk, onDownload, downloading }: {
   kind: keyof typeof recordFields;
   rows: Record<string, unknown>[];
   currency?: string | null | undefined;
   onAsk: (subject: string) => void;
+  onDownload?: (number: string) => void;
+  downloading?: string | null;
 }) {
   const fields = recordFields[kind];
   return (
@@ -397,6 +419,13 @@ function PartnerRecordsList({ kind, rows, currency, onAsk }: {
                   {row["match_status"] ? <div className="flex justify-between gap-2"><dt>Matching</dt><dd className="capitalize">{String(row["match_status"]).replace(/[_-]/g, " ")}</dd></div> : null}
                 </dl>
                 {reference ? <button type="button" onClick={() => onAsk(reference)} className="mt-3 min-h-11 text-sm font-medium text-white underline underline-offset-4">Ask the hotel about {reference}</button> : null}
+                {reference && onDownload &&
+                  ["approved","sent","partially-received","received","completed","closed"].includes(String(row["status"])) ? (
+                    <button type="button" className="neo-commerce-primary ml-2" disabled={Boolean(downloading)}
+                      onClick={() => onDownload(reference)}>
+                      {downloading === reference ? "Preparing PDF…" : "Download LPO"}
+                    </button>
+                  ) : null}
               </li>
             );
           })}

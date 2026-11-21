@@ -29,7 +29,7 @@ import {
 } from "@/lib/production-displays";
 import { supabase } from "@/integrations/supabase/client";
 import { useScopedStations } from "@/lib/kitchen-tickets";
-import { pairSharedDisplay } from "@/lib/shared-production-display";
+import { issueSharedDisplayActivation, pairSharedDisplay } from "@/lib/shared-production-display";
 import {
   isStaffPinSession,
   readTrustedStaffDevice,
@@ -330,6 +330,7 @@ function WorkspaceEntrance({
   const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
   const [displayLabel, setDisplayLabel] = useState("");
   const [pairingDisplay, setPairingDisplay] = useState(false);
+  const [displayActivation, setDisplayActivation] = useState<{ code: string; expires_at: string } | null>(null);
 
   const availableStations = useMemo(
     () =>
@@ -377,7 +378,7 @@ function WorkspaceEntrance({
     });
   }
 
-  async function pairDisplayDevice() {
+  async function pairDisplayDevice(issueCode = false) {
     if (!selectedDisplay || !selectedStationIds.length || pairingDisplay) {
       return;
     }
@@ -397,9 +398,15 @@ function WorkspaceEntrance({
     }
 
     setPairingDisplay(true);
+    setDisplayActivation(null);
 
     try {
-      await pairSharedDisplay(propertyId, selectedStationIds, label, false);
+      if (issueCode) {
+        setDisplayActivation(await issueSharedDisplayActivation(propertyId, selectedStationIds, label));
+        setPairingDisplay(false);
+      } else {
+        await pairSharedDisplay(propertyId, selectedStationIds, label, false);
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "This production display could not be paired.",
@@ -517,12 +524,18 @@ function WorkspaceEntrance({
                 setSelectedDisplay(null);
                 setSelectedStationIds([]);
                 setDisplayLabel("");
+                setDisplayActivation(null);
               }}
               className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold text-foreground"
             >
               Cancel
             </button>
 
+            <button type="button" disabled={pairingDisplay || !selectedStationIds.length || displayLabel.trim().length < 2}
+              onClick={() => void pairDisplayDevice(true)}
+              className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold">
+              Create activation code
+            </button>
             <button
               type="button"
               disabled={
@@ -534,6 +547,13 @@ function WorkspaceEntrance({
               {pairingDisplay ? "Pairing display…" : "Pair and open display"}
             </button>
           </div>
+          {displayActivation ? (
+            <aside className="space-y-2 rounded-xl border p-4" role="status">
+              <p className="font-semibold">One-use station activation code</p>
+              <code className="block select-all break-all">{displayActivation.code}</code>
+              <p className="text-sm">Enter it on the PIN screen of the new device. Expires {new Date(displayActivation.expires_at).toLocaleTimeString()}.</p>
+            </aside>
+          ) : null}
         </section>
       ) : null}
 

@@ -150,6 +150,11 @@ function ExplorePage() {
   const menuPending = catalogues.some((menu) => menu.isLoading);
   const menuFailed = catalogues.some((menu) => menu.isError);
   const dishes = [...new Map(catalogues.flatMap((menu) => menu.data ?? []).map((item) => [item["id"], item])).values()];
+  const sellable = (rows: Record<string, unknown>[] | undefined) =>
+    new Set((rows ?? []).filter((item) => item["availability"] === "available").map((item) => item["id"]));
+  const deliveryAvailable = sellable(deliveryMenu.data);
+  const collectionAvailable = sellable(collectionMenu.data);
+  const roomAvailable = sellable(roomMenu.data);
   const favourites = useGuestFavourites(ws.organization_id, customerId);
   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
   const favouriteByItem = new Map(
@@ -249,16 +254,16 @@ function ExplorePage() {
               description="Try other dates on the booking screen, or call reception to check what is held."
             />
           ) : (
-            <ul className="neo-guest-records">
+            <ul className="neo-guest-room-gallery">
               {(rooms.data ?? []).map((offer) => {
                 const cover = publicRooms.data?.find((room) => room.room_type_id === offer.room_type_id)?.images?.[0];
                 return (
                 <li
                   key={offer.room_type_id}
                 >
-                  <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: offer.room_type_id }} className="neo-guest-record" aria-label={`Book ${offer.room_type_name}`}>
-                    {cover ? <GuestImage src={cover} alt="" width={64} height={64} sizes="64px" className="neo-guest-room-thumb" />
-                      : <span className="neo-guest-record-icon"><BedDouble className="size-5" aria-hidden /></span>}
+                  <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: offer.room_type_id }} className="neo-guest-room-preview" aria-label={`View ${offer.room_type_name}`}>
+                    {cover ? <GuestImage src={cover} alt="" width={480} height={300} sizes="(min-width: 800px) 35vw, 100vw" className="neo-guest-room-cover" /> : null}
+                    <div className="neo-guest-room-caption">
                     <div className="min-w-0">
                       <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {offer.room_type_name}
@@ -274,7 +279,7 @@ function ExplorePage() {
                         {offer.rate_plan_name ? ` · ${offer.rate_plan_name}` : ""}
                       </p>
                     </div>
-                    <div className="neo-guest-record-total">
+                    <div className="text-right">
                       <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(offer.nightly_rate, offer.currency)}
                       </p>
@@ -282,6 +287,8 @@ function ExplorePage() {
                         per night
                       </p>
                     </div>
+                    </div>
+                    <span className="neo-guest-room-action">View room <ChevronRight className="size-4" aria-hidden /></span>
                   </Link>
                 </li>
               ); })}
@@ -349,10 +356,16 @@ function ExplorePage() {
             [...grouped.keys()].map((name) => (
               <GuestSection key={name} title={name}>
                 <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {(grouped.get(name) ?? []).map((item) => (
+                  {(grouped.get(name) ?? []).map((item) => {
+                    const itemId = item["id"];
+                    const deliveryMode = deliveryAvailable.has(itemId) ? "delivery"
+                      : collectionAvailable.has(itemId) ? "pickup" : null;
+                    const soldOut = !deliveryMode && !roomAvailable.has(itemId);
+                    return (
                     <li
                       key={String(item["id"])}
                       className="neo-guest-dish"
+                      data-sold-out={soldOut}
                     >
                       {item["image_url"] ? <GuestImage
                         src={String(item["image_url"])}
@@ -400,10 +413,10 @@ function ExplorePage() {
                                 />
                               </button>
                             ) : null}
-                            {delivery.data && deliveryMenu.data?.some((dish) => dish["id"] === item["id"]) ||
-                              delivery.data && collectionMenu.data?.some((dish) => dish["id"] === item["id"]) ? (
+                            {soldOut ? <span className="neo-sold-out-label">Out of stock</span> :
+                              delivery.data && deliveryMode ? (
                               <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }}
-                                search={{ item: String(item["id"]), mode: deliveryMenu.data?.some((dish) => dish["id"] === item["id"]) ? "delivery" : "pickup" }}
+                                search={{ item: String(item["id"]), mode: deliveryMode }}
                                 className="neo-guest-outline-action">Order</Link>
                             ) : delivery.data && !activeStay.data ? <span className="text-xs text-[var(--guest-muted)]">Room service</span> : <Link
                               to="/guest/$hotelSlug/order"
@@ -418,7 +431,8 @@ function ExplorePage() {
                         </div>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </GuestSection>
             ))

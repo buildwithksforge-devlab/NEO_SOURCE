@@ -102,7 +102,10 @@ function SavedItemTaxes({ snapshot }: { snapshot: unknown }) {
     <ul className="text-xs text-muted-foreground" aria-label="Saved item taxes before bill discounts">
       {snapshot.taxes.map((tax, index) => {
         if (!tax || typeof tax.name !== "string" || typeof tax.amount !== "number") return null;
-        return <li key={`${tax.code}-${index}`}>{tax.name} · {money(tax.amount)} {tax.inclusive ? "included" : "added"}</li>;
+        const rate = tax.method === "percentage" && typeof tax.value === "number" && Number.isFinite(tax.value)
+          ? `${new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 4 }).format(tax.value)} `
+          : "";
+        return <li key={`${tax.code}-${index}`}>{rate}{tax.name} · {money(tax.amount)} {tax.inclusive ? "included" : "added"}</li>;
       })}
     </ul>
   );

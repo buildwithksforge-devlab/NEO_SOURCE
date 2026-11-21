@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
 import { requireGuestOrderResult } from "@/lib/guest-order-result";
+import { loadPublicMenu } from "@/lib/public-delivery";
 import { readFolioChargeComponents, type FolioChargeComponent } from "@/lib/folio-charge-components";
 
 type Row = Record<string, unknown>;
@@ -187,14 +188,9 @@ export function useGuestMenu(
   return useQuery({
     queryKey: ["guest-menu", organizationId, branchId ?? "all", fulfilment],
     enabled,
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(sb, "neo_public_menu", {
-        _org: organizationId,
-        _branch: branchId,
-        _fulfilment: fulfilment,
-      });
-      if (error) throw new Error(error.message);
-      return (data ?? []) as PublicMenuItem[];
+      return await loadPublicMenu(organizationId, branchId, fulfilment) as unknown as PublicMenuItem[];
     },
   });
 }

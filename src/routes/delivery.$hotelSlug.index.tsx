@@ -205,6 +205,8 @@ function DeliveryHome() {
                       key={String(item["id"])}
                       type="button"
                       aria-haspopup="dialog"
+                      disabled={!available}
+                      data-sold-out={!available}
                       onClick={() => changeSelectedItem(String(item["id"]))}
                       className="neo-delivery-dish neo-delivery-menu-item group"
                     >
@@ -219,7 +221,7 @@ function DeliveryHome() {
                         ) : null}
                         <span className="mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-3 text-sm font-semibold text-slate-900">
                           <span>{money(item["base_price"], ws.currency ?? "KES")}</span>
-                          {available ? <span className="neo-delivery-item-add"><Plus className="size-4" aria-hidden /></span> : <span className="text-xs text-slate-600">Unavailable</span>}
+                          {available ? <span className="neo-delivery-item-add"><Plus className="size-4" aria-hidden /></span> : <span className="neo-sold-out-label">Out of stock</span>}
                         </span>
                       </span>
                       {item["image_url"] ? (
