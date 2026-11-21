@@ -1,6 +1,12 @@
 {
-  "updated": "2026-11-19",
+  "updated": "2026-11-21",
   "active_task": "WF11-T01",
+  "preview_release": {
+    "commit": "ffc50d0",
+    "build": "07b0cc8c387619fc",
+    "worker_version": "9c2ea129-35ce-4df3-b7fb-234f88a63fb1",
+    "verified_public_evidence": "HTTP 200 with matching build ID on sign-in, five Guest routes, Delivery checkout and Partner. Guest and Delivery served the same property. The Windows print-agent ZIP matched its published checksum."
+  },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
     {
@@ -37,6 +43,55 @@
       "title": "Reconcile explicit existing station/store links and actual remaining configuration",
       "status": "AWAITING_LIVE_RESULTS",
       "next_action": "Review explicit-link repair postcheck, preserve valid canonical mappings, resolve ambiguous or missing physical stores using actual department ownership; confirm depletion.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T01",
+      "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
+      "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["One responsive Guest navigation, explicit return from Delivery to Guest dining, one active cart in the database, one favourites list per guest using the current property menu.", "Booking detail uses the same verified-stay data as My Stay. Request and transfer acknowledgements link to their saved histories."],
+      "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Check the Nairobi experience advertised as taking place in Taveta against its intended property before changing publication.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF33-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Verify external supplier orders, receiving, invoices and hotel replies",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "ffc50d0",
+      "next_action": "Follow a controlled purchase order from the internal board into a real supplier account. Match partial receipt, posting and AP records and check that both parties see replies only for the authorised relationship.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF11-T02",
+      "chains": ["WF03", "WF11", "WF12", "WF23"],
+      "title": "Verify configurable payment methods by channel, property and processor",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
+      "next_action": "Connect and prove each intended processor in a sandbox. Verify callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout needs its own end-to-end implementation and acceptance.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF24-T01",
+      "chains": ["WF02", "WF03", "WF23", "WF24", "WF25"],
+      "title": "Verify live staff PIN, saved receipt tax and physical and PDF outputs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["PIN contracts, saved tax and ledger, branded long receipts, multi-page A4 PDF fixtures and print job states passed their focused tests. The packaged Windows agent passed 32 offline checks."],
+      "next_action": "Use an authorised paired device and staff account. Open an existing receipt for evidence and test a controlled new bill after confirming a saved tax profile, receipt branding and installed print-agent version. Compare PDF and paper, including logo, QR, payment and server footer. Retain separate acceptance of other document types and historical tax records.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF30-T01",
+      "chains": ["WF01", "WF26", "WF30", "WF34"],
+      "title": "Verify release readiness, saved defect counts and local Simulation",
+      "status": "BLOCKED",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. The local server credential returned HTTP 401 on a read-only Simulation registry check."],
+      "next_action": "Configure a valid server credential for the intended test project locally, confirm the Simulation registry, then run the two isolated workspaces. Capture actual defect counts and workflow evidence in Platform & Readiness before accepting an overall pass.",
       "live_acceptance": "OPEN"
     },
     {

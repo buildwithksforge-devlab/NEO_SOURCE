@@ -1,6 +1,6 @@
 import {createRequire} from 'node:module';import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';import {fileURLToPath} from 'node:url';import assert from 'node:assert/strict';
 const require=createRequire(new URL('../package.json',import.meta.url));const {PGlite}=require('@electric-sql/pglite');
-const evidenceDir=process.argv[2]??'.output/repair-evidence/';mkdirSync(evidenceDir,{recursive:true});const dir='scripts/fixtures/queue-batch-22/',read=n=>readFileSync(dir+n,'utf8'),db=new PGlite(),checks=[];
+const evidenceDir=process.argv[2]??'.output/repair-evidence/';mkdirSync(evidenceDir,{recursive:true});const dir='scripts/fixtures/queue-batch-22/',read=n=>readFileSync(dir+n,'utf8').replace(/\r\n/g,'\n'),db=new PGlite(),checks=[];
 const org='00000000-0000-0000-0000-000000000001',branch='00000000-0000-0000-0000-000000000002',other='00000000-0000-0000-0000-000000000003',foreign='00000000-0000-0000-0000-000000000004',item='00000000-0000-0000-0000-000000000005',station='00000000-0000-0000-0000-000000000006',order='00000000-0000-0000-0000-000000000007',line='00000000-0000-0000-0000-000000000008',ticket='00000000-0000-0000-0000-000000000009';
 const q=async(sql,args=[])=> (await db.query(sql,args)).rows;
 const readiness=async()=> (await q('select neo_go_live_readiness($1) as r',[branch]))[0].r;
