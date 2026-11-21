@@ -21,7 +21,13 @@ const handle = dispatchCourierJob as unknown as (input: {
   context: { supabase: ReturnType<typeof dispatchFixture>["supabase"] };
 }) => Promise<{ ok: boolean; reason?: string; state?: string }>;
 
-function dispatchFixture(options: { branch?: string | null; environment?: string; saved?: boolean } = {}) {
+function dispatchFixture(options: {
+  branch?: string | null;
+  environment?: string;
+  saved?: boolean;
+  canDispatch?: boolean;
+  branchInScope?: boolean;
+} = {}) {
   const job = {
     id: "dispatch",
     organization_id: "hotel",
@@ -53,7 +59,11 @@ function dispatchFixture(options: { branch?: string | null; environment?: string
     from: (table: string) => table === "integration_connections" ? query : {
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: job }) }) }),
     },
-    rpc: vi.fn().mockResolvedValue({ data: { ok: options.saved ?? true, state: "sent" }, error: null }),
+    rpc: vi.fn(async (name: string) => {
+      if (name === "has_permission") return { data: options.canDispatch ?? true, error: null };
+      if (name === "neo_branch_in_scope") return { data: options.branchInScope ?? true, error: null };
+      return { data: { ok: options.saved ?? true, state: "sent" }, error: null };
+    }),
   };
   const fetch = vi.fn().mockResolvedValue(new Response('{"status":"pending"}'));
   vi.stubGlobal("fetch", fetch);
@@ -86,6 +96,15 @@ describe("courier dispatch connection and saved state", () => {
     await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "provider_environment_changed" });
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it.each([{ canDispatch: false }, { branchInScope: false }])(
+    "blocks the external handoff without dispatch authority and property access",
+    async (options) => {
+      const { dispatch, fetch } = dispatchFixture(options);
+      await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "dispatch_access_denied" });
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it("requires the saved status before reporting that the dispatch was sent", async () => {
     const { dispatch } = dispatchFixture({ saved: false });

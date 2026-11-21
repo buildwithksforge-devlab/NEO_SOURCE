@@ -107,6 +107,17 @@ export const dispatchCourierJob = createServerFn({ method: "POST" })
 
     const job = found as JobRow | null;
     if (!job) return { ok: false, reason: "job_not_found" };
+    // A readable queue record does not grant permission to hand it to a provider.
+    const [assign, edit, scope] = await Promise.all([
+      supabase.rpc("has_permission", { _module: "delivery", _feature: "dispatch", _action: "assign" }),
+      supabase.rpc("has_permission", { _module: "delivery", _action: "edit" }),
+      job.branch_id
+        ? supabase.rpc("neo_branch_in_scope", { _branch: job.branch_id })
+        : Promise.resolve({ data: true, error: null }),
+    ]);
+    if ((assign.data !== true && edit.data !== true) || scope.error || scope.data !== true) {
+      return { ok: false, reason: "dispatch_access_denied", detail: "You cannot dispatch orders for this property." };
+    }
     if (job.state !== "requested") {
       return { ok: true, state: job.state, detail: "This dispatch has already been sent." };
     }
