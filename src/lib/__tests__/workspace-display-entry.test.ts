@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const workspace = readFileSync("src/routes/_shell.workspace.tsx", "utf8");
 const contexts = readFileSync("src/lib/continue-context.ts", "utf8");
+const controls = readFileSync("src/routes/_shell.production-displays.tsx", "utf8");
 
 describe("property workspace and production-display entry", () => {
   it("carries the chosen property from the context resolver", () => {
@@ -29,5 +30,11 @@ describe("property workspace and production-display entry", () => {
     expect(workspace).toMatch(
       /Station scope and every\s+ticket action are checked again by the server\./,
     );
+  });
+
+  it("takes the owner's display controls straight to station setup without the workspace choices", () => {
+    expect(controls).toContain('setup: "display"');
+    expect(workspace).toContain('displaySetupOnly ? "Set up a production display"');
+    expect(workspace).toContain("!displaySetupOnly && <button");
   });
 });

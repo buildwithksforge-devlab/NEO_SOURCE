@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { activateSharedDisplay } from "@/lib/shared-production-display";
+import { stationSignInDestination } from "@/lib/production-displays";
 import { Delete, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,8 @@ import {
 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
-export function StaffPinSignIn() {
+export function StaffPinSignIn({ redirect }: { redirect?: string | undefined }) {
+  const station = stationSignInDestination(redirect);
   const [device, setDevice] = useState(() =>
     readTrustedStaffDevice(),
   );
@@ -51,6 +53,11 @@ export function StaffPinSignIn() {
     event.preventDefault();
     setFormError(null);
 
+    if (station && device?.branchId !== station.property) {
+      setFormError("This link is for another property. Activate this device for the linked property or use Account sign-in.");
+      return;
+    }
+
     if (pin.length !== 6) {
       setFormError("Enter your six-digit personal PIN.");
       return;
@@ -59,13 +66,13 @@ export function StaffPinSignIn() {
     setBusy(true);
 
     try {
-      const { branchId } = await signInWithStaffPin(pin);
+      const { branchId } = await signInWithStaffPin(pin, station?.property);
 
       setPin("");
       toast.success("Signed in");
 
       window.location.replace(
-        `/workspace?home=1&property=${encodeURIComponent(branchId)}`,
+        station?.href ?? `/workspace?home=1&property=${encodeURIComponent(branchId)}`,
       );
     } catch (error) {
       setPin("");

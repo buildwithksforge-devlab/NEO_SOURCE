@@ -14,7 +14,7 @@ const workspace = readFileSync(
 describe("staff PIN login user interface", () => {
   it("offers Staff PIN as an explicit login-page option", () => {
     expect(auth).toContain('["pin", "Staff PIN"]');
-    expect(auth).toContain("<StaffPinSignIn />");
+    expect(auth).toContain("<StaffPinSignIn redirect={search.redirect} />");
     expect(auth).toContain('search["mode"] === "pin"');
   });
 
@@ -23,7 +23,7 @@ describe("staff PIN login user interface", () => {
     expect(pinForm).toContain(
       "This device is not yet authorised",
     );
-    expect(pinForm).toContain("signInWithStaffPin(pin)");
+    expect(pinForm).toContain("signInWithStaffPin(pin, station?.property)");
   });
 
   it("uses a PIN-only keypad and never requests a staff code", () => {
@@ -32,7 +32,8 @@ describe("staff PIN login user interface", () => {
     expect(pinForm).not.toMatch(/staff[_ ]code/i);
   });
 
-  it("returns successful PIN login to the trusted property entrance", () => {
+  it("opens a linked station directly and preserves ordinary PIN sign-in", () => {
+    expect(pinForm).toContain("station?.href ??");
     expect(pinForm).toContain(
       "/workspace?home=1&property=",
     );
@@ -49,7 +50,7 @@ describe("staff PIN login user interface", () => {
       'can("administration", "users", "assign_roles")',
     );
     expect(workspace).toContain(
-      "{canAuthorizeDevice ? (",
+      "{canAuthorizeDevice && !displaySetupOnly ? (",
     );
   });
 

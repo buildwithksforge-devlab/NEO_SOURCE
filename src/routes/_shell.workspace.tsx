@@ -42,6 +42,7 @@ import {
 type WorkspaceSearch = {
   home?: "1";
   property?: string;
+  setup?: "display";
 };
 
 const DISPLAY_DEPARTMENTS = ["kitchen", "coffee", "bar", "pastry"] as const;
@@ -63,6 +64,7 @@ export const Route = createFileRoute("/_shell/workspace")({
     return {
       ...(home ? { home } : {}),
       ...(property ? { property } : {}),
+      ...(search["setup"] === "display" ? { setup: "display" as const } : {}),
     };
   },
   head: () => ({
@@ -103,6 +105,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const askedForHome = search.home === "1";
+  const displaySetupOnly = search.setup === "display";
   const requestedProperty = search.property ?? null;
   const [authorizingDevice, setAuthorizingDevice] = useState(false);
   const [trustedDevice] = useState(readTrustedStaffDevice);
@@ -173,6 +176,7 @@ function Dashboard() {
 
   const pinHomeTarget =
     askedForHome &&
+    !displaySetupOnly &&
     isStaffPinSession() &&
     !canPairDisplay &&
     phase === "ready" &&
@@ -254,11 +258,16 @@ function Dashboard() {
       );
     }
 
+    if (displaySetupOnly && !displayChoices.length) {
+      return <AccessDeniedPanel subject="production display setup" />;
+    }
+
     return (
       <WorkspaceEntrance
         propertyId={activeBranch.id}
         propertyName={activeBranch.name}
         displays={displayChoices}
+        displaySetupOnly={displaySetupOnly}
         onEnterSystem={enterSystem}
         canAuthorizeDevice={canAuthorizeDevice}
         authorizingDevice={authorizingDevice}
@@ -310,6 +319,7 @@ function WorkspaceEntrance({
   propertyId,
   propertyName,
   displays,
+  displaySetupOnly,
   onEnterSystem,
   canAuthorizeDevice,
   authorizingDevice,
@@ -319,6 +329,7 @@ function WorkspaceEntrance({
   propertyId: string;
   propertyName: string;
   displays: DisplayChoice[];
+  displaySetupOnly: boolean;
   onEnterSystem: () => void;
   canAuthorizeDevice: boolean;
   authorizingDevice: boolean;
@@ -432,15 +443,15 @@ function WorkspaceEntrance({
     <main data-neo-workspace-entry className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={propertyName}
-        title="Choose how you want to work"
-        description="Enter the main NEØ system, configure a standalone production display, or authorise this device for staff PIN sign-in."
+        title={displaySetupOnly ? "Set up a production display" : "Choose how you want to work"}
+        description={displaySetupOnly ? "Choose a department and stations for this property's display." : "Enter the main NEØ system, configure a standalone production display, or authorise this device for staff PIN sign-in."}
       />
 
       <section
         aria-label="Available workspaces"
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
       >
-        <button
+        {!displaySetupOnly && <button
           type="button"
           onClick={onEnterSystem}
           className="group flex min-h-48 flex-col items-start rounded-2xl border border-border bg-card p-6 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -452,7 +463,7 @@ function WorkspaceEntrance({
           <span className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Open your normal role-based workspace, tasks and permitted modules.
           </span>
-        </button>
+        </button>}
 
         {displays.map((display) => (
           <button
@@ -565,9 +576,9 @@ function WorkspaceEntrance({
             <button type="button" disabled={pairingDisplay || selectedStationIds.length !== 1}
               onClick={() => void copyStationSignInLink()}
               className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold disabled:opacity-50">
-              Copy station account sign-in link
+              Copy station sign-in link
             </button>
-            <p className="text-sm text-muted-foreground">Select one station for staff who sign in with their own email and password.</p>
+            <p className="text-sm text-muted-foreground">Select one station. Staff can use their PIN on an authorised device or choose Account to sign in by email.</p>
           </div>
           {displayActivation ? (
             <aside className="space-y-2 rounded-xl border p-4" role="status">
@@ -579,7 +590,7 @@ function WorkspaceEntrance({
         </section>
       ) : null}
 
-      {canAuthorizeDevice ? (
+      {canAuthorizeDevice && !displaySetupOnly ? (
         <section
           data-neo-trusted-device-setup
           className="rounded-2xl border border-neo-turquoise/30 bg-neo-turquoise/5 p-5"

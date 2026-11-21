@@ -144,7 +144,7 @@
       "status": "AWAITING_INSTALLATION",
       "source_commit": "bf82044",
       "local_evidence": ["The staff PIN entry can redeem the existing one-use property code. Supervisors issue one-use display codes through the existing station pairing permissions. An isolated PostgreSQL test refused wrong scope, replay and revoked displays."],
-      "next_action": "Verify a one-use activation code on a controlled device and run the new station account sign-in link with an authorised and an unassigned account. The link restores the selected property and station after normal email/password authentication. Personal station action PINs retain actor identity.",
+      "next_action": "Verify the owner display-setup link, a one-use activation code and the direct station sign-in link on a controlled device. The station link opens Staff PIN with an Account alternative. Verify an authorised PIN and account both reach the exact display, and a wrong property or unassigned account is refused. Personal station action PINs retain actor identity.",
       "live_acceptance": "OPEN"
     },
     {

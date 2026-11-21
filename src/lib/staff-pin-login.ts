@@ -181,6 +181,7 @@ export async function revokeTrustedStaffDevice() {
 
 export async function signInWithStaffPin(
   pin: string,
+  expectedBranchId?: string,
 ): Promise<{ branchId: string }> {
   if (!/^[0-9]{6}$/.test(pin)) {
     throw new Error("Enter your six-digit personal PIN.");
@@ -229,6 +230,10 @@ export async function signInWithStaffPin(
     throw new Error(
       "Staff PIN sign-in returned an incomplete response.",
     );
+  }
+
+  if (expectedBranchId && payload.branch_id !== expectedBranchId) {
+    throw new Error("This PIN was verified at a different property. Use the station link for this device's property.");
   }
 
   const verified = await supabase.auth.verifyOtp({

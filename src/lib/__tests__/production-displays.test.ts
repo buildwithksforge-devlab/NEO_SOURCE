@@ -4,6 +4,7 @@ import {
   selectedDisplayStation,
   stationDepartment,
   stationAccountSignInPath,
+  stationSignInDestination,
   productionDisplaySearch,
   DISPLAY_ROUTES,
 } from "@/lib/production-displays";
@@ -24,12 +25,21 @@ describe("production display boundaries", () => {
     const origin = "https://neo.example";
     const entrance = new URL(stationAccountSignInPath(department, "property&east", "station?one"), origin);
     expect(entrance.pathname).toBe("/auth");
+    expect(entrance.searchParams.get("mode")).toBe("pin");
     const destination = new URL(entrance.searchParams.get("redirect")!, origin);
     expect(destination.pathname).toBe(DISPLAY_ROUTES[department]);
     expect(productionDisplaySearch(Object.fromEntries(destination.searchParams))).toEqual({
       property: "property&east", station: "station?one",
     });
+    expect(stationSignInDestination(entrance.searchParams.get("redirect")!)).toEqual({
+      href: destination.pathname + destination.search, property: "property&east",
+    });
   });
+  it.each(["/finance", "/kitchen/display?station=k", "//outside.example/kitchen/display?station=k&property=p", "//["])(
+    "refuses a non-station or invalid PIN destination %s", (destination) => {
+      expect(stationSignInDestination(destination)).toBeUndefined();
+    },
+  );
   it("keeps coffee separate from beverage/bar despite its beverage station type", () => {
     expect(stationDepartment(stations[1]!)).toBe("coffee");
     expect(displayStations(stations, "bar").map((s) => s.id)).toEqual(["b"]);

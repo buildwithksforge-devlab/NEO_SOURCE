@@ -48,7 +48,7 @@ function DisplayControls() {
     <div className="space-y-5">
       <PageHeader
         title="Shared display controls"
-        description="Manage and revoke standalone production screens. New screens are configured from the property work entrance before entering the main NEØ system."
+        description="Set up a station display, issue a one-use device activation code, and manage active screens."
       />
       <div className="rounded-lg border border-neo-mist bg-background p-4 text-sm">
         <p className="font-semibold">Independent station screen</p>
@@ -66,6 +66,7 @@ function DisplayControls() {
             to="/workspace"
             search={{
               home: "1",
+              setup: "display",
               ...(branchId ? { property: branchId } : {}),
             }}
             className="inline-flex rounded-lg border border-neo-turquoise px-4 py-2 font-semibold text-neo-midnight"

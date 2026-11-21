@@ -32,7 +32,19 @@ export function productionDisplaySearch(search: Record<string, unknown>): { stat
 
 export function stationAccountSignInPath(department: Exclude<DisplayDepartment, "overview">, property: string, station: string) {
   const search = new URLSearchParams({ property, station });
-  return `/auth?${new URLSearchParams({ redirect: `${DISPLAY_ROUTES[department]}?${search}` })}`;
+  return `/auth?${new URLSearchParams({ mode: "pin", redirect: `${DISPLAY_ROUTES[department]}?${search}` })}`;
+}
+
+export function stationSignInDestination(redirect: string | undefined) {
+  if (!redirect?.startsWith("/")) return undefined;
+  const origin = "https://station.invalid";
+  let destination: URL;
+  try { destination = new URL(redirect, origin); } catch { return undefined; }
+  const routes: readonly string[] = [DISPLAY_ROUTES.kitchen, DISPLAY_ROUTES.bar, DISPLAY_ROUTES.coffee, DISPLAY_ROUTES.pastry];
+  const station = destination.searchParams.get("station");
+  const property = destination.searchParams.get("property");
+  if (destination.origin !== origin || !routes.includes(destination.pathname) || !station || !property) return undefined;
+  return { property, href: `${destination.pathname}?${new URLSearchParams({ property, station })}` };
 }
 
 // This classifies presentation only. RLS, the scoped station list and the

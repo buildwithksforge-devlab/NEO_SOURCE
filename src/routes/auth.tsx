@@ -155,7 +155,7 @@ function AuthPage() {
       {tab === "signin" ? (
         <SignInForm redirect={search.redirect} />
       ) : tab === "pin" ? (
-        <StaffPinSignIn />
+        <StaffPinSignIn redirect={search.redirect} />
       ) : (
         <CreateWorkspaceWizard />
       )}
