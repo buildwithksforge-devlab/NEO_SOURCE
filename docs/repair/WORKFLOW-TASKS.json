@@ -2,11 +2,11 @@
   "updated": "2026-11-21",
   "active_task": "WF11-T01",
   "preview_release": {
-    "commit": "f66dbae",
-    "build": "8ebeebd0848ee56a",
-    "worker_version": "c9fd3ab3-01f8-4888-a8f4-e87955e3ab9d",
-    "verified_public_evidence": "Eight published routes returned HTTP 200 with the prepared build ID. The Standard Double deep link rendered its room and Browse rooms while session detection was pending. Guest dining navigation, favourites, transfers and the return from Delivery checkout rendered as expected.",
-    "preflight": "TypeScript, production smoke, installed RPC checks and the full offline run passed. The offline run recorded 5462 passed, 0 failed and 155 skipped cases. The selected local workflow command passed 361 tests and 27 readiness checks."
+    "commit": "b7b4244",
+    "build": "992df40cbe806635",
+    "worker_version": "75088662-bbb2-4042-9251-658da4e78423",
+    "verified_public_evidence": "Seven routes returned HTTP 200 with the deployed build ID. HTTP content checks verified Guest Services, the selected experience enquiry, the transfer page's Hotel services return, and the Delivery checkout return to Guest dining. Receiving, procurement reconciliation, and sign-in route responses were checked. Signed-in rendering and interaction remain open because the browser tool could not establish the current URL.",
+    "preflight": "TypeScript, production smoke, required rollout RPC checks and full offline regression passed. The offline run recorded 5462 passed, 0 failed and 155 skipped cases. The selected local workflow command passed 378 tests and 27 readiness checks."
   },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
@@ -51,9 +51,9 @@
       "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
       "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
       "status": "LOCAL_VERIFIED",
-      "source_commit": "ffc50d0",
-      "local_evidence": ["One responsive Guest navigation, explicit return from Delivery to Guest dining, one active cart in the database, one favourites list per guest using the current property menu.", "Booking detail uses the same verified-stay data as My Stay. Request and transfer acknowledgements link to their saved histories."],
-      "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Check the Nairobi experience advertised as taking place in Taveta against its intended property before changing publication.",
+      "source_commit": "b7b4244",
+      "local_evidence": ["One responsive Guest navigation, explicit return from Delivery to Guest dining, one active cart in the database, one favourites list per guest using the current property menu.", "Booking detail uses the same verified-stay data as My Stay. Transfer and experience links carry the selected catalogue ID and require a saved request before showing success."],
+      "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Confirm the intended property of Sartuday Kids Fun Day (f05d8e00-507f-4a9d-9e5c-51469cf473f0) before changing publication. The live Nairobi catalogue returned this listing with a Taveta venue.",
       "live_acceptance": "OPEN"
     },
     {
@@ -100,7 +100,8 @@
       "chains": ["WF04", "WF05", "WF06", "WF33"],
       "title": "Validate receiving custody and requested recount rollout",
       "status": "AWAITING_INSTALLATION",
-      "local_evidence": ["28 tests passed across blind receiving review, GRN handoff and document history. The Preview database returned PGRST202 for neo_request_receiving_recount."],
+      "source_commit": "b7b4244",
+      "local_evidence": ["71 focused tests passed across receiving, stores, GRN documents and supplier payables. The production client retains the current Storekeeper count when the server omits recount flags. The migration fixture verified independent recount, retry, approval, one stock posting, GRN data and audit. The Preview database returned PGRST202 for neo_request_receiving_recount."],
       "next_action": "Review the installed receiving function definitions before applying the pending custody migration. After rollout, check independent review, requested recount, GRN retrieval and the linked payable with controlled property records.",
       "live_acceptance": "OPEN"
     },
