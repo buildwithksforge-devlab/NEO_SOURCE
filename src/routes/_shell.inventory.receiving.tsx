@@ -88,7 +88,7 @@ function Page() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["procurement"] });
       toast.success(
-        "Blind receiving count submitted. Awaiting the Storekeeper count."
+        "Blind receiving count submitted for independent review."
       );
       setPendingConfirmation(null);
       setSelected(null);
@@ -474,9 +474,7 @@ function Page() {
             </div>
 
             <div className="rounded-lg border border-warning/40 bg-tint-warning p-4 text-sm text-on-tint-warning">
-              Blind counting is enabled. Stock posting remains locked
-              until the A10 database authorization and reconciliation
-              controls are installed.
+              Stock updates when an approved Goods Received Note is posted.
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">

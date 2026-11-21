@@ -539,9 +539,10 @@ function ExplorePage() {
                         {product["max_passengers"] ? ` · up to ${String(product["max_passengers"])}` : ""}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-                      {money(product["base_price"], String(product["currency"] ?? "KES"))}
-                    </span>
+                    <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} search={{ product: String(product["id"]) }}
+                      hash="transfer-request" aria-label={`Request ${String(product["name"])}`} className="neo-guest-outline-action">
+                      {product["base_price"] == null ? "Request" : money(product["base_price"], String(product["currency"] ?? "KES"))}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -626,6 +627,8 @@ function ExplorePage() {
                     <Link
                       to="/guest/$hotelSlug/trips"
                       params={{ hotelSlug }}
+                      search={{ experience: item.id }}
+                      hash="request-assistance"
                       className="inline-flex min-h-11 w-fit items-center px-4 text-sm font-semibold"
                       style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                     >

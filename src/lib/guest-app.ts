@@ -214,7 +214,8 @@ export function useCreateGuestRequest(organizationId: string, branchId: string |
         _priority: input.priority ?? "normal",
       });
       if (error) throw new Error(error.message);
-      return data as string;
+      if (typeof data !== "string" || !data) throw new Error("The property did not return a saved request reference.");
+      return data;
     },
     onSuccess: () => client.invalidateQueries({ queryKey: ["guest-requests", organizationId] }),
   });

@@ -510,25 +510,35 @@ export async function suiteShortageProcurement(ctx: SuiteContext) {
     })) as { count_id: string };
     const queue = (await expectOk(storekeeper, "neo_receiving_custody_queue", {})) as {
       count_id: string;
+      recount_required?: boolean;
       lines: { line_id: string; order_line_id: string }[];
     }[];
     const delivery = queue.find((row) => row.count_id === submitted.count_id);
     if (!delivery) throw new Error("Storekeeper could not load the submitted delivery");
-    await expectOk(storekeeper, "neo_accept_receiving_custody", {
-      _count_id: submitted.count_id,
-      _lines: delivery.lines.map((line) => ({
-        line_id: line.line_id,
-        delivered: list.find((item) => item.id === line.order_line_id)?.quantity,
-        rejected: 0,
-      })),
-    });
+    if (delivery.recount_required === true) throw new Error("A new routine count unexpectedly requires a recount");
+    if (delivery.recount_required === undefined) {
+      await expectOk(storekeeper, "neo_accept_receiving_custody", {
+        _count_id: submitted.count_id,
+        _lines: delivery.lines.map((line) => ({
+          line_id: line.line_id,
+          delivered: list.find((item) => item.id === line.order_line_id)?.quantity,
+          rejected: 0,
+        })),
+      });
+    }
     await expectOk(manager, "neo_blind_receiving_decide", {
       _count_id: submitted.count_id,
       _decision: "approved",
-      _notes: "Matched Storekeeper count and custody",
+      _notes: "Clerk count reviewed against the purchase order",
     });
     t.must("approval leaves stock unchanged", (await stockOnHand(ctx)) === before);
     await expectOk(manager, "neo_post_approved_blind_receiving", { _count_id: submitted.count_id });
+    if (delivery.recount_required === false) {
+      await expectOk(storekeeper, "neo_accept_receiving_custody", {
+        _count_id: submitted.count_id,
+        _lines: [],
+      });
+    }
 
     const after = await stockOnHand(ctx);
     t.must("stock increased after receiving", after > before, `> ${before}`, after);

@@ -540,7 +540,7 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     ).toEqual({ received_quantity: "10", accepted_quantity: "10" });
   });
 
-  it("requires a separate matched custody count and guarded approval before posting", async () => {
+  it("approves and posts a routine count independently of custody, and gates exceptions on a requested recount", async () => {
     const count = id(901);
     const discrepancy = id(902);
     const countLine = id(903);
@@ -584,39 +584,68 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     );
     const decide = (key: string, decision: string) =>
       db.query<{ result: Record<string, unknown> }>("SELECT neo_blind_receiving_decide($1,$2,'Checked') result", [key, decision]);
+    await actor(keeper);
+    await custody(discrepancy, discrepancyLine, 7);
+    await db.exec("RESET ROLE");
+    const legacy = (await db.query("SELECT * FROM neo_receiving_custody WHERE count_id = $1", [discrepancy])).rows;
+    await db.exec(`
+      CREATE TABLE receiving_workflow_audit(action text, record_id text, actor uuid, details jsonb);
+      CREATE FUNCTION log_audit_event(_action text, _module text, _record_id text,
+        _previous jsonb, _new jsonb, _reason text, _branch uuid, _correlation text)
+      RETURNS uuid LANGUAGE plpgsql AS $$
+      BEGIN
+        INSERT INTO receiving_workflow_audit VALUES (_action, _record_id, auth.uid(), _new);
+        RETURN gen_random_uuid();
+      END;
+      $$;
+    `);
+    const preflight = await db.query<{ matches_custody_baseline: boolean; recount_installed: boolean }>(
+      readFileSync("supabase/repair/2026-11-21/receiving-custody-preflight.sql", "utf8"),
+    );
+    expect(preflight.rows).toHaveLength(6);
+    expect(preflight.rows.every((row) => row.matches_custody_baseline && !row.recount_installed)).toBe(true);
+    await db.exec(readFileSync("supabase/migrations/20261120173000_receiving_custody_on_request.sql", "utf8"));
+
+    const request = (key: string) => db.query("SELECT neo_request_receiving_recount($1,'Verify batch and expiry') requested", [key]);
+    const acknowledge = (key: string) => db.query("SELECT neo_accept_receiving_custody($1,'[]'::jsonb) accepted", [key]);
+    const queued = async () => (await db.query<{ rows: Record<string, unknown>[] }>(
+      "SELECT neo_receiving_custody_queue() rows",
+    )).rows[0]?.rows ?? [];
+
+    await actor(submitter);
+    await expect(request(count)).rejects.toThrow(/independent review authorization/i);
+    await expect(decide(count, "approved")).rejects.toThrow(/independent review authorization/i);
+
     await actor(reviewer);
-    await expect(decide(count, "approved")).rejects.toThrow(/matching custody/);
-    await expect(custody(count, countLine, 8)).rejects.toThrow(/Storekeeper custody authorization/);
+    await expect(acknowledge(count)).rejects.toThrow(/Storekeeper custody authorization/);
     await expect(receive(8, 2)).rejects.toThrow(/permission denied/);
     await expect(db.query("SELECT inventory_apply_movement($1,$2,8,'kg','receipt')", [item, store]))
       .rejects.toThrow(/Receipt stock movements/);
+    await expect(db.query("SELECT neo_post_approved_blind_receiving($1)", [count]))
+      .rejects.toThrow(/Only independently approved counts/);
+    await expect(decide(discrepancy, "approved")).rejects.toThrow(/matching independent recount/);
+    await expect(request(discrepancy)).resolves.toMatchObject({ rows: [{ requested: true }] });
+    await expect(request(discrepancy)).resolves.toMatchObject({ rows: [{ requested: true }] });
+    await expect(decide(discrepancy, "approved")).rejects.toThrow(/matching independent recount/);
 
     await actor(keeper);
-    const queue = await db.query<{ rows: Array<{ lines: Array<Record<string, unknown>> }> }>(
-      "SELECT neo_receiving_custody_queue() rows",
-    );
-    expect(queue.rows[0]?.rows).toHaveLength(2);
-    expect(queue.rows[0]?.rows[0]?.lines[0]).toEqual({ line_id: expect.any(String), order_line_id: line, item_name: "Rice", unit: "kg" });
-    await expect(custody(count, countLine, 1)).rejects.toThrow(/one valid/);
-    await expect(custody(count, countLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
-    await expect(custody(count, countLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
-    await custody(discrepancy, discrepancyLine, 7);
+    expect(await queued()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ count_id: count, recount_required: false }),
+      expect.objectContaining({ count_id: discrepancy, recount_required: true,
+        lines: [{ line_id: discrepancyLine, order_line_id: line, item_name: "Rice", unit: "kg" }] }),
+    ]));
+    await expect(custody(count, countLine, 8)).rejects.toThrow(/requested recount/);
+    await expect(acknowledge(discrepancy)).rejects.toThrow(/already recorded|complete the requested recount/i);
+    await expect(custody(discrepancy, discrepancyLine, 1)).rejects.toThrow(/one valid/);
+    await expect(custody(discrepancy, discrepancyLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
+    await expect(custody(discrepancy, discrepancyLine, 8)).resolves.toMatchObject({ rows: [{ accepted: true }] });
     await expect(decide(count, "approved")).rejects.toThrow(/Independent review authorization/);
-    await expect(db.query("SELECT neo_post_approved_blind_receiving($1)", [count]))
-      .rejects.toThrow(/independent Storekeeper custody/);
 
     await actor(reviewer);
-    await expect(decide(discrepancy, "approved")).rejects.toThrow(/matching custody/);
-    await expect(decide(discrepancy, "rejected")).resolves.toMatchObject({ rows: [{ result: { status: "rejected" } }] });
-    await actor(submitter);
-    const recount = (note: string) => db.query(
-      "SELECT neo_submit_blind_receiving_count($1,$2,$3,$4::jsonb) result",
-      [order, store, note, JSON.stringify([{ order_line_id: line, quantity_delivered: 7 }])],
-    );
-    await expect(recount("DN-DIFFERENT")).resolves.toMatchObject({ rows: [{ result: { status: "submitted" } }] });
-    await expect(recount("dn-different")).rejects.toThrow(/already been recorded/);
-    await actor(reviewer);
+    await expect(decide(discrepancy, "approved")).resolves.toMatchObject({ rows: [{ result: { status: "approved" } }] });
     await expect(decide(count, "approved")).resolves.toMatchObject({ rows: [{ result: { status: "approved", stock_posted: false } }] });
+    const approved = await db.query<{ rows: Record<string, unknown>[] }>("SELECT neo_blind_receiving_approved_queue() rows");
+    expect(approved.rows[0]?.rows).toContainEqual(expect.objectContaining({ count_id: count }));
     await db.exec("RESET ROLE");
     await expect(db.query("SELECT * FROM movement_evidence")).resolves.toMatchObject({ rows: [] });
 
@@ -625,9 +654,25 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     const posted = (await post()).rows[0]?.result;
     expect(posted).toMatchObject({ status: "posted", grn_id: expect.any(String) });
     expect((await post()).rows[0]?.result).toMatchObject({ replayed: true, grn_id: posted?.["grn_id"] });
+    await actor(keeper);
+    expect(await queued()).toContainEqual(expect.objectContaining({ count_id: count, recount_required: false }));
+    await expect(acknowledge(count)).resolves.toMatchObject({ rows: [{ accepted: true }] });
+    await expect(acknowledge(count)).resolves.toMatchObject({ rows: [{ accepted: true }] });
+    expect(await queued()).not.toContainEqual(expect.objectContaining({ count_id: count }));
     await db.exec("RESET ROLE");
+    expect((await db.query("SELECT * FROM neo_receiving_custody WHERE count_id = $1", [discrepancy])).rows).toEqual(legacy);
+    expect((await db.query("SELECT action, record_id, actor FROM receiving_workflow_audit ORDER BY action")).rows).toEqual([
+      { action: "receiving.custody.confirmed", record_id: count, actor: keeper },
+      { action: "receiving.recount.recorded", record_id: discrepancy, actor: keeper },
+      { action: "receiving.recount.requested", record_id: discrepancy, actor: reviewer },
+    ]);
     expect((await db.query("SELECT quantity FROM movement_evidence")).rows).toEqual([{ quantity: "6" }]);
     expect((await db.query("SELECT batch_number, expiry_date::text, quantity_accepted FROM goods_receipt_lines")).rows)
       .toEqual([{ batch_number: "B-1", expiry_date: "2027-01-01", quantity_accepted: "6" }]);
+    expect((await db.query("SELECT has_function_privilege('anon','neo_request_receiving_recount(uuid,text)','EXECUTE') allowed")).rows)
+      .toEqual([{ allowed: false }]);
+    await expect(db.exec(readFileSync("supabase/migrations/20261120173000_receiving_custody_on_request.sql", "utf8")))
+      .rejects.toThrow(/Receiving custody prerequisite differs/);
+    await db.exec("ROLLBACK");
   }, 30000);
 });

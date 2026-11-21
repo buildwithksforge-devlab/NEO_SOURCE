@@ -601,7 +601,9 @@ export function useRequestTransport(organizationId: string, branchId: string | n
         _notes: input.notes ?? null,
       });
       if (error) throw new Error(error.message);
-      return data as { request_number: string; status: string; quoted_amount: number | null };
+      const saved = data as { id?: string; request_number?: string; status: string; quoted_amount: number | null } | null;
+      if (!saved?.id || !saved.request_number) throw new Error("The property did not return a saved transfer reference.");
+      return { ...saved, request_number: saved.request_number };
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["transport-requests"] }),
     onError: (e: Error) => toast.error(e.message),

@@ -18,6 +18,9 @@ import {
 } from "@/lib/guest-ordering";
 
 export const Route = createFileRoute("/guest/$hotelSlug/transport")({
+  validateSearch: (search): { product?: string } =>
+    typeof search["product"] === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(search["product"])
+      ? { product: search["product"].toLowerCase() } : {},
   head: () => ({
     meta: [
       { title: "Transport & Transfers — NEØ Guest" },
@@ -36,6 +39,7 @@ export const Route = createFileRoute("/guest/$hotelSlug/transport")({
 function TransportPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
+  const { product } = Route.useSearch();
   const preview = isPreviewMode();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
@@ -45,7 +49,11 @@ function TransportPage() {
   const request = useRequestTransport(ws.organization_id, ws.branch_id);
   useGuestScreenView(ws.organization_id, "transport", Boolean(customerId));
 
-  const [productId, setProductId] = useState<string>("");
+  const [selectedProductId, setProductId] = useState<string | null>(null);
+  const productId = selectedProductId ?? product ?? "";
+  const selectedProduct = products.data?.find((entry) => entry["id"] === productId);
+  const productUnavailable = Boolean(productId && !selectedProduct);
+  const maxPassengers = selectedProduct?.["max_passengers"] ? Number(selectedProduct["max_passengers"]) : undefined;
   const [pickupAt, setPickupAt] = useState("");
   const [pickupPoint, setPickupPoint] = useState("");
   const [destination, setDestination] = useState("");
@@ -56,7 +64,7 @@ function TransportPage() {
   const [submittedReference, setSubmittedReference] = useState<string | null>(null);
 
   async function submit() {
-    if (request.isPending) return;
+    if (request.isPending || productUnavailable || preview) return;
     const pickup = new Date(pickupAt);
     if (!pickupAt || !pickupPoint.trim() || !destination.trim()) {
       toast.error("Pickup time, pickup point and destination are required");
@@ -64,6 +72,14 @@ function TransportPage() {
     }
     if (!Number.isFinite(pickup.getTime()) || pickup.getTime() <= Date.now()) {
       toast.error("Choose a pickup time in the future");
+      return;
+    }
+    if (!Number.isInteger(passengers) || passengers < 1 || (maxPassengers && passengers > maxPassengers)) {
+      toast.error(maxPassengers ? `Enter between 1 and ${maxPassengers} passengers` : "Enter a whole number of passengers");
+      return;
+    }
+    if (!Number.isInteger(luggage) || luggage < 0) {
+      toast.error("Enter a whole number of bags");
       return;
     }
     try {
@@ -92,7 +108,9 @@ function TransportPage() {
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <GuestPageIntro title="Transfers" description={`Arrange a pickup or a trip with ${ws.hotel_name}.`}>
+        <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "services" }} className="neo-guest-outline-action">Hotel services</Link>
         <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="neo-guest-outline-action">My stay</Link>
+        {customerId && productId ? <a href="#transfer-request" className="neo-guest-outline-action">Continue to request</a> : null}
         {customerId ? <a href="#transfer-history" className="neo-guest-outline-action">My transfer requests</a> : null}
       </GuestPageIntro>
 
@@ -135,6 +153,7 @@ function TransportPage() {
                     <li key={id}>
                       <button
                         type="button"
+                        aria-pressed={isActive}
                         onClick={() => setProductId(isActive ? "" : id)}
                         className="flex w-full items-center gap-3 rounded-xl border p-3 text-left"
                         style={{ borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.08)" }}
@@ -163,8 +182,14 @@ function TransportPage() {
             )}
           </GuestSection>
 
-          <GuestSection title="Request a transfer" surface>
+          <GuestSection id="transfer-request" title="Request a transfer" surface>
             <div className="space-y-3">
+              {selectedProduct ? (
+                <p className="text-sm font-medium">Transfer selected · {String(selectedProduct["name"])}</p>
+              ) : productUnavailable && !products.isLoading ? (
+                <p role="status" className="text-sm">The selected transfer is unavailable. Choose another transfer or request a custom trip.</p>
+              ) : null}
+              {productId ? <button type="button" onClick={() => setProductId("")} className="neo-guest-outline-action">Request a custom trip instead</button> : null}
               <Field label="Pickup time">
                 <input
                   type="datetime-local"
@@ -193,6 +218,7 @@ function TransportPage() {
                   <input
                     type="number"
                     min={1}
+                    max={maxPassengers}
                     value={passengers}
                     onChange={(e) => setPassengers(Number(e.target.value))}
                     className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
@@ -226,7 +252,7 @@ function TransportPage() {
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={request.isPending || preview}
+                disabled={request.isPending || preview || productUnavailable}
                 className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                 style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
               >

@@ -12,7 +12,7 @@ const fixtures = [
   "pms-missing-accommodation-postgres", "pms-multi-folio-checkout-postgres", "pms-nightly-pricing-parity-postgres",
   "pms-night-audit-close-gate-postgres", "pos-room-transfer-postgres", "payment-gateway-dispatch-safety",
   "sales-tax-workflow-postgres", "thermal-receipt-layout", "print-agent-postgres-api",
-  "inventory-batch-cost-postgres", "receiving-document-postgres", "supplier-payable-integration-postgres",
+  "inventory-batch-cost-postgres", "blind-receiving-review-workflow", "receiving-document-postgres", "supplier-payable-integration-postgres",
   "housekeeping-execution-chain", "events-property-contract", "payroll-posting-release-guard",
   "automatic-platform-checks-postgres", "platform-public-app-health", "simulation-release",
 ];

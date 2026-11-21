@@ -37,6 +37,14 @@ type ReviewLine = {
   expiry_date: string | null;
 };
 
+type StorekeeperLine = {
+  line_id: string;
+  delivered: string;
+  rejected: string;
+  batch: string | null;
+  expiry: string | null;
+};
+
 type ReviewCount = {
   count_id: string;
   purchase_order_id: string;
@@ -45,8 +53,11 @@ type ReviewCount = {
   delivery_note: string;
   submitted_by: string;
   submitted_by_current_user?: boolean;
-  custody_status: "pending" | "matched" | "discrepancy" | "own-custody";
-  custody_lines: Array<{ line_id: string; delivered: string; rejected: string; batch: string; expiry: string | null }> | null;
+  custody_status: "pending" | "acknowledged" | "matched" | "discrepancy" | "recount-required" | "own-recount" | "own-custody";
+  recount_requested?: boolean;
+  recount_reason?: string | null;
+  custody_lines: StorekeeperLine[] | null;
+  prior_custody_lines?: StorekeeperLine[] | null;
   submitted_at: string;
   status: string;
   remarks: string | null;
@@ -145,7 +156,33 @@ function Page() {
     },
   });
 
+  const recount = useMutation({
+    mutationFn: async ({ countId, reason }: { countId: string; reason: string }) => {
+      const { data, error } = await guardedRpc<boolean>(db, "neo_request_receiving_recount", {
+        _count_id: countId,
+        _reason: reason,
+      });
+      if (error || data !== true) throw new Error(error?.message ?? "The recount was not requested.");
+    },
+    onSuccess: async () => {
+      toast.success("Recount requested from Stores.");
+      await invalidateSupplyViews(queryClient);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  function requestRecount(count: ReviewCount) {
+    if (count.recount_requested !== false || decide.isPending || recount.isPending) return;
+    const reason = notes[count.count_id]?.trim();
+    if (!reason) {
+      toast.error("Enter a reason for the recount.");
+      return;
+    }
+    recount.mutate({ countId: count.count_id, reason });
+  }
+
   function submitDecision(count: ReviewCount, decision: "approved" | "rejected") {
+    if (decide.isPending || recount.isPending) return;
     const reason = notes[count.count_id]?.trim() ?? "";
 
     if (!reason) {
@@ -216,7 +253,7 @@ function Page() {
 
       <SectionCard
         title="Independent receiving review"
-        description="Compare the original count and the Storekeeper count. Reject discrepancies with a reason and have the delivery recounted."
+        description="Compare the clerk’s count with the purchase order and delivery note. The review shows what Stores still needs to confirm."
       >
         <div className="mb-4 flex justify-end">
           <Button
@@ -380,19 +417,27 @@ function Page() {
                 </div>
 
                 <p className="text-sm" role="status">
-                  {count.custody_status === "matched" && "Storekeeper count matched and custody recorded."}
-                  {count.custody_status === "pending" && "Awaiting independent Storekeeper count."}
+                  {count.custody_status === "pending" && (typeof count.recount_requested === "boolean"
+                    ? "Custody confirmation is pending." : "Awaiting independent Storekeeper count.")}
+                  {count.custody_status === "acknowledged" && "Stores confirmed custody."}
+                  {count.custody_status === "matched" && "The independent Storekeeper count matched."}
+                  {count.custody_status === "recount-required" && "Awaiting the requested Storekeeper recount."}
+                  {count.custody_status === "own-recount" && "A different reviewer must approve this recount."}
                   {count.custody_status === "own-custody" && "Another reviewer must approve this delivery."}
-                  {count.custody_status === "discrepancy" && "Storekeeper count differs. Reject with a reason and have the delivery recounted."}
+                  {count.custody_status === "discrepancy" && "The independent Storekeeper count differs. Resolve the discrepancy before approval."}
                 </p>
-                {count.custody_status === "discrepancy" && count.custody_lines?.map((line) => (
-                  <p key={line.line_id} className="text-sm text-muted-foreground">
-                    Storekeeper count for {count.lines.find((item) => item.count_line_id === line.line_id)?.item_name ?? "purchase item"}
+                {count.recount_reason && <p className="text-sm">Recount reason: {count.recount_reason}</p>}
+                {[
+                  { label: "Storekeeper count", lines: count.custody_lines },
+                  { label: "Previous Storekeeper count", lines: count.prior_custody_lines },
+                ].map(({ label, lines }) => lines?.map((line) => (
+                  <p key={`${label}:${line.line_id}`} className="text-sm text-muted-foreground">
+                    {label} for {count.lines.find((item) => item.count_line_id === line.line_id)?.item_name ?? "purchase item"}
                     {" · "}{line.delivered} delivered · {line.rejected} rejected
-                    {line.batch ? ` · Batch ${line.batch}` : ""}
-                    {line.expiry ? ` · Expiry ${line.expiry}` : ""}
+                    {" · Batch "}{line.batch || "not entered"}
+                    {" · Expiry "}{line.expiry || "not entered"}
                   </p>
-                ))}
+                )))}
                 {!submittedByCurrentUser ? (
                   <div className="space-y-3 rounded-lg border p-4">
                     <p className="text-sm font-semibold">
@@ -411,16 +456,23 @@ function Page() {
                     />
 
                     <div className="flex flex-wrap justify-end gap-3">
+                      {count.recount_requested === false && (
+                        <Button variant="outline" disabled={decide.isPending || recount.isPending} onClick={() => requestRecount(count)}>
+                          Request recount
+                        </Button>
+                      )}
                       <Button
                         variant="destructive"
-                        disabled={decide.isPending}
+                        disabled={decide.isPending || recount.isPending}
                         onClick={() => submitDecision(count, "rejected")}
                       >
                         Reject Count
                       </Button>
 
                       <Button
-                        disabled={decide.isPending || hasExcess || count.custody_status !== "matched"}
+                        disabled={decide.isPending || recount.isPending || hasExcess ||
+                          !(count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
+                            ["pending", "acknowledged"].includes(count.custody_status)))}
                         onClick={() => submitDecision(count, "approved")}
                       >
                         Approve Count

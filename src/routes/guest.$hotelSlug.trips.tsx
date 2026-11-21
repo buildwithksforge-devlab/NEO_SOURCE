@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { money } from "@/lib/public-delivery";
+import { usePublicExperiences } from "@/lib/guest-experiences";
 import {
   isInHouse,
   requestCategories,
@@ -25,6 +26,9 @@ import {
 } from "@/lib/guest-app";
 
 export const Route = createFileRoute("/guest/$hotelSlug/trips")({
+  validateSearch: (search): { experience?: string } =>
+    typeof search["experience"] === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(search["experience"])
+      ? { experience: search["experience"].toLowerCase() } : {},
   head: () => ({
     meta: [
       { title: "My Trips — NEØ Guest" },
@@ -43,26 +47,34 @@ export const Route = createFileRoute("/guest/$hotelSlug/trips")({
 function TripsPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
+  const { experience } = Route.useSearch();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customerId = profile.data?.["id"] as string | undefined;
   const reservations = useGuestReservations(ws.organization_id, customerId, ws.branch_id);
   const requests = useGuestRequests(ws.organization_id, ws.branch_id, customerId);
   const createRequest = useCreateGuestRequest(ws.organization_id, ws.branch_id);
+  const packages = usePublicExperiences(experience ? ws.branch_id ?? undefined : undefined);
+  const selectedExperience = packages.data?.find((entry) => entry.id === experience);
   useGuestScreenView(ws.organization_id, "trips", Boolean(customerId));
 
   const [category, setCategory] = useState<string>("housekeeping");
   const [description, setDescription] = useState("");
-  const [sent, setSent] = useState(false);
+  const [sentRequest, setSentRequest] = useState<string | null>(null);
 
   const stay = (reservations.data ?? []).find((r) => isInHouse(r));
 
   async function submitRequest() {
-    if (!customerId || !description.trim() || createRequest.isPending) return;
+    if (!customerId || !description.trim() || createRequest.isPending || (experience && !selectedExperience)) return;
     try {
-      await createRequest.mutateAsync({ category, description });
+      const id = await createRequest.mutateAsync({
+        category: selectedExperience ? "concierge" : category,
+        description: selectedExperience
+          ? `Experience enquiry · ${selectedExperience.name}\n${description.trim()}`
+          : description.trim(),
+      });
       setDescription("");
-      setSent(true);
+      setSentRequest(id);
       toast.success("Request sent to the team");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not send your request");
@@ -106,7 +118,8 @@ function TripsPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
-      <GuestPageIntro title="Hotel requests" description={`Ask the team at ${ws.hotel_name} for help with your stay.`}>
+      <GuestPageIntro title={experience ? "Ask about an experience" : "Hotel requests"}
+        description={`Ask the team at ${ws.hotel_name} for help with your stay.`}>
         <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="neo-guest-outline-action">My stay</Link>
         <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} className="neo-guest-outline-action">Transfers</Link>
         {customerId ? <a href="#guest-requests" className="neo-guest-outline-action">My requests</a> : null}
@@ -119,7 +132,7 @@ function TripsPage() {
           description="Refresh your account to send and track requests."
           action={<button type="button" className="neo-guest-secondary" onClick={() => void profile.refetch()}>Try again</button>} />
       ) : <>
-      {stay ? (
+      {!experience && stay ? (
         <GuestSection title="You are in house" description="Current stay context from the property system.">
           <dl className="grid gap-2 text-sm" style={{ color: "var(--guest-text, #07142D)" }}>
             <Line label="Confirmation" value={String(stay["confirmation_number"])} />
@@ -130,12 +143,20 @@ function TripsPage() {
         </GuestSection>
       ) : null}
 
-      <MyStaySection organizationId={ws.organization_id} branchId={ws.branch_id} {...(user ? { userId: user.id } : {})} />
+      {!experience ? <MyStaySection organizationId={ws.organization_id} branchId={ws.branch_id} {...(user ? { userId: user.id } : {})} /> : null}
 
 
-      <GuestSection title="Request assistance" description="Your request goes to the team responsible for the service." surface>
+      <GuestSection id="request-assistance" title={experience ? "Experience enquiry" : "Request assistance"} surface>
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+          {experience ? (
+            <div className="space-y-2">
+              <p className="font-medium">
+                {selectedExperience?.name ?? (packages.isPending ? "Loading the selected experience…" : "This experience is unavailable")}
+              </p>
+              <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "experiences" }} className="neo-guest-outline-action">Browse experiences</Link>
+              {packages.isError ? <button type="button" className="neo-guest-outline-action" onClick={() => void packages.refetch()}>Retry</button> : null}
+            </div>
+          ) : <div className="flex flex-wrap gap-2">
             {requestCategories.map((c) => (
               <button
                 key={c.value}
@@ -151,15 +172,15 @@ function TripsPage() {
                 {c.label}
               </button>
             ))}
-          </div>
+          </div>}
           <Textarea
             value={description}
             aria-label="What do you need help with?"
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tell the team what you need"
+            placeholder={experience ? "Tell the concierge your preferred date and number of guests" : "Tell the team what you need"}
             rows={3}
           />
-          <BrandButton onClick={() => void submitRequest()} disabled={createRequest.isPending || !description.trim()}>
+          <BrandButton onClick={() => void submitRequest()} disabled={createRequest.isPending || !description.trim() || Boolean(experience && !selectedExperience)}>
             {createRequest.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -167,7 +188,7 @@ function TripsPage() {
             )}
             Send request
           </BrandButton>
-          {sent ? <p role="status" className="text-sm">Request sent. <a href="#guest-requests" className="underline">Check its status</a>.</p> : null}
+          {sentRequest ? <p role="status" className="text-sm">Request sent. <a href={requests.data?.some((row) => row["id"] === sentRequest) ? `#guest-request-${sentRequest}` : "#guest-requests"} className="underline">Check its status</a>.</p> : null}
         </div>
       </GuestSection>
 
@@ -185,7 +206,7 @@ function TripsPage() {
         ) : (
           <ul className="space-y-2">
             {(requests.data ?? []).map((r) => (
-              <li key={String(r["id"])} className="rounded-xl border border-black/5 p-3">
+              <li id={`guest-request-${String(r["id"])}`} key={String(r["id"])} className="rounded-xl border border-black/5 p-3">
                 <p className="text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(r["description"])}
                 </p>

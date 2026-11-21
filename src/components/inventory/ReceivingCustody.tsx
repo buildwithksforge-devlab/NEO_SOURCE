@@ -18,6 +18,7 @@ type CustodyCount = {
   order_number: string;
   delivery_note: string;
   lines: CustodyLine[];
+  recount_required?: boolean;
 };
 
 export function ReceivingCustody() {
@@ -38,8 +39,8 @@ export function ReceivingCustody() {
 
   const counts = (queue.data ?? []).filter((count) => !branchId || count.branch_id === branchId);
   return (
-    <SectionCard title="Storekeeper count and custody"
-      description="Count the delivery independently. Record the quantities physically received and rejected, plus batch and expiry where applicable.">
+    <SectionCard title="Storekeeper custody"
+      description="Confirm that Stores took custody. Enter an independent count when a reviewer requests one.">
       <div className="space-y-4">
         {queue.isError ? (
           <div className="space-y-3">
@@ -47,7 +48,7 @@ export function ReceivingCustody() {
             <Button variant="outline" onClick={() => void queue.refetch()}>Retry</Button>
           </div>
         ) : queue.isPending ? <p role="status">Loading custody queue…</p>
-          : counts.length === 0 ? <p className="text-sm text-muted-foreground">No deliveries are waiting for an independent count at this property.</p>
+          : counts.length === 0 ? <p className="text-sm text-muted-foreground">No deliveries are waiting for custody confirmation or a requested recount at this property.</p>
           : counts.map((count) => (
           <CustodyForm key={count.count_id} count={count}
             onAccepted={() => invalidateSupplyViews(queryClient)} />
@@ -62,15 +63,17 @@ function CustodyForm({ count, onAccepted }: {
   onAccepted: () => Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const requiresCount = count.recount_required !== false;
+  const countLabel = count.recount_required === true ? "recount" : "count";
   const accept = useMutation({
-    mutationFn: async (fields: FormData) => {
-      const lines = count.lines.map(({ line_id }) => ({
+    mutationFn: async (fields: FormData | null) => {
+      const lines = fields ? count.lines.map(({ line_id }) => ({
         line_id,
         delivered: fields.get(line_id + "-delivered"),
         rejected: fields.get(line_id + "-rejected"),
         batch: fields.get(line_id + "-batch"),
         expiry: fields.get(line_id + "-expiry") || null,
-      }));
+      })) : [];
       const { data, error } = await guardedRpc<boolean>(supabase, "neo_accept_receiving_custody", {
         _count_id: count.count_id,
         _lines: lines,
@@ -78,7 +81,7 @@ function CustodyForm({ count, onAccepted }: {
       if (error || data !== true) throw new Error(error?.message ?? "Custody was not recorded.");
     },
     onSuccess: async () => {
-      toast.success("Storekeeper count and custody recorded.");
+      toast.success(requiresCount ? `Independent ${countLabel} and custody recorded.` : "Custody confirmed.");
       await onAccepted();
     },
     onError: (error) => toast.error(error.message),
@@ -88,11 +91,17 @@ function CustodyForm({ count, onAccepted }: {
     <div className="space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p>LPO {count.order_number} · Delivery note {count.delivery_note}</p>
-        <Button type="button" variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-          {expanded ? "Close count" : "Record independent count"}
-        </Button>
+        {requiresCount ? (
+          <Button type="button" variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+            {expanded ? `Close ${countLabel}` : count.recount_required ? "Record requested recount" : "Record independent count"}
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" disabled={accept.isPending} onClick={() => accept.mutate(null)}>
+            Confirm custody
+          </Button>
+        )}
       </div>
-      {expanded && (
+      {requiresCount && expanded && (
         <form className="space-y-3" onSubmit={(event) => {
           event.preventDefault();
           accept.mutate(new FormData(event.currentTarget));
@@ -106,7 +115,7 @@ function CustodyForm({ count, onAccepted }: {
               <CustodyExpiry name={line.line_id + "-expiry"} />
             </fieldset>
           ))}
-          <Button type="submit" disabled={accept.isPending}>Record count and accept custody</Button>
+          <Button type="submit" disabled={accept.isPending}>Submit {countLabel} and confirm custody</Button>
         </form>
       )}
     </div>
