@@ -23,7 +23,7 @@ export const DISPLAY_LABELS: Record<DisplayDepartment, string> = {
   overview: "Production Overview",
 };
 
-export function productionDisplaySearch(search: Record<string, unknown>) {
+export function productionDisplaySearch(search: Record<string, unknown>): { station?: string | undefined; property?: string | undefined } {
   return {
     station: typeof search["station"] === "string" ? search["station"] : undefined,
     property: typeof search["property"] === "string" ? search["property"] : undefined,

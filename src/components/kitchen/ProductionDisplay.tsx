@@ -52,6 +52,7 @@ export function ProductionDisplay({
       key={`${requestedProperty ?? ""}:${department}:${requestedStation ?? ""}`}
       department={department}
       requestedStation={requestedStation}
+      requestedProperty={requestedProperty}
     />
   );
   return requestedProperty ? <DisplayPropertyGate propertyId={requestedProperty}>{display}</DisplayPropertyGate> : display;
@@ -74,9 +75,11 @@ function DisplayPropertyGate({ propertyId, children }: { propertyId: string; chi
 function ScopedDisplay({
   department,
   requestedStation,
+  requestedProperty,
 }: {
   department: DisplayDepartment;
   requestedStation?: string | undefined;
+  requestedProperty?: string | undefined;
 }) {
   const scope = useScopedStations();
   const { branchId } = useActivePropertyFilter();
@@ -114,6 +117,7 @@ function ScopedDisplay({
       stationId={selected.id}
       stations={stations}
       propertyName={property.name}
+      requestedProperty={requestedProperty}
     />
   );
 }
@@ -123,11 +127,13 @@ function DisplayBoard({
   stationId,
   stations,
   propertyName,
+  requestedProperty,
 }: {
   department: DisplayDepartment;
   stationId: string;
   stations: { id: string; name: string }[];
   propertyName: string;
+  requestedProperty?: string | undefined;
 }) {
   const qc = useQueryClient();
   const { user, can, canExact } = useAuth();
@@ -250,7 +256,7 @@ function DisplayBoard({
             <Link
               key={s.id}
               to={DISPLAY_ROUTES[department]}
-              search={{ station: s.id }}
+              search={{ station: s.id, property: requestedProperty }}
               className={`rounded-lg border px-4 py-3 ${s.id === stationId ? "bg-primary text-primary-foreground" : ""}`}
               aria-current={s.id === stationId ? "page" : undefined}
             >
