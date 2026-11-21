@@ -10,6 +10,7 @@ import {
 } from "@/lib/public-apps";
 import { NEO_WORDMARK_SRC } from "@/components/brand/NeoIdentity";
 import { CREATOR_CREDIT_URL, InstagramMark } from "@/components/brand/NeoGlyph";
+import { GuestNavigation } from "@/components/public/GuestNavigation";
 
 /** The maker credit, shown beside "Powered by NEØ" on every public surface. */
 export function PublicCreatorCredit({ className = "" }: { className?: string }) {
@@ -126,6 +127,7 @@ export function PublicAppShell({
   const secondary = normalizedHex(ws.secondary_color || brandFallback.secondary, brandFallback.secondary);
   const background = normalizedHex(ws.background_color || brandFallback.background, brandFallback.background);
   const hotelSlug = homeTo?.to === "/delivery/$hotelSlug" ? homeTo.params?.["hotelSlug"] : undefined;
+  const guestSlug = hotelSlug ? ws.guest_slug : undefined;
   const destinations = [
     { key: "menu", to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
     { key: "cart", to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
@@ -158,7 +160,7 @@ export function PublicAppShell({
         <BrandMark workspace={ws} />
       </span>
       <span className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-sm font-semibold text-white">
+        <span className="neo-hospitality-brand truncate text-sm font-semibold text-white">
           {ws.hotel_name || ws.app_name}
         </span>
         <span className="truncate text-xs text-white/75">{hotelSlug ? "Delivery & collection" : ws.app_name}</span>
@@ -169,6 +171,7 @@ export function PublicAppShell({
   return (
     <div
       className={`neo-public-app neo-branded-app flex flex-col ${hotelSlug ? "neo-delivery-app neo-customer-frame" : ""}`}
+      data-guest-connected={guestSlug ? "true" : undefined}
       style={
         {
           "--pa-background": background,
@@ -195,14 +198,19 @@ export function PublicAppShell({
               <nav aria-label="Delivery app" className="neo-delivery-header-nav hidden lg:flex">
                 {deliveryLinks}
               </nav>
-              {ws.guest_slug ? (
-                <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug: ws.guest_slug }} search={{ section: "dining" }} className="neo-delivery-guest-link">
+              {guestSlug ? (
+                <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug: guestSlug }} search={{ section: "dining" }} className="neo-delivery-guest-link">
                   <ArrowLeft className="size-3.5" aria-hidden /> Guest dining
                 </Link>
               ) : null}
             </div>
           ) : null}
         </div>
+        {guestSlug && deliveryLinks ? (
+          <nav aria-label="Delivery app" className="neo-public-wrap neo-guest-commerce-nav flex lg:hidden">
+            {deliveryLinks}
+          </nav>
+        ) : null}
       </header>
 
       <div className="neo-customer-content" data-scroll-restoration-id="delivery-body">
@@ -225,7 +233,9 @@ export function PublicAppShell({
         </div>
       </footer>
       </div>
-      {deliveryLinks ? (
+      {guestSlug ? (
+        <GuestNavigation hotelSlug={guestSlug} active={deliveryTab === "menu" ? "explore" : "orders"} />
+      ) : deliveryLinks ? (
         <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
           {deliveryLinks}
         </nav>

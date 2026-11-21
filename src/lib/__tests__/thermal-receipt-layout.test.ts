@@ -55,6 +55,10 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered).toContain('SCAN TO LEAVE FEEDBACK');
    expect(rendered).toContain('M-Pesa Paybill:');
    expect(rendered).toContain('M-Pesa Till:');
+   expect(rendered).toContain('TAX BREAKDOWN');
+   expect(rendered).toContain('Total tax');
+   expect(rendered).toContain('KES 288.12');
+   expect(rendered.indexOf('Total tax')).toBeLessThan(rendered.indexOf('TOTAL'));
    expect(rendered.indexOf('Served by:')).toBeGreaterThan(rendered.indexOf('HOW TO PAY'));
    const pdf=await PDFDocument.load(Buffer.from(result.base64,'base64'));
    expect(pdf.getPageCount()).toBeGreaterThan(2);

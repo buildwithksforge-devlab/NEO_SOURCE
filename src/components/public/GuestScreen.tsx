@@ -1,26 +1,17 @@
 import { useGuestDisplayPrefs } from "@/lib/guest-display-preferences";
 import { guestPalette } from "@/lib/public-palette";
 import { useEffect, useRef, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
 import { writeLaunchLockup } from "@/lib/brand-cache";
-import { BedDouble, Compass, Home, Receipt, UserRound } from "lucide-react";
 import { useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestFooter, GuestHeader } from "@/components/public/GuestHeader";
+import { GuestNavigation, type GuestDestination } from "@/components/public/GuestNavigation";
 import { brandFallback, buttonRadius } from "@/lib/public-apps";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
 
-/** Phone navigation: the five places a guest moves between during a stay. */
-const tabs = [
-  { key: "home", label: "Home", icon: Home, to: "/guest/$hotelSlug" },
-  { key: "explore", label: "Explore", icon: Compass, to: "/guest/$hotelSlug/explore" },
-  { key: "orders", label: "Orders", icon: Receipt, to: "/guest/$hotelSlug/orders" },
-  { key: "stay", label: "Stay", icon: BedDouble, to: "/guest/$hotelSlug/stay" },
-  { key: "profile", label: "Account", icon: UserRound, to: "/guest/$hotelSlug/profile" },
-] as const;
-
 export type GuestTab =
-  | (typeof tabs)[number]["key"]
+  | GuestDestination
+  | "profile"
   | "book"
   | "laundry"
   | "favourites"
@@ -29,14 +20,19 @@ export type GuestTab =
   | "notifications"
   | "account";
 
-const tabForScreen: Partial<Record<GuestTab, (typeof tabs)[number]["key"]>> = {
+const tabForScreen: Record<GuestTab, GuestDestination | undefined> = {
+  home: "home",
+  explore: "explore",
+  orders: "orders",
+  stay: "stay",
   book: "stay",
   trips: "stay",
   laundry: "explore",
   favourites: "explore",
-  settings: "profile",
-  notifications: "profile",
-  account: "profile",
+  settings: undefined,
+  notifications: undefined,
+  profile: undefined,
+  account: undefined,
 };
 
 /**
@@ -57,7 +53,7 @@ export function GuestScreen({
   const ws = useWorkspace();
   const { prefs } = useGuestDisplayPrefs();
   const primary = ws.primary_color || brandFallback.primary;
-  const activeTab = tabForScreen[active] ?? active;
+  const activeTab = tabForScreen[active];
   const scrollFrame = useRef<HTMLDivElement>(null);
 
   // The launch frame opens on this hotel's own lockup next time, not the
@@ -95,31 +91,7 @@ export function GuestScreen({
     >
       <GuestHeader hotelSlug={hotelSlug} />
 
-      <nav
-        aria-label="Guest app"
-        className="neo-app-dock neo-guest-tabbar"
-      >
-        <ul className="contents">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = tab.key === activeTab;
-            return (
-              <li key={tab.key}>
-                <Link
-                  to={tab.to}
-                  params={{ hotelSlug }}
-                  activeOptions={{ exact: true }}
-                  className="min-h-11"
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <Icon className="size-5" aria-hidden />
-                  <span className="w-full text-center">{tab.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <GuestNavigation hotelSlug={hotelSlug} {...(activeTab ? { active: activeTab } : {})} />
 
       <div ref={scrollFrame} className="neo-customer-content" data-scroll-restoration-id="guest-body">
         <PullToRefresh scrollTarget={() => scrollFrame.current}>

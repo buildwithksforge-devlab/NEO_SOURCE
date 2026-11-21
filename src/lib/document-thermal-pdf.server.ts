@@ -651,17 +651,39 @@ export async function buildThermalReceiptPdf(
 
   let paymentHeading = false;
   let totalShown = false;
+  let taxHeading = false;
+  let taxCents = 0;
+  let taxRows = 0;
+  const drawTaxTotal = () => {
+    if (taxRows > 1) {
+      continueRoll(26);
+      drawPair("Total tax", money(taxCents / 100, currency), bold, bold, 8, 8);
+    }
+    taxRows = 0;
+    taxCents = 0;
+  };
   for (const total of totals) {
-    const label = clean(total.label);
+    const label = clean(total.label).replace(/^Tax(?=\s*·|$)/i, "Recorded tax");
     const value = money(total.amount, currency);
 
     if (!label || !value) continue;
 
+    const isTax = !totalShown && (/^Recorded tax$/i.test(label) || /·\s*(Included|Added)$/i.test(label));
+    if (!isTax && taxRows) drawTaxTotal();
     const emphasised =
       Boolean(total.emphasis) ||
       /^(total|amount due|balance due|grand total)$/i.test(label);
 
     continueRoll(pairHeight(label, value, bold, bold, 10, 10) + 45);
+    if (isTax) {
+      if (!taxHeading) {
+        drawLeft("TAX BREAKDOWN", margin, 7.5, bold);
+        y -= 13;
+        taxHeading = true;
+      }
+      taxRows += 1;
+      taxCents += Math.round(Number(total.amount) * 100);
+    }
     if (totalShown && !paymentHeading) {
       drawLeft("PAYMENTS & BALANCE", margin, 7.5, bold);
       y -= 13;
@@ -681,6 +703,7 @@ export async function buildThermalReceiptPdf(
       drawPair(label, value, regular, bold, 8, 8);
     }
   }
+  if (taxRows) drawTaxTotal();
 
   if (paymentMeta.length) {
     continueRoll(18 + estimateMetaHeight(paymentMeta));

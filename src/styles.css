@@ -2835,3 +2835,63 @@ html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system
   .neo-guest-page-intro-image { order: initial; height: 100%; min-height: 12.5rem; }
   .neo-guest-reservation-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); }
 }
+
+.neo-guest-app,
+.neo-delivery-app[data-guest-connected="true"] {
+  --hospitality-evergreen: #142f2a;
+  --hospitality-limestone: #f6f2e9;
+}
+.neo-guest-app .neo-guest-header,
+.neo-delivery-app[data-guest-connected="true"] .neo-pub-header {
+  background: var(--hospitality-evergreen);
+  color: #fff;
+  border-color: #ffffff25;
+}
+.neo-guest-app .neo-guest-header [class*="text-white"] { color: #e8e6dd; }
+.neo-guest-app .neo-guest-header .text-white { color: #fff; }
+.neo-guest-app .neo-hospitality-brand,
+.neo-delivery-app[data-guest-connected="true"] .neo-hospitality-brand {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+.neo-guest-app .neo-guest-page-intro h1 { font-family: var(--font-display); font-weight: 400; }
+.neo-guest-app .neo-guest-tabbar,
+.neo-delivery-app[data-guest-connected="true"] .neo-guest-tabbar { border-radius: 1rem; }
+.neo-delivery-app[data-guest-connected="true"] .neo-guest-tabbar {
+  --guest-surface: #fff;
+  --guest-text: #203831;
+  --guest-border: #ded9cd;
+}
+.neo-guest-tabbar a[aria-current="page"] {
+  background: #f8ede6;
+  color: #873a2a;
+  border-radius: .7rem;
+}
+.neo-delivery-app[data-guest-connected="true"] { background: var(--hospitality-limestone); }
+.neo-delivery-app[data-guest-connected="true"] .neo-delivery-categories button[aria-pressed="false"] {
+  color: #203831;
+  background: #fff;
+  border-color: #ded9cd;
+}
+.neo-delivery-app[data-guest-connected="true"] .neo-delivery-categories ~ section > h2 { color: var(--hospitality-evergreen); }
+.neo-delivery-app[data-guest-connected="true"] .neo-customer-content [role="status"].text-white { color: var(--hospitality-evergreen); }
+.neo-guest-commerce-nav { gap: .4rem; padding-block: 0 .55rem; }
+.neo-guest-commerce-nav a {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.75rem;
+  border: 1px solid #ffffff42;
+  border-radius: .7rem;
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 650;
+}
+.neo-guest-commerce-nav a[aria-current="page"] {
+  background: #f8ede6;
+  color: #873a2a;
+  border-color: transparent;
+}

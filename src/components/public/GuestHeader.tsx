@@ -131,7 +131,7 @@ export function GuestHeader({ hotelSlug }: { hotelSlug: string }) {
         >
           <PropertyMark ws={ws} />
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-sm font-semibold text-white sm:text-base">{name}</span>
+            <span className="neo-hospitality-brand truncate text-sm font-semibold text-white sm:text-base">{name}</span>
             <span className="flex min-w-0 items-center gap-1 text-[0.7rem] text-white/75">
               {ws.contact_address ? (
                 <>

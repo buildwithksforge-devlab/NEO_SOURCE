@@ -53,6 +53,15 @@ namespace NeoPrintAgent {
      {"logoLight","data:image/png;base64,"+Convert.ToBase64String(logoStream.ToArray())},{"receiptPaybill","123456"},{"receiptTill","654321"}}}};
    }
    payload["meta"]=new Dictionary<string,object>{{"Waiter","Sample server"},{"Collected by","Sample receiver"}};
+   payload["totals"]=new object[]{
+    new Dictionary<string,object>{{"label","Catering levy \u00b7 Included"},{"amount",2.03m}},
+    new Dictionary<string,object>{{"label","VAT \u00b7 Included"},{"amount",16.27m}},
+    new Dictionary<string,object>{{"label","Total"},{"amount",120m}},
+    new Dictionary<string,object>{{"label","Cash"},{"amount",120m}}
+   };
+   var taxReceipt=ReceiptRenderer.Render(job);
+   check(System.Array.IndexOf(taxReceipt,"TAX BREAKDOWN")>=0&&System.Array.IndexOf(taxReceipt,"Total tax: KES 18.30")<System.Array.IndexOf(taxReceipt,"Total: KES 120.00")
+    &&taxReceipt.Contains("Total tax: KES 18.30"),"Named taxes total separately before amount due");
    var bytes=PrinterTransport.EscPos(job);check(bytes[0]==27&&bytes[1]==64,"ESC/POS initialize");check(bytes[bytes.Length-3]==29,"ESC/POS cut");
    check(bytes[5]==29&&bytes[6]==118&&bytes[7]==48,"Logo raster precedes receipt text");
    var brandedText=Encoding.ASCII.GetString(bytes);
@@ -119,13 +128,31 @@ namespace NeoPrintAgent {
    add(Program.Get(property,"name"));add(Program.Get(doc,"title"));add(Program.Get(doc,"number"));add(Program.Get(doc,"date"));add(new string('-',32));
    foreach(var line in Program.Array(Program.Get(payload,"lines"))) {var row=Program.Obj(line);add(Program.Get(row,"description"));add("  "+Program.Text(Program.Get(row,"quantity"))+" x "+Money(Program.Get(row,"unit_price"),currency));add("  "+Money(Program.Get(row,"total"),currency));var note=Program.Get(row,"note");if(note!=null)add(note);}
    add(new string('-',32));
-   bool hasTotal=false, hasPaymentHeading=false;
+   bool hasTotal=false, hasPaymentHeading=false, hasTaxHeading=false;
+   int taxRows=0;
+   decimal taxTotal=0;
+   Action addTaxTotal=()=>{
+    if(taxRows>1)add("Total tax: "+Money(taxTotal,currency));
+    taxRows=0;
+    taxTotal=0;
+   };
    foreach(var line in Program.Array(Program.Get(payload,"totals"))) {
     var row=Program.Obj(line);var label=Program.Text(Program.Get(row,"label"));
+    label=System.Text.RegularExpressions.Regex.Replace(label,@"^Tax(?=\s*\u00b7|$)","Recorded tax",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    bool isTax=!hasTotal && (label.Equals("Recorded tax",StringComparison.OrdinalIgnoreCase) ||
+     System.Text.RegularExpressions.Regex.IsMatch(label,@"\u00b7\s*(Included|Added)$",System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+    if(!isTax&&taxRows>0)addTaxTotal();
+    decimal tax;
+    if(isTax&&decimal.TryParse(Program.Text(Program.Get(row,"amount")),System.Globalization.NumberStyles.Any,System.Globalization.CultureInfo.InvariantCulture,out tax)) {
+     if(!hasTaxHeading){add("TAX BREAKDOWN");hasTaxHeading=true;}
+     taxRows++;
+     taxTotal+=tax;
+    }
     if(hasTotal&&!hasPaymentHeading) {add("PAYMENTS & BALANCE");hasPaymentHeading=true;}
     add(label+": "+Money(Program.Get(row,"amount"),currency));
-    if(label.Equals("Total",StringComparison.OrdinalIgnoreCase)) hasTotal=true;
+    if(label.Equals("Total",StringComparison.OrdinalIgnoreCase)||label.Equals("Grand total",StringComparison.OrdinalIgnoreCase)) hasTotal=true;
    }
+   if(taxRows>0)addTaxTotal();
    var brand=Program.Obj(Program.Get(identity,"brand"));
    var instructions=new Dictionary<string,string>{{"receiptPaybill","M-Pesa Paybill"},{"receiptPaybillAccount","Paybill account"},{"receiptTill","M-Pesa Till"},{"receiptPaymentInstructions","Payment instructions"}};
    if(instructions.Keys.Any(key=>!string.IsNullOrWhiteSpace(Program.Text(Program.Get(brand,key))))) {

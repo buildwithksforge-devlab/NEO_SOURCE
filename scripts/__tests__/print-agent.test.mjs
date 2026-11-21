@@ -135,7 +135,12 @@ test("POS receipts send split payment instructions and a feedback raster before 
         document: { title: "Receipt", number: "FIXTURE" },
         property: { name: "Fixture property" },
         identity: { brand: { receiptPaybill: "123456", receiptTill: "654321" } },
-        totals: [{ label: "Total", amount: 120 }, { label: "Cash", amount: 120 }],
+        totals: [
+          { label: "Net before tax", amount: 101.70 },
+          { label: "Catering levy · Included", amount: 2.03 },
+          { label: "VAT · Included", amount: 16.27 },
+          { label: "Total", amount: 120 }, { label: "Cash", amount: 120 },
+        ],
         meta: { Waiter: "Fixture server" },
       } },
       printer: { connection_type: "network", address },
@@ -143,6 +148,11 @@ test("POS receipts send split payment instructions and a feedback raster before 
     await withFetch(api.fetch, async () => processPrinter(config, { id: "receipt", name: "Fixture" }));
     await received;
     const bytes = Buffer.concat(chunks);
+    const breakdown = bytes.indexOf(Buffer.from("TAX BREAKDOWN"));
+    const taxTotal = bytes.indexOf(Buffer.from("Total tax:"));
+    assert.ok(breakdown >= 0 && taxTotal > breakdown);
+    assert.ok(bytes.includes(Buffer.from("18.30")));
+    assert.ok(bytes.indexOf(Buffer.from("PAYMENTS & BALANCE")) > taxTotal);
     for (const label of ["PAYMENTS & BALANCE", "HOW TO PAY", "M-Pesa Paybill: 123456", "M-Pesa Till: 654321", "Served by: Fixture server"]) {
       assert.ok(bytes.includes(Buffer.from(label)), label);
     }

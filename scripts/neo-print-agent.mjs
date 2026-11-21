@@ -287,7 +287,26 @@ function receiptLines(job) {
 
   let paymentsNext = false;
   let headingShown = false;
+  let taxHeading = false;
+  let taxRows = 0;
+  let taxCents = 0;
+  const addTaxTotal = () => {
+    if (taxRows > 1) output.push(`Total tax: ${amount(taxCents / 100)}`);
+    taxRows = 0;
+    taxCents = 0;
+  };
   for (const total of totals) {
+    const label = typeof total === "string" ? "" : (total.label ?? "Total").replace(/^Tax(?=\s*·|$)/i, "Recorded tax");
+    const isTax = !paymentsNext && (/^Recorded tax$/i.test(label) || /·\s*(Included|Added)$/i.test(label));
+    if (!isTax && taxRows) addTaxTotal();
+    if (isTax && Number.isFinite(Number(total.amount))) {
+      if (!taxHeading) {
+        output.push("TAX BREAKDOWN");
+        taxHeading = true;
+      }
+      taxRows += 1;
+      taxCents += Math.round(Number(total.amount) * 100);
+    }
     if (paymentsNext && !headingShown) {
       output.push("PAYMENTS & BALANCE");
       headingShown = true;
@@ -296,13 +315,14 @@ function receiptLines(job) {
       output.push(total);
     } else {
       output.push(
-        `${total.label ?? "Total"}: ${
+        `${label}: ${
           amount(total.amount)
         }`,
       );
       if (/^(total|grand total)$/i.test(total.label ?? "")) paymentsNext = true;
     }
   }
+  if (taxRows) addTaxTotal();
 
   const howToPay = [
     ["M-Pesa Paybill", brand.receiptPaybill], ["Paybill account", brand.receiptPaybillAccount],
