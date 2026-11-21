@@ -698,6 +698,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_payment_intent_set_provider_payload: "authenticated",
   neo_delivery_dispatch_open: "authenticated",
   neo_delivery_dispatch_mark_sent: "authenticated",
+  neo_delivery_dispatch_claim: "authenticated",
   neo_delivery_dispatch_apply: "service_role",
   neo_rpc_execute_privileges: "authenticated",
   neo_etims_settings_get: "authenticated",

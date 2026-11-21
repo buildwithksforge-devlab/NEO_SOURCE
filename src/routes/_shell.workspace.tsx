@@ -25,6 +25,7 @@ import {
   displayStations,
   DISPLAY_LABELS,
   DISPLAY_ROUTES,
+  stationAccountSignInPath,
   type DisplayDepartment,
 } from "@/lib/production-displays";
 import { supabase } from "@/integrations/supabase/client";
@@ -359,8 +360,21 @@ function WorkspaceEntrance({
     }
 
     setSelectedDisplay(display);
+    setDisplayActivation(null);
     setSelectedStationIds(stations.length === 1 && stations[0] ? [stations[0].id] : []);
     setDisplayLabel(`${propertyName} · ${display.label}`);
+  }
+
+  async function copyStationSignInLink() {
+    const stationId = selectedStationIds[0];
+    if (!selectedDisplay || selectedStationIds.length !== 1 || !stationId || !availableStations.some((station) => station.id === stationId)) return;
+    const path = stationAccountSignInPath(selectedDisplay.department, propertyId, stationId);
+    try {
+      await navigator.clipboard.writeText(new URL(path, window.location.origin).href);
+      toast.success("Station sign-in link copied.");
+    } catch {
+      toast.error("Could not copy the station sign-in link. Check clipboard access and try again.");
+    }
   }
 
   function toggleStation(stationId: string) {
@@ -546,6 +560,14 @@ function WorkspaceEntrance({
             >
               {pairingDisplay ? "Pairing display…" : "Pair and open display"}
             </button>
+          </div>
+          <div className="space-y-2 border-t border-border pt-4">
+            <button type="button" disabled={pairingDisplay || selectedStationIds.length !== 1}
+              onClick={() => void copyStationSignInLink()}
+              className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold disabled:opacity-50">
+              Copy station account sign-in link
+            </button>
+            <p className="text-sm text-muted-foreground">Select one station for staff who sign in with their own email and password.</p>
           </div>
           {displayActivation ? (
             <aside className="space-y-2 rounded-xl border p-4" role="status">

@@ -3,6 +3,8 @@ import {
   displayStations,
   selectedDisplayStation,
   stationDepartment,
+  stationAccountSignInPath,
+  productionDisplaySearch,
   DISPLAY_ROUTES,
 } from "@/lib/production-displays";
 import { pathPermitted } from "@/lib/capabilities";
@@ -18,6 +20,16 @@ const stations = [
 const canOnly = (module: string, feature: string) => (m: string, f: string, a?: string) =>
   m === module && f === feature && a === "view";
 describe("production display boundaries", () => {
+  it.each(["kitchen", "bar", "coffee", "pastry"] as const)("keeps the exact property and station through %s account sign-in", (department) => {
+    const origin = "https://neo.example";
+    const entrance = new URL(stationAccountSignInPath(department, "property&east", "station?one"), origin);
+    expect(entrance.pathname).toBe("/auth");
+    const destination = new URL(entrance.searchParams.get("redirect")!, origin);
+    expect(destination.pathname).toBe(DISPLAY_ROUTES[department]);
+    expect(productionDisplaySearch(Object.fromEntries(destination.searchParams))).toEqual({
+      property: "property&east", station: "station?one",
+    });
+  });
   it("keeps coffee separate from beverage/bar despite its beverage station type", () => {
     expect(stationDepartment(stations[1]!)).toBe("coffee");
     expect(displayStations(stations, "bar").map((s) => s.id)).toEqual(["b"]);

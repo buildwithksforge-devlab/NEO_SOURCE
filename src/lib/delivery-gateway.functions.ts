@@ -188,26 +188,20 @@ export const dispatchCourierJob = createServerFn({ method: "POST" })
       environment: job.environment,
     };
 
-    const { supabaseAdmin } = await (adminModule ??= import("@/integrations/supabase/client.server"));
     // Reserve the handoff before crossing the network. The open-job index also
     // covers `sent`, so an interrupted request keeps its original job and token.
-    const { data: claimed, error: claimError } = await supabaseAdmin
-      .from("delivery_dispatch_jobs")
-      .update({ state: "sent", state_detail: "Handoff started. Waiting for courier confirmation.", updated_at: new Date().toISOString() })
-      .eq("id", job.id)
-      .eq("organization_id", job.organization_id)
-      .eq("state", "requested")
-      .select("id")
-      .maybeSingle();
+    const { data: claimed, error: claimError } = await supabase.rpc("neo_delivery_dispatch_claim", { _job: job.id });
     if (claimError) {
       if (claimError.code === "23514") {
         return { ok: false, reason: "order_no_longer_dispatchable", detail: claimError.message };
       }
       return { ok: false, reason: "dispatch_claim_failed", detail: "NEØ could not reserve this dispatch. Refresh its status before trying again." };
     }
-    if (!claimed) {
+    if (claimed !== true) {
       return { ok: false, reason: "dispatch_already_claimed", detail: "This dispatch is already being handled. Refresh to see the latest status." };
     }
+
+    const { supabaseAdmin } = await (adminModule ??= import("@/integrations/supabase/client.server"));
 
     const saveAwaitingConfirmation = async (detail: string, reference?: string) => {
       const { error } = await supabaseAdmin.from("delivery_dispatch_jobs")

@@ -58,6 +58,7 @@ function dispatchFixture(options: {
       error: null,
     }),
   };
+  let claimed = false;
   const supabase = {
     from: (table: string) => table === "integration_connections" ? query : {
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: job }) }) }),
@@ -65,25 +66,20 @@ function dispatchFixture(options: {
     rpc: vi.fn(async (name: string) => {
       if (name === "has_permission") return { data: options.canDispatch ?? true, error: null };
       if (name === "neo_branch_in_scope") return { data: options.branchInScope ?? true, error: null };
+      if (name === "neo_delivery_dispatch_claim") {
+        if (options.claimError) return { data: null, error: { code: "PGRST202" } };
+        if (claimed) return { data: false, error: null };
+        claimed = true;
+        return { data: true, error: null };
+      }
       throw new Error(`Unexpected RPC ${name}`);
     }),
   };
-  let claimed = false;
   adminFrom.mockReset().mockImplementation(() => ({
-    update: vi.fn((values: { state?: string }) => {
-      const update = {
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        maybeSingle: async () => {
-          if (options.claimError) return { data: null, error: new Error("Database unavailable") };
-          if (claimed) return { data: null, error: null };
-          claimed = true;
-          return { data: { id: job.id }, error: null };
-        },
-      };
-      if (!values.state) Object.assign(update, { then: (resolve: (result: unknown) => void) =>
-        resolve({ error: options.saved === false ? new Error("Database unavailable") : null }) });
-      return update;
+    update: () => ({
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (result: unknown) => void) =>
+        resolve({ error: options.saved === false ? new Error("Database unavailable") : null }),
     }),
   }));
   const fetch = vi.fn().mockResolvedValue(new Response('{"status":"pending"}'));

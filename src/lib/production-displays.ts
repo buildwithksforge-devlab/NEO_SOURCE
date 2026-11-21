@@ -23,6 +23,18 @@ export const DISPLAY_LABELS: Record<DisplayDepartment, string> = {
   overview: "Production Overview",
 };
 
+export function productionDisplaySearch(search: Record<string, unknown>) {
+  return {
+    station: typeof search["station"] === "string" ? search["station"] : undefined,
+    property: typeof search["property"] === "string" ? search["property"] : undefined,
+  };
+}
+
+export function stationAccountSignInPath(department: Exclude<DisplayDepartment, "overview">, property: string, station: string) {
+  const search = new URLSearchParams({ property, station });
+  return `/auth?${new URLSearchParams({ redirect: `${DISPLAY_ROUTES[department]}?${search}` })}`;
+}
+
 // This classifies presentation only. RLS, the scoped station list and the
 // existing transition RPC remain authoritative for access and execution.
 export function stationDepartment(

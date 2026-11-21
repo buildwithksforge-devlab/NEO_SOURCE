@@ -49908,6 +49908,7 @@ export type Database = {
           vehicle_type: string
         }[]
       }
+      neo_delivery_dispatch_claim: { Args: { _job: string }; Returns: boolean }
       neo_delivery_dispatch_mark_sent: {
         Args: {
           _detail?: string

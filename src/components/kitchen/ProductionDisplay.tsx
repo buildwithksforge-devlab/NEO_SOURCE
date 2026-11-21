@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useSession } from "@/lib/session";
 import { pathPermitted } from "@/lib/capabilities";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useBranchScope } from "@/lib/branches";
 import { AccessDeniedPanel } from "@/components/common/AccessState";
 import { PageHeader } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
@@ -36,21 +37,38 @@ import {
 export function ProductionDisplay({
   department,
   requestedStation,
+  requestedProperty,
 }: {
   department: DisplayDepartment;
   requestedStation?: string | undefined;
+  requestedProperty?: string | undefined;
 }) {
   const { can, loading } = useAuth();
   if (loading) return <Skeleton className="h-64" />;
   if (!pathPermitted(can, DISPLAY_ROUTES[department]))
     return <AccessDeniedPanel subject={DISPLAY_LABELS[department]} />;
-  return (
+  const display = (
     <ScopedDisplay
-      key={`${department}:${requestedStation ?? ""}`}
+      key={`${requestedProperty ?? ""}:${department}:${requestedStation ?? ""}`}
       department={department}
       requestedStation={requestedStation}
     />
   );
+  return requestedProperty ? <DisplayPropertyGate propertyId={requestedProperty}>{display}</DisplayPropertyGate> : display;
+}
+
+function DisplayPropertyGate({ propertyId, children }: { propertyId: string; children: React.ReactNode }) {
+  const { activeBranchId, branches, failed, loading, setActiveBranchId } = useBranchScope();
+  const permitted = branches.some((branch) => branch.id === propertyId && branch.active);
+
+  useEffect(() => {
+    if (!loading && !failed && permitted && activeBranchId !== propertyId) setActiveBranchId(propertyId);
+  }, [activeBranchId, failed, loading, permitted, propertyId, setActiveBranchId]);
+
+  if (failed) return <AccessDeniedPanel reason="setup" subject="the linked property" detail="Reload to verify the property for this display." />;
+  if (loading) return <Skeleton className="h-64" />;
+  if (!permitted) return <AccessDeniedPanel reason="scope" subject="the linked property" />;
+  return activeBranchId === propertyId ? children : <Skeleton className="h-64" />;
 }
 
 function ScopedDisplay({

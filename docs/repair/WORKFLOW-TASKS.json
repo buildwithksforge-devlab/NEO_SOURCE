@@ -83,7 +83,8 @@
       "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "bf82044",
       "local_evidence": ["Saved percentages now travel with each tax on the canonical receipt, including separate rows when a bill contains different VAT rates. An isolated SQL test compared the rate rows with Finance's saved liability amount.", "The actual 42-item receipt was rendered and inspected across three 80 mm pages. Guest folio and issued payment PDFs use the scoped guest bill projection."],
-      "next_action": "Preview recognises and protects neo_pos_sales_tax_receipt. Run the read-only pos-receipt-live-path.sql to check whether its installed body displays saved rates and whether the canonical print route calls it. Compare the same sale's PDF and printer output. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
+      "live_evidence": ["The 2026-11-21 13:55 Savanna Crown Nairobi SQL export shows receipt_reads_named_tax=true and receipt_labels_show_saved_rates=true. The workspace has zero active profiles and zero active defaults. None of the eight sampled orders has item tax snapshots or saved tax codes, and the diagnostic found no matching print-job payload for those orders."],
+      "next_action": "Configure the property's approved rules and map the relevant menu items or approved workspace default. Verify a new controlled sale has saved tax allocations, named rates and matching POS PDF, printer and Finance rows. For historical sales, recover item-level evidence before attempting any reconstruction. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
       "live_acceptance": "OPEN"
     },
     {
@@ -123,7 +124,7 @@
       "status": "LOCAL_VERIFIED",
       "source_commit": "3c53e82",
       "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
-      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql before publishing the worker change. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
+      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql and 20261121123600_courier_handoff_claim.sql in order. The release check reported PGRST202 for the new claim on Preview. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
       "live_acceptance": "OPEN"
     },
     {
@@ -143,7 +144,7 @@
       "status": "AWAITING_INSTALLATION",
       "source_commit": "bf82044",
       "local_evidence": ["The staff PIN entry can redeem the existing one-use property code. Supervisors issue one-use display codes through the existing station pairing permissions. An isolated PostgreSQL test refused wrong scope, replay and revoked displays."],
-      "next_action": "Install the display activation migration and accept a named station on a controlled device. Email and password still use normal staff sign-in. Personal station action PINs retain actor identity.",
+      "next_action": "Verify a one-use activation code on a controlled device and run the new station account sign-in link with an authorised and an unassigned account. The link restores the selected property and station after normal email/password authentication. Personal station action PINs retain actor identity.",
       "live_acceptance": "OPEN"
     },
     {
