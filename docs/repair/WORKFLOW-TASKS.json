@@ -14,8 +14,8 @@
       "id": "WF11-T01",
       "chains": ["WF11", "WF18", "WF23"],
       "title": "Protect unpaid POS-to-room transfers and prevent subsequent POS collection",
-      "status": "IN_PROGRESS",
-      "confirmed_problem": "Reviewed room-transfer source posts the full bill despite prior POS money, replays by key without proving the requested destination/source, and the terminal still offers POS collection after transfer.",
+      "status": "AWAITING_LIVE_RESULTS",
+      "confirmed_problem": "The original transfer could post the full bill despite prior POS money and offer collection again. The current source includes the partial-payment allocation and the collection guard.",
       "finish_checks": [
         "An unpaid sent/served bill posts exactly one original-source folio charge with inclusive tax/service/discount components.",
         "Prior or pending money, routed cash, provider success/uncertainty and active receipt review stop an unallocated transfer.",
@@ -24,10 +24,10 @@
         "Folio/stay ownership and status are checked; all effects roll back on downstream failure; original function owner/grants remain.",
         "Terminal displays POS collection separately from transferred debt and refreshes Finance/folio views. Tests, TypeScript, build and smoke pass."
       ],
-      "local_evidence": ["Initial actual-engine and pure-state run: 42 tests passed in 2 files"],
-      "installation": "NOT_INSTALLED; candidate guards unknown installed definitions; read-only preflight required",
+      "local_evidence": ["49 PostgreSQL and UI-state checks passed. The database fixtures exercise verified partial payments, idempotent retries and prevention of a second collection."],
+      "installation": "Preview exposes the room_transfer_paid_total column and refuses anonymous execution of pos_post_room_charge. Verify the installed definition using POS-ROOM-TRANSFER-PREFLIGHT.sql and reconcile a controlled transfer before live acceptance.",
       "live_acceptance": "OPEN",
-      "limits": ["Partial-payment allocation and bills with tips/delivery fees require a separately reconciled allocation workflow; this task refuses them instead of guessing.", "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."]
+      "limits": ["Unmatched payments and bills with tips or delivery fees still require allocation rules before transfer.", "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."]
     },
     {
       "id": "WF13-T01",
@@ -83,7 +83,7 @@
       "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "bf82044",
       "local_evidence": ["Saved percentages now travel with each tax on the canonical receipt, including separate rows when a bill contains different VAT rates. An isolated SQL test compared the rate rows with Finance's saved liability amount.", "The actual 42-item receipt was rendered and inspected across three 80 mm pages. Guest folio and issued payment PDFs use the scoped guest bill projection."],
-      "next_action": "Run the read-only pos-receipt-live-path.sql on the actual database, install the saved-rate migration, then compare that sale's new PDF and printer payload. Preview serves the newer app shell. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
+      "next_action": "Preview recognises and protects neo_pos_sales_tax_receipt. Run the read-only pos-receipt-live-path.sql to check whether its installed body displays saved rates and whether the canonical print route calls it. Compare the same sale's PDF and printer output. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
       "live_acceptance": "OPEN"
     },
     {
@@ -92,7 +92,7 @@
       "title": "Verify release readiness, saved defect counts and local Simulation",
       "status": "BLOCKED",
       "source_commit": "f66dbae",
-      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. npm run test:simulation:local works with isolated fixtures. The connection checker distinguishes missing configuration, rejected keys, missing schema and refused access. The current local credential fails server-key validation. The new cleanup test checks the saved registry state before reporting success."],
+      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. The latest isolated Simulation run passed 379 tests and 27 readiness checks. The connection checker still reports invalid_credential for the configured browser Simulation server key. The cleanup test checks the saved registry state before reporting success."],
       "next_action": "Connect browser-based Simulation with a valid server credential for the intended test project. Run the two isolated workspaces and capture the saved defect counts and workflow evidence in Platform & Readiness.",
       "live_acceptance": "OPEN"
     },
@@ -121,7 +121,7 @@
       "chains": ["WF12", "WF34"],
       "title": "Scope courier dispatch and require a saved acknowledgement",
       "status": "LOCAL_VERIFIED",
-      "source_commit": "33fbaac",
+      "source_commit": "3c53e82",
       "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
       "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql before publishing the worker change. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
       "live_acceptance": "OPEN"
