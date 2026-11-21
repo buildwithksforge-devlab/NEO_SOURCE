@@ -20,7 +20,7 @@ describe("courier and in-house rider handoff", () => {
       CREATE TABLE delivery_dispatch_events (organization_id uuid, job_id uuid, from_state text, to_state text, detail text);
     `);
     await db.exec(readFileSync("supabase/migrations/20261121123500_courier_handoff_exclusivity.sql", "utf8"));
-    await db.exec(readFileSync("supabase/migrations/20261121123600_courier_handoff_claim.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/20261121123700_courier_handoff_claim.sql", "utf8"));
   });
 
   beforeEach(async () => {

@@ -124,7 +124,7 @@
       "status": "LOCAL_VERIFIED",
       "source_commit": "3c53e82",
       "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
-      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql and 20261121123600_courier_handoff_claim.sql in order. The release check reported PGRST202 for the new claim on Preview. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
+      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql and 20261121123700_courier_handoff_claim.sql in order. The release check reported PGRST202 for the new claim on Preview. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
       "live_acceptance": "OPEN"
     },
     {

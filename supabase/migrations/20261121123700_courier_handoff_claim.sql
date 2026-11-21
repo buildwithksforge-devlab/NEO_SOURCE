@@ -1,3 +1,4 @@
+-- Install after the courier and in-house rider exclusivity guards.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.delivery_dispatch_jobs'::regclass
