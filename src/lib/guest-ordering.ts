@@ -602,7 +602,6 @@ export function useRequestTransport(organizationId: string, branchId: string | n
       return { ...saved, request_number: saved.request_number };
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["transport-requests"] }),
-    onError: (e: Error) => toast.error(e.message),
   });
 }
 

@@ -1,18 +1,19 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Bike, ChevronRight, Loader2, ShoppingBag, Utensils } from "lucide-react";
+import { Bike, ChevronRight, ShoppingBag, Utensils } from "lucide-react";
 import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
-import { brandFallback } from "@/lib/public-apps";
+import { GuestRowsSkeleton } from "@/components/public/GuestSkeleton";
 import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel, useMyPublicOrders } from "@/lib/public-delivery";
 import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
-import { orderBucket } from "@/lib/guest-presentation";
+import { guestOrderSearch, orderBucket } from "@/lib/guest-presentation";
 
 export { orderBucket } from "@/lib/guest-presentation";
 
 export const Route = createFileRoute("/guest/$hotelSlug/orders")({
+  validateSearch: guestOrderSearch,
   head: () => ({
     meta: [
       { title: "My Orders — NEØ Guest" },
@@ -39,7 +40,8 @@ const buckets = [
 
 function OrdersPage() {
   const ws = useWorkspace();
-  const [bucket, setBucket] = useState<(typeof buckets)[number]["key"]>("active");
+  const bucket = Route.useSearch().filter ?? "active";
+  const navigate = Route.useNavigate();
   const { hotelSlug } = Route.useParams();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
@@ -60,24 +62,23 @@ function OrdersPage() {
     <GuestScreen hotelSlug={hotelSlug} active="orders">
       <GuestPageIntro title="My orders" description={ws.hotel_name} />
 
-      {!loading && !user ? (
+      {loading || orders.isLoading || profile.isLoading ? (
+        <div className="mt-4"><GuestRowsSkeleton rows={3} label="Loading your orders" /></div>
+      ) : !user ? (
         <GuestSignInPrompt
           hotelSlug={hotelSlug}
           title="Sign in to see your orders"
           description="Your order history and live status are private to your account."
         />
-      ) : orders.isLoading || profile.isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
-        </div>
-      ) : orders.isError || profile.isError ? (
+      ) : orders.isError || profile.isError || !customerId ? (
         <PublicEmptyState title="Orders couldn’t load" description={`Try again to see orders for ${ws.hotel_name}.`}
-          action={<button className="neo-guest-secondary" onClick={() => void (profile.isError ? profile.refetch() : orders.refetch())}>Retry orders</button>} />
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void (!customerId || profile.isError ? profile.refetch() : orders.refetch())}>Retry orders</button>} />
       ) : (orders.data?.length ?? 0) === 0 ? (
         <GuestSection title="Order history">
           <PublicEmptyState
             title="No orders yet"
             description="Orders you place with this property will appear here with live status."
+            action={<Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "dining" }} className="neo-guest-outline-action">Browse dining</Link>}
           />
         </GuestSection>
       ) : (
@@ -90,7 +91,7 @@ function OrdersPage() {
                   key={b.key}
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => setBucket(b.key)}
+                  onClick={() => void navigate({ search: { filter: b.key }, resetScroll: false })}
                 >
                   {b.label}
                   <span className="text-xs opacity-80">{(grouped[b.key] ?? []).length}</span>
@@ -111,7 +112,7 @@ function OrdersPage() {
               const status = statusLabel(o["order_status"]);
               return (
               <li key={String(o["id"])}>
-                <Link to="/guest/$hotelSlug/orders/$orderReference" params={{ hotelSlug, orderReference: String(o["order_number"]) }} className="neo-guest-record">
+                <Link to="/guest/$hotelSlug/orders/$orderReference" params={{ hotelSlug, orderReference: String(o["order_number"]) }} search={{ filter: bucket }} className="neo-guest-record">
                   <span className="neo-guest-record-icon"><Icon className="size-5" aria-hidden /></span>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>

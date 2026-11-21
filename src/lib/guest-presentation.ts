@@ -38,6 +38,15 @@ const activeOrderStatuses = new Set([
 ]);
 const cancelledOrderStatuses = new Set(["cancelled", "rejected", "declined", "failed", "delivery-failed", "returned"]);
 
+export type GuestOrderBucket = "active" | "scheduled" | "completed" | "cancelled";
+
+export function guestOrderSearch(search: Record<string, unknown>): { filter?: GuestOrderBucket } {
+  const value = search["filter"];
+  return value === "active" || value === "scheduled" || value === "completed" || value === "cancelled"
+    ? { filter: value }
+    : {};
+}
+
 export function orderBucket(status: unknown, scheduledFor?: unknown, fulfilment?: unknown) {
   const value = String(status ?? "").toLowerCase().replaceAll("_", "-");
   if (cancelledOrderStatuses.has(value)) return "cancelled";

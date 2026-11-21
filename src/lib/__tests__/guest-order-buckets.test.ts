@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { chooseGuestFulfilment, orderBucket } from "@/lib/guest-presentation";
+import { chooseGuestFulfilment, guestOrderSearch, orderBucket } from "@/lib/guest-presentation";
 
 const future = new Date(Date.now() + 86_400_000).toISOString();
 const past = new Date(Date.now() - 86_400_000).toISOString();
 
 describe("guest order buckets", () => {
+  it("restores only a recognised filter from an order history or detail link", () => {
+    for (const filter of ["active", "scheduled", "completed", "cancelled"]) {
+      expect(guestOrderSearch({ filter, other: "ignored" })).toEqual({ filter });
+    }
+    expect(guestOrderSearch({ filter: ["active"] })).toEqual({});
+    expect(guestOrderSearch({ filter: "unknown" })).toEqual({});
+  });
   it("keeps live kitchen and dispatch states active", () => {
     for (const status of ["pending", "pending-payment", "in-preparation", "rider-assigned", "out-for-delivery", "ready-for-pickup", "on_the_way"]) {
       expect(orderBucket(status)).toBe("active");

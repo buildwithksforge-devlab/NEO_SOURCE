@@ -2827,9 +2827,32 @@ html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system
   padding: clamp(1rem, 2.5vw, 1.65rem);
 }
 .neo-guest-reservation-grid { display: grid; gap: 1rem; align-items: start; margin-top: 1rem; }
+.neo-guest-transfer-options { display: grid; gap: .65rem; }
+.neo-guest-transfer-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .4rem .75rem;
+  align-items: center;
+  width: 100%;
+  min-height: 4.5rem;
+  padding: .9rem;
+  border: 1px solid var(--guest-border);
+  border-radius: 1.1rem;
+  background: var(--guest-surface);
+  color: var(--guest-text);
+  text-align: left;
+}
+.neo-guest-transfer-option[aria-pressed="true"] { border-color: var(--pa-accent-ink); background: var(--guest-subtle, var(--guest-surface)); }
+.neo-guest-transfer-option-icon { display: grid; width: 2.55rem; height: 2.55rem; place-items: center; border-radius: .85rem; background: var(--guest-subtle, var(--guest-surface)); color: var(--pa-accent-ink); }
+.neo-guest-transfer-form { display: grid; gap: .9rem; min-width: 0; }
+.neo-guest-app :is(#transfer-request, #transfer-history) { scroll-margin-top: 5rem; }
+.neo-guest-transfer-primary { background: var(--pa-primary); color: var(--pa-on-primary); }
+.neo-guest-transfer-selection { display: flex; gap: .7rem; align-items: center; padding: .85rem; border: 1px solid var(--guest-border); border-radius: .95rem; color: var(--guest-text); }
+.neo-guest-transfer-selection p { color: var(--guest-muted); font-size: .82rem; }
 .neo-guest-date-ticket { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-block: 1rem; }
 .neo-guest-date-ticket > div { border: 1px solid var(--guest-border); border-radius: 1rem; padding: .75rem; }
 @media (min-width: 640px) {
+  .neo-guest-transfer-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .neo-guest-home-tasks:has(> :nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .neo-guest-page-intro[data-with-image="true"] { grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); }
   .neo-guest-page-intro-image { order: initial; height: 100%; min-height: 12.5rem; }

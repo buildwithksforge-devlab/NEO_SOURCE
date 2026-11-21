@@ -155,7 +155,7 @@
       "id": "WF34-T02",
       "chains": ["WF01", "WF12", "WF16", "WF24", "WF32", "WF33", "WF34"],
       "title": "Apply the mobile design reference across public and staff apps",
-      "status": "QUEUED",
+      "status": "IN_PROGRESS",
       "design_references": {
         "motion": "Apple: short state transitions with a reduced-motion alternative",
         "onboarding": "Duolingo: one clear step, progress and safe defaults",
@@ -169,7 +169,8 @@
         "interaction": "Framer: immediate, visible loading, success and recovery states",
         "mobile_reference": "The supplied Medora image guides the layout: an image-led welcome, an overview with a strong first action, a compact icon dock, and details that retain the same palette and type. Use NEØ's own imagery, labels and data."
       },
-      "next_action": "Start with Guest home, rooms and reservations, services, orders and the linked Delivery flow. Then apply the same hierarchy to Partner, Rider, staff PIN and station displays. Review each release with 320–430 px screenshots and a completed task from entry to saved result, including sold-out, empty, slow and error states.",
+      "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history."],
+      "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
       "live_acceptance": "OPEN"
     }
   ]

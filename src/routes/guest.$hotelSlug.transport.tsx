@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Car, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowRight, Car, Check, Loader2, Users } from "lucide-react";
 import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
-import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { money } from "@/lib/public-delivery";
 import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
@@ -40,6 +38,7 @@ function TransportPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { product } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const preview = isPreviewMode();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
@@ -49,8 +48,7 @@ function TransportPage() {
   const request = useRequestTransport(ws.organization_id, ws.branch_id);
   useGuestScreenView(ws.organization_id, "transport", Boolean(customerId));
 
-  const [selectedProductId, setProductId] = useState<string | null>(null);
-  const productId = selectedProductId ?? product ?? "";
+  const productId = product ?? "";
   const selectedProduct = products.data?.find((entry) => entry["id"] === productId);
   const productUnavailable = Boolean(productId && !selectedProduct);
   const maxPassengers = selectedProduct?.["max_passengers"] ? Number(selectedProduct["max_passengers"]) : undefined;
@@ -62,26 +60,38 @@ function TransportPage() {
   const [travelReference, setTravelReference] = useState("");
   const [notes, setNotes] = useState("");
   const [submittedReference, setSubmittedReference] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const submitting = useRef(false);
+
+  function chooseProduct(id: string) {
+    if (submitting.current) return;
+    setFormError(null);
+    setSubmittedReference(null);
+    void navigate({ search: id ? { product: id } : {}, hash: "transfer-request", resetScroll: false });
+  }
 
   async function submit() {
-    if (request.isPending || productUnavailable || preview) return;
+    if (submitting.current || request.isPending || productUnavailable || preview || !customerId) return;
+    setFormError(null);
+    setSubmittedReference(null);
     const pickup = new Date(pickupAt);
     if (!pickupAt || !pickupPoint.trim() || !destination.trim()) {
-      toast.error("Pickup time, pickup point and destination are required");
+      setFormError("Enter a pickup time, pickup point and destination.");
       return;
     }
     if (!Number.isFinite(pickup.getTime()) || pickup.getTime() <= Date.now()) {
-      toast.error("Choose a pickup time in the future");
+      setFormError("Choose a pickup time in the future.");
       return;
     }
     if (!Number.isInteger(passengers) || passengers < 1 || (maxPassengers && passengers > maxPassengers)) {
-      toast.error(maxPassengers ? `Enter between 1 and ${maxPassengers} passengers` : "Enter a whole number of passengers");
+      setFormError(maxPassengers ? `Enter between 1 and ${maxPassengers} passengers.` : "Enter a whole number of passengers.");
       return;
     }
     if (!Number.isInteger(luggage) || luggage < 0) {
-      toast.error("Enter a whole number of bags");
+      setFormError("Enter a whole number of bags.");
       return;
     }
+    submitting.current = true;
     try {
       const result = await request.mutateAsync({
         productId: productId || null,
@@ -93,15 +103,16 @@ function TransportPage() {
         travelReference: travelReference.trim() || null,
         notes: notes.trim() || null,
       });
-      toast.success(`Request ${result.request_number} sent to the concierge`);
       setSubmittedReference(result.request_number);
       setPickupAt("");
       setPickupPoint("");
       setDestination("");
       setTravelReference("");
       setNotes("");
-    } catch {
-      /* surfaced by the mutation */
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "The request could not be saved. Try again.");
+    } finally {
+      submitting.current = false;
     }
   }
 
@@ -109,8 +120,7 @@ function TransportPage() {
     <GuestScreen hotelSlug={hotelSlug} active="trips">
       <GuestPageIntro title="Transfers" description={`Arrange a pickup or a trip with ${ws.hotel_name}.`}>
         <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "services" }} className="neo-guest-outline-action">Hotel services</Link>
-        <Link to="/guest/$hotelSlug/stay" params={{ hotelSlug }} className="neo-guest-outline-action">My stay</Link>
-        {customerId && productId ? <a href="#transfer-request" className="neo-guest-outline-action">Continue to request</a> : null}
+        {customerId ? <a href="#transfer-request" className="neo-guest-secondary neo-guest-transfer-primary">Request a transfer</a> : null}
         {customerId ? <a href="#transfer-history" className="neo-guest-outline-action">My transfer requests</a> : null}
       </GuestPageIntro>
 
@@ -145,7 +155,7 @@ function TransportPage() {
                 description="You can still request a custom transfer below and the concierge will quote you."
               />
             ) : (
-              <ul className="space-y-2">
+              <ul className="neo-guest-transfer-options">
                 {(products.data ?? []).map((p) => {
                   const id = String(p["id"]);
                   const isActive = id === productId;
@@ -154,25 +164,26 @@ function TransportPage() {
                       <button
                         type="button"
                         aria-pressed={isActive}
-                        onClick={() => setProductId(isActive ? "" : id)}
-                        className="flex w-full items-center gap-3 rounded-xl border p-3 text-left"
-                        style={{ borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.08)" }}
+                        disabled={request.isPending}
+                        onClick={() => chooseProduct(id)}
+                        className="neo-guest-transfer-option"
                       >
-                        <span className="flex size-11 items-center justify-center rounded-lg bg-black/5">
-                          <Car className="size-5" style={{ color: "var(--guest-muted, #52627A)" }} aria-hidden />
+                        <span className="neo-guest-transfer-option-icon">
+                          {isActive ? <Check className="size-5" aria-hidden /> : <Car className="size-5" aria-hidden />}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                             {String(p["name"])}
                           </span>
-                          <span className="block truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
+                          <span className="block text-xs text-[var(--guest-muted)]">
                             {String(p["description"] ?? "")}
                           </span>
+                          {Number(p["max_passengers"]) > 0 ? <span className="mt-1 flex items-center gap-1 text-xs text-[var(--guest-muted)]"><Users className="size-4" aria-hidden />Up to {Number(p["max_passengers"])}</span> : null}
                         </span>
-                        <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
+                        <span className="text-right text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                           {p["base_price"] == null
                             ? "On request"
-                            : money(p["base_price"], String(p["currency"] ?? "KES"))}
+                            : money(p["base_price"], String(p["currency"] ?? ws.currency ?? "KES"))}
                         </span>
                       </button>
                     </li>
@@ -183,14 +194,15 @@ function TransportPage() {
           </GuestSection>
 
           <GuestSection id="transfer-request" title="Request a transfer" surface>
-            <div className="space-y-3">
+            <form aria-busy={request.isPending} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+            <fieldset disabled={request.isPending} className="neo-guest-transfer-form">
               {selectedProduct ? (
-                <p className="text-sm font-medium">Transfer selected · {String(selectedProduct["name"])}</p>
+                <div className="neo-guest-transfer-selection"><Car className="size-5 shrink-0" aria-hidden /><div><strong>{String(selectedProduct["name"])}</strong><p>{selectedProduct["base_price"] == null ? "Price on request" : `Published price ${money(selectedProduct["base_price"], String(selectedProduct["currency"] ?? ws.currency ?? "KES"))}`}</p></div></div>
               ) : productUnavailable && !products.isLoading ? (
                 <p role="status" className="text-sm">The selected transfer is unavailable. Choose another transfer or request a custom trip.</p>
               ) : null}
-              {productId ? <button type="button" onClick={() => setProductId("")} className="neo-guest-outline-action">Request a custom trip instead</button> : null}
-              <Field label="Pickup time">
+              {productId ? <button type="button" disabled={request.isPending} onClick={() => chooseProduct("")} className="neo-guest-outline-action justify-self-start">Request a custom trip instead</button> : null}
+              <Field label="Pickup time (your device’s time zone)">
                 <input
                   type="datetime-local"
                   value={pickupAt}
@@ -249,16 +261,17 @@ function TransportPage() {
                   className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
                 />
               </Field>
+              {formError ? <p role="alert" className="text-sm text-destructive">{formError}</p> : null}
               <button
-                type="button"
-                onClick={() => void submit()}
+                type="submit"
                 disabled={request.isPending || preview || productUnavailable}
-                className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
+                className="neo-guest-secondary neo-guest-transfer-primary flex w-full items-center justify-center gap-2 disabled:opacity-50"
               >
                 {request.isPending ? "Sending…" : preview ? "Preview only" : "Send request"}
+                {!request.isPending && !preview ? <ArrowRight className="size-4" aria-hidden /> : null}
               </button>
-            </div>
+            </fieldset>
+            </form>
           </GuestSection>
 
           <GuestSection id="transfer-history" title="My transfers">

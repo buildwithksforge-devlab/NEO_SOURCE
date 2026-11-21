@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bike, Loader2 } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { guestOrderSearch } from "@/lib/guest-presentation";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
@@ -20,6 +21,7 @@ function Amount({ label, value }: { label: string; value: string }) {
 }
 
 export const Route = createFileRoute("/guest/$hotelSlug/orders_/$orderReference")({
+  validateSearch: guestOrderSearch,
   head: () => ({
     meta: [
       { title: "Order Tracking — NEØ Guest" },
@@ -37,6 +39,7 @@ export const Route = createFileRoute("/guest/$hotelSlug/orders_/$orderReference"
 function TrackingPage() {
   const ws = useWorkspace();
   const { hotelSlug, orderReference } = Route.useParams();
+  const ordersSearch = Route.useSearch();
   const { user, loading } = useCustomerSession();
   const orderAtProperty = usePublicOrderByReference(ws.organization_id, user ? orderReference : undefined, ws.branch_id);
   const tracking = useGuestOrderTracking(ws.organization_id, orderAtProperty.data ? orderReference : undefined);
@@ -50,14 +53,9 @@ function TrackingPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
-      <section className="neo-rider-card p-6">
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
-          Order {orderReference}
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
-          Live status from {ws.hotel_name}'s kitchen and dispatch.
-        </p>
-      </section>
+      <GuestPageIntro title={`Order ${orderReference}`} description={`Live status from ${ws.hotel_name}'s kitchen and dispatch.`}>
+        <Link to="/guest/$hotelSlug/orders" params={{ hotelSlug }} search={ordersSearch} className="neo-guest-outline-action">Back to orders</Link>
+      </GuestPageIntro>
 
       {!loading && !user ? (
         <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to track this order" description="Order details and live fulfilment progress are private to the account that placed it." />
