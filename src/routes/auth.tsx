@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { StaffPinSignIn } from "@/components/auth/StaffPinSignIn";
 import { clearStaffPinSession } from "@/lib/staff-pin-login";
+import { resolveStationAccountEntry } from "@/lib/station-account-entry";
 import { readSharedDisplayToken } from "@/lib/shared-production-display";
 import {
   CreateWorkspaceWizard,
@@ -249,7 +250,7 @@ function SignInForm({ redirect }: { redirect?: string | undefined }) {
         : // No explicit destination: the canonical resolver decides, from the
           // relationships this account genuinely holds. Authentication alone
           // never implies a guest, and never implies work either.
-          "/continue";
+          (await resolveStationAccountEntry()) ?? "/continue";
     navigate({ href: target, replace: true });
   }
 

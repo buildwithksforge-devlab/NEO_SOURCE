@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { activateSharedDisplay } from "@/lib/shared-production-display";
 import { stationSignInDestination } from "@/lib/production-displays";
+import { resolveStationAccountEntry } from "@/lib/station-account-entry";
 import { Delete, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -67,12 +68,13 @@ export function StaffPinSignIn({ redirect }: { redirect?: string | undefined }) 
 
     try {
       const { branchId } = await signInWithStaffPin(pin, station?.property);
+      const destination = station?.href ?? await resolveStationAccountEntry(branchId);
 
       setPin("");
       toast.success("Signed in");
 
       window.location.replace(
-        station?.href ?? `/workspace?home=1&property=${encodeURIComponent(branchId)}`,
+        destination ?? `/workspace?home=1&property=${encodeURIComponent(branchId)}`,
       );
     } catch (error) {
       setPin("");

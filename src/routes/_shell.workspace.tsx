@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Monitor, ShieldCheck } from "lucide-react";
+import { Monitor, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { resolveWorkHome } from "@/lib/work-home";
 import { canAccessPath } from "@/lib/nav-permissions";
@@ -32,7 +32,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useScopedStations } from "@/lib/kitchen-tickets";
 import { issueSharedDisplayActivation, pairSharedDisplay } from "@/lib/shared-production-display";
 import {
-  isStaffPinSession,
   readTrustedStaffDevice,
   type TrustedStaffDevice,
   pairTrustedStaffDevice,
@@ -174,28 +173,20 @@ function Dashboard() {
     requestedBranch && activeBranchId !== requestedBranch.id,
   );
 
-  const pinHomeTarget =
+  const workEntryTarget =
     askedForHome &&
     !displaySetupOnly &&
-    isStaffPinSession() &&
-    !canPairDisplay &&
     phase === "ready" &&
     !branchesLoading &&
     !applyingRequestedProperty &&
-    activeBranch &&
-    workHome.route !== "/workspace"
+    activeBranch && (!requestedProperty || requestedBranch)
       ? workHome.route
       : null;
 
   useEffect(() => {
-    if (!pinHomeTarget) return;
-    void navigate({ href: pinHomeTarget, replace: true });
-  }, [navigate, pinHomeTarget]);
-
-  function enterSystem() {
-    const target = workHome.route === "/workspace" ? "/workspace" : workHome.route;
-    void navigate({ href: target, replace: true });
-  }
+    if (!workEntryTarget) return;
+    void navigate({ href: workEntryTarget, replace: true });
+  }, [navigate, workEntryTarget]);
 
   async function authorizeThisDevice() {
     if (!activeBranch || authorizingDevice || trustedDevice?.branchId === activeBranch.id) return;
@@ -233,7 +224,7 @@ function Dashboard() {
       phase !== "ready" ||
       branchesLoading ||
       applyingRequestedProperty ||
-      Boolean(pinHomeTarget)
+      Boolean(workEntryTarget)
     ) {
       return <Skeleton className="mx-auto mt-8 h-72 w-full max-w-5xl" />;
     }
@@ -258,7 +249,7 @@ function Dashboard() {
       );
     }
 
-    if (displaySetupOnly && !displayChoices.length) {
+    if (!displayChoices.length) {
       return <AccessDeniedPanel subject="production display setup" />;
     }
 
@@ -267,8 +258,6 @@ function Dashboard() {
         propertyId={activeBranch.id}
         propertyName={activeBranch.name}
         displays={displayChoices}
-        displaySetupOnly={displaySetupOnly}
-        onEnterSystem={enterSystem}
         canAuthorizeDevice={canAuthorizeDevice}
         authorizingDevice={authorizingDevice}
         onAuthorizeDevice={authorizeThisDevice}
@@ -319,8 +308,6 @@ function WorkspaceEntrance({
   propertyId,
   propertyName,
   displays,
-  displaySetupOnly,
-  onEnterSystem,
   canAuthorizeDevice,
   authorizingDevice,
   onAuthorizeDevice,
@@ -329,8 +316,6 @@ function WorkspaceEntrance({
   propertyId: string;
   propertyName: string;
   displays: DisplayChoice[];
-  displaySetupOnly: boolean;
-  onEnterSystem: () => void;
   canAuthorizeDevice: boolean;
   authorizingDevice: boolean;
   onAuthorizeDevice: () => void;
@@ -443,28 +428,14 @@ function WorkspaceEntrance({
     <main data-neo-workspace-entry className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       <PageHeader
         eyebrow={propertyName}
-        title={displaySetupOnly ? "Set up a production display" : "Choose how you want to work"}
-        description={displaySetupOnly ? "Choose a department and stations for this property's display." : "Enter the main NEØ system, configure a standalone production display, or authorise this device for staff PIN sign-in."}
+        title="Set up a production display"
+        description="Choose a department and stations for this property's display."
       />
 
       <section
-        aria-label="Available workspaces"
+        aria-label="Available display departments"
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
       >
-        {!displaySetupOnly && <button
-          type="button"
-          onClick={onEnterSystem}
-          className="group flex min-h-48 flex-col items-start rounded-2xl border border-border bg-card p-6 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
-            <LayoutDashboard className="size-5" aria-hidden />
-          </span>
-          <span className="mt-5 text-lg font-semibold text-foreground">Enter NEØ System</span>
-          <span className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Open your normal role-based workspace, tasks and permitted modules.
-          </span>
-        </button>}
-
         {displays.map((display) => (
           <button
             key={display.department}
@@ -590,7 +561,7 @@ function WorkspaceEntrance({
         </section>
       ) : null}
 
-      {canAuthorizeDevice && !displaySetupOnly ? (
+      {canAuthorizeDevice ? (
         <section
           data-neo-trusted-device-setup
           className="rounded-2xl border border-neo-turquoise/30 bg-neo-turquoise/5 p-5"

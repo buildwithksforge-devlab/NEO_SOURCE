@@ -90,13 +90,12 @@ beforeEach(() => {
   m.device = true;
 });
 afterEach(cleanup);
-describe("property choice before entering the operating system", () => {
-  it("does not load the dashboard before the operator chooses the OS and safely transitions in place", () => {
+describe("property entry and separate display setup", () => {
+  it("opens the work home directly without showing workspace choices", () => {
     const view = render(<Page />);
-    expect(screen.getByText("Choose how you want to work")).toBeTruthy();
+    expect(screen.queryByText("Choose how you want to work")).toBeNull();
     expect(screen.queryByText("Main OS dashboard")).toBeNull();
     expect(m.dashboard).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Enter NEØ System/ }));
     expect(m.navigate).toHaveBeenCalledWith({ href: "/workspace", replace: true });
     m.search = {};
     view.rerender(<Page />);
@@ -104,6 +103,7 @@ describe("property choice before entering the operating system", () => {
     expect(screen.queryByText("Choose how you want to work")).toBeNull();
   });
   it("acknowledges a matching authorised device and cannot pair it again from the disabled control", () => {
+    m.search = { ...m.search, setup: "display" };
     render(<Page />);
     const button = screen.getByRole("button", { name: "Device authorised" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
@@ -120,6 +120,7 @@ describe("property choice before entering the operating system", () => {
     expect(m.pair).not.toHaveBeenCalled();
   });
   it("opens station setup without entering the main dashboard", () => {
+    m.search = { ...m.search, setup: "display" };
     render(<Page />);
     fireEvent.click(screen.getByRole("button", { name: /Set up Kitchen Display/ }));
     expect(screen.getByText("Configure Kitchen Display")).toBeTruthy();

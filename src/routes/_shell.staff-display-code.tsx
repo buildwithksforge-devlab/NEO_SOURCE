@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StationAccountSetup } from "@/components/auth/StationAccountSetup";
 
 export const Route = createFileRoute("/_shell/staff-display-code")({ component: StaffDisplayCode });
 type PinState = { ok: boolean; staff_code: string | null; pin_set: boolean };
@@ -111,6 +112,7 @@ function StaffDisplayCode() {
           ) : null}
         </>
       ) : null}
+      <StationAccountSetup />
     </div>
   );
 }

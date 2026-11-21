@@ -17,8 +17,8 @@ describe("property workspace and production-display entry", () => {
     expect(workspace).toContain("applyingRequestedProperty");
   });
 
-  it("offers the main system and existing display routes without recreating modules", () => {
-    expect(workspace).toContain("Enter NEØ System");
+  it("opens the normal work home and preserves the existing display routes", () => {
+    expect(workspace).toContain("workEntryTarget");
     expect(workspace).toContain('["kitchen", "coffee", "bar", "pastry"]');
     expect(workspace).toContain("DISPLAY_ROUTES[department]");
   });
@@ -34,7 +34,7 @@ describe("property workspace and production-display entry", () => {
 
   it("takes the owner's display controls straight to station setup without the workspace choices", () => {
     expect(controls).toContain('setup: "display"');
-    expect(workspace).toContain('displaySetupOnly ? "Set up a production display"');
-    expect(workspace).toContain("!displaySetupOnly && <button");
+    expect(workspace).toContain('title="Set up a production display"');
+    expect(workspace).not.toContain("Choose how you want to work");
   });
 });

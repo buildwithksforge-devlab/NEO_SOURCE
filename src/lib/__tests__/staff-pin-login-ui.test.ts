@@ -33,7 +33,7 @@ describe("staff PIN login user interface", () => {
   });
 
   it("opens a linked station directly and preserves ordinary PIN sign-in", () => {
-    expect(pinForm).toContain("station?.href ??");
+    expect(pinForm).toContain("station?.href ?? await resolveStationAccountEntry(branchId)");
     expect(pinForm).toContain(
       "/workspace?home=1&property=",
     );
@@ -50,7 +50,7 @@ describe("staff PIN login user interface", () => {
       'can("administration", "users", "assign_roles")',
     );
     expect(workspace).toContain(
-      "{canAuthorizeDevice && !displaySetupOnly ? (",
+      "{canAuthorizeDevice ? (",
     );
   });
 

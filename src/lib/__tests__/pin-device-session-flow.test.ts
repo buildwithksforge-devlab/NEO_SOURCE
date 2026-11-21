@@ -16,8 +16,7 @@ describe("coordinated PIN device session flow", () => {
   it("routes PIN staff directly through their permission-resolved work home", () => {
     const workspace = read("src/routes/_shell.workspace.tsx");
 
-    expect(workspace).toContain("isStaffPinSession()");
-    expect(workspace).toContain("pinHomeTarget");
+    expect(workspace).toContain("workEntryTarget");
     expect(workspace).toContain("workHome.route");
   });
 
