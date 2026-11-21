@@ -36,6 +36,11 @@ describe("provider payment dispatch safety", () => {
         LANGUAGE sql IMMUTABLE AS $$
           SELECT decode(md5(encode($1, 'hex')), 'hex')
         $$;
+      CREATE TABLE public.audit_logs (
+        organization_id uuid NOT NULL, branch_id uuid, action text, module text,
+        record_id text, new_value jsonb
+      );
+      CREATE TABLE public.pos_payments (id uuid PRIMARY KEY, status text NOT NULL);
       CREATE TABLE public.integration_connections (
         id uuid PRIMARY KEY,
         organization_id uuid NOT NULL,
@@ -86,6 +91,7 @@ describe("provider payment dispatch safety", () => {
         ('${legacyAttempt}', '${org}', '${legacyAttempt}', 'cancelled', 'legacy-callback-token');
     `);
     await db.exec(migration);
+    await db.exec(readFileSync("supabase/migrations/20261121123600_provider_refund_reconciliation_guard.sql", "utf8"));
     await db.query(
       `INSERT INTO public.payment_attempts
         (id, organization_id, payment_id, state)
@@ -138,5 +144,67 @@ describe("provider payment dispatch safety", () => {
     );
     expect(second.rows[0]?.result).toMatchObject({ ok: true, claimed: false, state: "requested" });
     expect(second.rows[0]?.result).not.toHaveProperty("token");
+  });
+
+  it("retains a posted payment and one Finance observation when a provider repeats a reversal", async () => {
+    const alternateOrg = "00000000-0000-4000-8000-000000000010";
+    const reversedAttempt = "00000000-0000-4000-8000-000000000011";
+    const linkedPayment = "00000000-0000-4000-8000-000000000012";
+    const journal = "00000000-0000-4000-8000-000000000013";
+    const token = "synthetic-posted-reversal";
+    await db.query(
+      `INSERT INTO public.payment_attempts
+         (id, organization_id, payment_id, state, callback_token, linked_table, linked_id, posted_journal_id, provider_reference)
+       VALUES ($1, $2, $1, 'posted', encode(extensions.digest(convert_to($3, 'UTF8'), 'sha256'), 'hex'),
+         'pos_payments', $4, $5, 'ORIGINAL-COLLECTION')`,
+      [reversedAttempt, alternateOrg, token, linkedPayment, journal],
+    );
+    await db.query("INSERT INTO public.pos_payments VALUES ($1, 'confirmed')", [linkedPayment]);
+
+    for (const outcome of ["reversed", "refunded"]) {
+      const result = await db.query<{ result: Record<string, unknown> }>(
+        "SELECT neo_payment_intent_apply($1, $2, 'REVERSAL-REF') AS result",
+        [token, outcome],
+      );
+      expect(result.rows[0]?.result).toMatchObject({
+        ok: true, state: "posted", refund_reconciliation_required: true,
+      });
+    }
+    expect((await db.query(
+      "SELECT state, posted_journal_id, provider_reference FROM public.payment_attempts WHERE id = $1",
+      [reversedAttempt],
+    )).rows).toEqual([{ state: "posted", posted_journal_id: journal, provider_reference: "ORIGINAL-COLLECTION" }]);
+    expect((await db.query("SELECT status FROM public.pos_payments WHERE id = $1", [linkedPayment])).rows)
+      .toEqual([{ status: "confirmed" }]);
+    expect((await db.query("SELECT organization_id, action, record_id FROM public.audit_logs")).rows).toEqual([
+      { organization_id: alternateOrg, action: "payment.intent.refund_observed", record_id: linkedPayment },
+    ]);
+  });
+
+  it("keeps an out-of-order confirmation on hold and preserves callback-only access", async () => {
+    const pendingAttempt = "00000000-0000-4000-8000-000000000021";
+    const token = "synthetic-out-of-order-reversal";
+    await db.query(
+      `INSERT INTO public.payment_attempts (id, organization_id, payment_id, state, callback_token)
+       VALUES ($1, $2, $1, 'pending', encode(extensions.digest(convert_to($3, 'UTF8'), 'sha256'), 'hex'))`,
+      [pendingAttempt, org, token],
+    );
+    const apply = async (key: string, outcome: string) => (
+      await db.query<{ result: Record<string, unknown> }>(
+        "SELECT neo_payment_intent_apply($1, $2) AS result", [key, outcome],
+      )
+    ).rows[0]?.result;
+
+    expect(await apply("unknown-token", "reversed")).toMatchObject({ ok: false, reason: "unknown_token" });
+    expect(await apply(token, "reversed")).toMatchObject({ ok: true, state: "pending" });
+    expect(await apply(token, "approved")).toMatchObject({
+      ok: false, reason: "refund_reconciliation_required", state: "pending",
+    });
+    const grants = await db.query(`
+      SELECT
+        has_function_privilege('authenticated','public.neo_payment_intent_apply(text,text,text,text,jsonb)','EXECUTE') AS staff,
+        has_function_privilege('service_role','public.neo_payment_intent_apply(text,text,text,text,jsonb)','EXECUTE') AS service
+    `);
+    expect(grants.rows).toEqual([{ staff: false, service: true }]);
   });
 });

@@ -13,7 +13,11 @@ import { LoadingState } from "@/components/common/StateSystem";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { canAccessPath } from "@/lib/nav-permissions";
-import { usePaymentReadiness, type PaymentReadiness } from "@/lib/payment-methods";
+import {
+  paymentAdapterCapabilities,
+  usePaymentReadiness,
+  type PaymentReadiness,
+} from "@/lib/payment-methods";
 
 function tone(row: PaymentReadiness): "success" | "warning" | "default" {
   if (row.ready) return "success";
@@ -21,8 +25,8 @@ function tone(row: PaymentReadiness): "success" | "warning" | "default" {
 }
 
 function state(row: PaymentReadiness): string {
-  if (row.kind === "recorded") return "Available";
-  if (row.ready) return "Ready";
+  if (row.kind === "recorded") return row.ready ? "Available" : "Unavailable";
+  if (row.ready) return "Collection enabled";
   if (row.last_test?.status === "failed" || row.last_test_status === "failed") return "Verification failed";
   if (row.configured) return row.enabled ? "Not tested" : "Switched off";
   return "Not configured";
@@ -60,6 +64,11 @@ export function PaymentReadinessPanel({ title = "Payment methods" }: { title?: s
                 <span className="block text-xs text-muted-foreground">
                   {row.reason ?? row.hint ?? ""}
                 </span>
+                {row.kind === "provider" && paymentAdapterCapabilities(row.method)?.refundExecution === "external-confirmation-only" ? (
+                  <span className="block text-xs text-muted-foreground">
+                    Finance can record a completed external POS refund. The provider’s refund eligibility and limits require separate verification.
+                  </span>
+                ) : null}
                 {row.kind === "provider" && row.config_path && (isAdmin || canAccessPath(can, row.config_path)) ? (
                   <Link to={row.config_path} className="mt-1 inline-block text-xs underline underline-offset-2">
                     {row.ready ? "Review setup" : "Set this up"}

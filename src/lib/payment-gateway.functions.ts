@@ -64,7 +64,7 @@ type ConnectionRow = {
   secret_names: unknown;
 };
 
-const TERMINAL_OUTCOMES = new Set(["approved", "declined", "cancelled", "timeout", "reversed"]);
+const TERMINAL_OUTCOMES = new Set(["approved", "declined", "cancelled", "timeout", "reversed", "refunded"]);
 
 function callbackBase(): string | null {
   const configured = process.env["PUBLIC_SITE_URL"];
@@ -282,13 +282,35 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
           args?: Record<string, unknown>,
         ) => Promise<{ data: unknown; error: unknown }>;
       };
-      await admin.rpc("neo_payment_intent_apply", {
+      const applied = await admin.rpc("neo_payment_intent_apply", {
         _token: callbackToken,
         _outcome: status,
         _provider_reference: answer.reference ?? undefined,
         _detail: answer.message ?? null,
         _payload: answer as Record<string, unknown>,
       });
+      const result = applied.data as {
+        ok?: boolean;
+        state?: string;
+        refund_reconciliation_required?: boolean;
+      } | null;
+      if (result?.refund_reconciliation_required === true) {
+        return {
+          ok: false,
+          reason: "refund_reconciliation_required",
+          detail: "Finance must reconcile the provider's refund before it can be recorded.",
+          ...(typeof result.state === "string" ? { state: result.state } : {}),
+          providerReference: answer.reference ?? null,
+        };
+      }
+      if (applied.error || result?.ok !== true) {
+        return {
+          ok: false,
+          reason: "provider_outcome_unrecorded",
+          detail: "NEØ could not record the processor's answer. Check the existing payment before retrying.",
+          state: "pending",
+        };
+      }
       return { ok: true, state: status, providerReference: answer.reference ?? null };
     }
 

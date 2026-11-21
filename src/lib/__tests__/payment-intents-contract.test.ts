@@ -7,7 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PAYMENT_METHOD_CATALOGUE, paymentMethod } from "@/lib/payment-methods";
+import { PAYMENT_METHOD_CATALOGUE, paymentAdapterCapabilities, paymentMethod } from "@/lib/payment-methods";
 import { EXTERNAL_METHODS } from "@/lib/pos";
 import { RPC_MANIFEST } from "@/lib/rpc-manifest";
 
@@ -26,6 +26,21 @@ describe("payment method catalogue", () => {
     for (const method of Object.keys(EXTERNAL_METHODS)) {
       expect(paymentMethod(method)?.kind).toBe("provider");
     }
+  });
+
+  it("reports the actual NEØ collection path separately from external refund recording", () => {
+    expect(paymentAdapterCapabilities("m-pesa")).toEqual({
+      collection: "stk-prompt",
+      refundExecution: "external-confirmation-only",
+    });
+    for (const method of ["card-terminal", "qr"]) {
+      expect(paymentAdapterCapabilities(method)).toEqual({
+        collection: "processor-handoff",
+        refundExecution: "external-confirmation-only",
+      });
+    }
+    expect(paymentAdapterCapabilities("card")).toBeUndefined();
+    expect(paymentAdapterCapabilities("unconfigured-provider")).toBeUndefined();
   });
 
   it("gives every provider-backed method one place it is set up", () => {

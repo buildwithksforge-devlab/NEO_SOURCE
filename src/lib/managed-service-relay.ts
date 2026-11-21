@@ -1,9 +1,24 @@
 import { managedRequestDeadline, managedTransportFailure } from "./managed-request-deadline";
 import { protectDynamicResponse } from "./web-response-policy";
+import { SIMULATION_BRIDGE_CONTRACT, SIMULATION_BRIDGE_HEADER } from "./simulation/connection-status";
 const ORIGIN = "https://horizon-prime-os.lovable.app";
 // Compared with Horizon's public client on 18 Nov. IDs identify routes, not
 // installed implementation/authority parity. Activation remains separately gated.
-export const MANAGED_SERVICE_OPERATIONS = new Map([
+type ManagedOperation = {
+  name: string;
+  group: "comms" | "users" | "simulation";
+  action: boolean;
+  method?: "GET";
+};
+
+// Build-export IDs for four explicit Simulation operations. Horizon must
+// publish this health check before actions are accepted by the relay.
+const SIMULATION_HEALTH_ID = "e147f1a7d3e4fa6db8c865a12a139885a10acd9f524b22965821cd6eec8c7b55";
+export const MANAGED_SERVICE_OPERATIONS = new Map<string, ManagedOperation>([
+  [SIMULATION_HEALTH_ID, { name: "checkSimulationService", group: "simulation", action: false, method: "GET" }],
+  ["30b6abba53a588fa11989106dbe2c6b30e947b8e44a5a7d920b47fd9946692cf", { name: "createTestEnvironment", group: "simulation", action: true }],
+  ["375cd295efdbb60b57f3139b04766ba70d3091f31a8bca9490bc5dd3b9821724", { name: "runSystemTest", group: "simulation", action: true }],
+  ["990731089e8284115fba84e523615e777927279642c4f9ee2923894682d37d2d", { name: "cleanTestEnvironment", group: "simulation", action: true }],
   [
     "e98b312a6ceb488a8c655879fd1294414c8ca3f5371063378ad309e1c8c1f433",
     { name: "getProviderCredentialSummary", group: "comms", action: false },
@@ -50,13 +65,15 @@ export async function forwardManagedServiceRequest(
   ).runtime?.cloudflare?.env;
   const setting = (key: string) => runtime[key] ?? requestEnv?.[key] ?? process.env[key];
   const gate =
-    operation.group === "users" ? "NEO_MANAGED_USERS_ENABLED" : "NEO_MANAGED_COMMS_ENABLED";
+    operation.group === "simulation" ? "NEO_MANAGED_SIMULATION_ENABLED"
+      : operation.group === "users" ? "NEO_MANAGED_USERS_ENABLED" : "NEO_MANAGED_COMMS_ENABLED";
   if (setting(gate) !== "true") return null;
   const fail = (status: number, message: string) =>
     protectDynamicResponse(
       new Response(message, { status, headers: { "content-type": "text/plain; charset=utf-8" } }),
     );
-  if (request.method !== "POST") return fail(405, "This operation requires POST.");
+  const method = operation.method ?? "POST";
+  if (request.method !== method) return fail(405, `This operation requires ${method}.`);
   if (url.search)
     return fail(400, "Query parameters are not supported for this managed operation.");
   if (
@@ -83,6 +100,9 @@ export async function forwardManagedServiceRequest(
       503,
       "Managed account changes are not enabled. Verify the original account authority and audit contract first.",
     );
+  const simulationAction = operation.group === "simulation" && operation.action;
+  if (simulationAction && setting("NEO_MANAGED_SIMULATION_ACTIONS_ENABLED") !== "true")
+    return fail(503, "Managed Simulation actions are not enabled.");
   const contentType = request.headers.get("content-type");
   if (contentType && contentType.split(";")[0]?.trim() !== "application/json")
     return fail(415, "Only JSON server-function requests are supported.");
@@ -121,15 +141,31 @@ export async function forwardManagedServiceRequest(
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  const deadline = managedRequestDeadline(request.signal);
+  const deadline = managedRequestDeadline(
+    request.signal, operation.name === "runSystemTest" ? 180_000 : undefined,
+  );
   try {
+    if (simulationAction) {
+      const health = await upstreamFetch.call(globalThis, `${ORIGIN}/_serverFn/${SIMULATION_HEALTH_ID}`, {
+        method: "GET",
+        headers: { Authorization: authorization, Origin: ORIGIN, "x-tsr-serverFn": "true" },
+        redirect: "manual",
+        signal: deadline.signal,
+      });
+      const ready = health.ok && health.headers.get(SIMULATION_BRIDGE_HEADER) === SIMULATION_BRIDGE_CONTRACT;
+      await health.body?.cancel();
+      if (!ready)
+        return fail(503, "Horizon has not verified the current Simulation contract. No test action was sent.");
+    }
     const upstream = await upstreamFetch.call(globalThis, `${ORIGIN}/_serverFn/${id}`, {
-      method: "POST",
+      method,
       headers,
       body: size ? body : null,
       redirect: "manual",
       signal: deadline.signal,
     });
+    if (operation.group === "simulation" && upstream.status === 404)
+      return fail(503, "Horizon has not published this Simulation operation.");
     if (upstream.status >= 300 && upstream.status < 400)
       return fail(502, "The managed backend returned an unexpected redirect.");
     if (!upstream.ok && !upstream.headers.has("x-tss-serialized"))
@@ -149,7 +185,9 @@ export async function forwardManagedServiceRequest(
     console.error("Managed service transport failed", managedTransportFailure(error));
     return fail(
       503,
-      "The managed response was not received. Check the existing message/account history; no automatic retry or local fallback was made.",
+      operation.group === "simulation"
+        ? "The managed Simulation response was not received. Check run history before retrying."
+        : "The managed response was not received. Check the existing message/account history; no automatic retry or local fallback was made.",
     );
   } finally {
     deadline.dispose();

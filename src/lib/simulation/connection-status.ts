@@ -1,7 +1,10 @@
+export const SIMULATION_BRIDGE_CONTRACT = "routed-cash-journal-v1";
+export const SIMULATION_BRIDGE_HEADER = "x-neo-simulation-contract";
+
 export const simulationConnectionActions = {
-  missing_configuration: "Set the server Supabase URL and service-role key, then restart the server.",
+  missing_configuration: "The Simulation backend connection is missing. Check that the managed Horizon route is enabled for this deployment.",
   wrong_project: "Use the same Supabase project for browser sign-in and the Simulation server.",
-  invalid_credential: "Supabase requires a server-only secret or service-role JWT from that project. Replace the server key and restart.",
+  invalid_credential: "The Simulation backend's Supabase credential was rejected. Check whether this request is reaching the authorized backend.",
   registry_missing: "Apply the Simulation registry migrations to the configured Supabase project.",
   registry_denied: "The server key cannot read the Simulation registry. Check the project's server-role grants.",
   unreachable: "The server could not reach the Simulation registry. Check network access and retry.",

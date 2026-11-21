@@ -145,3 +145,66 @@ describe("conditional existing managed communications and account routes", () =>
     ).toBe(false);
   });
 });
+
+describe("managed Simulation", () => {
+  const health = "e147f1a7d3e4fa6db8c865a12a139885a10acd9f524b22965821cd6eec8c7b55";
+  const run = "375cd295efdbb60b57f3139b04766ba70d3091f31a8bca9490bc5dd3b9821724";
+  const statusOnly = {
+    NEO_MANAGED_SIMULATION_ENABLED: "true",
+    NEO_MANAGED_SIMULATION_ACTIONS_ENABLED: "false",
+  };
+  const actions = { ...statusOnly, NEO_MANAGED_SIMULATION_ACTIONS_ENABLED: "true" };
+  const horizon = "https://horizon-prime-os.lovable.app/_serverFn/";
+
+  it("allows the authenticated GET without a body or any API key", async () => {
+    const fetchHorizon = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ available: true }));
+    const response = await forwardManagedServiceRequest(
+      req(health, { method: "GET", body: null }),
+      statusOnly,
+      fetchHorizon,
+    );
+    expect(response?.status).toBe(200);
+    expect(fetchHorizon).toHaveBeenCalledOnce();
+    const [url, init] = fetchHorizon.mock.calls[0]!;
+    expect(url).toBe(horizon + health);
+    expect(init).toMatchObject({ method: "GET", body: null, redirect: "manual" });
+    const headers = new Headers(init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer test.payload.signature");
+    expect(headers.has("cookie")).toBe(false);
+    expect(headers.has("apikey")).toBe(false);
+  });
+
+  it("keeps test actions gated and restricts the health route to GET", async () => {
+    const fetchHorizon = vi.fn<typeof fetch>();
+    expect((await forwardManagedServiceRequest(req(run), statusOnly, fetchHorizon))?.status).toBe(503);
+    expect((await forwardManagedServiceRequest(req(health), statusOnly, fetchHorizon))?.status).toBe(405);
+    expect(fetchHorizon).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 200])("does not send a test action to an unverified Horizon build (%s)", async (status) => {
+    const fetchHorizon = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status }));
+    expect((await forwardManagedServiceRequest(req(run), actions, fetchHorizon))?.status).toBe(503);
+    expect(fetchHorizon).toHaveBeenCalledOnce();
+    expect(fetchHorizon.mock.calls[0]![0]).toBe(horizon + health);
+  });
+
+  it("sends the original request once after Horizon verifies the Simulation contract", async () => {
+    const fetchHorizon = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(
+        { available: true },
+        { headers: { "x-neo-simulation-contract": "routed-cash-journal-v1" } },
+      ))
+      .mockResolvedValueOnce(Response.json({ state: "completed" }));
+    const body = '{"data":{}}';
+    const response = await forwardManagedServiceRequest(req(run, { body }), actions, fetchHorizon);
+    expect(response?.status).toBe(200);
+    expect(fetchHorizon).toHaveBeenCalledTimes(2);
+    const [check, execute] = fetchHorizon.mock.calls;
+    expect(check?.[0]).toBe(horizon + health);
+    expect(check?.[1]?.method).toBe("GET");
+    expect(new Headers(check?.[1]?.headers).get("authorization")).toBe("Bearer test.payload.signature");
+    expect(execute?.[0]).toBe(horizon + run);
+    expect(execute?.[1]?.method).toBe("POST");
+    expect(new TextDecoder().decode(execute?.[1]?.body as Uint8Array)).toBe(body);
+  });
+});

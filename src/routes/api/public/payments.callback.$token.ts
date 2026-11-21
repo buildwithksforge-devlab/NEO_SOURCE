@@ -57,12 +57,21 @@ export const Route = createFileRoute("/api/public/payments/callback/$token")({
 
         if (applied.error) return new Response("Could not apply result", { status: 500 });
 
-        const result = (applied.data ?? {}) as { ok?: boolean; reason?: string; state?: string };
+        const result = (applied.data ?? {}) as {
+          ok?: boolean;
+          reason?: string;
+          state?: string;
+          refund_reconciliation_required?: boolean;
+        };
         if (!result.ok) {
           const status = result.reason === "unknown_token" ? 401 : 409;
           return Response.json({ ok: false, reason: result.reason }, { status });
         }
-        return Response.json({ ok: true, state: result.state });
+        return Response.json({
+          ok: true,
+          state: result.state,
+          ...(result.refund_reconciliation_required ? { refund_reconciliation_required: true } : {}),
+        });
       },
     },
   },

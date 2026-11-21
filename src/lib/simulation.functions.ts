@@ -7,25 +7,31 @@
  * the run record.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { simulationConfigurationIssue, simulationConnectionActions, simulationRegistryIssue } from "./simulation/connection-status";
+import {
+  SIMULATION_BRIDGE_CONTRACT,
+  SIMULATION_BRIDGE_HEADER,
+  simulationConfigurationIssue,
+  simulationConnectionActions,
+  simulationRegistryIssue,
+} from "./simulation/connection-status";
 
 type Ctx = { supabase: unknown; userId: string };
 
 async function adminTenant(context: Ctx) {
   const client = context.supabase as {
-    rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown }>;
-    from: (t: string) => {
-      select: (c: string) => {
-        eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: { organization_id: string } | null }> };
-      };
-    };
+    rpc: (fn: string) => Promise<{ data: unknown; error: unknown }>;
   };
-  const { data: profile } = await client.from("profiles").select("organization_id").eq("id", context.userId).maybeSingle();
-  if (!profile?.organization_id) throw new Error("No workspace is linked to this account.");
-  const { data: isAdmin } = await client.rpc("is_org_admin");
-  if (isAdmin !== true) throw new Error("Only a workspace administrator can use the Simulation Centre.");
-  return profile.organization_id;
+  const [workspace, authority] = await Promise.all([
+    client.rpc("current_org_id"),
+    client.rpc("is_org_admin"),
+  ]);
+  if (workspace.error || typeof workspace.data !== "string" || !workspace.data)
+    throw new Error("The active workspace could not be verified.");
+  if (authority.error || authority.data !== true)
+    throw new Error("Only a workspace administrator can use the Simulation Centre.");
+  return workspace.data;
 }
 
 async function admin() {
@@ -44,6 +50,7 @@ export const checkSimulationService = createServerFn({ method: "GET" })
     if (configurationIssue) return { available: false, issue: configurationIssue, checkedAt };
     try {
       const { error, status } = await (await admin()).from("neo_test_environments").select("id", { head: true }).limit(0);
+      if (!error) setResponseHeader(SIMULATION_BRIDGE_HEADER, SIMULATION_BRIDGE_CONTRACT);
       return { available: !error, issue: error ? simulationRegistryIssue(status, error.code) : null, checkedAt };
     } catch {
       return { available: false, issue: "unreachable" as const, checkedAt };
