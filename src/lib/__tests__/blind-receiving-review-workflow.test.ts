@@ -669,8 +669,14 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     expect((await db.query("SELECT quantity FROM movement_evidence")).rows).toEqual([{ quantity: "6" }]);
     expect((await db.query("SELECT batch_number, expiry_date::text, quantity_accepted FROM goods_receipt_lines")).rows)
       .toEqual([{ batch_number: "B-1", expiry_date: "2027-01-01", quantity_accepted: "6" }]);
-    expect((await db.query("SELECT has_function_privilege('anon','neo_request_receiving_recount(uuid,text)','EXECUTE') allowed")).rows)
-      .toEqual([{ allowed: false }]);
+    const postflight = readFileSync("supabase/repair/2026-11-21/receiving-custody-postflight.sql", "utf8");
+    expect((await db.query(postflight)).rows).toEqual([{
+      recount_table_exists: true,
+      recount_rpc_installed: true,
+      authenticated_can_request: true,
+      anonymous_can_request: false,
+      review_queue_reports_recount: true,
+    }]);
     await expect(db.exec(readFileSync("supabase/migrations/20261120173000_receiving_custody_on_request.sql", "utf8")))
       .rejects.toThrow(/Receiving custody prerequisite differs/);
     await db.exec("ROLLBACK");

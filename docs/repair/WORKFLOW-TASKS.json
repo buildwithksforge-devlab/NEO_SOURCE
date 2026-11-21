@@ -43,7 +43,7 @@
       "chains": ["WF07", "WF09"],
       "title": "Reconcile explicit existing station/store links and actual remaining configuration",
       "status": "AWAITING_LIVE_RESULTS",
-      "next_action": "Review explicit-link repair postcheck, preserve valid canonical mappings, resolve ambiguous or missing physical stores using actual department ownership; confirm depletion.",
+      "next_action": "Run NEXT-CONFIGURATION-DETAILS.sql to identify stations missing a usable departmental store. Preserve valid canonical mappings, verify ambiguous or missing links using actual department ownership, then confirm sale depletion and replenishment.",
       "live_acceptance": "OPEN"
     },
     {
@@ -60,10 +60,11 @@
       "id": "WF33-T01",
       "chains": ["WF04", "WF05", "WF06", "WF33"],
       "title": "Verify external supplier orders, receiving, invoices and hotel replies",
-      "status": "LOCAL_VERIFIED",
+      "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "bf82044",
       "local_evidence": ["The Partner portal renders issued LPO PDFs from the actual saved order and order lines. An isolated PostgreSQL test denied anonymous access, unrelated accounts, other properties and draft orders."],
-      "next_action": "Install the scoped LPO migration. Follow a controlled purchase order from the internal board into a real supplier account. Match partial receipt, posting and AP records and verify replies and historic document access.",
+      "live_evidence": ["Preview recognises neo_partner_lpo_payload and denies anonymous execution."],
+      "next_action": "Follow a controlled purchase order from the internal board into a real supplier account. Match partial receipt, posting and AP records and verify replies and historic document access.",
       "live_acceptance": "OPEN"
     },
     {
@@ -104,7 +105,7 @@
       "status": "AWAITING_INSTALLATION",
       "source_commit": "b7b4244",
       "local_evidence": ["71 focused tests passed across receiving, stores, GRN documents and supplier payables. The production client retains the current Storekeeper count when the server omits recount flags. The migration fixture verified independent recount, retry, approval, one stock posting, GRN data and audit. The Preview database returned PGRST202 for neo_request_receiving_recount."],
-      "next_action": "Review the installed receiving function definitions before applying the pending custody migration. After rollout, check independent review, requested recount, GRN retrieval and the linked payable with controlled property records.",
+      "next_action": "Run receiving-custody-preflight.sql and confirm all six baseline definitions before applying 20261120173000_receiving_custody_on_request.sql. Run receiving-custody-postflight.sql after installation. Then verify independent review, requested recount, durable GRN retrieval and the linked payable with controlled property records.",
       "live_acceptance": "OPEN"
     },
     {
@@ -132,10 +133,11 @@
       "id": "WF09-T01",
       "chains": ["WF07", "WF09", "WF10", "WF12", "WF16"],
       "title": "Use the POS departmental stock decision in Guest and Delivery",
-      "status": "AWAITING_INSTALLATION",
+      "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "bf82044",
       "local_evidence": ["The isolated PostgreSQL suite showed public sellability changes with department stock and blocked a stale multi-line order above the available quantity. The public API exposes status and published dish data only."],
-      "next_action": "Check the installed batch-aligned POS stock routine, install the public menu migration, then test sell-out and replenishment on a controlled department and each enabled channel.",
+      "live_evidence": ["Preview serves neo_public_menu_with_stock. Installation of the public menu routine is confirmed."],
+      "next_action": "Verify the installed batch-aligned POS stock routine and checkout protection, then test sell-out and replenishment on a controlled department and each enabled channel.",
       "live_acceptance": "OPEN"
     },
     {

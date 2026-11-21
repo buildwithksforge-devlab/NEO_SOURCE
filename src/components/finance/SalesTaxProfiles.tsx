@@ -40,6 +40,12 @@ export function SalesTaxProfiles() {
   return (
     <SectionCard title="Sales tax profiles" description="Group effective-dated tax codes for menu items. The rule order determines which taxes a compound rule includes in its base.">
       {profiles.error && <p role="alert">{profiles.error.message}</p>}
+      {profiles.isSuccess && !profiles.data.some((profile) => profile.active) ? (
+        <p role="status" className="mb-4 rounded-md border p-3 text-sm">
+          No active sales tax profiles. Create a profile with the approved tax codes and assign it to menu items,
+          a category, or the workspace default to save a named tax breakdown on new sales.
+        </p>
+      ) : null}
       <ul className="mb-4 divide-y">
         {(profiles.data ?? []).map((profile) => (
           <li key={profile.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
