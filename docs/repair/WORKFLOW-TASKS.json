@@ -2,11 +2,11 @@
   "updated": "2026-11-21",
   "active_task": "WF11-T01",
   "preview_release": {
-    "commit": "bf82044",
-    "build": "78c6396be4579bf5",
-    "worker_version": "be8d9da5-4a8e-402b-a821-b242ab8a2993",
-    "verified_public_evidence": "Eight Preview routes returned HTTP 200 and the deployed build ID. Public content checked Guest home, rooms, dining, folio, Delivery and checkout. The published PIN bundle contains device activation. Horizon serves a different Delivery shell. The new stock, display, LPO and named-rate SQL was prepared for separate installation. Signed-in and physical acceptance remain open.",
-    "preflight": "TypeScript, production smoke, required rollout RPC checks and full offline regression passed. The offline run recorded 5478 passed, 0 failed and 155 skipped cases. The named-rate receipt sample was rendered and verified."
+    "commit": "7185da1",
+    "build": "53ebadf0bae69c38",
+    "worker_version": "770269f3-2a38-4f58-b6a8-b5bc94247085",
+    "verified_public_evidence": "The home, Staff PIN, station-screen, Guest Explore and Delivery routes returned HTTP 200 with the new Preview build ID. The published Personal PIN asset contains Display sign-in setup. The new courier claim and station account routines are installed and reject anonymous calls. Signed-in station and courier sandbox acceptance remain open.",
+    "preflight": "The exact committed release passed TypeScript, production build smoke and the required rollout RPC checks. The owner and staff station entry change passed 53 focused local checks. The previous bf82044 release recorded 5478 offline tests passed, 0 failed and 155 skipped."
   },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
@@ -121,10 +121,11 @@
       "id": "WF12-T01",
       "chains": ["WF12", "WF34"],
       "title": "Scope courier dispatch and require a saved acknowledgement",
-      "status": "LOCAL_VERIFIED",
+      "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "3c53e82",
       "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
-      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql and 20261121123700_courier_handoff_claim.sql in order. The release check reported PGRST202 for the new claim on Preview. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
+      "live_evidence": ["The SQL editor export confirmed the courier claim is installed. Preview recognised and protected the new claim, and build 53ebadf0bae69c38 is live."],
+      "next_action": "Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
       "live_acceptance": "OPEN"
     },
     {
@@ -141,10 +142,11 @@
       "id": "WF02-T01",
       "chains": ["WF02", "WF21", "WF34"],
       "title": "Activate named devices and scoped station displays from the PIN screen",
-      "status": "AWAITING_INSTALLATION",
+      "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "bf82044",
       "local_evidence": ["The staff PIN entry can redeem the existing one-use property code. Supervisors issue one-use display codes through the existing station pairing permissions. An isolated PostgreSQL test refused wrong scope, replay and revoked displays."],
-      "next_action": "Install 20261121123800_station_account_entry.sql and publish the matching app. In My personal staff PIN, link an assigned staff account to its display. Verify an authorised device opens that display after an ordinary PIN sign-in, the existing email/password account opens the same display, and removing the assignment stops the redirect. The shared activation-code path and personal ticket action identity also need live verification.",
+      "live_evidence": ["The SQL editor export confirmed the station administration and destination routines are installed. Preview recognised both and denies anonymous access. The live build serves the owner setup asset and the public PIN and station-screen routes."],
+      "next_action": "In My personal staff PIN, link an assigned staff account to its display. Verify an authorised device opens that display after an ordinary PIN sign-in, the existing email/password account opens the same display, and removing the assignment stops the redirect. The shared activation-code path and personal ticket action identity also need live verification.",
       "live_acceptance": "OPEN"
     },
     {
