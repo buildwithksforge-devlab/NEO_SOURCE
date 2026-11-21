@@ -224,6 +224,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   recommended_role_template_status: "authenticated",
   set_role_permissions: "authenticated",
   has_permission: "authenticated",
+  neo_branch_in_scope: "authenticated",
   is_org_admin: "authenticated",
   is_platform_admin: "authenticated",
   my_dashboards: "authenticated",
