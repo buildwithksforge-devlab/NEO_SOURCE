@@ -2,11 +2,11 @@
   "updated": "2026-11-21",
   "active_task": "WF11-T01",
   "preview_release": {
-    "commit": "b7b4244",
-    "build": "992df40cbe806635",
-    "worker_version": "75088662-bbb2-4042-9251-658da4e78423",
-    "verified_public_evidence": "Seven routes returned HTTP 200 with the deployed build ID. HTTP content checks verified Guest Services, the selected experience enquiry, the transfer page's Hotel services return, and the Delivery checkout return to Guest dining. Receiving, procurement reconciliation, and sign-in route responses were checked. Signed-in rendering and interaction remain open because the browser tool could not establish the current URL.",
-    "preflight": "TypeScript, production smoke, required rollout RPC checks and full offline regression passed. The offline run recorded 5462 passed, 0 failed and 155 skipped cases. The selected local workflow command passed 378 tests and 27 readiness checks."
+    "commit": "758a112",
+    "build": "ae14e0fc3a3e81d6",
+    "worker_version": "ff3adf88-d3bb-4cc3-8810-856df9cc5a1b",
+    "verified_public_evidence": "Seven routes returned HTTP 200 with the deployed build ID. Guest home, Guest dining, Delivery menu, cart and checkout each rendered the same four Guest destinations. Checkout retained the Delivery controls and Guest Dining return. The deployed Windows print-agent package matched the tested SHA-256. Signed-in browser and physical acceptance remain open.",
+    "preflight": "TypeScript, production smoke, required rollout RPC checks and full offline regression passed. The offline run recorded 5473 passed, 0 failed and 155 skipped cases. Six focused Guest, tax and PDF suites passed 38 tests. The Node agent passed 16 tests and the packaged Windows agent passed 33 offline checks."
   },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
@@ -51,8 +51,8 @@
       "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
       "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
       "status": "LOCAL_VERIFIED",
-      "source_commit": "b7b4244",
-      "local_evidence": ["One responsive Guest navigation, explicit return from Delivery to Guest dining, one active cart in the database, one favourites list per guest using the current property menu.", "Booking detail uses the same verified-stay data as My Stay. Transfer and experience links carry the selected catalogue ID and require a saved request before showing success."],
+      "source_commit": "59be5d1",
+      "local_evidence": ["The same four Guest destinations, Home, Explore, Orders and My Stay, appear in Guest and property-linked Delivery. Delivery retains its Menu, Cart and Orders controls. The shared shell uses the same header and visual hierarchy through checkout.", "One active cart and one favourites list per guest use the current property menu. Booking detail uses the same verified-stay data as My Stay. Transfer and experience links carry the selected catalogue ID and require a saved request before showing success."],
       "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Confirm the intended property of Sartuday Kids Fun Day (f05d8e00-507f-4a9d-9e5c-51469cf473f0) before changing publication. The live Nairobi catalogue returned this listing with a Taveta venue.",
       "live_acceptance": "OPEN"
     },
@@ -80,8 +80,8 @@
       "chains": ["WF02", "WF03", "WF23", "WF24", "WF25"],
       "title": "Verify live staff PIN, saved receipt tax and physical and PDF outputs",
       "status": "AWAITING_LIVE_RESULTS",
-      "source_commit": "ffc50d0",
-      "local_evidence": ["PIN contracts, saved tax and ledger, branded long receipts, multi-page A4 PDF fixtures and print job states passed their focused tests. The packaged Windows agent passed 32 offline checks."],
+      "source_commit": "758a112",
+      "local_evidence": ["PIN contracts, saved tax and ledger, branded long receipts, multi-page A4 PDF fixtures and print job states passed their focused tests.", "The actual 42-item receipt was rendered and inspected across three 80 mm pages. The final page displays named tax components and total tax before the amount due, with payment details, feedback QR and staff footer. Both printer paths retain the tax names and amounts. The packaged Windows agent passed 33 offline checks."],
       "next_action": "Use an authorised paired device and staff account. Open an existing receipt for evidence and test a controlled new bill after confirming a saved tax profile, receipt branding and installed print-agent version. Compare PDF and paper, including logo, QR, payment and server footer. Retain separate acceptance of other document types and historical tax records.",
       "live_acceptance": "OPEN"
     },
@@ -109,8 +109,21 @@
       "id": "WF10-T01",
       "chains": ["WF10"],
       "title": "Stable item-selection identity after an uncertain successful insert",
-      "status": "QUEUED",
-      "next_action": "Bind one durable item intent to the atomic item/modifier write; recover the saved item after a lost response without creating a duplicate. Retain paid-bill protection."
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "34670cf",
+      "local_evidence": ["The terminal retains one UUID per pending selection in the current tab and submits it as the order-line primary key. Recovery verifies organization, waiter, bill and menu item. Existing atomic modifier and collected-bill triggers still own the write. Five focused tests passed, including a lost response, a failed recovery read and a deliberate second sale."],
+      "next_action": "Verify a lost response from the signed-in POS against installed order-line and modifier records. Then follow the single saved item through production, service and stock.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF12-T01",
+      "chains": ["WF12", "WF34"],
+      "title": "Scope courier dispatch and require a saved acknowledgement",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "33fbaac",
+      "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A provider response must be reflected in the saved dispatch state before the client reports success. Six focused handler tests passed."],
+      "next_action": "Verify a configured courier and callback in a sandbox. The existing send routine still needs an atomic claim and explicit reconciliation of uncertain network outcomes before simultaneous sends and retries are certified.",
+      "live_acceptance": "OPEN"
     }
   ]
 }
