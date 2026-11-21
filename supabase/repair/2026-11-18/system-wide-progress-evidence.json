@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-18",
+  "scope": "All current and future organisations; tenant-specific data cleanup is separate",
+  "installed_database_evidence_source": "User returned SYSTEM-WIDE-WORKFLOW-INSPECTION.sql results from Lovable",
+  "organisations_reported": 28,
+  "shared_workflows": {
+    "installed": 23,
+    "known_shared_definitions": 20,
+    "known_reviewed_later_definitions": [
+      {"routine":"neo_supplier_invoice_accept", "hash":"e23c4c22a3c48c7fbcca961b95438bac", "source":"20261115020000_supplier_matching_quantity_parity.sql"},
+      {"routine":"neo_revenue_reconciliation", "hash":"de81c7c64b5a359b6925040ce1f47bd1", "source":"20261115013000_finance_checkout_ledger_parity.sql"},
+      {"routine":"pos_record_payment_attempt", "hash":"915008ca2eb86bd57147bb54230b7817", "source":"20261116110000_mpesa_receipt_review.sql; canonical PostgreSQL hash independently reproduced"}
+    ],
+    "unmatched_definition_preserve_for_review": null,
+    "known_tenant_gate_markers_found": 0
+  },
+  "recipe_atomic_contract": {"installed":true,"staff_execute":true,"anonymous_execute":false,"live_api_missing_function_cleared":true,"staff_live_save_import_acceptance":"open"},
+  "minibar_durable_request_wrapper": {"installed":false,"coordinated_client_and_database_rollout":"required","current_core_normalized_hash":"02e573b16d42f6eadb1a8fbc3ee9c80a","current_core_matches_staged_guards":false},
+  "ownership_data": {"invalid_active_recipe_outputs":21,"invalid_direct_stock_menu_ownership":20,"affected_organisation":"TWIN BOABAB ENTERPRISES LTD","prepared_existing_menu_repair":"not confirmed executed"},
+  "station_counts": {"first_legacy_link_count":"superseded; do not treat as confirmed missing stores","corrected_inspection":"SYSTEM-ROLLOUT-DETAILS.sql uses station_consumption_stores and only stock-consuming stations","stock_consuming_stations_without_valid_store":18},
+  "live_preview": {"build":"b33769acc209ed89","auth_page_status":200,"new_local_changes_in_this_build":false},
+  "local_privileged_backend_zero_row_read": {"status":401,"code":"PGRST301"},
+  "windows_printer_inventory": {"installed_queues":["Microsoft Print to PDF","OneNote (Desktop)"],"physical_printer_queue_found":false,"network_printer_port_found":false,"physical_print_acceptance":"open"},
+  "local_broad_regression": {"tests_passed":270,"files_passed":23,"live_completion_gates_closed":0},
+  "new_shared_property_picker_fix": "Local; menu reads and query cache now follow current tenant and selected property",
+  "property_picker_followup_validation": "TypeScript, production build and built-server smoke passed",
+  "recipe_two_arbitrary_tenant_database_test": "Passed save, approval, retry-history isolation and cross-tenant denial",
+  "completion": "Not complete: installed-version reconciliation, matching frontend rollout, live business acceptance, document inventory and physical printing remain"
+}

@@ -310,6 +310,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const applyTheme = () => {
       const dark = isDark();
       root.classList.toggle("dark", dark);
+      root.dataset["appearance"] = dark ? "dark" : "light";
       root.style.setProperty("--brand", b.primary);
       root.style.setProperty("--brand-accent", b.accent);
       root.style.setProperty("--font-sans", font.stack);

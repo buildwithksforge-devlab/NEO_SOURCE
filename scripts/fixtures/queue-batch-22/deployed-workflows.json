@@ -1,0 +1,1023 @@
+{
+  "columns": [
+    {
+      "column": "id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "receipt_id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "order_line_id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "stock_item_id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "quantity_ordered",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "quantity_received",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "quantity_damaged",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "unit",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "unit_price",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "batch_number",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "expiry_date",
+      "table": "goods_receipt_lines",
+      "type": "date"
+    },
+    {
+      "column": "notes",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "goods_receipt_lines",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "goods_receipt_lines",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "quantity_previously_received",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "quantity_accepted",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "quantity_rejected",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "quantity_returned",
+      "table": "goods_receipt_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "manufacture_date",
+      "table": "goods_receipt_lines",
+      "type": "date"
+    },
+    {
+      "column": "location_id",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "rejection_reason",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "inspection_notes",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "over_receipt_reason",
+      "table": "goods_receipt_lines",
+      "type": "text"
+    },
+    {
+      "column": "over_receipt_authorised_by",
+      "table": "goods_receipt_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "order_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "supplier_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "location_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "grn_number",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "delivery_note_number",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "supplier_invoice_number",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "received_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "is_partial",
+      "table": "goods_receipts",
+      "type": "boolean"
+    },
+    {
+      "column": "total_value",
+      "table": "goods_receipts",
+      "type": "numeric"
+    },
+    {
+      "column": "notes",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "received_by",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "posted_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "created_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "inspected_by",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "inspected_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "delivery_date",
+      "table": "goods_receipts",
+      "type": "date"
+    },
+    {
+      "column": "discrepancy_notes",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "attachments",
+      "table": "goods_receipts",
+      "type": "jsonb"
+    },
+    {
+      "column": "accrual_journal_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "accrued_value",
+      "table": "goods_receipts",
+      "type": "numeric"
+    },
+    {
+      "column": "accrual_error",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "reversal_journal_id",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "reversed_at",
+      "table": "goods_receipts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "reversed_by",
+      "table": "goods_receipts",
+      "type": "uuid"
+    },
+    {
+      "column": "reversal_reason",
+      "table": "goods_receipts",
+      "type": "text"
+    },
+    {
+      "column": "id",
+      "table": "guest_laundry_items",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "guest_laundry_items",
+      "type": "uuid"
+    },
+    {
+      "column": "order_id",
+      "table": "guest_laundry_items",
+      "type": "uuid"
+    },
+    {
+      "column": "price_item_id",
+      "table": "guest_laundry_items",
+      "type": "uuid"
+    },
+    {
+      "column": "description",
+      "table": "guest_laundry_items",
+      "type": "text"
+    },
+    {
+      "column": "service_type",
+      "table": "guest_laundry_items",
+      "type": "text"
+    },
+    {
+      "column": "quantity",
+      "table": "guest_laundry_items",
+      "type": "numeric"
+    },
+    {
+      "column": "counted_quantity",
+      "table": "guest_laundry_items",
+      "type": "numeric"
+    },
+    {
+      "column": "unit_price",
+      "table": "guest_laundry_items",
+      "type": "numeric"
+    },
+    {
+      "column": "tax_rate",
+      "table": "guest_laundry_items",
+      "type": "numeric"
+    },
+    {
+      "column": "line_total",
+      "table": "guest_laundry_items",
+      "type": "numeric"
+    },
+    {
+      "column": "condition_notes",
+      "table": "guest_laundry_items",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "guest_laundry_items",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "guest_laundry_items",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "laundry_number",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "customer_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "reservation_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "folio_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "requested_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "collected_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "required_delivery_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "delivered_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "service_type",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "express",
+      "table": "guest_laundry_orders",
+      "type": "boolean"
+    },
+    {
+      "column": "express_charge",
+      "table": "guest_laundry_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "special_instructions",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "discrepancy_notes",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "assignee_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "subtotal",
+      "table": "guest_laundry_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "tax_amount",
+      "table": "guest_laundry_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "total",
+      "table": "guest_laundry_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "posting_status",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "folio_line_id",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "posted_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "delivery_confirmed_by",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "created_by",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "created_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "guest_laundry_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "source_channel",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "requested_by_user",
+      "table": "guest_laundry_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "handover_mode",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "payment_intent",
+      "table": "guest_laundry_orders",
+      "type": "text"
+    },
+    {
+      "column": "resident",
+      "table": "guest_laundry_orders",
+      "type": "boolean"
+    },
+    {
+      "column": "id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "batch_number",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "source_department_id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "batch_kind",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "guest_order_id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "cycle_type",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "machine",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "weight_kg",
+      "table": "laundry_batches",
+      "type": "numeric"
+    },
+    {
+      "column": "detergent_usage",
+      "table": "laundry_batches",
+      "type": "numeric"
+    },
+    {
+      "column": "attendant_id",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "received_at",
+      "table": "laundry_batches",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "started_at",
+      "table": "laundry_batches",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "completed_at",
+      "table": "laundry_batches",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "quality_result",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "rewash_reason",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "notes",
+      "table": "laundry_batches",
+      "type": "text"
+    },
+    {
+      "column": "created_by",
+      "table": "laundry_batches",
+      "type": "uuid"
+    },
+    {
+      "column": "created_at",
+      "table": "laundry_batches",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "laundry_batches",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "supplier_invoice_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "line_number",
+      "table": "supplier_invoice_lines",
+      "type": "integer"
+    },
+    {
+      "column": "description",
+      "table": "supplier_invoice_lines",
+      "type": "text"
+    },
+    {
+      "column": "stock_item_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "expense_account_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "department_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "quantity",
+      "table": "supplier_invoice_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "unit_price",
+      "table": "supplier_invoice_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "tax_code_id",
+      "table": "supplier_invoice_lines",
+      "type": "uuid"
+    },
+    {
+      "column": "tax_amount",
+      "table": "supplier_invoice_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "net_amount",
+      "table": "supplier_invoice_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "total_amount",
+      "table": "supplier_invoice_lines",
+      "type": "numeric"
+    },
+    {
+      "column": "created_at",
+      "table": "supplier_invoice_lines",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "supplier_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "order_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "receipt_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "invoice_number",
+      "table": "supplier_invoices",
+      "type": "text"
+    },
+    {
+      "column": "invoice_date",
+      "table": "supplier_invoices",
+      "type": "date"
+    },
+    {
+      "column": "due_date",
+      "table": "supplier_invoices",
+      "type": "date"
+    },
+    {
+      "column": "amount",
+      "table": "supplier_invoices",
+      "type": "numeric"
+    },
+    {
+      "column": "matched_amount",
+      "table": "supplier_invoices",
+      "type": "numeric"
+    },
+    {
+      "column": "variance",
+      "table": "supplier_invoices",
+      "type": "numeric"
+    },
+    {
+      "column": "status",
+      "table": "supplier_invoices",
+      "type": "text"
+    },
+    {
+      "column": "notes",
+      "table": "supplier_invoices",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "supplier_invoices",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "supplier_invoices",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "branch_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "tax_amount",
+      "table": "supplier_invoices",
+      "type": "numeric"
+    },
+    {
+      "column": "paid_amount",
+      "table": "supplier_invoices",
+      "type": "numeric"
+    },
+    {
+      "column": "match_status",
+      "table": "supplier_invoices",
+      "type": "text"
+    },
+    {
+      "column": "approval_request_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "approved_by",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "approved_at",
+      "table": "supplier_invoices",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "journal_id",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    },
+    {
+      "column": "created_by",
+      "table": "supplier_invoices",
+      "type": "uuid"
+    }
+  ],
+  "diagnostic_version": "queue-readiness-laundry-routing-preflight-v1",
+  "functions": [
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.laundry_post_charge(_order uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ declare v_org uuid:=current_org_id(); v_order record; v_folio uuid; v_line uuid; v_key text; v_system boolean:=public.neo_system_posting(); begin if not v_system and not (has_permission('laundry','edit') or has_permission('laundry','approve') or has_permission('laundry','complete') or has_permission('laundry','deliver') or has_permission('pms','folios.post_charge') or is_org_admin()) then raise exception 'Not permitted to post laundry charges'; end if; select * into v_order from guest_laundry_orders where id=_order and organization_id=v_org for update; if v_order is null then raise exception 'Unknown laundry order'; end if; if v_order.posting_status='posted' then return jsonb_build_object('ok',true,'already_posted',true,'folio_line_id',v_order.folio_line_id); end if; if coalesce(v_order.total,0)<=0 then return jsonb_build_object('ok',false,'reason','no_chargeable_items','detail','Count the laundry items and price them before posting the charge.'); end if; v_folio:=v_order.folio_id; if v_folio is null and v_order.reservation_id is not null then select id into v_folio from folios where organization_id=v_org and reservation_id=v_order.reservation_id and status='open' order by created_at limit 1; end if; if v_folio is null then return jsonb_build_object('ok',false,'reason','no_folio','detail','No open guest folio for this laundry order.'); end if; v_key:='laundry:'||_order::text; perform set_config('neo.system_posting','on',true); v_line:=public.folio_post_charge(v_folio,'laundry','Guest laundry '||coalesce(v_order.laundry_number,''),1,coalesce(v_order.total,0)-coalesce(v_order.tax_amount,0),coalesce(v_order.tax_amount,0),0,0,'laundry',_order,'laundry',v_key,null); update guest_laundry_orders set posting_status='posted',folio_id=v_folio,folio_line_id=v_line,posted_at=now() where id=_order; return jsonb_build_object('ok',true,'folio_line_id',v_line); end $function$\n",
+      "md5": "1de16c25ea669167c0bbd1fa980f7128",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "laundry_post_charge(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_go_live_readiness(_branch uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _checks jsonb := '[]'::jsonb;\n  _n int;\n  _m int;\n  _fin jsonb;\nBEGIN\n  IF _org IS NULL THEN\n    RETURN jsonb_build_object('status', 'unknown', 'checks', '[]'::jsonb);\n  END IF;\n\n  -- POS configuration\n  SELECT count(*) INTO _n\n    FROM public.pos_settings ps\n   WHERE ps.organization_id = _org\n     AND (_branch IS NULL OR ps.branch_id IS NULL OR ps.branch_id = _branch);\n  SELECT count(*) INTO _m\n    FROM public.menu_items mi\n   WHERE mi.organization_id = _org\n     AND mi.publish_status = 'published'\n     AND (_branch IS NULL OR mi.branch_id IS NULL OR mi.branch_id = _branch);\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'pos', 'domain', 'Point of Sale', 'label', 'POS configured',\n    'status', CASE WHEN _n > 0 AND _m > 0 THEN 'ready' WHEN _m > 0 THEN 'attention' ELSE 'blocked' END,\n    'detail', CASE WHEN _m = 0 THEN 'No published menu items for this property'\n                   WHEN _n = 0 THEN 'POS settings not configured; defaults in use'\n                   ELSE _m || ' published menu items' END,\n    'count', _m, 'route', '/admin/configuration'));\n\n  -- KDS routing\n  SELECT count(*) INTO _n\n    FROM public.pos_order_items oi\n    JOIN public.pos_orders o ON o.id = oi.order_id\n   WHERE o.organization_id = _org\n     AND (_branch IS NULL OR o.branch_id = _branch)\n     AND o.created_at > now() - interval '30 days'\n     AND oi.station_id IS NOT NULL\n     AND NOT EXISTS (\n       SELECT 1 FROM public.station_tickets t\n        WHERE t.order_id = o.id AND t.station_id = oi.station_id);\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'kds', 'domain', 'Kitchen', 'label', 'KDS routing',\n    'status', CASE WHEN _n = 0 THEN 'ready' ELSE 'blocked' END,\n    'detail', CASE WHEN _n = 0 THEN 'All kitchen-bound order lines have tickets'\n                   ELSE _n || ' order lines have no kitchen ticket' END,\n    'count', _n, 'route', '/kitchen/reconciliation'));\n\n  -- Menu data completeness\n  SELECT count(*) INTO _n FROM public.neo_menu_validation_states(_branch) v WHERE v.state <> 'ready';\n  SELECT count(*) INTO _m FROM public.neo_menu_validation_states(_branch) v;\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'menu', 'domain', 'Menus', 'label', 'Menu master data complete',\n    'status', CASE WHEN _m = 0 THEN 'blocked' WHEN _n = 0 THEN 'ready' ELSE 'attention' END,\n    'detail', CASE WHEN _m = 0 THEN 'No menu items imported'\n                   WHEN _n = 0 THEN _m || ' items fully mapped'\n                   ELSE _n || ' of ' || _m || ' items need images, stations or recipes' END,\n    'count', _n, 'route', '/pos/menu'));\n\n  -- Housekeeping staffing\n  SELECT count(*) INTO _n\n    FROM public.employees e\n    JOIN public.departments d ON d.id = e.department_id\n   WHERE e.organization_id = _org\n     AND e.employment_status = 'active'\n     AND (_branch IS NULL OR e.branch_id = _branch)\n     AND (d.catalogue_key = 'housekeeping' OR lower(d.name) LIKE '%housekeep%');\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'housekeeping', 'domain', 'Housekeeping', 'label', 'Housekeeping staff configured',\n    'status', CASE WHEN _n >= 2 THEN 'ready' WHEN _n = 1 THEN 'attention' ELSE 'blocked' END,\n    'detail', _n || ' active housekeeping employees',\n    'count', _n, 'route', '/hr/employees'));\n\n  -- Approvals\n  SELECT count(*) INTO _n\n    FROM public.approval_rules r\n   WHERE r.organization_id = _org\n     AND r.active\n     AND (_branch IS NULL OR r.branch_id IS NULL OR r.branch_id = _branch);\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'approvals', 'domain', 'Governance', 'label', 'Approval rules configured',\n    'status', CASE WHEN _n > 0 THEN 'ready' ELSE 'blocked' END,\n    'detail', CASE WHEN _n > 0 THEN _n || ' active approval rules' ELSE 'No approval authority defined' END,\n    'count', _n, 'route', '/admin/approval-limits'));\n\n  -- Finance readiness\n  BEGIN\n    _fin := public.neo_finance_readiness();\n  EXCEPTION WHEN OTHERS THEN\n    _fin := NULL;\n  END;\n  SELECT count(*) INTO _n\n    FROM public.accounting_periods p\n   WHERE p.organization_id = _org\n     AND p.status = 'open'\n     AND CURRENT_DATE BETWEEN p.starts_on AND p.ends_on;\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'finance', 'domain', 'Finance', 'label', 'Accounting period open',\n    'status', CASE WHEN _n > 0 THEN 'ready' ELSE 'blocked' END,\n    'detail', CASE WHEN _n > 0 THEN 'An accounting period is open for today'\n                   ELSE 'No open accounting period covering today' END,\n    'count', _n, 'route', '/finance', 'extra', COALESCE(_fin, '{}'::jsonb)));\n\n  -- Rider identities\n  SELECT count(*) INTO _n\n    FROM public.rider_profiles rp\n   WHERE rp.organization_id = _org\n     AND rp.active\n     AND (_branch IS NULL OR rp.branch_id = _branch)\n     AND (rp.profile_id IS NULL OR rp.employee_id IS NULL);\n  SELECT count(*) INTO _m\n    FROM public.rider_profiles rp\n   WHERE rp.organization_id = _org\n     AND rp.active\n     AND (_branch IS NULL OR rp.branch_id = _branch);\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'riders', 'domain', 'Delivery', 'label', 'Rider identities complete',\n    'status', CASE WHEN _m = 0 THEN 'attention' WHEN _n = 0 THEN 'ready' ELSE 'blocked' END,\n    'detail', CASE WHEN _m = 0 THEN 'No active riders for this property'\n                   WHEN _n = 0 THEN _m || ' riders linked to staff records'\n                   ELSE _n || ' riders missing a staff or login link' END,\n    'count', _n, 'route', '/delivery/riders'));\n\n  -- Event billing\n  SELECT count(*) INTO _n\n    FROM public.event_bookings b\n   WHERE b.organization_id = _org\n     AND (_branch IS NULL OR b.branch_id = _branch)\n     AND b.status IN ('confirmed', 'completed')\n     AND NOT EXISTS (SELECT 1 FROM public.event_billing_items i WHERE i.booking_id = b.id);\n  _checks := _checks || jsonb_build_array(jsonb_build_object(\n    'key', 'event_billing', 'domain', 'Events', 'label', 'Event billing complete',\n    'status', CASE WHEN _n = 0 THEN 'ready' ELSE 'blocked' END,\n    'detail', CASE WHEN _n = 0 THEN 'All confirmed events have billing lines'\n                   ELSE _n || ' confirmed events have no charges' END,\n    'count', _n, 'route', '/events/bookings'));\n\n  RETURN jsonb_build_object(\n    'branch_id', _branch,\n    'generated_at', now(),\n    'status', CASE\n      WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(_checks) c WHERE c->>'status' = 'blocked') THEN 'blocked'\n      WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(_checks) c WHERE c->>'status' = 'attention') THEN 'attention'\n      ELSE 'ready' END,\n    'checks', _checks);\nEND;\n$function$\n",
+      "md5": "72d23c5024f4363d8fa65ebf3291a613",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_go_live_readiness(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_grn_post_accrual(_receipt uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_org uuid;\n  r record; pol public.procurement_matching_policies;\n  v_value numeric := 0; v_currency text; v_res jsonb; v_journal uuid; v_receipt uuid;\nBEGIN\n  SELECT * INTO r FROM public.goods_receipts WHERE id = _receipt;\n  IF r IS NULL THEN RAISE EXCEPTION 'Receipt not found'; END IF;\n  v_org := r.organization_id;\n  pol := public.neo_matching_policy(v_org, r.branch_id);\n\n  PERFORM pg_advisory_xact_lock(hashtextextended('grn:' || _receipt::text, 0));\n\n  SELECT COALESCE(sum(\n    COALESCE(l.quantity_accepted,\n      GREATEST(COALESCE(l.quantity_received,0) - COALESCE(l.quantity_rejected,0)\n               - COALESCE(l.quantity_damaged,0) - COALESCE(l.quantity_returned,0), 0))\n    * COALESCE(l.unit_price,0)), 0)\n    INTO v_value\n    FROM public.goods_receipt_lines l WHERE l.receipt_id = _receipt;\n\n  IF round(COALESCE(v_value,0),2) <= 0 THEN\n    RETURN jsonb_build_object('ok', true, 'skipped', 'zero_value');\n  END IF;\n\n  SELECT COALESCE(po.currency,'KES') INTO v_currency FROM public.purchase_orders po WHERE po.id = r.order_id;\n  v_currency := COALESCE(v_currency, 'KES');\n\n  PERFORM public.neo_finance_ensure_account(v_org, pol.inventory_account_code, 'Inventory', 'asset', 'Inventory');\n  PERFORM public.neo_finance_ensure_account(v_org, pol.grni_account_code, 'Goods Received Not Invoiced', 'liability', 'Payables');\n\n  v_res := public.neo_gl_post(\n    v_org, r.branch_id, 'procurement', 'goods_receipt', _receipt, 'accrual',\n    COALESCE(r.received_at::date, CURRENT_DATE), v_currency,\n    'Goods received ' || COALESCE(r.grn_number, _receipt::text),\n    jsonb_build_array(\n      jsonb_build_object('code', pol.inventory_account_code, 'debit', round(v_value,2), 'description','Stock received'),\n      jsonb_build_object('code', pol.grni_account_code, 'credit', round(v_value,2), 'description','Goods received not invoiced')\n    ));\n\n  v_journal := (v_res->>'journal_id')::uuid;\n\n  UPDATE public.goods_receipts\n     SET accrual_journal_id = v_journal,\n         accrued_value = round(v_value,2),\n         accrual_error = NULL\n   WHERE id = _receipt;\n\n  v_receipt := public.neo_record_posting_receipt(\n    v_org, r.branch_id, 'inventory', _receipt, COALESCE(r.grn_number, _receipt::text),\n    'posted', round(v_value,2), v_currency, NULL,\n    'Stock recognised against goods received not invoiced', NULL,\n    COALESCE(r.received_at::date, CURRENT_DATE));\n\n  UPDATE public.finance_posting_receipts\n     SET journal_id = v_journal, posting_type = 'accrual'\n   WHERE id = v_receipt;\n\n  PERFORM public.emit_domain_event(v_org, r.branch_id, 'grn.accepted', 'procurement', _receipt,\n    jsonb_build_object('reference', r.grn_number, 'value', round(v_value,2), 'currency', v_currency),\n    'grn:' || _receipt::text || ':accepted');\n  PERFORM public.emit_domain_event(v_org, r.branch_id, 'inventory.recognised', 'procurement', _receipt,\n    jsonb_build_object('reference', r.grn_number, 'value', round(v_value,2), 'currency', v_currency),\n    'grn:' || _receipt::text || ':inventory_recognised');\n  PERFORM public.emit_domain_event(v_org, r.branch_id, 'finance.posted', 'procurement', _receipt,\n    jsonb_build_object('reference', r.grn_number, 'journal_id', v_journal, 'receipt_id', v_receipt,\n                       'value', round(v_value,2), 'currency', v_currency),\n    'grn:' || _receipt::text || ':finance_posted');\n\n  PERFORM public.neo_canonical_transaction_set(\n    _org := v_org, _branch := r.branch_id, _module := 'inventory', _source := _receipt,\n    _reference := r.grn_number, _operational := 'posted', _financial := 'posted',\n    _amount := round(v_value,2), _currency := v_currency,\n    _idempotency := 'inventory:' || _receipt::text, _actor := auth.uid(),\n    _owner := 'Finance', _next_action := 'Match against the supplier invoice', _blocker := NULL,\n    _journal := v_journal, _receipt := v_receipt,\n    _downstream := jsonb_build_object('grn.accepted','emitted','inventory.recognised','emitted','finance.posted','emitted'),\n    _metadata := jsonb_build_object('entity_kind', 'grn'));\n\n  -- A superseded twin keeps its history but stops competing as a read model.\n  UPDATE public.canonical_transaction_states\n     SET operational_state = 'superseded', financial_state = 'not-applicable',\n         next_action = NULL, current_owner = NULL,\n         metadata = coalesce(metadata,'{}'::jsonb)\n           || jsonb_build_object('superseded_by', 'inventory:' || _receipt::text)\n   WHERE organization_id = v_org AND source_id = _receipt\n     AND idempotency_key = 'grn:' || _receipt::text\n     AND operational_state <> 'superseded';\n\n  RETURN v_res || jsonb_build_object('receipt_id', v_receipt);\nEND $function$\n",
+      "md5": "7ddbe107f01db6513a2b3d23d6b8f213",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_grn_post_accrual(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_laundry_completion_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.status IN ('delivered','completed','closed') THEN\n    IF coalesce(btrim(NEW.laundry_number), '') = '' THEN\n      RAISE EXCEPTION 'This laundry order has no order number yet, so it cannot be completed.'\n        USING ERRCODE = '23514';\n    END IF;\n    IF coalesce(NEW.total, 0) <= 0 OR NEW.total::text IN ('NaN','Infinity','-Infinity') THEN\n      RAISE EXCEPTION 'This laundry order has no priced items, so it cannot be completed. Price the items first.'\n        USING ERRCODE = '23514';\n    END IF;\n  END IF;\n  RETURN NEW;\nEND $function$\n",
+      "md5": "b4908b48fbbac89995f83fbb8f3421ed",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_laundry_completion_guard()"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_laundry_order_advance(_order uuid, _status text, _note text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _row public.guest_laundry_orders%ROWTYPE;\n  _posting jsonb;\nBEGIN\n  IF _org IS NULL THEN RAISE EXCEPTION 'No organisation context'; END IF;\n  IF (\n    public.has_permission('laundry','orders','edit') OR\n    public.has_permission('laundry','orders','approve') OR\n    public.is_org_admin()\n  ) IS NOT TRUE THEN\n    RAISE EXCEPTION 'Not permitted to update guest laundry' USING ERRCODE='42501';\n  END IF;\n\n  SELECT * INTO _row\n    FROM public.guest_laundry_orders\n   WHERE id=_order AND organization_id=_org\n   FOR UPDATE;\n  IF _row.id IS NULL THEN RAISE EXCEPTION 'Laundry order not found'; END IF;\n\n\n  -- neo_laundry_scope_transition_guard_v1\n  IF auth.uid() IS NULL\n     OR public.neo_branch_in_scope(_row.branch_id) IS NOT TRUE\n  THEN\n    RAISE EXCEPTION 'Laundry order is outside your branch scope'\n      USING ERRCODE = '42501';\n  END IF;\n\n  IF _status IS NULL OR (\n    _status IS DISTINCT FROM _row.status\n    AND NOT COALESCE(\n      CASE _row.status\n        WHEN 'requested' THEN\n          _status IN ('collected', 'on-hold', 'cancelled')\n        WHEN 'awaiting-collection' THEN\n          _status IN ('collected', 'on-hold', 'cancelled')\n        WHEN 'collected' THEN\n          _status IN ('on-hold', 'disputed', 'cancelled')\n        WHEN 'ready-for-delivery' THEN\n          _status IN ('delivered', 'on-hold', 'disputed')\n        WHEN 'delivered' THEN\n          _status IN ('completed', 'disputed')\n        WHEN 'on-hold' THEN\n          _status IN ('collected', 'disputed', 'cancelled')\n        WHEN 'disputed' THEN\n          _status IN ('on-hold', 'ready-for-delivery', 'cancelled')\n        ELSE false\n      END,\n      false\n    )\n  ) THEN\n    RAISE EXCEPTION 'Laundry transition from % to % is not permitted',\n      _row.status, _status\n      USING ERRCODE = '22023';\n  END IF;\n\n  IF _status = _row.status THEN\n    RETURN jsonb_build_object('ok',true,'idempotent',true,'status',_row.status,\n      'posting_status',_row.posting_status);\n  END IF;\n\n  IF _status = 'delivered' THEN\n    UPDATE public.guest_laundry_orders\n       SET status='delivered',\n           delivered_at=COALESCE(delivered_at,now()),\n           delivery_confirmed_by=COALESCE(delivery_confirmed_by,auth.uid()),\n           discrepancy_notes=concat_ws(' ',NULLIF(discrepancy_notes,''),NULLIF(btrim(_note),'')),\n           updated_at=now()\n     WHERE id=_order;\n\n    -- Delivery and accounting are separate facts.  Retry the canonical Finance\n    -- posting and leave the order visibly blocked when the guest/folio/payment\n    -- context is not sufficient rather than pretending it was billed.\n    _posting := public.neo_laundry_retry_posting(_order);\n\n    SELECT * INTO _row FROM public.guest_laundry_orders WHERE id=_order;\n    PERFORM public.log_audit_event(\n      _org,'laundry.order.delivered','laundry',_order::text,\n      jsonb_build_object('status','ready-for-delivery'),\n      jsonb_build_object('status',_row.status,'delivered_at',_row.delivered_at,\n                         'posting_status',_row.posting_status,'posting',_posting),\n      COALESCE(NULLIF(btrim(_note),''),'Guest laundry handed back'));\n\n    RETURN jsonb_build_object('ok',true,'status',_row.status,\n      'delivered_at',_row.delivered_at,'posting_status',_row.posting_status,\n      'posting',_posting);\n  END IF;\n\n  IF _status = 'completed' THEN\n    UPDATE public.guest_laundry_orders\n       SET status='completed',updated_at=now()\n     WHERE id=_order;\n    RETURN jsonb_build_object('ok',true,'status','completed');\n  END IF;\n\n  UPDATE public.guest_laundry_orders\n     SET status=_status,\n         collected_at=CASE WHEN _status='collected' AND collected_at IS NULL THEN now() ELSE collected_at END,\n         discrepancy_notes=CASE WHEN _status IN ('on-hold','disputed')\n           THEN concat_ws(' ',NULLIF(discrepancy_notes,''),NULLIF(btrim(_note),''))\n           ELSE discrepancy_notes END,\n         updated_at=now()\n   WHERE id=_order;\n\n  RETURN jsonb_build_object('ok',true,'status',_status);\nEND;\n$function$\n",
+      "md5": "6df59f0b81b01c3abce5b32a9eeb020f",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_laundry_order_advance(uuid,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_laundry_retry_posting(_order uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE _org uuid := public.current_org_id(); _res jsonb; _ok boolean; _line uuid; _folio uuid;\nBEGIN\n  IF NOT (public.has_permission('laundry','orders','edit')\n          OR public.has_permission('laundry','orders','approve')\n          OR public.has_permission('pms','folios','post_charge')\n          OR public.has_permission('finance','postings','edit')\n          OR public.is_org_admin()) THEN\n    RAISE EXCEPTION 'Not permitted to re-post laundry charges';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM public.guest_laundry_orders\n                  WHERE id = _order AND organization_id = _org) THEN\n    RAISE EXCEPTION 'Unknown laundry order';\n  END IF;\n\n  _res := public.neo_finance_post_source('laundry', _order, true);\n  _ok := COALESCE((_res->>'ok')::boolean, false);\n\n  SELECT folio_line_id, folio_id INTO _line, _folio\n    FROM public.guest_laundry_orders WHERE id = _order;\n\n  -- A charge that reached Finance but never reached a guest folio is still a\n  -- completed posting; it is recorded as such with the reason kept visible.\n  IF _ok THEN\n    UPDATE public.guest_laundry_orders\n       SET posting_status = 'posted',\n           posted_at = COALESCE(posted_at, now()),\n           discrepancy_notes = CASE\n             WHEN _line IS NULL AND _folio IS NULL\n               THEN 'Recognised in Finance as laundry revenue. No open guest folio was attached, so nothing was charged to a guest bill.'\n             ELSE discrepancy_notes END\n     WHERE id = _order AND COALESCE(posting_status,'unposted') <> 'posted';\n    RETURN _res || jsonb_build_object('folio_charged', _line IS NOT NULL);\n  END IF;\n\n  UPDATE public.guest_laundry_orders\n     SET posting_status = 'blocked',\n         discrepancy_notes = COALESCE(_res->>'detail', _res->>'reason', discrepancy_notes)\n   WHERE id = _order AND COALESCE(posting_status,'unposted') <> 'posted';\n  RETURN _res;\nEND $function$\n",
+      "md5": "1565589e330407606ece35e7440fe7ef",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_laundry_retry_posting(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_menu_validation_states(_branch uuid DEFAULT NULL::uuid)\n RETURNS TABLE(item_id uuid, branch_id uuid, name text, state text, issues text[])\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  WITH scoped AS (\n    SELECT mi.*\n      FROM public.menu_items mi\n     WHERE mi.organization_id = public.current_org_id()\n       AND (_branch IS NULL OR mi.branch_id IS NULL OR mi.branch_id = _branch)\n  ), flagged AS (\n    SELECT s.id,\n           s.branch_id,\n           s.name,\n           ARRAY_REMOVE(ARRAY[\n             CASE WHEN s.station_id IS NULL THEN 'missing-station' END,\n             CASE WHEN s.category_id IS NULL THEN 'missing-category' END,\n             CASE WHEN COALESCE(s.image_url, '') = '' THEN 'missing-image' END,\n             CASE WHEN NOT EXISTS (\n               SELECT 1 FROM public.recipes r\n                WHERE r.menu_item_id = s.id\n                  AND r.status IN ('active', 'approved')\n             ) THEN 'missing-recipe' END,\n             CASE WHEN EXISTS (\n               SELECT 1 FROM public.recipes r\n                WHERE r.menu_item_id = s.id\n                  AND r.status IN ('active', 'approved')\n                  AND NOT EXISTS (SELECT 1 FROM public.recipe_ingredients ri WHERE ri.recipe_id = r.id)\n             ) THEN 'incomplete-recipe' END,\n             CASE WHEN s.base_price <= 0 THEN 'missing-price' END,\n             CASE WHEN s.publish_status = 'draft' THEN 'draft' END\n           ], NULL) AS issues\n      FROM scoped s\n  )\n  SELECT f.id,\n         f.branch_id,\n         f.name,\n         CASE\n           WHEN CARDINALITY(f.issues) = 0 THEN 'ready'\n           WHEN 'draft' = ANY(f.issues) THEN 'draft'\n           WHEN 'missing-price' = ANY(f.issues) THEN 'invalid-relationship'\n           WHEN 'missing-station' = ANY(f.issues) OR 'missing-category' = ANY(f.issues) THEN 'missing-mapping'\n           WHEN 'missing-recipe' = ANY(f.issues) OR 'incomplete-recipe' = ANY(f.issues) THEN 'missing-recipe'\n           ELSE 'missing-image'\n         END,\n         f.issues\n    FROM flagged f;\n$function$\n",
+      "md5": "669fbc76950f32b5a98b6ef12fde3804",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_menu_validation_states(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_pos_order_is_kitchen_bound(_order uuid, _org uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.pos_order_items oi\n     WHERE oi.order_id = _order\n       AND oi.organization_id = _org\n       AND oi.held = false\n       AND coalesce(oi.status,'draft') NOT IN ('cancelled','voided')\n  );\n$function$\n",
+      "md5": "22247017c1c21289a73472141c9fd3bc",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_pos_order_is_kitchen_bound(uuid,uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_pos_route_tickets_internal(_order uuid, _org uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _o public.pos_orders; _it record; _station uuid; _ticket uuid; _target int;\n  _created int := 0; _reused int := 0; _tickets int := 0; _unassigned int := 0;\n  _consumes boolean; _gap text[] := ARRAY[]::text[]; _station_name text;\nBEGIN\n  SELECT * INTO _o FROM public.pos_orders WHERE id = _order AND organization_id = _org;\n  IF _o.id IS NULL THEN RAISE EXCEPTION 'order_not_found' USING ERRCODE = 'P0002'; END IF;\n\n  PERFORM pg_advisory_xact_lock(hashtextextended(_order::text, 42));\n\n  FOR _it IN\n    SELECT oi.* FROM public.pos_order_items oi\n     WHERE oi.order_id = _order AND oi.organization_id = _org\n       AND oi.held = false AND coalesce(oi.status,'draft') NOT IN ('cancelled','voided')\n     ORDER BY oi.created_at\n  LOOP\n    IF EXISTS (SELECT 1 FROM public.station_ticket_items sti\n                WHERE sti.order_item_id = _it.id AND sti.remake_of_id IS NULL) THEN\n      _reused := _reused + 1; CONTINUE;\n    END IF;\n\n    _station := nullif(public.neo_kitchen_route_order_item(_it.id)->>'station_id','')::uuid;\n    IF _station IS NULL THEN\n      _unassigned := _unassigned + 1;\n      CONTINUE;\n    END IF;\n\n    SELECT COALESCE(mi.consumption_mode,'none') <> 'none'\n           OR EXISTS (SELECT 1 FROM public.recipes r\n                       WHERE r.organization_id = _org AND r.menu_item_id = _it.menu_item_id\n                         AND r.recipe_type IN ('menu_item','direct_sale') AND r.status = 'active')\n      INTO _consumes\n      FROM public.menu_items mi WHERE mi.id = _it.menu_item_id;\n\n    IF COALESCE(_consumes,false)\n       AND public.neo_station_consumption_location(_org, _station, _o.branch_id) IS NULL THEN\n      SELECT s.name INTO _station_name FROM public.operational_stations s WHERE s.id = _station;\n      IF NOT (COALESCE(_station_name, _station::text) = ANY (_gap)) THEN\n        _gap := _gap || COALESCE(_station_name, _station::text);\n      END IF;\n      CONTINUE;\n    END IF;\n\n    IF _station IS DISTINCT FROM _it.station_id THEN\n      UPDATE public.pos_order_items SET station_id = _station WHERE id = _it.id;\n    END IF;\n\n    SELECT COALESCE(\n      (SELECT pt.target_minutes FROM public.preparation_targets pt\n        WHERE pt.organization_id = _org AND pt.active\n          AND (pt.branch_id IS NULL OR pt.branch_id = _o.branch_id)\n          AND ((pt.scope='menu-item' AND pt.menu_item_id = _it.menu_item_id)\n            OR (pt.scope='station' AND pt.station_id = _station)\n            OR (pt.scope='order-type' AND pt.order_type = _o.order_type)\n            OR (pt.scope='branch'))\n        ORDER BY CASE pt.scope WHEN 'menu-item' THEN 1 WHEN 'station' THEN 2 WHEN 'order-type' THEN 3 ELSE 4 END\n        LIMIT 1),\n      (SELECT mi.prep_minutes FROM public.menu_items mi WHERE mi.id = _it.menu_item_id),\n      15) INTO _target;\n\n    -- A customer-app order has no staff profile behind it; the staff actor\n    -- column stays NULL rather than pointing at a guest auth user.\n    INSERT INTO public.station_tickets (\n      organization_id, branch_id, department_id, order_id, station_id, ticket_number, course,\n      priority, status, target_minutes, received_at, created_by, routing_note)\n    VALUES (_org, _o.branch_id,\n      (SELECT s.department_id FROM public.operational_stations s WHERE s.id = _station),\n      _order, _station,\n      'KT-' || upper(substr(replace(_order::text,'-',''),1,6)) || '-' ||\n        upper(substr(md5(_station::text || _it.course), 1, 4)),\n      _it.course, COALESCE(_o.order_type,'dine-in'), 'new', _target, now(),\n      (SELECT p.id FROM public.profiles p WHERE p.id = auth.uid()), NULL)\n    ON CONFLICT (order_id, COALESCE(station_id, '00000000-0000-0000-0000-000000000000'::uuid), course)\n      DO NOTHING;\n    IF FOUND THEN _tickets := _tickets + 1; END IF;\n\n    SELECT id INTO _ticket FROM public.station_tickets\n      WHERE order_id = _order AND course = _it.course\n        AND COALESCE(station_id,'00000000-0000-0000-0000-000000000000'::uuid) = _station;\n    IF _ticket IS NULL THEN CONTINUE; END IF;\n\n    BEGIN\n      INSERT INTO public.station_ticket_items (organization_id, ticket_id, order_item_id, status)\n      VALUES (_org, _ticket, _it.id, 'new');\n      _created := _created + 1;\n    EXCEPTION WHEN unique_violation THEN\n      _reused := _reused + 1;\n    END;\n\n    UPDATE public.pos_order_items\n       SET status = CASE WHEN status IN ('draft','new','held') THEN 'sent' ELSE status END,\n           sent_at = COALESCE(sent_at, now())\n     WHERE id = _it.id;\n  END LOOP;\n\n  IF array_length(_gap, 1) > 0 THEN\n    RAISE EXCEPTION 'store_unmapped: % has no consumption store for this property', array_to_string(_gap, ', ')\n      USING ERRCODE = '22023';\n  END IF;\n\n  IF _unassigned > 0 THEN\n    RAISE EXCEPTION 'routing_unresolved: % item(s) have no production station configured for this property', _unassigned\n      USING ERRCODE = '22023';\n  END IF;\n\n  UPDATE public.pos_orders\n     SET status = 'sent', sent_at = COALESCE(sent_at, now())\n   WHERE id = _order AND (status IS NULL OR status IN ('draft','open','new','draft-sent','confirmed'));\n\n  RETURN jsonb_build_object('ok', true, 'order_id', _order, 'tickets_created', _tickets,\n                            'items_created', _created, 'items_reused', _reused,\n                            'unassigned_station', 0);\nEND;\n$function$\n",
+      "md5": "1c3f7c0630f9997ae6127c781a779b73",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_pos_route_tickets_internal(uuid,uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_supplier_invoice_accept(_invoice uuid, _reason text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_org uuid := current_org_id();\n  inv record; pol public.procurement_matching_policies; l record;\n  v_net numeric; v_tax numeric; v_lines jsonb := '[]'::jsonb; v_res jsonb; v_debit_code text;\nBEGIN\n  IF NOT (has_permission('finance','approve') OR is_org_admin()) THEN\n    RAISE EXCEPTION 'Not permitted to accept supplier invoices';\n  END IF;\n  SELECT * INTO inv FROM supplier_invoices WHERE id = _invoice AND organization_id = v_org;\n  IF inv IS NULL THEN RAISE EXCEPTION 'Invoice not found'; END IF;\n  IF inv.journal_id IS NOT NULL THEN\n    RETURN jsonb_build_object('ok', true, 'already_posted', true, 'journal_id', inv.journal_id);\n  END IF;\n  IF inv.match_status = 'pending' THEN\n    PERFORM public.proc_three_way_match(_invoice);\n    SELECT * INTO inv FROM supplier_invoices WHERE id = _invoice;\n  END IF;\n  IF inv.match_status = 'held' AND COALESCE(btrim(_reason),'') = '' THEN\n    RAISE EXCEPTION 'This invoice is on hold. A written override reason is required.';\n  END IF;\n\n  pol := public.neo_matching_policy(v_org, inv.branch_id);\n  v_tax := round(COALESCE(inv.tax_amount,0), 2);\n  v_net := round(COALESCE(inv.amount,0) - v_tax, 2);\n  IF v_net + v_tax <= 0 THEN RAISE EXCEPTION 'Invoice has no value to post'; END IF;\n\n  v_debit_code := CASE WHEN inv.order_id IS NULL THEN pol.expense_account_code ELSE pol.grni_account_code END;\n  PERFORM public.neo_finance_ensure_account(v_org, v_debit_code,\n    CASE WHEN inv.order_id IS NULL THEN 'Other Operating Expenses' ELSE 'Goods Received Not Invoiced' END,\n    CASE WHEN inv.order_id IS NULL THEN 'operating_expense' ELSE 'liability' END,\n    CASE WHEN inv.order_id IS NULL THEN 'Operating Expenses' ELSE 'Payables' END);\n  PERFORM public.neo_finance_ensure_account(v_org, pol.payable_account_code, 'Accounts Payable', 'liability', 'Payables');\n\n  v_lines := v_lines || jsonb_build_object('code', v_debit_code, 'debit', v_net,\n    'description', CASE WHEN inv.order_id IS NULL THEN 'Non-order supplier invoice' ELSE 'Clear goods received not invoiced' END);\n  IF v_tax > 0 THEN\n    PERFORM public.neo_finance_ensure_account(v_org, pol.tax_input_account_code, 'VAT Input (Recoverable)', 'asset', 'Tax');\n    v_lines := v_lines || jsonb_build_object('code', pol.tax_input_account_code, 'debit', v_tax, 'description', 'Recoverable input tax');\n  END IF;\n  v_lines := v_lines || jsonb_build_object('code', pol.payable_account_code, 'credit', round(v_net + v_tax,2), 'description', 'Supplier payable');\n\n  v_res := public.neo_gl_post(v_org, inv.branch_id, 'procurement', 'supplier_invoice', _invoice, 'payable',\n    COALESCE(inv.invoice_date, CURRENT_DATE), 'KES',\n    'Supplier invoice ' || inv.invoice_number, v_lines);\n\n  UPDATE supplier_invoices\n     SET journal_id = (v_res->>'journal_id')::uuid,\n         status = 'approved',\n         match_status = CASE WHEN match_status = 'held' THEN 'approved-with-variance' ELSE match_status END,\n         approved_by = auth.uid(), approved_at = now(),\n         notes = COALESCE(notes,'') || CASE WHEN COALESCE(btrim(_reason),'') = '' THEN '' ELSE E'\\nAccepted: ' || _reason END\n   WHERE id = _invoice;\n\n  -- Reflect what has been invoiced back onto the purchase order trail.\n  IF inv.order_id IS NOT NULL THEN\n    FOR l IN SELECT * FROM supplier_invoice_lines WHERE supplier_invoice_id = _invoice LOOP\n      UPDATE purchase_order_lines pl\n         SET invoiced_quantity = COALESCE(pl.invoiced_quantity,0) + l.quantity\n       WHERE pl.order_id = inv.order_id\n         AND (pl.stock_item_id = l.stock_item_id\n              OR (l.stock_item_id IS NULL AND lower(pl.description) = lower(COALESCE(l.description,''))));\n    END LOOP;\n    UPDATE purchase_orders\n       SET invoiced_amount = COALESCE(invoiced_amount,0) + round(COALESCE(inv.amount,0),2),\n           status = CASE WHEN status IN ('closed','cancelled','voided') THEN status\n                         WHEN COALESCE(invoiced_amount,0) + COALESCE(inv.amount,0) >= COALESCE(total_amount,0) THEN 'fully-invoiced'\n                         ELSE 'partially-invoiced' END\n     WHERE id = inv.order_id;\n  END IF;\n\n  RETURN jsonb_build_object('ok', true, 'journal_id', v_res->>'journal_id', 'amount', round(v_net + v_tax,2));\nEND $function$\n",
+      "md5": "c0d761ed24f0d9c51d76bf9673dbb0e7",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_supplier_invoice_accept(uuid,text)"
+    }
+  ],
+  "read_only": "on",
+  "scope": "Installed code, schema and trigger inspection only. No delivery, payment, stock movement, invoice acceptance, journal posting or historical retry is invoked.",
+  "triggers": [
+    {
+      "definition": "CREATE TRIGGER aaa_neo_system_org_ctx BEFORE INSERT OR UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_set_system_org()",
+      "enabled": "O",
+      "function": "neo_set_system_org()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER aab_laundry_stamp_delivered BEFORE INSERT OR UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_laundry_stamp_delivered()",
+      "enabled": "O",
+      "function": "neo_laundry_stamp_delivered()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER guest_laundry_autopost_txn AFTER UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_autopost_txn()",
+      "enabled": "O",
+      "function": "neo_autopost_txn()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER guest_laundry_orders_autopost BEFORE UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_autopost_on_finalise()",
+      "enabled": "O",
+      "function": "neo_autopost_on_finalise()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER neo_laundry_completion_guard_trg BEFORE INSERT OR UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_laundry_completion_guard()",
+      "enabled": "O",
+      "function": "neo_laundry_completion_guard()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER neo_laundry_posting_invariant_trg BEFORE INSERT OR UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_laundry_posting_invariant()",
+      "enabled": "O",
+      "function": "neo_laundry_posting_invariant()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER tgtf_guest_laundry_orders_branch_id_fkey BEFORE INSERT OR UPDATE OF branch_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_assert_tenant_fk('branches', 'id', 'branch_id')",
+      "enabled": "O",
+      "function": "neo_assert_tenant_fk()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER tgtf_guest_laundry_orders_customer_id_fkey BEFORE INSERT OR UPDATE OF customer_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_assert_tenant_fk('customers', 'id', 'customer_id')",
+      "enabled": "O",
+      "function": "neo_assert_tenant_fk()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER tgtf_guest_laundry_orders_folio_id_fkey BEFORE INSERT OR UPDATE OF folio_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_assert_tenant_fk('folios', 'id', 'folio_id')",
+      "enabled": "O",
+      "function": "neo_assert_tenant_fk()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER tgtf_guest_laundry_orders_reservation_id_fkey BEFORE INSERT OR UPDATE OF reservation_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_assert_tenant_fk('reservations', 'id', 'reservation_id')",
+      "enabled": "O",
+      "function": "neo_assert_tenant_fk()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER tgtf_guest_laundry_orders_room_id_fkey BEFORE INSERT OR UPDATE OF room_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_assert_tenant_fk('rooms', 'id', 'room_id')",
+      "enabled": "O",
+      "function": "neo_assert_tenant_fk()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_guest_notify_laundry AFTER INSERT OR UPDATE OF status ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_guest_notify_laundry()",
+      "enabled": "O",
+      "function": "neo_guest_notify_laundry()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_laundry_number_order BEFORE INSERT ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION laundry_number_order()",
+      "enabled": "O",
+      "function": "laundry_number_order()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_link_guest_laundry BEFORE INSERT OR UPDATE OF folio_id, reservation_id, customer_id ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION neo_link_guest_from_context()",
+      "enabled": "O",
+      "function": "neo_link_guest_from_context()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_touch_guest_laundry_orders BEFORE UPDATE ON public.guest_laundry_orders FOR EACH ROW EXECUTE FUNCTION ops_touch_updated_at()",
+      "enabled": "O",
+      "function": "ops_touch_updated_at()",
+      "table": "guest_laundry_orders"
+    },
+    {
+      "definition": "CREATE TRIGGER neo_sync_guest_laundry_from_batch_trg AFTER INSERT OR UPDATE OF status ON public.laundry_batches FOR EACH ROW EXECUTE FUNCTION neo_sync_guest_laundry_from_batch()",
+      "enabled": "O",
+      "function": "neo_sync_guest_laundry_from_batch()",
+      "table": "laundry_batches"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_touch_laundry_batches BEFORE UPDATE ON public.laundry_batches FOR EACH ROW EXECUTE FUNCTION ops_touch_updated_at()",
+      "enabled": "O",
+      "function": "ops_touch_updated_at()",
+      "table": "laundry_batches"
+    }
+  ]
+}

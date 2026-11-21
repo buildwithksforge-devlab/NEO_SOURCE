@@ -42,6 +42,7 @@ export type CourierDispatchResult = {
 
 type JobRow = {
   id: string;
+  organization_id: string;
   branch_id: string | null;
   state: string;
   environment: string | null;
@@ -57,29 +58,24 @@ type ConnectionRow = {
   configuration: Record<string, unknown> | null;
 };
 
-const COURIER_OUTCOMES = new Set(["accepted", "assigned", "picked_up", "collected", "delivered", "failed", "declined", "rejected", "cancelled"]);
+const COURIER_OUTCOMES = new Set(["accepted", "assigned", "picked_up", "collected", "delivered", "completed", "failed", "declined", "rejected", "cancelled"]);
 
 function callbackBase(): string | null {
   const configured = process.env["PUBLIC_SITE_URL"];
   if (configured) return configured.replace(/\/$/, "");
-  const origin = getRequest()?.headers.get("origin") ?? getRequest()?.headers.get("host");
-  if (!origin) return null;
-  return origin.startsWith("http") ? origin.replace(/\/$/, "") : `https://${origin}`;
+  const request = getRequest();
+  return request ? new URL(request.url).origin : null;
 }
 
-type RpcClient = { rpc: (fn: string, args?: Record<string, unknown>) => Promise<unknown> };
+type RpcClient = {
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+};
 
-async function markSent(
-  client: unknown,
-  jobId: string,
-  opts: { reference?: string | undefined; detail?: string | undefined; failed: boolean },
-) {
-  await (client as RpcClient).rpc("neo_delivery_dispatch_mark_sent", {
-    _job: jobId,
-    ...(opts.reference ? { _provider_reference: opts.reference } : {}),
-    ...(opts.detail ? { _detail: opts.detail } : {}),
-    _failed: opts.failed,
-  });
+let adminModule: Promise<typeof import("@/integrations/supabase/client.server")> | undefined;
+
+function savedDispatchState(result: { data: unknown; error: unknown }): string | null {
+  const row = result.data as { ok?: boolean; state?: unknown } | null;
+  return !result.error && row?.ok === true && typeof row.state === "string" ? row.state : null;
 }
 
 export const dispatchCourierJob = createServerFn({ method: "POST" })
@@ -93,31 +89,53 @@ export const dispatchCourierJob = createServerFn({ method: "POST" })
 
     const { data: found } = await supabase
       .from("delivery_dispatch_jobs")
-      .select("id, branch_id, state, environment, callback_token, request_payload, provider_code")
+      .select("id, organization_id, branch_id, state, environment, callback_token, request_payload, provider_code")
       .eq("id", data.jobId)
       .maybeSingle();
 
     const job = found as JobRow | null;
     if (!job) return { ok: false, reason: "job_not_found" };
+    // A readable queue record does not grant permission to hand it to a provider.
+    const [assign, edit, scope] = await Promise.all([
+      supabase.rpc("has_permission", { _module: "delivery", _feature: "dispatch", _action: "assign" }),
+      supabase.rpc("has_permission", { _module: "delivery", _action: "edit" }),
+      job.branch_id
+        ? supabase.rpc("neo_branch_in_scope", { _branch: job.branch_id })
+        : Promise.resolve({ data: true, error: null }),
+    ]);
+    if ((assign.data !== true && edit.data !== true) || scope.error || scope.data !== true) {
+      return { ok: false, reason: "dispatch_access_denied", detail: "You cannot dispatch orders for this property." };
+    }
     if (job.state !== "requested") {
       return { ok: true, state: job.state, detail: "This dispatch has already been sent." };
     }
 
-    const { data: conn } = await supabase
+    const connections = supabase
       .from("integration_connections")
       .select("enabled, status, environment, configuration")
-      .eq("provider_code", job.provider_code)
+      .eq("organization_id", job.organization_id)
+      .eq("provider_code", job.provider_code);
+    const scopedConnections = job.branch_id
+      ? connections.or(`branch_id.eq.${job.branch_id},branch_id.is.null`)
+      : connections.is("branch_id", null);
+    const { data: conn, error: lookupError } = await scopedConnections
       .order("branch_id", { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();
 
     const connection = conn as ConnectionRow | null;
+    if (lookupError) {
+      return { ok: false, reason: "provider_lookup_failed", detail: "The courier connection could not be verified for this property." };
+    }
     if (!connection || !connection.enabled || connection.status !== "connected") {
       return {
         ok: false,
         reason: "provider_not_connected",
         detail: "No courier service is connected, so nothing can be sent.",
       };
+    }
+    if (job.environment !== (connection.environment ?? "sandbox")) {
+      return { ok: false, reason: "provider_environment_changed", detail: "The courier environment changed after this dispatch was opened." };
     }
 
     const config = (connection.configuration ?? {}) as Record<string, unknown>;
@@ -167,38 +185,69 @@ export const dispatchCourierJob = createServerFn({ method: "POST" })
       payment: { method: req["payment_method"] ?? null, status: req["payment_status"] ?? null },
       merchant_id: config["merchant_id"] ?? null,
       callback_url: `${base}/api/public/delivery/callback/${job.callback_token}`,
-      environment: job.environment ?? connection.environment ?? "sandbox",
+      environment: job.environment,
+    };
+
+    // Reserve the handoff before crossing the network. The open-job index also
+    // covers `sent`, so an interrupted request keeps its original job and token.
+    const { data: claimed, error: claimError } = await supabase.rpc("neo_delivery_dispatch_claim", { _job: job.id });
+    if (claimError) {
+      if (claimError.code === "23514") {
+        return { ok: false, reason: "order_no_longer_dispatchable", detail: claimError.message };
+      }
+      return { ok: false, reason: "dispatch_claim_failed", detail: "NEØ could not reserve this dispatch. Refresh its status before trying again." };
+    }
+    if (claimed !== true) {
+      return { ok: false, reason: "dispatch_already_claimed", detail: "This dispatch is already being handled. Refresh to see the latest status." };
+    }
+
+    const { supabaseAdmin } = await (adminModule ??= import("@/integrations/supabase/client.server"));
+
+    const saveAwaitingConfirmation = async (detail: string, reference?: string) => {
+      const { error } = await supabaseAdmin.from("delivery_dispatch_jobs")
+        .update({ state_detail: detail, ...(reference ? { provider_reference: reference } : {}), updated_at: new Date().toISOString() })
+        .eq("id", job.id)
+        .eq("organization_id", job.organization_id)
+        .eq("state", "sent");
+      return !error;
     };
 
     let answer: { status?: string; reference?: string; message?: string } = {};
+    let uncertainDetail: string | undefined;
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          "idempotency-key": job.id,
           ...(secret ? { authorization: `Bearer ${secret}` } : {}),
         },
         body: JSON.stringify(payload),
+        redirect: "error",
         signal: AbortSignal.timeout(20_000),
       });
       const text = await res.text();
       try {
-        answer = text ? (JSON.parse(text) as typeof answer) : {};
+        const body = text ? JSON.parse(text) : null;
+        if (body && typeof body === "object") {
+          answer = {
+            ...(typeof body.status === "string" ? { status: body.status } : {}),
+            ...(typeof body.reference === "string" ? { reference: body.reference } : {}),
+            ...(typeof body.message === "string" ? { message: body.message } : {}),
+          };
+        }
       } catch {
         answer = {};
       }
       if (!res.ok) {
-        await markSent(supabase, job.id, {
-          reference: answer.reference,
-          detail: `The courier refused the request (${res.status}).`,
-          failed: true,
-        });
-        return { ok: false, reason: "provider_rejected", detail: `Courier returned ${res.status}.`, state: "failed" };
+        uncertainDetail = `The courier returned HTTP ${res.status}. Verify the original handoff with the courier.`;
       }
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : "The courier could not be reached.";
-      await markSent(supabase, job.id, { detail, failed: true });
-      return { ok: false, reason: "provider_unreachable", detail, state: "failed" };
+    } catch {
+      uncertainDetail = "No response was received. Verify the original handoff with the courier.";
+    }
+    if (uncertainDetail) {
+      await saveAwaitingConfirmation(uncertainDetail);
+      return { ok: false, reason: "courier_confirmation_pending", detail: uncertainDetail, state: "sent" };
     }
 
     const status = String(answer.status ?? "pending").toLowerCase();
@@ -206,24 +255,25 @@ export const dispatchCourierJob = createServerFn({ method: "POST" })
     // A courier that answers on the spot is still the courier answering, so that
     // answer travels the same path as the webhook rather than a shortcut.
     if (COURIER_OUTCOMES.has(status)) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const admin = supabaseAdmin as unknown as {
-        rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-      };
-      await admin.rpc("neo_delivery_dispatch_apply", {
+      const admin = supabaseAdmin as unknown as RpcClient;
+      const state = savedDispatchState(await admin.rpc("neo_delivery_dispatch_apply", {
         _token: job.callback_token,
         _outcome: status,
         _provider_reference: answer.reference ?? undefined,
         _detail: answer.message ?? null,
         _payload: answer as Record<string, unknown>,
-      });
-      return { ok: true, state: status, providerReference: answer.reference ?? null };
+      }));
+      if (!state) {
+        return { ok: false, reason: "courier_state_unconfirmed", detail: "The courier answered, but NEØ could not confirm the saved status. Check the dispatch before sending again." };
+      }
+      if (state === "failed" || state === "cancelled") {
+        return { ok: false, reason: "courier_handoff_declined", detail: answer.message || "The courier declined or cancelled this dispatch.", state };
+      }
+      return { ok: true, state, providerReference: answer.reference ?? null };
     }
 
-    await markSent(supabase, job.id, {
-      reference: answer.reference,
-      detail: answer.message,
-      failed: false,
-    });
+    if (!await saveAwaitingConfirmation(answer.message || "Sent to the courier. Waiting for their answer.", answer.reference)) {
+      return { ok: false, reason: "courier_state_unconfirmed", detail: "The courier received the request, but NEØ could not confirm the saved status. Check the dispatch before sending again." };
+    }
     return { ok: true, state: "sent", providerReference: answer.reference ?? null };
   });

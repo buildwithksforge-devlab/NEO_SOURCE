@@ -1,0 +1,177 @@
+{
+  "updated": "2026-11-21",
+  "active_task": "WF11-T01",
+  "preview_release": {
+    "commit": "7185da1",
+    "build": "53ebadf0bae69c38",
+    "worker_version": "770269f3-2a38-4f58-b6a8-b5bc94247085",
+    "verified_public_evidence": "The home, Staff PIN, station-screen, Guest Explore and Delivery routes returned HTTP 200 with the new Preview build ID. The published Personal PIN asset contains Display sign-in setup. The new courier claim and station account routines are installed and reject anonymous calls. Signed-in station and courier sandbox acceptance remain open.",
+    "preflight": "The exact committed release passed TypeScript, production build smoke and the required rollout RPC checks. The owner and staff station entry change passed 53 focused local checks. The previous bf82044 release recorded 5478 offline tests passed, 0 failed and 155 skipped."
+  },
+  "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
+  "tasks": [
+    {
+      "id": "WF11-T01",
+      "chains": ["WF11", "WF18", "WF23"],
+      "title": "Protect unpaid POS-to-room transfers and prevent subsequent POS collection",
+      "status": "AWAITING_LIVE_RESULTS",
+      "confirmed_problem": "The original transfer could post the full bill despite prior POS money and offer collection again. The current source includes the partial-payment allocation and the collection guard.",
+      "finish_checks": [
+        "An unpaid sent/served bill posts exactly one original-source folio charge with inclusive tax/service/discount components.",
+        "Prior or pending money, routed cash, provider success/uncertainty and active receipt review stop an unallocated transfer.",
+        "Retries match original order, folio, property, currency, components and valid saved line; wrong destination/key/source refuses.",
+        "New POS receipts, late confirmation and routed cash cannot collect the transferred debt again; non-monetary evidence remains recordable.",
+        "Folio/stay ownership and status are checked; all effects roll back on downstream failure; original function owner/grants remain.",
+        "Terminal displays POS collection separately from transferred debt and refreshes Finance/folio views. Tests, TypeScript, build and smoke pass."
+      ],
+      "local_evidence": ["49 PostgreSQL and UI-state checks passed. The database fixtures exercise verified partial payments, idempotent retries and prevention of a second collection."],
+      "installation": "Preview exposes the room_transfer_paid_total column and refuses anonymous execution of pos_post_room_charge. Verify the installed definition using POS-ROOM-TRANSFER-PREFLIGHT.sql and reconcile a controlled transfer before live acceptance.",
+      "live_acceptance": "OPEN",
+      "limits": ["Unmatched payments and bills with tips or delivery fees still require allocation rules before transfer.", "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."]
+    },
+    {
+      "id": "WF13-T01",
+      "chains": ["WF13", "WF14", "WF15", "WF17", "WF18"],
+      "title": "Reconcile existing reservation money by saved IDs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Review the corrected RESERVATION-MONEY-INSPECTION.sql JSON and trace each reported source/application/allocation/journal ID. Do not invent or overwrite balances.",
+      "local_evidence": ["Inspection corrected for absent reservations.currency; 9 PostgreSQL checks passed"],
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF07-T01",
+      "chains": ["WF07", "WF09"],
+      "title": "Reconcile explicit existing station/store links and actual remaining configuration",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Run NEXT-CONFIGURATION-DETAILS.sql to identify stations missing a usable departmental store. Preserve valid canonical mappings, verify ambiguous or missing links using actual department ownership, then confirm sale depletion and replenishment.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T01",
+      "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
+      "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "bf82044",
+      "local_evidence": ["The same four Guest destinations appear in Guest and property-linked Delivery. Linked Delivery resolves the name and logo from the verified property. Signed-in room results use the same photo-led gallery as the public catalogue and retain live rates and booking links.", "One active cart and one favourites list per guest use the current property menu. Booking detail uses the same verified-stay data as My Stay. Transfer and experience links carry the selected catalogue ID and require a saved request before showing success."],
+      "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Confirm the intended property of Sartuday Kids Fun Day (f05d8e00-507f-4a9d-9e5c-51469cf473f0) before changing publication. The live Nairobi catalogue returned this listing with a Taveta venue.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF33-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Verify external supplier orders, receiving, invoices and hotel replies",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The Partner portal renders issued LPO PDFs from the actual saved order and order lines. An isolated PostgreSQL test denied anonymous access, unrelated accounts, other properties and draft orders."],
+      "live_evidence": ["Preview recognises neo_partner_lpo_payload and denies anonymous execution."],
+      "next_action": "Follow a controlled purchase order from the internal board into a real supplier account. Match partial receipt, posting and AP records and verify replies and historic document access.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF11-T02",
+      "chains": ["WF03", "WF11", "WF12", "WF23"],
+      "title": "Verify configurable payment methods by channel, property and processor",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
+      "next_action": "Connect and prove each intended processor in a sandbox. Verify callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout needs its own end-to-end implementation and acceptance.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF24-T01",
+      "chains": ["WF02", "WF03", "WF23", "WF24", "WF25"],
+      "title": "Verify live staff PIN, saved receipt tax and physical and PDF outputs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["Saved percentages now travel with each tax on the canonical receipt, including separate rows when a bill contains different VAT rates. An isolated SQL test compared the rate rows with Finance's saved liability amount.", "The actual 42-item receipt was rendered and inspected across three 80 mm pages. Guest folio and issued payment PDFs use the scoped guest bill projection."],
+      "live_evidence": ["The 2026-11-21 13:55 Savanna Crown Nairobi SQL export shows receipt_reads_named_tax=true and receipt_labels_show_saved_rates=true. The workspace has zero active profiles and zero active defaults. None of the eight sampled orders has item tax snapshots or saved tax codes, and the diagnostic found no matching print-job payload for those orders."],
+      "next_action": "Configure the property's approved rules and map the relevant menu items or approved workspace default. Verify a new controlled sale has saved tax allocations, named rates and matching POS PDF, printer and Finance rows. For historical sales, recover item-level evidence before attempting any reconstruction. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF30-T01",
+      "chains": ["WF01", "WF26", "WF30", "WF34"],
+      "title": "Verify release readiness, saved defect counts and local Simulation",
+      "status": "BLOCKED",
+      "source_commit": "f66dbae",
+      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. The latest isolated Simulation run passed 379 tests and 27 readiness checks. The connection checker still reports invalid_credential for the configured browser Simulation server key. The cleanup test checks the saved registry state before reporting success."],
+      "next_action": "Connect browser-based Simulation with a valid server credential for the intended test project. Run the two isolated workspaces and capture the saved defect counts and workflow evidence in Platform & Readiness.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF05-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Validate receiving custody and requested recount rollout",
+      "status": "AWAITING_INSTALLATION",
+      "source_commit": "b7b4244",
+      "local_evidence": ["71 focused tests passed across receiving, stores, GRN documents and supplier payables. The production client retains the current Storekeeper count when the server omits recount flags. The migration fixture verified independent recount, retry, approval, one stock posting, GRN data and audit. The Preview database returned PGRST202 for neo_request_receiving_recount."],
+      "next_action": "Run receiving-custody-preflight.sql and confirm all six baseline definitions before applying 20261120173000_receiving_custody_on_request.sql. Run receiving-custody-postflight.sql after installation. Then verify independent review, requested recount, durable GRN retrieval and the linked payable with controlled property records.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF10-T01",
+      "chains": ["WF10"],
+      "title": "Stable item-selection identity after an uncertain successful insert",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "34670cf",
+      "local_evidence": ["The terminal retains one UUID per pending selection in the current tab and submits it as the order-line primary key. Recovery verifies organization, waiter, bill and menu item. Existing atomic modifier and collected-bill triggers still own the write. Five focused tests passed, including a lost response, a failed recovery read and a deliberate second sale."],
+      "next_action": "Verify a lost response from the signed-in POS against installed order-line and modifier records. Then follow the single saved item through production, service and stock.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF12-T01",
+      "chains": ["WF12", "WF34"],
+      "title": "Scope courier dispatch and require a saved acknowledgement",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "3c53e82",
+      "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
+      "live_evidence": ["The SQL editor export confirmed the courier claim is installed. Preview recognised and protected the new claim, and build 53ebadf0bae69c38 is live."],
+      "next_action": "Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF09-T01",
+      "chains": ["WF07", "WF09", "WF10", "WF12", "WF16"],
+      "title": "Use the POS departmental stock decision in Guest and Delivery",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The isolated PostgreSQL suite showed public sellability changes with department stock and blocked a stale multi-line order above the available quantity. The public API exposes status and published dish data only."],
+      "live_evidence": ["Preview serves neo_public_menu_with_stock. Installation of the public menu routine is confirmed."],
+      "next_action": "Verify the installed batch-aligned POS stock routine and checkout protection, then test sell-out and replenishment on a controlled department and each enabled channel.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF02-T01",
+      "chains": ["WF02", "WF21", "WF34"],
+      "title": "Activate named devices and scoped station displays from the PIN screen",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The staff PIN entry can redeem the existing one-use property code. Supervisors issue one-use display codes through the existing station pairing permissions. An isolated PostgreSQL test refused wrong scope, replay and revoked displays."],
+      "live_evidence": ["The SQL editor export confirmed the station administration and destination routines are installed. Preview recognised both and denies anonymous access. The live build serves the owner setup asset and the public PIN and station-screen routes."],
+      "next_action": "In My personal staff PIN, link an assigned staff account to its display. Verify an authorised device opens that display after an ordinary PIN sign-in, the existing email/password account opens the same display, and removing the assignment stops the redirect. The shared activation-code path and personal ticket action identity also need live verification.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T02",
+      "chains": ["WF01", "WF12", "WF16", "WF24", "WF32", "WF33", "WF34"],
+      "title": "Apply the mobile design reference across public and staff apps",
+      "status": "IN_PROGRESS",
+      "design_references": {
+        "motion": "Apple: short state transitions with a reduced-motion alternative",
+        "onboarding": "Duolingo: one clear step, progress and safe defaults",
+        "interface": "Linear: consistent spacing and contextual actions",
+        "typography": "Pentagram: distinct type hierarchy and aligned totals",
+        "minimalism": "Muji: display only the controls and content needed for the task",
+        "search": "Airbnb: nearby search and filters with reversible selections",
+        "art_direction": "Aesop: original hospitality imagery and a coherent property palette",
+        "dashboards": "Notion: group work by the records and actions each role needs",
+        "entry_pages": "Stripe: clear product entry and one primary action",
+        "interaction": "Framer: immediate, visible loading, success and recovery states",
+        "mobile_reference": "The supplied Medora image guides the layout: an image-led welcome, an overview with a strong first action, a compact icon dock, and details that retain the same palette and type. Use NEØ's own imagery, labels and data."
+      },
+      "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history."],
+      "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
+      "live_acceptance": "OPEN"
+    }
+  ]
+}

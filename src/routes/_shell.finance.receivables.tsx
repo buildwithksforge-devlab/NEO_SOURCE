@@ -321,7 +321,7 @@ function ReceivablesPage() {
                 />
               }
             >
-              <DataTable head={["Note", "Kind", "Issued", "Total", "Status"]}>
+              <DataTable head={["Note", "Kind", "Issued", "Total", "Status", "Document"]}>
                 {(creditNotes.data ?? []).map((c) => (
                   <tr key={String(c["id"])}>
                     <td className="py-2 pr-4 font-mono text-xs">{String(c["note_number"])}</td>
@@ -332,6 +332,11 @@ function ReceivablesPage() {
                     <td className="py-2 pr-4">{money(c["total"])}</td>
                     <td className="py-2 pr-4">
                       <FinStatus value={String(c["status"])} />
+                    </td>
+                    <td className="py-2 pr-4">
+                      {["approved", "issued"].includes(String(c["status"])) && (
+                        <DocumentPrintButton type="credit_note" id={String(c["id"])} label="Note PDF" />
+                      )}
                     </td>
                   </tr>
                 ))}

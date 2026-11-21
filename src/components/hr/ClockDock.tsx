@@ -155,7 +155,7 @@ export function ClockDock() {
     <div
       data-clock-dock
       className={cn(
-        "pointer-events-none fixed z-40 flex justify-end",
+        "neo-attendance-dock pointer-events-none fixed z-40 flex justify-end",
         offset ? "" : "bottom-4 right-4 sm:bottom-6 sm:right-6",
       )}
       style={offset ? { right: offset.right, bottom: offset.bottom } : undefined}
@@ -178,14 +178,14 @@ export function ClockDock() {
           onPointerCancel={endDrag}
           onKeyDown={nudge}
           className={cn(
-            "-ml-0.5 flex size-7 shrink-0 touch-none items-center justify-center rounded-lg text-muted-foreground",
+            "-ml-0.5 hidden size-7 shrink-0 touch-none items-center justify-center rounded-lg text-muted-foreground lg:flex",
             "hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             dragging ? "cursor-grabbing bg-muted text-foreground" : "cursor-grab",
           )}
         >
           <GripVertical className="size-4" aria-hidden />
         </button>
-        <div className="hidden max-w-0 overflow-hidden pl-1 text-xs transition-all group-hover:max-w-[15rem] group-focus-within:max-w-[15rem] sm:block">
+        <div className="min-w-0 flex-1 pl-1 text-xs lg:max-w-0 lg:overflow-hidden lg:transition-all lg:group-focus-within:max-w-[15rem] lg:group-hover:max-w-[15rem]">
           <p className="whitespace-nowrap font-medium text-foreground">
             {open ? `On since ${clockTime(open["clock_in_at"])} · ${hoursFromMinutes(worked)}` : "Not clocked in"}
           </p>
@@ -205,7 +205,7 @@ export function ClockDock() {
           size="sm"
           variant={open ? "default" : "outline"}
           disabled={busy}
-          className="rounded-xl"
+          className="min-h-11 shrink-0 rounded-full lg:min-h-8"
           onClick={() =>
             open
               ? clockOut.mutate({ record: open })

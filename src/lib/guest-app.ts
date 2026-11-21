@@ -71,7 +71,7 @@ export function useGuestProfile(
 
   const linked = Boolean(query.data);
   useEffect(() => {
-    if (!userId || query.isLoading || linked || previewSuppressed()) return;
+    if (!userId || query.isLoading || query.isError || linked || previewSuppressed()) return;
     let cancelled = false;
     void (async () => {
       let claimed = false;
@@ -102,7 +102,7 @@ export function useGuestProfile(
     return () => {
       cancelled = true;
     };
-  }, [organizationId, branchId, userId, query.isLoading, linked, client]);
+  }, [organizationId, branchId, userId, query.isLoading, query.isError, linked, client]);
 
   return query;
 }
@@ -180,16 +180,17 @@ export function useUpdateGuestProfile(organizationId: string) {
   });
 }
 
-export function useGuestRequests(organizationId: string, customerId?: string | null) {
+export function useGuestRequests(organizationId: string, branchId: string | null, customerId?: string | null) {
   return useQuery({
-    queryKey: ["guest-requests", organizationId, customerId ?? "none"],
-    enabled: Boolean(customerId),
+    queryKey: ["guest-requests", organizationId, branchId, customerId ?? "none"],
+    enabled: Boolean(customerId && branchId),
     refetchInterval: 60_000,
     queryFn: async () => {
       const { data, error } = await rpc
         .from("guest_requests")
         .select("id, category, description, status, priority, created_at, completed_at, resolution_notes")
         .eq("organization_id", organizationId)
+        .eq("branch_id", branchId)
         .eq("customer_id", customerId)
         .order("created_at", { ascending: false })
         .limit(40);
@@ -199,38 +200,41 @@ export function useGuestRequests(organizationId: string, customerId?: string | n
   });
 }
 
-export function useCreateGuestRequest(organizationId: string) {
+export function useCreateGuestRequest(organizationId: string, branchId: string | null) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (input: { category: string; description: string; priority?: string }) => {
       guardPreview();
+      if (!branchId) throw new Error("Choose a property before sending a request");
       const { data, error } = await guardedRpc(rpc, "neo_guest_create_request", {
         _org: organizationId,
+        _branch: branchId,
         _category: input.category,
         _description: input.description,
         _priority: input.priority ?? "normal",
       });
       if (error) throw new Error(error.message);
-      return data as string;
+      if (typeof data !== "string" || !data) throw new Error("The property did not return a saved request reference.");
+      return data;
     },
     onSuccess: () => client.invalidateQueries({ queryKey: ["guest-requests", organizationId] }),
   });
 }
 
-export function useGuestReservations(organizationId: string, customerId?: string | null) {
+export function useGuestReservations(organizationId: string, customerId?: string | null, branchId?: string | null) {
   return useQuery({
-    queryKey: ["guest-reservations", organizationId, customerId ?? "none"],
+    queryKey: ["guest-reservations", organizationId, customerId ?? "none", branchId ?? "all"],
     enabled: Boolean(customerId),
     queryFn: async () => {
-      const { data, error } = await rpc
+      let query = rpc
         .from("reservations")
         .select(
           "id, confirmation_number, status, arrival_date, departure_date, nights, adults, children, total_amount, balance",
         )
         .eq("organization_id", organizationId)
-        .eq("customer_id", customerId)
-        .order("arrival_date", { ascending: false })
-        .limit(25);
+        .eq("customer_id", customerId);
+      if (branchId) query = query.eq("branch_id", branchId);
+      const { data, error } = await query.order("arrival_date", { ascending: false }).limit(25);
       if (error) throw new Error(error.message);
       return (data ?? []) as Row[];
     },
@@ -268,12 +272,12 @@ export function isInHouse(reservation: Row | undefined) {
  * reference plus a detail already held on the booking. The database decides;
  * no reference or record number typed into the address bar can widen this.
  */
-export function useMyStays(organizationId: string, enabled = true) {
+export function useMyStays(organizationId: string, branchId: string | null, userId?: string) {
   return useQuery({
-    queryKey: ["guest-my-stays", organizationId],
-    enabled,
+    queryKey: ["guest-my-stays", organizationId, branchId, userId],
+    enabled: Boolean(userId && branchId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(rpc, "neo_guest_my_stays", { _org: organizationId });
+      const { data, error } = await guardedRpc(rpc, "neo_guest_my_stays", { _org: organizationId, _branch: branchId });
       if (error) throw new Error(error.message);
       return (data ?? []) as Row[];
     },
@@ -292,13 +296,15 @@ export const stayVerificationMessages: Record<string, string> = {
   too_many_attempts: "Too many attempts. Please try again later.",
 };
 
-export function useVerifyStay(organizationId: string) {
+export function useVerifyStay(organizationId: string, branchId: string | null) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (input: { reference: string; detail: string }) => {
       guardPreview();
+      if (!branchId) throw new Error("Choose a property before linking a booking");
       const { data, error } = await guardedRpc(rpc, "neo_guest_verify_stay", {
         _org: organizationId,
+        _branch: branchId,
         _reference: input.reference,
         _detail: input.detail,
       });

@@ -1,3 +1,4 @@
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Delivery Department layer.
  *
@@ -289,7 +290,7 @@ export function useCreateDeliveryTask() {
     }) => {
       if (!organizationId) throw new Error("No organisation context");
       const departmentId = department.data?.["id"] ? String(department.data["id"]) : null;
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: departmentId,
@@ -301,7 +302,7 @@ export function useCreateDeliveryTask() {
         priority: input.priority ?? "normal",
         status: "open",
       });
-      if (error) throw new Error(error.message);
+
     },
     onSuccess: () => {
       invalidate();

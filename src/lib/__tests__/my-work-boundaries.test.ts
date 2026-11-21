@@ -1,0 +1,32 @@
+import {beforeEach,describe,it,expect,vi} from 'vitest';
+const m=vi.hoisted(()=>({rpc:vi.fn(),auth:{organizationId:'org',user:{id:'worker'},phase:'ready',permissions:new Set(['pms.view']),permissionsLoaded:true,accessLoaded:true,access:{accessScope:'self',branchIds:['property'],departmentIds:['department'],stationIds:[],roleIds:['role']}}}));
+vi.mock('@/lib/auth',()=>({useAuth:()=>m.auth}));
+vi.mock('@/lib/rpc-guard',()=>({guardedRpc:m.rpc}));
+vi.mock('@/integrations/supabase/client',()=>({supabase:{}}));
+vi.mock('@tanstack/react-query',()=>({useQuery:(o:unknown)=>o}));
+import {parseMyWorkPayload,useMyWork} from '@/lib/my-work';
+const item={id:'arrivals',module:'pms',label:'Arrivals',detail:'Recorded work',route:'/pms/arrivals',tone:'info',value:2};
+type Query={queryKey:unknown[];enabled:boolean;queryFn:()=>Promise<unknown>;retry:(count:number,error:Error)=>boolean};
+const query=(branch:string|null='property')=>useMyWork(branch) as unknown as Query;
+beforeEach(()=>{vi.clearAllMocks();m.auth.organizationId='org';m.auth.user={id:'worker'};m.auth.phase='ready';m.auth.permissions=new Set(['pms.view']);m.auth.permissionsLoaded=true;m.auth.accessLoaded=true;m.auth.access.branchIds=['property'];});
+describe('My work authenticated data boundary',()=>{
+ it.each(['signed-out','authenticating','resolving-account','resolving-access','suspended','denied','reauth-required','error'])('does not start the query in %s',phase=>{m.auth.phase=phase;expect(query().enabled).toBe(false);expect(m.rpc).not.toHaveBeenCalled()});
+ it('waits for both effective-access and permission resolution',()=>{m.auth.accessLoaded=false;expect(query().enabled).toBe(false);m.auth.accessLoaded=true;m.auth.permissionsLoaded=false;expect(query().enabled).toBe(false)});
+ it('requires an organization and staff identity',()=>{m.auth.organizationId='';expect(query().enabled).toBe(false);m.auth.organizationId='org';m.auth.user={id:''};expect(query().enabled).toBe(false)});
+ it('retains explicit caller-disabled behavior',()=>expect((useMyWork('property',false) as unknown as Query).enabled).toBe(false));
+ it('isolates worker, company, selected property and authority caches',()=>{const original=query().queryKey;m.auth.user={id:'other'};expect(query().queryKey).not.toEqual(original);m.auth.user={id:'worker'};m.auth.organizationId='other-org';expect(query().queryKey).not.toEqual(original);m.auth.organizationId='org';expect(query('other-property').queryKey).not.toEqual(original);m.auth.permissions.add('finance.view');expect(query().queryKey).not.toEqual(original);m.auth.permissions=new Set(['pms.view']);m.auth.access.branchIds=['other-property'];expect(query().queryKey).not.toEqual(original)});
+ it('keeps equivalent authority orderings in the same cache',()=>{m.auth.permissions=new Set(['pms.view','finance.view']);const first=query().queryKey;m.auth.permissions=new Set(['finance.view','pms.view']);expect(query().queryKey).toEqual(first)});
+ it('uses the guarded RPC and the selected property',async()=>{m.rpc.mockResolvedValue({data:{authorised:true,items:[item]},error:null});expect(await query().queryFn()).toMatchObject({items:[item]});expect(m.rpc).toHaveBeenCalledWith({},'neo_my_work',{_branch:'property'})});
+ it('does not silently convert a missing response to no-account or all-clear',async()=>{m.rpc.mockResolvedValue({data:null,error:null});await expect(query().queryFn()).rejects.toThrow(/invalid response/)});
+ it('preserves schema-error identity and does not retry a missing object',async()=>{m.rpc.mockResolvedValue({data:null,error:{code:'42P01',message:'relation does not exist'}});await expect(query().queryFn()).rejects.toMatchObject({code:'42P01'});expect(query().retry(0,Object.assign(new Error('relation does not exist'),{code:'42P01'}))).toBe(false)});
+ it('does not retry permission denial; permits bounded transport retries',()=>{expect(query().retry(0,Object.assign(new Error('permission denied'),{code:'42501'}))).toBe(false);expect(query().retry(0,new Error('Failed to fetch'))).toBe(true);expect(query().retry(2,new Error('Failed to fetch'))).toBe(false)});
+});
+describe('My work payload validity',()=>{
+ it('accepts real zero work and preserves current server facts',()=>expect(parseMyWorkPayload({authorised:true,today:'2026-11-08',items:[{...item,value:0,tone:'ok'}]})).toMatchObject({today:'2026-11-08',items:[{value:0}]}));
+ it('accepts an authorized genuinely empty queue',()=>expect(parseMyWorkPayload({authorised:true,items:[]})).toEqual({authorised:true,items:[]}));
+ it('removes any supplied work list from an explicitly denied payload',()=>expect(parseMyWorkPayload({authorised:false,reason:'no_organisation',items:[item]})).toEqual({authorised:false,reason:'no_organisation',items:[]}));
+ it.each([null,{},[],true,{authorised:'true'},{authorised:true},{authorised:true,items:{}},{authorised:true,items:[null]}])('rejects invalid response %j',data=>expect(()=>parseMyWorkPayload(data)).toThrow());
+ it.each([NaN,Infinity,-Infinity,-1,'2',null])('rejects invalid work count %s',value=>expect(()=>parseMyWorkPayload({authorised:true,items:[{...item,value}]})).toThrow());
+ it.each(['https://example.com/','//example.com/','javascript:alert(1)'])('rejects external work destination %s',route=>expect(()=>parseMyWorkPayload({authorised:true,items:[{...item,route}]})).toThrow());
+ it('rejects duplicate rows and unknown tones instead of inventing a clean summary',()=>{expect(()=>parseMyWorkPayload({authorised:true,items:[item,item]})).toThrow();expect(()=>parseMyWorkPayload({authorised:true,items:[{...item,tone:'good'}]})).toThrow()});
+});

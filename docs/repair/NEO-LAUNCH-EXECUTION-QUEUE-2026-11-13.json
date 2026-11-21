@@ -1,0 +1,325 @@
+{
+  "date": "2026-11-13",
+  "scope": "Current launch priorities; supplements the older 106-item queue without discarding its history",
+  "authorization": "Current priority: local M-Pesa repair/verification, then departmental blueprint verification. User specifically forbids prompting Lovable and directs codebase-only checks. No deployment, live SQL or payment performed.",
+  "statusDefinitions": {
+    "in_progress_local": "Source edits underway; final validation pending",
+    "fixed_local_tested": "Local source repair passed its stated checks; not deployed/live-certified",
+    "present_needs_workflow_proof": "Implementation exists; complete operational chain not certified",
+    "blocked_backend_contract": "Needs original Lovable source, deployed contract or authorized backend implementation",
+    "queued_local_repair": "Confirmed local issue with a concrete next repair",
+    "queued_acceptance": "Needs controlled workflow or physical acceptance evidence",
+    "local_tests_passed_checks_pending": "Local repair has passing targeted tests; final compiler/lint/build checks still pending; not deployed",
+    "blocked_runtime_credential": "Existing direct server path needs a valid project privileged key in its runtime; deployed credential has not been verified",
+    "partial_local_repair": "Specific local safeguards/transport implemented and tested; remaining contract, data recovery or live acceptance work remains open"
+  },
+  "items": [
+    {
+      "id": "LAUNCH-01",
+      "priority": "P0",
+      "area": "POS M-Pesa entry",
+      "status": "fixed_local_tested",
+      "finding": "Generic Take payment M-Pesa option records pending without dispatching STK",
+      "action": "Route that option into the shared actual prompt dialog and preserve entered amount; do not record a second generic payment",
+      "files": [
+        "src/components/pos/PosPaymentDialog.tsx",
+        "src/components/payments/MpesaPromptDialog.tsx",
+        "src/routes/_shell.pos.orders.$id.tsx"
+      ],
+      "passCondition": "UI test sends one chargeWithMpesa request with the order/amount/phone and no generic record/intent mutation",
+      "liveRemaining": "Matching code deployment plus original-backend sandbox collection",
+      "validation": {
+        "uiTests": 18,
+        "uiStatus": "passed",
+        "typecheck": "passed_full_project",
+        "lint": "passed_zero_errors_one_existing_fast_refresh_warning",
+        "productionBuild": "passed",
+        "clientSecretScan": "passed_889_public_files",
+        "live": "not_run"
+      }
+    },
+    {
+      "id": "LAUNCH-02",
+      "priority": "P0",
+      "area": "Provider readiness",
+      "status": "fixed_local_tested",
+      "finding": "Missing/loading/error readiness can leave provider selection/submission enabled",
+      "action": "Fail closed in method selection and submit handlers; keep recorded cash independent",
+      "files": [
+        "src/components/payments/PaymentMethodPicker.tsx",
+        "src/components/pos/PosPaymentDialog.tsx",
+        "src/components/payments/MpesaPromptDialog.tsx"
+      ],
+      "passCondition": "Loading, missing and failed checks cannot create/dispatch a provider payment; cash still routes normally",
+      "liveRemaining": "Actual tenant/provider configuration and backend enforcement",
+      "validation": {
+        "uiTests": 18,
+        "uiStatus": "passed",
+        "typecheck": "passed_full_project",
+        "lint": "passed_zero_errors_one_existing_fast_refresh_warning",
+        "productionBuild": "passed",
+        "clientSecretScan": "passed_889_public_files",
+        "live": "not_run"
+      }
+    },
+    {
+      "id": "LAUNCH-03",
+      "priority": "P0",
+      "area": "Existing Lovable privileged relay / direct runtime key",
+      "status": "partial_local_repair",
+      "finding": "Read-only 13 November check: local public key HTTP 200; local server key HTTP 401 Invalid API key. Cloudflare secret list confirms SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY exist on neo-preview; values and runtime validity unverified. User then reported the deployed neo-preview M-Pesa Test Connection also returns Supabase / Invalid API key. Horizon supplied a read-only report: neo_mpesa_collection_start and neo_mpesa_claim_dispatch are NOT installed; neo_mpesa_apply_result is installed. It uses older neo_mpesa_txn_start and sends STK without a dispatch routine. This report is supplied evidence, not a direct database inspection by this session.",
+      "action": "Optional relay added in existing src/server.ts using caller JWT and fixed Horizon function allowlist. Keep payment forwarding off until original handler/SQL/callback parity and authenticated sandbox acceptance. A valid project runtime key remains an alternative direct path.",
+      "files": [
+        "src/server.ts",
+        "src/lib/__tests__/web-response-policy.test.ts",
+        "docs/repair/CLOUDFLARE-LOVABLE-BACKEND-CONTRACT-2026-11-12.md"
+      ],
+      "passCondition": "The executing Worker authenticates privileged database calls for the original project through the existing direct path or optional delegated path; denied tenant/property tests and a complete sandbox collection pass.",
+      "liveRemaining": "Review current installed definitions and install the existing atomic-start/dispatch/replay-disable SQL before matching handler deployment; verify original privileged callback host; deploy/enable connection-only relay, then denied/tenant and sandbox acceptance before money forwarding. No valid privileged local key or authorized local SQL connection is available.",
+      "validation": {
+        "localPublicKey": "http_200_zero_rows",
+        "localServerKey": "http_401_invalid_api_key",
+        "workerSecretNames": "verified_present_read_only",
+        "workerSecretValue": "not_retrievable_from_secret_list",
+        "workerRuntimeAuth": "user_reported_supabase_invalid_api_key",
+        "focusedChecks": 57,
+        "typecheck": "passed_full_project",
+        "lint": "passed",
+        "productionBuild": "passed_with_optional_relay",
+        "publicOriginalFunctionIds": "six_existing_ids_match",
+        "unauthenticatedOriginalSettingsProbe": "http_500_no_business_fields_not_authorization_proof",
+        "bridgeFlagsChanged": false,
+        "live": "not_run",
+        "clientSecretScan": "passed_889_public_files"
+      },
+      "localRecovery": {
+        "guestGatewayPreflight": "implemented_before_balance_reservation",
+        "earlyCallbacks": "retained_for_provider_verified_recovery_and_503_no_guaranteed_provider_retry",
+        "legacyCallbackReplay": "disabled_in_existing_unapplied_migration_and_removed_from_UI_and_manifest",
+        "providerRecovery": "existing_reconcileMpesaTransaction_instead_of_raw_callback_replay",
+        "migration": "supabase/migrations/20261112150000_mpesa_collection_dispatch_guard.sql",
+        "migrationInstalled": false,
+        "tests131": "passed",
+        "focusedCallbackSqlRerun25": "passed_overlapping",
+        "rpcGuardTests13": "passed",
+        "typecheck": "passed_full_project",
+        "lint": "passed_after_irregular_comment_whitespace_cleanup",
+        "finalBuild": "passed_final_frozen_source",
+        "builtSourceFingerprintMatches": true,
+        "obsoleteReplayCallAbsentFromBuild": true,
+        "latestCallbackRecoveryPresentInBuild": true,
+        "clientSecretScan": "passed_889_public_files"
+      }
+    },
+    {
+      "id": "LAUNCH-04",
+      "priority": "P0",
+      "area": "Receiving engine compatibility",
+      "status": "queued_local_repair",
+      "finding": "Reproduced against actual receiving engine: 12 delivered and 2 rejected is refused against 10 outstanding although review wrapper accepts 10 net. Receipt posting separately increments physical received and accepted counters; replacing only one wrapper quantity is not a sound repair.",
+      "action": "Repair the accepted/rejected boundary using actual receiving-engine integration tests, preserve audit quantities and Finance effects",
+      "files": [
+        "supabase/migrations/20261112160000_atomic_blind_receiving_review.sql",
+        "supabase/migrations/20261025100000_o03_grn_quantity_integrity.sql",
+        "src/lib/__tests__/blind-receiving-review-workflow.test.ts"
+      ],
+      "passCondition": "Real core-engine fixture handles matched/partial/rejected/excess cases with one GRN/movement and rollback on failure",
+      "liveRemaining": "Reviewed forward database installation and controlled receiving/AP acceptance"
+    },
+    {
+      "id": "LAUNCH-05",
+      "priority": "P1",
+      "area": "Recipe importer parity",
+      "status": "blocked_backend_contract",
+      "finding": "Local recipe editor exists; newer Horizon onboarding recipe importer is absent from local onboarding domain/adapter catalogue",
+      "action": "Obtain actual original importer source/RPC signature, compare then integrate without guessing or recreating data",
+      "files": [
+        "src/routes/_shell.kitchen.recipes.tsx",
+        "src/lib/onboarding/domains.ts",
+        "src/lib/onboarding/adapters.ts",
+        "src/lib/recipe-master.ts"
+      ],
+      "passCondition": "Mixed-size ingredient groups import atomically per dish with stock/menu/unit/property validation and safe explicit replacement",
+      "liveRemaining": "Original source/installed RPC parity and actual recipe sale/consumption proof"
+    },
+    {
+      "id": "LAUNCH-06",
+      "priority": "P1",
+      "area": "Recipe activation integrity",
+      "status": "queued_local_repair",
+      "finding": "Local activation/attachment uses separate recipe/menu updates rather than one backend transaction",
+      "action": "Compare newer backend activation fix; specify and test atomic activation/binding without multiple active versions",
+      "files": [
+        "src/lib/kitchen-data.ts",
+        "src/lib/recipe-master.ts"
+      ],
+      "passCondition": "Failure at each step leaves no partial activation/binding; retry does not duplicate active versions",
+      "liveRemaining": "Matching authorized backend function and installed-schema proof"
+    },
+    {
+      "id": "LAUNCH-07",
+      "priority": "P0",
+      "area": "Pending card/QR recovery",
+      "status": "partial_local_repair",
+      "finding": "Terminal/QR record creation and intent opening remain separate calls. Local dialog now locks one attempt synchronously, preserves property context and blocks repeats after missing/lost/open-failure responses.",
+      "action": "Duplicate submissions are guarded locally. Still repair the atomic record/intent boundary and recover existing stranded attempts with verified provider outcomes; closing the dialog does not cancel or repair a payment.",
+      "files": [
+        "src/components/pos/PosPaymentDialog.tsx",
+        "src/lib/payment-gateway.functions.ts",
+        "src/lib/payment-intents.ts"
+      ],
+      "passCondition": "Definitive pre-dispatch refusal leaves no misleading pending collection; unknown dispatch outcome cannot trigger duplicate charge; apply failure is visible",
+      "liveRemaining": "Real acquirer adapter, callback assurance and sandbox acceptance",
+      "validation": {
+        "focusedPaymentChecks": 41,
+        "status": "passed",
+        "lint": "passed",
+        "typecheck": "passed_full_project",
+        "productionBuild": "passed_before_optional_relay",
+        "live": "not_run",
+        "clientSecretScan": "passed_889_public_files"
+      }
+    },
+    {
+      "id": "LAUNCH-08",
+      "priority": "P1",
+      "area": "PIN and physical printing",
+      "status": "present_needs_workflow_proof",
+      "finding": "Horizon reports an in-app PIN broker accepting X-Neo-Device-Token, compatible with this local Bearer-to-device-header proxy. Local Edge file is not the reported deployed PIN architecture. Local print agent/API has passing fixture tests; Horizon newer Python connector/browser station differs and cannot be inspected from available source. Windows lists only PDF and OneNote.",
+      "action": "PIN proxy now refuses redirects, with behavioral tests for valid response, denied device/PIN, failed/incomplete broker and no retry. Verify real paired-device login. Printing requires a reachable privileged backend with matching token/job contract and an installed physical printer; do not start agents against live queues during audit.",
+      "files": [
+        "src/routes/api/public/staff-pin-login.ts",
+        "supabase/functions/neo-staff-pin-login/index.ts",
+        "src/routes/api/public/print-agent.$action.ts",
+        "src/lib/printing.ts"
+      ],
+      "passCondition": "Authorized PIN creates original-project session; one physical print has correct claim/ack and no duplicate on unknown outcome",
+      "liveRemaining": "Original deployed contract plus device pairing, staff PIN and physical printer evidence",
+      "validation": {
+        "pinContractAndBehaviorTests": 11,
+        "otherPinSourceChecks": 24,
+        "printApiDatabaseTests": 22,
+        "physicalPrintSourceChecks": 8,
+        "nodeAgentTests": 15,
+        "status": "passed_local_only",
+        "installedWindowsQueues": [
+          "OneNote (Desktop)",
+          "Microsoft Print to PDF"
+        ],
+        "realPinLogin": "not_run",
+        "physicalPaper": "not_verified",
+        "horizonBrokerSource": "user_supplied_report_only",
+        "typecheck": "passed_full_project",
+        "lint": "passed"
+      }
+    },
+    {
+      "id": "LAUNCH-09",
+      "priority": "P1",
+      "area": "Live updates and recipes baseline",
+      "status": "present_needs_workflow_proof",
+      "finding": "Recipe UI/engine and scoped Realtime/polling recovery are present; no universal instant-update certification",
+      "action": "Run local recipe/access/refresh tests; preserve current speed; verify two-device propagation and reconnect",
+      "files": [
+        "src/lib/recipe-engine.ts",
+        "src/lib/realtime-scope.ts",
+        "src/lib/operational-query-client.ts",
+        "src/lib/notifications-inbox.ts"
+      ],
+      "passCondition": "Local checks pass and controlled two-device changes meet agreed latency/property isolation with reconnect recovery",
+      "liveRemaining": "Actual deployed subscriptions/publications and observed latency",
+      "validation": {
+        "recipeEngine": 13,
+        "recipeAccessSurfaces": 10,
+        "recipeIngredientSheet": 5,
+        "operationalRefresh": 26,
+        "status": "passed_local",
+        "liveLatency": "not_verified"
+      }
+    },
+    {
+      "id": "LAUNCH-10",
+      "priority": "P0",
+      "area": "Operational launch acceptance",
+      "status": "present_needs_workflow_proof",
+      "finding": "20-chain departmental matrix reconciled with actual source and local evidence. 343 targeted tests passed; 23 live assertions skipped. Separate actual-SQL fixtures pass 36 room-charge, 47 readiness and 21 event checks. Receiving composition failure reproduced.",
+      "action": "Use updated existing readiness matrix to resolve real blockers; receiving quantity/counter/posting semantics next, then trace complete operating-role source/stock/payment/journal chains and controlled live acceptance. Passing mocked/source tests cannot close downstream effects.",
+      "files": [
+        "docs/repair/NEO-LAUNCH-READINESS-2026-11-13.md"
+      ],
+      "passCondition": "Canonical source, receipt, movement, journal and final-state evidence; denied and retry cases safe; no unresolved critical blockers in chosen scope",
+      "liveRemaining": "Controlled UAT boundary, physical facts and operator rehearsal",
+      "validation": {
+        "departmentalBatch": {
+          "passed": 209,
+          "skipped": 18
+        },
+        "supplementalBatch": {
+          "passed": 134,
+          "skipped": 5
+        },
+        "actualSqlFixtures": {
+          "posRoomCharge": 36,
+          "roomReadiness": 47,
+          "eventOwnership": 21
+        },
+        "receivingComposition": "confirmed_failure_12_delivered_2_rejected_10_outstanding",
+        "live": false
+      }
+    },
+    {
+      "id": "LAUNCH-11",
+      "priority": "P1",
+      "area": "Source and schema synchronization",
+      "status": "queued_acceptance",
+      "finding": "Local dirty files, Horizon source and SQL-editor-installed routines are different versioned surfaces",
+      "action": "Record exact commits/installed signatures; preserve dirty work; merge reviewed source through linked active branch; no blind pull or migration replay",
+      "files": [
+        "supabase/repair/2026-11-13/READ_ONLY_FRONTEND_BACKEND_PARITY.sql"
+      ],
+      "passCondition": "Local/Horizon/Worker provenance and schema signatures recorded; no old source overwrites newer original routines",
+      "liveRemaining": "Original source export/linked branch and authorized read-only schema inventory"
+    },
+    {
+      "id": "LAUNCH-12",
+      "priority": "P2",
+      "area": "Costs without stale operations",
+      "status": "present_needs_workflow_proof",
+      "finding": "Historical costs and current bounded notification reads identified; current invoice savings unmeasured",
+      "action": "Keep active update speed; optimize scoped/bounded reads and measured indexes only with latency checks; do not pause operational backend",
+      "files": [
+        "src/lib/notifications-inbox.ts",
+        "src/lib/operational-query-client.ts"
+      ],
+      "passCondition": "Measured reduction in wasted work without slower critical updates or false stale state",
+      "liveRemaining": "Current authorized usage/query-plan evidence; no savings guarantee"
+    }
+  ],
+  "verificationNotes": [
+    "18 POS payment-entry UI tests passed, including M-Pesa dispatch, readiness, cash, card-slip and bank-transfer cases.",
+    "75 POS/payment/finance/menu/printing/document checks passed across the expanded batch and document rerun. The document scan initially hit the default time limit; unchanged assertions passed on rerun.",
+    "54 recipe-engine/access/sheet and operational-refresh checks passed. Test batches overlap; do not add all historical batch totals.",
+    "Production client/server build passed; synthetic server-key sentinel absent from 889 public files.",
+    "Focused lint has zero errors and one pre-existing Fast Refresh warning. Full-project TypeScript check passed.",
+    "No migration was executed, credential changed, deployment performed or real payment/data action taken. The existing KES 1802.50 attempt was not read or changed.",
+    "13 November follow-up: 41 focused payment tests passed (18 UI, 8 M-Pesa handler, 4 POS context, 11 intent contracts); focused lint passed. Full compiler/build follow-up passed; synthetic secret absent from 889 public files. No new source/report files created for this follow-up.",
+    "Optional existing-server relay: 57 focused tests, full TypeScript and focused lint passed. Final relay production build passed; synthetic secret absent from 889 public files. No flags/deployments/credentials/database/payment state changed. Public matching function IDs do not prove matching remote safety implementations.",
+    "Latest existing-file corrections: STK TransactionDesc capped at 13; accepted STK without CheckoutRequestID stays ambiguous; PIN broker redirects forbidden. 103 focused PIN/printing/M-Pesa tests and 15 Node agent tests passed; lint passed; Full-project TypeScript follow-up passed. No physical print, PIN login, provider request, database write or migration execution.",
+    "Current codebase-only pass: 131 local payment tests + overlapping 25 callback/SQL rerun + 13 RPC guard/manifest checks passed; lint and full TypeScript passed. Departmental results: 209+134 passed, 18+5 skipped; actual SQL fixtures 36/47/21 pass; real receiving composition fails. Final frozen-source build and fingerprint parity passed; obsolete replay absent; synthetic key absent from 889 public files. No Lovable prompt, deployment, live SQL or payment."
+  ],
+  "sourceParity": {
+    "remoteHeadsCheckedReadOnly": true,
+    "repairHead": "358686727474e15cd3e14d6c794a8d6c15ef4489",
+    "mainHead": "ada447b0d126afca92f651742d89eee88dd8d198",
+    "printingHead": "9d18edcded087f11a240c44b0ff4747a3bf7a1c2",
+    "displayHead": "a5ccf04af6d0d2d9a680d2b9fafc33ebd1acec04",
+    "recipeOnboardingImporterFoundInAvailableSnapshots": false,
+    "merged": false,
+    "pushed": false,
+    "horizonReportedBranch": "neo-printing",
+    "horizonReportedCommit": "88a9478399d898d0eb3468402be63fc45a0d53b1",
+    "horizonReportedCommitAvailableLocally": false,
+    "horizonReportedBranchOnCurrentRemote": false,
+    "userStatesNoHorizonRepositoryAvailable": true
+  }
+}

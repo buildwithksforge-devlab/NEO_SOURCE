@@ -1,0 +1,568 @@
+import { useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { PackageSearch } from "lucide-react";
+import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
+import { EmptyState, OpsGuard } from "@/components/operations/OpsShared";
+import { QueryState } from "@/components/common/StateSystem";
+import {
+  RequisitionWorkspace,
+  RequisitionLineItems,
+  InspectorSection,
+  type RequisitionRow,
+  type RequisitionLineRow,
+} from "@/components/common/RequisitionWorkspace";
+import type { SummaryFigure } from "@/components/common/SummaryStrip";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { CatalogueGroup, CatalogueRow } from "@/components/common/CatalogueWorkspace";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useStockLocations, useStockItems } from "@/lib/inventory-data";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
+import { useAuth } from "@/lib/auth";
+import { titleCase } from "@/lib/operations";
+import {
+  num,
+  str,
+  useAllDepartmentStockNeeds,
+  useAssignRequisitionStockItem,
+  useReleaseRequisitionToStores,
+  useApproveRequisitionAtStores,
+  useIssueRequisition,
+  useSetIssuingStore,
+  useRaiseReplenishment,
+  useRejectRequisition,
+  useStoresAvailability,
+  useStoresRequisitions,
+  type StoresRow,
+} from "@/lib/stores-department";
+
+export const Route = createFileRoute("/_shell/inventory/requisitions")({
+  head: () => ({
+    meta: [
+      { title: "Department requests — Stores — NEØ" },
+      {
+        name: "description",
+        content:
+          "Requests from every department in one Stores queue: check availability, issue in full or in part, return with a reason or send the shortage to Procurement.",
+      },
+      { property: "og:title", content: "Department requests — Stores — NEØ" },
+      {
+        property: "og:description",
+        content:
+          "The Storekeeper's queue of department requisitions, with live availability and partial issuing.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: () => (
+    <OpsGuard module="stores" action="requisitions.view">
+      <StoresRequisitionsPage />
+    </OpsGuard>
+  ),
+});
+
+const STATUS_TONE: Record<string, "success" | "warning" | "destructive" | "info" | "default"> = {
+  "awaiting-stores": "warning",
+  "ready-for-issue": "info",
+  "partially-approved": "warning",
+  "partially-issued": "warning",
+  issued: "success",
+  received: "success",
+  rejected: "destructive",
+};
+
+function outstandingOf(line: StoresRow) {
+  return Math.max(
+    num(line["quantity_approved"] ?? line["quantity_requested"]) - num(line["quantity_issued"]),
+    0,
+  );
+}
+
+function StoresRequisitionsPage() {
+  const { can } = useAuth();
+  const mayIssue = can("stores", "requisitions.edit") || can("stores", "issues.create");
+  const mayRelease =
+    can("stores", "approve") ||
+    can("stores", "requisitions.approve") ||
+    can("restaurant", "approve") ||
+    can("housekeeping", "approve") ||
+    can("maintenance", "approve");
+
+  const [scope, setScope] = useState<"open" | "all">("open");
+  const requisitions = useStoresRequisitions(scope);
+  const availabilityQuery = useStoresAvailability();
+  const needs = useAllDepartmentStockNeeds("pending");
+
+  const assignStockItem = useAssignRequisitionStockItem();
+  const stockItemsQuery = useStockItems();
+  const releaseToStores = useReleaseRequisitionToStores();
+  const approveAtStores = useApproveRequisitionAtStores();
+  const issue = useIssueRequisition();
+  const reject = useRejectRequisition();
+  const replenish = useRaiseReplenishment();
+  const setStore = useSetIssuingStore();
+  const locationsQuery = useStockLocations();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState("");
+  const [issueAttemptId, setIssueAttemptId] = useState(() => crypto.randomUUID());
+
+  const availability = useMemo(
+    () => availabilityQuery.data ?? new Map<string, number>(),
+    [availabilityQuery.data],
+  );
+  const rows = (requisitions.data ?? []) as StoresRow[];
+  const needRows = (needs.data ?? []) as StoresRow[];
+
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    setDrafts({});
+    setReason("");
+  };
+
+  const awaitingApprovalCount = rows.filter(
+    (r) => str(r["status"], "") === "pending-supervisor",
+  ).length;
+  const readyCount = rows.filter((r) =>
+    ["awaiting-stores", "ready-for-issue", "partially-approved"].includes(
+      str(r["status"], ""),
+    ),
+  ).length;
+  const issuedCount = rows.filter((r) =>
+    ["issued", "received"].includes(str(r["status"], "")),
+  ).length;
+
+  const lead: SummaryFigure = {
+    id: "total",
+    label: "Department requests",
+    value: requisitions.isLoading ? "…" : rows.length,
+    hint: scope === "open" ? "Open requests" : "All requests",
+  };
+  const figures: SummaryFigure[] = [
+    {
+      id: "awaiting",
+      label: "Awaiting approval",
+      value: requisitions.isLoading ? "…" : awaitingApprovalCount,
+      tone: awaitingApprovalCount ? "warning" : "success",
+    },
+    {
+      id: "ready",
+      label: "Ready to issue",
+      value: requisitions.isLoading ? "…" : readyCount,
+      tone: readyCount ? "info" : "default",
+    },
+    {
+      id: "issued",
+      label: "Issued / received",
+      value: requisitions.isLoading ? "…" : issuedCount,
+      tone: "success",
+    },
+  ];
+
+  const workspaceRows: RequisitionRow[] = rows.map((r) => {
+    const status = str(r["status"], "awaiting-stores");
+    const department = str((r["departments"] as StoresRow | null)?.["name"], "Department");
+    return {
+      id: String(r["id"]),
+      title: `${str(r["request_number"], "Requisition")} — ${department}`,
+      subtitle: `${titleCase(str(r["priority"], "normal"))} priority · ${str(r["reason"], "No reason given")}`,
+      chips: <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>,
+    };
+  });
+
+  const renderInspector = (id: string) => {
+    const requisition = rows.find((r) => String(r["id"]) === id);
+    if (!requisition) return null;
+
+    const lines = (requisition["internal_requisition_lines"] ?? []) as StoresRow[];
+    const status = str(requisition["status"], "awaiting-stores");
+    const awaitingApproval = status === "pending-supervisor";
+    const approvedForIssue = [
+      "ready-for-issue",
+      "partially-approved",
+      "partially-issued",
+    ].includes(status);
+    const canIssue = mayIssue && approvedForIssue;
+    const department = str((requisition["departments"] as StoresRow | null)?.["name"], "Department");
+    const sourceStoreId = str(requisition["source_location_id"], "");
+    const sourceStoreName = str(
+      (requisition["source_store"] as StoresRow | null)?.["name"],
+      "Not chosen yet",
+    );
+    const storeOptions = (locationsQuery.data ?? []).filter(
+      (l) => (l as StoresRow)["active"] !== false,
+    ) as StoresRow[];
+    const totalRequested = lines.reduce((sum, line) => sum + num(line["quantity_requested"]), 0);
+    const totalIssued = lines.reduce((sum, line) => sum + num(line["quantity_issued"]), 0);
+    const fullyIssued = totalRequested > 0 && totalIssued >= totalRequested;
+
+    const shortage = lines.some((line) => {
+      const itemId = str(line["stock_item_id"], "");
+      const onHand = itemId ? ((sourceStoreId ? availability.get(`${sourceStoreId}:${itemId}`) ?? 0 : 0)) : 0;
+      return outstandingOf(line) > onHand;
+    });
+
+    const issueLines = lines
+      .map((line) => {
+        const lineId = String(line["id"]);
+        const typed = drafts[lineId];
+        const quantity = typed === undefined || typed === "" ? outstandingOf(line) : Number(typed);
+        return { id: lineId, quantity_issued: Number.isFinite(quantity) ? quantity : 0 };
+      })
+      .filter((line) => line.quantity_issued > 0);
+
+    const lineRows: RequisitionLineRow[] = lines.map((line) => {
+      const lineId = String(line["id"]);
+      const itemId = str(line["stock_item_id"], "");
+      const onHand = itemId ? ((sourceStoreId ? availability.get(`${sourceStoreId}:${itemId}`) ?? 0 : 0)) : 0;
+      const outstanding = outstandingOf(line);
+      const short = outstanding > onHand;
+      return {
+        id: lineId,
+        name: str(
+          (line["stock_items"] as StoresRow | null)?.["name"],
+          str(line["description"], "Item"),
+        ),
+        unit: str(line["unit"], "unit"),
+        requested: num(line["quantity_requested"]),
+        outstanding,
+        available: onHand,
+        shortage: short,
+        control:
+          canIssue && outstanding > 0 ? (
+            <Input
+              className="ml-auto h-8 w-24 text-right"
+              inputMode="decimal"
+              placeholder={String(Math.min(outstanding, onHand))}
+              value={drafts[lineId] ?? ""}
+              onChange={(e) => setDrafts((prev) => ({ ...prev, [lineId]: e.target.value }))}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          ),
+      };
+    });
+
+    return {
+      title: `${str(requisition["request_number"], "Requisition")} — ${department}`,
+      subtitle: `${titleCase(str(requisition["priority"], "normal"))} priority`,
+      chips: (
+        <>
+          <StatusPill tone={STATUS_TONE[status] ?? "default"}>{titleCase(status)}</StatusPill>
+          {requisition["purchase_request_id"] ? (
+            <StatusPill tone="info">Replenishment raised</StatusPill>
+          ) : null}
+        </>
+      ),
+      sections: (
+        <>
+          <InspectorSection
+            title="Request"
+            actions={
+              <DocumentPrintButton
+                type="requisition"
+                id={id}
+                label="Print requisition"
+                variant="ghost"
+              />
+            }
+          >
+            <p className="text-sm text-muted-foreground">
+              {str(requisition["reason"], "No reason given")}
+            </p>
+          </InspectorSection>
+          {mayIssue && ["pending-supervisor", "awaiting-stores"].includes(status) ? (
+            <InspectorSection title="Match requested items to inventory">
+              <div className="space-y-4">
+                {lines.map((line) => {
+                  const lineId = String(line["id"]);
+                  const currentItemId = str(line["stock_item_id"], "");
+
+                  return (
+                    <div key={lineId} className="space-y-2 rounded-lg border p-3">
+                      <p className="text-sm font-medium">
+                        {str(line["description"], "Requested item")}
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Requested: {num(line["quantity_requested"])} {str(line["unit"], "units")}
+                      </p>
+
+                      <Select
+                        value={currentItemId}
+                        disabled={assignStockItem.isPending}
+                        onValueChange={(stockItemId) =>
+                          assignStockItem.mutate({
+                            requisitionId: id,
+                            lineId,
+                            stockItemId,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select actual inventory item" />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {((stockItemsQuery.data ?? []) as StoresRow[]).map((item) => (
+                            <SelectItem key={String(item["id"])} value={String(item["id"])}>
+                              {str(item["name"], "Inventory item")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {currentItemId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Inventory item linked
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700">
+                          Match this request to an inventory item before issuing.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </InspectorSection>
+          ) : null}
+
+          <InspectorSection title="Line items & availability">
+            <RequisitionLineItems lines={lineRows} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Leave a quantity blank to issue the full outstanding amount. A partial issue keeps
+              the balance open.
+            </p>
+          </InspectorSection>
+
+          <InspectorSection title="Progress">
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="text-muted-foreground">Stage: </span>
+                {awaitingApproval
+                  ? "Waiting on departmental approval before Stores can issue"
+                  : fullyIssued
+                    ? "Issued in full — this request is closed"
+                    : totalIssued > 0
+                      ? "Partly issued — the balance stays open until the rest is released"
+                      : "Approved and with Stores, waiting to be issued"}
+              </p>
+              <p className="text-muted-foreground">
+                {totalIssued} of {totalRequested} requested issued
+                {requisition["issued_at"]
+                  ? ` · last issued ${new Date(String(requisition["issued_at"])).toLocaleString()}`
+                  : ""}
+              </p>
+            </div>
+          </InspectorSection>
+
+          {canIssue ? (
+            <InspectorSection title="Issuing store">
+              <p className="mb-2 text-sm text-muted-foreground">
+                Stock leaves from: <span className="text-foreground">{sourceStoreName}</span>
+              </p>
+              <Select
+                value={sourceStoreId}
+                onValueChange={(v) => setStore.mutate({ requisitionId: id, locationId: v })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Choose the store this will be issued from" />
+                </SelectTrigger>
+                <SelectContent>
+                  {storeOptions.map((l) => (
+                    <SelectItem key={String(l["id"])} value={String(l["id"])}>
+                      {str(l["name"], "Store")}
+                      {l["code"] ? ` · ${str(l["code"])}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!sourceStoreId ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Choose a store before issuing — stock has to come off a real shelf.
+                </p>
+              ) : null}
+            </InspectorSection>
+          ) : null}
+
+
+          {canIssue ? (
+            <InspectorSection title="Reason">
+              <Textarea
+                rows={2}
+                placeholder="Reason — required to return this request, or to explain the shortage sent to Procurement"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </InspectorSection>
+          ) : null}
+        </>
+      ),
+      footer: (
+        <>
+          {status === "pending-supervisor" && mayRelease ? (
+  <Button
+    size="sm"
+    disabled={releaseToStores.isPending}
+    onClick={() => releaseToStores.mutate({ requisitionId: id })}
+  >
+    Approve & Send to Stores
+  </Button>
+) : null}
+
+{status === "awaiting-stores" && can("stores", "approve") ? (
+  <Button
+    size="sm"
+    disabled={approveAtStores.isPending}
+    onClick={() =>
+      approveAtStores.mutate({
+        requisitionId: id,
+        lines: lines.map((line) => ({
+          id: String(line["id"]),
+          quantity_approved: Number(
+            line["quantity_approved"] ?? line["quantity_requested"] ?? 0
+          ),
+        })),
+      })
+    }
+  >
+    Approve Quantities
+  </Button>
+) : null}
+{canIssue ? (
+            <>
+              <Button
+                disabled={
+                  issue.isPending ||
+                  issueLines.length === 0 ||
+                  !sourceStoreId ||
+                  issueLines.some((entry) =>
+                    !lines.some(
+                      (line) =>
+                        String(line["id"]) === entry.id &&
+                        Boolean(line["stock_item_id"]),
+                    ),
+                  )
+                }
+                onClick={() =>
+                  issue.mutate(
+                    {
+                      requisitionId: id,
+                      lines: issueLines,
+                      attemptId: issueAttemptId,
+                    },
+                    {
+                      onSuccess: () => setIssueAttemptId(crypto.randomUUID()),
+                    },
+                  )
+                }
+              >
+                {sourceStoreId
+                  ? `Issue ${issueLines.length} line${issueLines.length === 1 ? "" : "s"}`
+                  : "Choose an issuing store first"}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={reject.isPending || reason.trim() === ""}
+                onClick={() => reject.mutate({ requisitionId: id, reason: reason.trim() })}
+              >
+                Return with reason
+              </Button>
+              {shortage ? (
+                <Button
+                  variant="outline"
+                  disabled={replenish.isPending || Boolean(requisition["purchase_request_id"])}
+                  onClick={() =>
+                    replenish.mutate({
+                      requisition,
+                      notes:
+                        reason.trim() || "Stock unavailable to fulfil a department requisition",
+                    })
+                  }
+                >
+                  Send shortage to Procurement
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      ),
+    };
+  };
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Inventory & Stores"
+        title="Department requests"
+        description="Every department asks Stores for what it needs. Check availability, issue in full or in part, return the request with a reason, or route the shortage to Procurement."
+        actions={
+          <Tabs value={scope} onValueChange={(v) => setScope(v as "open" | "all")}>
+            <TabsList>
+              <TabsTrigger value="open">Open</TabsTrigger>
+              <TabsTrigger value="all">All</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
+      />
+
+      <RequisitionWorkspace
+        lead={lead}
+        figures={figures}
+        isLoading={requisitions.isLoading}
+        error={requisitions.error}
+        rows={workspaceRows}
+        emptyState={
+          <EmptyState
+            icon={PackageSearch}
+            title="No department requests"
+            description="Requisitions raised by Housekeeping, Kitchen, Bar, Front Office and the other departments land here once they reach Stores."
+          />
+        }
+        selectedId={selectedId}
+        onSelect={select}
+        renderInspector={renderInspector}
+      />
+
+      <SectionCard
+        title="Reported stock needs"
+        description="Shortages reported by departments that have not yet become a formal requisition."
+      >
+        <QueryState
+          isLoading={needs.isLoading}
+          error={needs.error}
+          isEmpty={needRows.length === 0}
+          empty={
+            <p className="py-6 text-sm text-muted-foreground">Nothing reported at the moment.</p>
+          }
+        >
+          <CatalogueGroup label="Reported shortages" count={needRows.length}>
+            {needRows.map((row) => (
+              <CatalogueRow
+                key={String(row["id"])}
+                title={str(row["item"], "Item")}
+                subtitle={`${str(
+                  (row["departments"] as StoresRow | null)?.["name"],
+                  titleCase(str(row["module"], "—")),
+                )} · ${titleCase(str(row["priority"], "normal"))}`}
+                trailing={`${num(row["quantity"])} ${str(row["unit"], "unit")}`}
+              />
+            ))}
+          </CatalogueGroup>
+        </QueryState>
+
+      </SectionCard>
+    </div>
+  );
+}

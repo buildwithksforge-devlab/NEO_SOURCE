@@ -1,0 +1,2111 @@
+﻿
+====================================================
+FILE: supabase/migrations/20261022132500_requisition_issue_integrity.sql
+====================================================
+Total lines: 322
+    1: -- NEÃ˜ E07-B: Safe requisition issue infrastructure.
+    2: -- Already executed in Supabase; retained for source control.
+    3: 
+    4: CREATE TABLE IF NOT EXISTS public.neo_requisition_issue_attempts (
+    5:     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    6:     organization_id uuid NOT NULL,
+    7:     requisition_id uuid NOT NULL,
+    8:     attempt_id uuid NOT NULL,
+    9:     payload jsonb NOT NULL,
+   10:     result jsonb NOT NULL,
+   11:     created_by uuid NOT NULL,
+   12:     created_at timestamptz NOT NULL DEFAULT now(),
+   13:     CONSTRAINT neo_req_issue_attempt_unique
+   14:         UNIQUE (organization_id, requisition_id, attempt_id)
+   15: );
+   16: 
+   17: CREATE INDEX IF NOT EXISTS neo_req_issue_attempt_requisition_idx
+   18: ON public.neo_requisition_issue_attempts
+   19: (organization_id, requisition_id);
+   20: 
+   21: ALTER TABLE public.neo_requisition_issue_attempts
+   22: ENABLE ROW LEVEL SECURITY;
+   23: 
+   24: REVOKE ALL ON public.neo_requisition_issue_attempts
+   25: FROM PUBLIC, anon, authenticated;
+   26: 
+   27: -- IMPORTANT:
+   28: -- The deployed neo_req_issue_safe function definition
+   29: -- must be included below before this migration is committed.
+   30: 
+   31: CREATE OR REPLACE FUNCTION public.neo_req_issue_safe(
+   32:     _requisition uuid,
+   33:     _lines jsonb,
+   34:     _attempt uuid
+   35: )
+   36: RETURNS jsonb
+   37: LANGUAGE plpgsql
+   38: SECURITY DEFINER
+   39: SET search_path TO 'public'
+   40: AS $function$
+   41: DECLARE
+   42:     v_org uuid := public.current_org_id();
+   43:     v_req public.internal_requisitions;
+   44:     v_line jsonb;
+   45:     v_row public.internal_requisition_lines;
+   46:     v_item public.stock_items;
+   47:     v_qty numeric;
+   48:     v_count integer := 0;
+   49:     v_partial boolean := false;
+   50:     v_prior record;
+   51:     v_result jsonb;
+   52:     v_seen uuid[] := ARRAY[]::uuid[];
+   53:     v_line_id uuid;
+   54: BEGIN
+   55:     IF auth.uid() IS NULL OR v_org IS NULL THEN
+   56:         RAISE EXCEPTION 'Staff authentication required' USING ERRCODE = '42501';
+   57:     END IF;
+   58: 
+   59:     IF NOT (
+   60:         public.has_permission('stores','issues','create')
+   61:         OR public.has_permission('stores','edit')
+   62:         OR public.has_permission('stores','approve')
+   63:         OR public.is_org_admin()
+   64:     ) THEN
+   65:         RAISE EXCEPTION 'Stores issuing permission required' USING ERRCODE = '42501';
+   66:     END IF;
+   67: 
+   68:     IF _attempt IS NULL THEN
+   69:         RAISE EXCEPTION 'A unique issue attempt ID is required';
+   70:     END IF;
+   71: 
+   72:     IF _lines IS NULL OR jsonb_typeof(_lines) <> 'array'
+   73:        OR jsonb_array_length(_lines) = 0 THEN
+   74:         RAISE EXCEPTION 'At least one issue line is required';
+   75:     END IF;
+   76: 
+   77:     SELECT * INTO v_req
+   78:     FROM public.internal_requisitions
+   79:     WHERE id = _requisition AND organization_id = v_org
+   80:     FOR UPDATE;
+   81: 
+   82:     IF NOT FOUND THEN
+   83:         RAISE EXCEPTION 'Requisition not found';
+   84:     END IF;
+   85: 
+   86:     IF v_req.branch_id IS NULL
+   87:        OR NOT (v_req.branch_id = ANY(public.current_branch_ids())) THEN
+   88:         RAISE EXCEPTION 'Requisition outside authorized property'
+   89:             USING ERRCODE = '42501';
+   90:     END IF;
+   91: 
+   92:     SELECT * INTO v_prior
+   93:     FROM public.neo_requisition_issue_attempts
+   94:     WHERE organization_id = v_org
+   95:       AND requisition_id = _requisition
+   96:       AND attempt_id = _attempt;
+   97: 
+   98:     IF FOUND THEN
+   99:         IF v_prior.payload <> _lines THEN
+  100:             RAISE EXCEPTION 'Issue attempt already used with a different payload';
+  101:         END IF;
+  102: 
+  103:         RETURN v_prior.result || jsonb_build_object('replayed', true);
+  104:     END IF;
+  105: 
+  106:     IF v_req.status NOT IN (
+  107:         'ready-for-issue',
+  108:         'partially-approved',
+  109:         'partially-issued'
+  110:     ) THEN
+  111:         RAISE EXCEPTION 'Stores approval required before issuing';
+  112:     END IF;
+  113: 
+  114:     IF v_req.source_location_id IS NULL THEN
+  115:         RAISE EXCEPTION 'Select an issuing store';
+  116:     END IF;
+  117: 
+  118:     IF NOT EXISTS (
+  119:         SELECT 1
+  120:         FROM public.stock_locations s
+  121:         WHERE s.id = v_req.source_location_id
+  122:           AND s.organization_id = v_org
+  123:           AND s.branch_id = v_req.branch_id
+  124:           AND s.active IS TRUE
+  125:     ) THEN
+  126:         RAISE EXCEPTION 'Invalid issuing store for this property';
+  127:     END IF;
+  128: 
+  129:     IF v_req.destination_location_id IS NOT NULL THEN
+  130:         IF v_req.destination_location_id = v_req.source_location_id THEN
+  131:             RAISE EXCEPTION 'Source and destination stores must differ';
+  132:         END IF;
+  133: 
+  134:         IF NOT EXISTS (
+  135:             SELECT 1
+  136:             FROM public.stock_locations s
+  137:             WHERE s.id = v_req.destination_location_id
+  138:               AND s.organization_id = v_org
+  139:               AND s.branch_id = v_req.branch_id
+  140:               AND s.active IS TRUE
+  141:         ) THEN
+  142:             RAISE EXCEPTION 'Invalid destination store for this property';
+  143:         END IF;
+  144:     END IF;
+  145: 
+  146:     FOR v_line IN
+  147:         SELECT value FROM jsonb_array_elements(_lines)
+  148:     LOOP
+  149:         IF jsonb_typeof(v_line) <> 'object'
+  150:            OR v_line->>'id' IS NULL
+  151:            OR v_line->>'quantity_issued' IS NULL THEN
+  152:             RAISE EXCEPTION 'Invalid issue line format';
+  153:         END IF;
+  154: 
+  155:         v_line_id := (v_line->>'id')::uuid;
+  156: 
+  157:         IF v_line_id = ANY(v_seen) THEN
+  158:             RAISE EXCEPTION 'Duplicate issue line in submission';
+  159:         END IF;
+  160: 
+  161:         v_seen := array_append(v_seen, v_line_id);
+  162: 
+  163:         SELECT * INTO v_row
+  164:         FROM public.internal_requisition_lines
+  165:         WHERE id = v_line_id
+  166:           AND requisition_id = _requisition
+  167:           AND organization_id = v_org
+  168:         FOR UPDATE;
+  169: 
+  170:         IF NOT FOUND THEN
+  171:             RAISE EXCEPTION 'Requisition line not found';
+  172:         END IF;
+  173: 
+  174:         v_qty := (v_line->>'quantity_issued')::numeric;
+  175: 
+  176:         IF v_qty IS NULL OR v_qty <= 0 THEN
+  177:             RAISE EXCEPTION 'Issue quantity must be positive';
+  178:         END IF;
+  179: 
+  180:         IF v_row.quantity_approved IS NULL THEN
+  181:             RAISE EXCEPTION 'Approve line quantities before issue';
+  182:         END IF;
+  183: 
+  184:         IF v_qty > (
+  185:             v_row.quantity_approved -
+  186:             COALESCE(v_row.quantity_issued, 0)
+  187:         ) THEN
+  188:             RAISE EXCEPTION 'Quantity exceeds outstanding approved amount';
+  189:         END IF;
+  190: 
+  191:         IF v_row.stock_item_id IS NULL THEN
+  192:             RAISE EXCEPTION 'Assign inventory item before issuing';
+  193:         END IF;
+  194: 
+  195:         SELECT * INTO v_item
+  196:         FROM public.stock_items
+  197:         WHERE id = v_row.stock_item_id
+  198:           AND organization_id = v_org
+  199:           AND (
+  200:               branch_id = v_req.branch_id
+  201:               OR branch_id IS NULL
+  202:           )
+  203:           AND active IS TRUE;
+  204: 
+  205:         IF NOT FOUND THEN
+  206:             RAISE EXCEPTION 'Invalid inventory item for this property';
+  207:         END IF;
+  208: 
+  209:         PERFORM public.inventory_apply_movement(
+  210:             v_row.stock_item_id,
+  211:             v_req.source_location_id,
+  212:             -v_qty,
+  213:             v_row.unit,
+  214:             CASE
+  215:                 WHEN v_req.destination_location_id IS NULL THEN 'issue'
+  216:                 ELSE 'transfer-out'
+  217:             END,
+  218:             NULL,
+  219:             'internal-requisition',
+  220:             _requisition,
+  221:             'Requisition stock issue',
+  222:             'req-out:' || _attempt::text || ':' || v_row.id::text
+  223:         );
+  224: 
+  225:         IF v_req.destination_location_id IS NOT NULL THEN
+  226:             PERFORM public.inventory_apply_movement(
+  227:                 v_row.stock_item_id,
+  228:                 v_req.destination_location_id,
+  229:                 v_qty,
+  230:                 v_row.unit,
+  231:                 'transfer-in',
+  232:                 NULL,
+  233:                 'internal-requisition',
+  234:                 _requisition,
+  235:                 'Requisition stock transfer',
+  236:                 'req-in:' || _attempt::text || ':' || v_row.id::text
+  237:             );
+  238:         END IF;
+  239: 
+  240:         UPDATE public.internal_requisition_lines
+  241:         SET quantity_issued = COALESCE(quantity_issued, 0) + v_qty
+  242:         WHERE id = v_row.id
+  243:           AND organization_id = v_org;
+  244: 
+  245:         v_count := v_count + 1;
+  246:     END LOOP;
+  247: 
+  248:     SELECT EXISTS (
+  249:         SELECT 1
+  250:         FROM public.internal_requisition_lines
+  251:         WHERE requisition_id = _requisition
+  252:           AND organization_id = v_org
+  253:           AND COALESCE(quantity_issued, 0)
+  254:               < COALESCE(quantity_approved, quantity_requested)
+  255:     )
+  256:     INTO v_partial;
+  257: 
+  258:     UPDATE public.internal_requisitions
+  259:     SET status = CASE
+  260:             WHEN v_partial THEN 'partially-issued'
+  261:             ELSE 'issued'
+  262:         END,
+  263:         issued_by = auth.uid(),
+  264:         issued_at = now()
+  265:     WHERE id = _requisition
+  266:       AND organization_id = v_org;
+  267: 
+  268:     UPDATE public.kitchen_ingredient_requests k
+  269:     SET issued_quantity = (
+  270:         SELECT COALESCE(SUM(l.quantity_issued), 0)
+  271:         FROM public.internal_requisition_lines l
+  272:         WHERE l.requisition_id = _requisition
+  273:           AND l.organization_id = v_org
+  274:     ),
+  275:     status = CASE
+  276:         WHEN v_partial THEN 'partially-available'
+  277:         ELSE 'issued'
+  278:     END,
+  279:     handled_by = auth.uid(),
+  280:     updated_at = now()
+  281:     WHERE k.stores_requisition_id = _requisition
+  282:       AND k.organization_id = v_org
+  283:       AND k.branch_id = v_req.branch_id;
+  284: 
+  285:     v_result := jsonb_build_object(
+  286:         'ok', true,
+  287:         'requisition_id', _requisition,
+  288:         'attempt_id', _attempt,
+  289:         'lines_issued', v_count,
+  290:         'partial', v_partial,
+  291:         'status', CASE
+  292:             WHEN v_partial THEN 'partially-issued'
+  293:             ELSE 'issued'
+  294:         END
+  295:     );
+  296: 
+  297:     INSERT INTO public.neo_requisition_issue_attempts (
+  298:         organization_id,
+  299:         requisition_id,
+  300:         attempt_id,
+  301:         payload,
+  302:         result,
+  303:         created_by
+  304:     )
+  305:     VALUES (
+  306:         v_org,
+  307:         _requisition,
+  308:         _attempt,
+  309:         _lines,
+  310:         v_result,
+  311:         auth.uid()
+  312:     );
+  313: 
+  314:     RETURN v_result;
+  315: END;
+  316: $function$;
+  317: 
+  318: REVOKE ALL ON FUNCTION public.neo_req_issue_safe(uuid, jsonb, uuid)
+  319: FROM PUBLIC;
+  320: 
+  321: GRANT EXECUTE ON FUNCTION public.neo_req_issue_safe(uuid, jsonb, uuid)
+  322: TO authenticated;
+
+====================================================
+FILE: supabase/migrations/20261022131000_event_stock_requisition_handoff.sql
+====================================================
+Total lines: 208
+    1: -- NEÃ˜ E04: Events stock need -> Stores requisition
+    2: -- New function; existing shared requisition functions remain unchanged.
+    3: -- Creates no records until explicitly invoked by an authorised user.
+    4: 
+    5: CREATE OR REPLACE FUNCTION public.neo_event_stock_need_to_requisition(
+    6:     _need uuid
+    7: )
+    8: RETURNS jsonb
+    9: LANGUAGE plpgsql
+   10: SECURITY DEFINER
+   11: SET search_path = public
+   12: AS $function$
+   13: DECLARE
+   14:     v_org uuid := public.current_org_id();
+   15:     v_need public.department_stock_needs;
+   16:     v_req uuid;
+   17:     v_number text;
+   18: BEGIN
+   19: 
+   20:     IF auth.uid() IS NULL
+   21:        OR v_org IS NULL
+   22:        OR public.is_active_staff() IS NOT TRUE THEN
+   23:         RAISE EXCEPTION 'An active staff session is required';
+   24:     END IF;
+   25: 
+   26:     -- Only authorised Events managers may raise this requisition.
+   27:     IF public.has_permission('events', 'stock_needs', 'approve')
+   28:        IS NOT TRUE THEN
+   29:         RAISE EXCEPTION
+   30:           'Only an authorised Events Manager can requisition stock';
+   31:     END IF;
+   32: 
+   33:     -- Lock the originating need to prevent concurrent duplication.
+   34:     SELECT *
+   35:       INTO v_need
+   36:       FROM public.department_stock_needs
+   37:      WHERE id = _need
+   38:        AND organization_id = v_org
+   39:        AND module = 'events'
+   40:      FOR UPDATE;
+   41: 
+   42:     IF NOT FOUND THEN
+   43:         RAISE EXCEPTION 'Event stock need not found';
+   44:     END IF;
+   45: 
+   46:     IF v_need.branch_id IS NULL
+   47:        OR NOT (v_need.branch_id = ANY(public.current_branch_ids())) THEN
+   48:         RAISE EXCEPTION 'The stock need is outside your property access';
+   49:     END IF;
+   50: 
+   51:     -- E04: Every new Events requisition must belong to a real,
+   52:     -- active booking in the same organization and property.
+   53:     IF v_need.event_booking_id IS NULL THEN
+   54:         RAISE EXCEPTION
+   55:           'Select an event booking before requisitioning supplies';
+   56:     END IF;
+   57: 
+   58:     IF NOT EXISTS (
+   59:         SELECT 1
+   60:         FROM public.event_bookings b
+   61:         WHERE b.id = v_need.event_booking_id
+   62:           AND b.organization_id = v_org
+   63:           AND b.branch_id = v_need.branch_id
+   64:           AND lower(coalesce(b.status, '')) NOT IN (
+   65:               'cancelled',
+   66:               'closed',
+   67:               'completed',
+   68:               'no-show'
+   69:           )
+   70:     ) THEN
+   71:         RAISE EXCEPTION
+   72:           'The originating event is invalid, closed, or belongs to another property';
+   73:     END IF;
+   74: 
+   75:     -- Return a previously linked requisition without creating another.
+   76:     IF v_need.requisition_id IS NOT NULL THEN
+   77: 
+   78:         SELECT id, request_number
+   79:           INTO v_req, v_number
+   80:           FROM public.internal_requisitions
+   81:          WHERE id = v_need.requisition_id
+   82:            AND organization_id = v_org
+   83:            AND branch_id = v_need.branch_id
+   84:            AND department_id IS NOT DISTINCT FROM v_need.department_id
+   85:            AND event_booking_id = v_need.event_booking_id;
+   86: 
+   87:         IF v_req IS NULL THEN
+   88:             RAISE EXCEPTION
+   89:               'The stock need references an invalid requisition';
+   90:         END IF;
+   91: 
+   92:         RETURN jsonb_build_object(
+   93:             'ok', true,
+   94:             'already_exists', true,
+   95:             'requisition_id', v_req,
+   96:             'request_number', v_number,
+   97:             'status', 'requisitioned'
+   98:         );
+   99:     END IF;
+  100: 
+  101:     IF v_need.status NOT IN ('pending', 'acknowledged') THEN
+  102:         RAISE EXCEPTION
+  103:           'Only pending or acknowledged stock needs can be requisitioned';
+  104:     END IF;
+  105: 
+  106:     IF coalesce(v_need.quantity, 0) <= 0 THEN
+  107:         RAISE EXCEPTION 'Requested quantity must be greater than zero';
+  108:     END IF;
+  109: 
+  110:     v_number :=
+  111:         'REQ-' ||
+  112:         to_char(now(), 'YYMMDD') ||
+  113:         '-' ||
+  114:         upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 5));
+  115: 
+  116:     -- New requisitions require supervisor approval.
+  117:     -- The creator is never recorded as their own approver.
+  118:     INSERT INTO public.internal_requisitions (
+  119:         organization_id,
+  120:         branch_id,
+  121:         request_number,
+  122:         department_id,
+  123:         event_booking_id,
+  124:         fulfilment_model,
+  125:         requested_by,
+  126:         request_date,
+  127:         priority,
+  128:         reason,
+  129:         status
+  130:     )
+  131:     VALUES (
+  132:         v_org,
+  133:         v_need.branch_id,
+  134:         v_number,
+  135:         v_need.department_id,
+  136:         v_need.event_booking_id,
+  137:         'stores-issue',
+  138:         auth.uid(),
+  139:         current_date,
+  140:         coalesce(v_need.priority, 'normal'),
+  141:         'Events stock need: ' || v_need.item ||
+  142:           ' (Need ' || v_need.id::text || ')',
+  143:         'pending-supervisor'
+  144:     )
+  145:     RETURNING id INTO v_req;
+  146: 
+  147:     INSERT INTO public.internal_requisition_lines (
+  148:         organization_id,
+  149:         requisition_id,
+  150:         description,
+  151:         unit,
+  152:         quantity_requested,
+  153:         notes
+  154:     )
+  155:     VALUES (
+  156:         v_org,
+  157:         v_req,
+  158:         v_need.item,
+  159:         coalesce(v_need.unit, 'unit'),
+  160:         v_need.quantity,
+  161:         v_need.notes
+  162:     );
+  163: 
+  164:     UPDATE public.department_stock_needs
+  165:        SET status = 'requisitioned',
+  166:            requisition_id = v_req,
+  167:            reviewed_by = auth.uid(),
+  168:            reviewed_at = now(),
+  169:            updated_at = now()
+  170:      WHERE id = v_need.id
+  171:        AND organization_id = v_org;
+  172: 
+  173:     PERFORM public.neo_notify(
+  174:         v_org,
+  175:         NULL,
+  176:         v_need.branch_id,
+  177:         'operational-alert',
+  178:         'Events requisition awaiting approval - ' || v_number,
+  179:         'An Events stock need has been submitted to Stores.',
+  180:         '/inventory/requisitions',
+  181:         coalesce(v_need.priority, 'normal'),
+  182:         true,
+  183:         'stores',
+  184:         v_req,
+  185:         'stores.requisition_raised',
+  186:         'req:' || v_req::text || ':raised'
+  187:     );
+  188: 
+  189:     RETURN jsonb_build_object(
+  190:         'ok', true,
+  191:         'already_exists', false,
+  192:         'need_id', v_need.id,
+  193:         'requisition_id', v_req,
+  194:         'request_number', v_number,
+  195:         'status', 'pending-supervisor',
+  196:         'lines', 1
+  197:     );
+  198: 
+  199: END;
+  200: $function$;
+  201: 
+  202: REVOKE ALL ON FUNCTION
+  203: public.neo_event_stock_need_to_requisition(uuid)
+  204: FROM PUBLIC;
+  205: 
+  206: GRANT EXECUTE ON FUNCTION
+  207: public.neo_event_stock_need_to_requisition(uuid)
+  208: TO authenticated;
+
+====================================================
+FILE: supabase/migrations/20261021110000_shared_production_displays.sql
+====================================================
+Total lines: 387
+    1: -- Shared production displays. Additive: existing POS/stock transitions unchanged.
+    2: BEGIN;
+    3: DO $preflight$
+    4: BEGIN
+    5:   IF to_regprocedure('extensions.crypt(text,text)') IS NULL
+    6:     OR to_regprocedure('extensions.gen_salt(text,integer)') IS NULL
+    7:     OR to_regprocedure('extensions.gen_random_bytes(integer)') IS NULL
+    8:     OR to_regprocedure('public.neo_kitchen_ticket_transition(uuid,text,text)') IS NULL
+    9:     OR to_regprocedure('public.neo_kitchen_visible_station_ids()') IS NULL THEN
+   10:     RAISE EXCEPTION 'Shared displays require the existing kitchen functions and pgcrypto in the extensions schema. No changes installed.';
+   11:   END IF;
+   12: END $preflight$;
+   13: 
+   14: CREATE TABLE IF NOT EXISTS public.neo_production_display_sessions (
+   15:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   16:   organization_id uuid NOT NULL REFERENCES public.organizations(id),
+   17:   branch_id uuid NOT NULL REFERENCES public.branches(id),
+   18:   station_ids uuid[] NOT NULL CHECK (cardinality(station_ids) BETWEEN 1 AND 16),
+   19:   label text NOT NULL CHECK (length(label) BETWEEN 1 AND 80),
+   20:   read_only boolean NOT NULL DEFAULT false,
+   21:   token_hash text NOT NULL UNIQUE,
+   22:   opened_by uuid NOT NULL REFERENCES public.profiles(id),
+   23:   created_at timestamptz NOT NULL DEFAULT now(),
+   24:   expires_at timestamptz NOT NULL DEFAULT (now() + interval '12 hours'),
+   25:   closed_at timestamptz,
+   26:   failed_attempts integer NOT NULL DEFAULT 0,
+   27:   attempt_window timestamptz NOT NULL DEFAULT now(),
+   28:   blocked_until timestamptz
+   29: );
+   30: CREATE TABLE IF NOT EXISTS public.neo_production_staff_codes (
+   31:   organization_id uuid NOT NULL REFERENCES public.organizations(id),
+   32:   user_id uuid NOT NULL REFERENCES public.profiles(id),
+   33:   staff_code text NOT NULL,
+   34:   pin_hash text NOT NULL,
+   35:   enabled boolean NOT NULL DEFAULT true,
+   36:   failed_attempts integer NOT NULL DEFAULT 0,
+   37:   blocked_until timestamptz,
+   38:   updated_at timestamptz NOT NULL DEFAULT now(),
+   39:   PRIMARY KEY (organization_id, user_id),
+   40:   UNIQUE (organization_id, staff_code)
+   41: );
+   42: CREATE TABLE IF NOT EXISTS public.neo_production_display_actions (
+   43:   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+   44:   session_id uuid NOT NULL REFERENCES public.neo_production_display_sessions(id),
+   45:   request_id uuid NOT NULL,
+   46:   organization_id uuid NOT NULL REFERENCES public.organizations(id),
+   47:   branch_id uuid NOT NULL REFERENCES public.branches(id),
+   48:   station_id uuid NOT NULL REFERENCES public.operational_stations(id),
+   49:   ticket_id uuid NOT NULL REFERENCES public.station_tickets(id),
+   50:   actor_id uuid NOT NULL REFERENCES public.profiles(id),
+   51:   supervisor_id uuid NOT NULL REFERENCES public.profiles(id),
+   52:   from_status text NOT NULL,
+   53:   to_status text NOT NULL,
+   54:   reason text,
+   55:   result jsonb NOT NULL,
+   56:   created_at timestamptz NOT NULL DEFAULT now(),
+   57:   UNIQUE (session_id, request_id)
+   58: );
+   59: CREATE INDEX IF NOT EXISTS neo_production_display_sessions_scope_idx
+   60:   ON public.neo_production_display_sessions (organization_id, branch_id, expires_at);
+   61: CREATE INDEX IF NOT EXISTS neo_production_display_actions_ticket_idx
+   62:   ON public.neo_production_display_actions (organization_id, ticket_id, created_at);
+   63: 
+   64: ALTER TABLE public.neo_production_display_sessions ENABLE ROW LEVEL SECURITY;
+   65: ALTER TABLE public.neo_production_staff_codes ENABLE ROW LEVEL SECURITY;
+   66: ALTER TABLE public.neo_production_display_actions ENABLE ROW LEVEL SECURITY;
+   67: REVOKE ALL ON public.neo_production_display_sessions,
+   68:   public.neo_production_staff_codes, public.neo_production_display_actions
+   69:   FROM PUBLIC, anon, authenticated;
+   70: 
+   71: -- Private, narrowly used delegation. Never grant this helper to API roles.
+   72: -- Caller functions save and restore all three JWT settings, also on exceptions.
+   73: CREATE OR REPLACE FUNCTION public.neo_production_context(_actor uuid)
+   74: RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+   75: BEGIN
+   76:   PERFORM set_config('request.jwt.claims', jsonb_build_object('sub',_actor,'role','authenticated')::text, true);
+   77:   PERFORM set_config('request.jwt.claim.sub', _actor::text, true);
+   78:   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+   79:   PERFORM public.neo_access_cache_bump();
+   80: END $$;
+   81: REVOKE ALL ON FUNCTION public.neo_production_context(uuid) FROM PUBLIC, anon, authenticated;
+   82: 
+   83: CREATE OR REPLACE FUNCTION public.neo_production_can_manage()
+   84: RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+   85:   SELECT public.is_active_staff() AND (
+   86:     public.is_org_admin()
+   87:     OR public.has_exact_permission('kitchen','*','production.manage')
+   88:     OR public.has_exact_permission('kitchen','*','chef.assign')
+   89:     OR public.has_exact_permission('bar','queue','assign')
+   90:   );
+   91: $$;
+   92: REVOKE ALL ON FUNCTION public.neo_production_can_manage() FROM PUBLIC, anon, authenticated;
+   93: 
+   94: CREATE OR REPLACE FUNCTION public.neo_production_require_session(_token text)
+   95: RETURNS public.neo_production_display_sessions
+   96: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+   97: DECLARE s public.neo_production_display_sessions;
+   98: BEGIN
+   99:   IF _token IS NULL OR _token !~ '^[a-f0-9]{64}$' THEN
+  100:     RAISE EXCEPTION 'Display session is unavailable. Ask a supervisor to pair this screen again.' USING ERRCODE='42501';
+  101:   END IF;
+  102:   SELECT * INTO s FROM public.neo_production_display_sessions
+  103:   WHERE token_hash=encode(extensions.digest(convert_to(_token,'UTF8'),'sha256'),'hex')
+  104:     AND closed_at IS NULL AND expires_at>now();
+  105:   IF s.id IS NULL THEN
+  106:     RAISE EXCEPTION 'Display session is unavailable. Ask a supervisor to pair this screen again.' USING ERRCODE='42501';
+  107:   END IF;
+  108:   RETURN s;
+  109: END $$;
+  110: REVOKE ALL ON FUNCTION public.neo_production_require_session(text) FROM PUBLIC, anon, authenticated;
+  111: 
+  112: -- Called ONLY after setting the saved supervisor identity. Scope/role revocation
+  113: -- takes effect on every read and action, not just when the device is paired.
+  114: CREATE OR REPLACE FUNCTION public.neo_production_assert_supervisor(_session uuid)
+  115: RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  116: DECLARE s public.neo_production_display_sessions;
+  117: BEGIN
+  118:   SELECT * INTO s FROM public.neo_production_display_sessions WHERE id=_session;
+  119:   IF s.id IS NULL OR s.closed_at IS NOT NULL OR s.expires_at<=now()
+  120:      OR s.opened_by IS DISTINCT FROM auth.uid()
+  121:      OR s.organization_id IS DISTINCT FROM public.current_org_id()
+  122:      OR NOT public.neo_production_can_manage()
+  123:      OR NOT (s.station_ids <@ public.neo_kitchen_visible_station_ids())
+  124:      OR (s.read_only AND NOT public.has_permission('kitchen','all_stations','view'))
+  125:      OR EXISTS (SELECT 1 FROM unnest(s.station_ids) wanted(id)
+  126:        LEFT JOIN public.operational_stations st ON st.id=wanted.id
+  127:        WHERE st.id IS NULL OR NOT st.active
+  128:          OR st.organization_id IS DISTINCT FROM s.organization_id
+  129:          OR st.branch_id IS DISTINCT FROM s.branch_id)
+  130:   THEN RAISE EXCEPTION 'Display authorisation has expired or changed. Ask a supervisor to pair this screen again.' USING ERRCODE='42501';
+  131:   END IF;
+  132: END $$;
+  133: REVOKE ALL ON FUNCTION public.neo_production_assert_supervisor(uuid) FROM PUBLIC, anon, authenticated;
+  134: 
+  135: -- Personal enrolment/reset: requires a normal authenticated staff account.
+  136: -- A staff code is an identifier, never a secret. No PIN/hash is ever returned.
+  137: CREATE OR REPLACE FUNCTION public.neo_production_staff_pin(_pin text DEFAULT NULL, _disable boolean DEFAULT false)
+  138: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  139: DECLARE v_org uuid:=public.current_org_id(); c public.neo_production_staff_codes; v_code text;
+  140: BEGIN
+  141:   IF auth.uid() IS NULL OR NOT public.is_active_staff() OR NOT (
+  142:     public.has_permission('kitchen','ticket.accept')
+  143:     OR public.has_permission('kitchen','item.prepare')
+  144:     OR public.has_permission('bar','queue','edit')
+  145:     OR public.neo_production_can_manage()
+  146:   ) THEN RAISE EXCEPTION 'An authorised production staff account is required.' USING ERRCODE='42501'; END IF;
+  147:   SELECT * INTO c FROM public.neo_production_staff_codes WHERE organization_id=v_org AND user_id=auth.uid() FOR UPDATE;
+  148:   IF _disable THEN
+  149:     UPDATE public.neo_production_staff_codes SET enabled=false, updated_at=now()
+  150:       WHERE organization_id=v_org AND user_id=auth.uid();
+  151:     RETURN jsonb_build_object('ok',true,'staff_code',c.staff_code,'pin_set',false);
+  152:   END IF;
+  153:   IF _pin IS NOT NULL THEN
+  154:     IF _pin !~ '^[0-9]{6}$' THEN RAISE EXCEPTION 'Use a six-digit personal PIN.' USING ERRCODE='22023'; END IF;
+  155:     SELECT upper(btrim(staff_id)) INTO v_code FROM public.profiles WHERE id=auth.uid();
+  156:     IF coalesce(v_code,'') !~ '^[A-Z0-9-]{3,24}$' THEN
+  157:       v_code:=upper(substr(replace(auth.uid()::text,'-',''),1,10));
+  158:     END IF;
+  159:     INSERT INTO public.neo_production_staff_codes(organization_id,user_id,staff_code,pin_hash)
+  160:       VALUES(v_org,auth.uid(),coalesce(c.staff_code,v_code),extensions.crypt(_pin,extensions.gen_salt('bf',10)))
+  161:     ON CONFLICT (organization_id,user_id) DO UPDATE SET
+  162:       pin_hash=EXCLUDED.pin_hash, enabled=true, failed_attempts=0, blocked_until=NULL, updated_at=now();
+  163:   END IF;
+  164:   SELECT * INTO c FROM public.neo_production_staff_codes WHERE organization_id=v_org AND user_id=auth.uid();
+  165:   RETURN jsonb_build_object('ok',true,'staff_code',c.staff_code,'pin_set',coalesce(c.enabled,false));
+  166: END $$;
+  167: REVOKE ALL ON FUNCTION public.neo_production_staff_pin(text,boolean) FROM PUBLIC, anon;
+  168: GRANT EXECUTE ON FUNCTION public.neo_production_staff_pin(text,boolean) TO authenticated;
+  169: 
+  170: CREATE OR REPLACE FUNCTION public.neo_production_display_pair(_branch uuid, _stations uuid[], _label text, _read_only boolean DEFAULT false)
+  171: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  172: DECLARE v_org uuid:=public.current_org_id(); v_token text; v_id uuid; v_stations uuid[];
+  173: BEGIN
+  174:   IF NOT public.neo_production_can_manage() THEN RAISE EXCEPTION 'A production supervisor must pair this screen.' USING ERRCODE='42501'; END IF;
+  175:   SELECT array_agg(DISTINCT id) INTO v_stations FROM unnest(_stations) x(id) WHERE id IS NOT NULL;
+  176:   IF coalesce(cardinality(v_stations),0) NOT BETWEEN 1 AND 16
+  177:     OR length(btrim(coalesce(_label,''))) NOT BETWEEN 1 AND 80
+  178:     OR NOT (v_stations <@ public.neo_kitchen_visible_station_ids())
+  179:     OR (_read_only AND NOT public.has_permission('kitchen','all_stations','view'))
+  180:     OR NOT EXISTS(SELECT 1 FROM public.branches WHERE id=_branch AND organization_id=v_org)
+  181:     OR EXISTS(SELECT 1 FROM unnest(v_stations) x(id)
+  182:       LEFT JOIN public.operational_stations s ON s.id=x.id
+  183:       WHERE s.id IS NULL OR NOT s.active OR s.organization_id IS DISTINCT FROM v_org
+  184:         OR s.branch_id IS DISTINCT FROM _branch OR s.station_type='service')
+  185:   THEN RAISE EXCEPTION 'Select active production stations in one authorised property.' USING ERRCODE='42501'; END IF;
+  186:   v_token:=encode(extensions.gen_random_bytes(32),'hex');
+  187:   INSERT INTO public.neo_production_display_sessions(organization_id,branch_id,station_ids,label,read_only,token_hash,opened_by)
+  188:     VALUES(v_org,_branch,v_stations,btrim(_label),coalesce(_read_only,false),
+  189:       encode(extensions.digest(convert_to(v_token,'UTF8'),'sha256'),'hex'),auth.uid()) RETURNING id INTO v_id;
+  190:   RETURN jsonb_build_object('ok',true,'session_id',v_id,'token',v_token,'expires_at',now()+interval '12 hours');
+  191: END $$;
+  192: REVOKE ALL ON FUNCTION public.neo_production_display_pair(uuid,uuid[],text,boolean) FROM PUBLIC, anon;
+  193: GRANT EXECUTE ON FUNCTION public.neo_production_display_pair(uuid,uuid[],text,boolean) TO authenticated;
+  194: 
+  195: CREATE OR REPLACE FUNCTION public.neo_production_display_manage(_close uuid DEFAULT NULL)
+  196: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  197: DECLARE v_org uuid:=public.current_org_id(); v_rows jsonb;
+  198: BEGIN
+  199:   IF NOT public.neo_production_can_manage() THEN RAISE EXCEPTION 'Production supervisor access is required.' USING ERRCODE='42501'; END IF;
+  200:   IF _close IS NOT NULL THEN
+  201:     UPDATE public.neo_production_display_sessions SET closed_at=coalesce(closed_at,now())
+  202:     WHERE id=_close AND organization_id=v_org
+  203:       AND (opened_by=auth.uid() OR station_ids <@ public.neo_kitchen_visible_station_ids());
+  204:     IF NOT FOUND THEN RAISE EXCEPTION 'Display session is outside your scope.' USING ERRCODE='42501'; END IF;
+  205:   END IF;
+  206:   SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'label',s.label,'branch_id',s.branch_id,
+  207:     'station_ids',s.station_ids,'read_only',s.read_only,'opened_by',s.opened_by,'expires_at',s.expires_at,
+  208:     'closed_at',s.closed_at) ORDER BY s.created_at DESC),'[]'::jsonb) INTO v_rows
+  209:   FROM public.neo_production_display_sessions s WHERE s.organization_id=v_org
+  210:     AND s.expires_at>now() AND s.closed_at IS NULL
+  211:     AND (s.opened_by=auth.uid() OR s.station_ids <@ public.neo_kitchen_visible_station_ids());
+  212:   RETURN jsonb_build_object('ok',true,'sessions',v_rows);
+  213: END $$;
+  214: REVOKE ALL ON FUNCTION public.neo_production_display_manage(uuid) FROM PUBLIC, anon;
+  215: GRANT EXECUTE ON FUNCTION public.neo_production_display_manage(uuid) TO authenticated;
+  216: 
+  217: -- Token-authenticated read: deliberately callable after supervisor signs out.
+  218: CREATE OR REPLACE FUNCTION public.neo_production_display_read(_token text)
+  219: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  220: DECLARE s public.neo_production_display_sessions; v_result jsonb; v_tickets jsonb;
+  221:   v_claims text:=current_setting('request.jwt.claims',true);
+  222:   v_sub text:=current_setting('request.jwt.claim.sub',true);
+  223:   v_role text:=current_setting('request.jwt.claim.role',true);
+  224: BEGIN
+  225:   s:=public.neo_production_require_session(_token);
+  226:   PERFORM public.neo_production_context(s.opened_by);
+  227:   PERFORM public.neo_production_assert_supervisor(s.id);
+  228:   SELECT coalesce(jsonb_agg(to_jsonb(q) || jsonb_build_object('claimed_by',(
+  229:     SELECT p.full_name FROM public.station_ticket_items ti JOIN public.profiles p ON p.id=ti.chef_id
+  230:     WHERE ti.ticket_id=q.ticket_id AND ti.organization_id=s.organization_id AND ti.chef_id IS NOT NULL
+  231:       AND ti.status NOT IN ('cancelled','completed') ORDER BY ti.accepted_at NULLS LAST,ti.id LIMIT 1
+  232:   )) ORDER BY q.received_at),'[]'::jsonb) INTO v_tickets
+  233:   FROM public.neo_kitchen_queue(s.branch_id,NULL,'live') q
+  234:   WHERE q.station_id=ANY(s.station_ids);
+  235:   v_result:=jsonb_build_object('ok',true,'session_id',s.id,'label',s.label,'read_only',s.read_only,
+  236:     'property',(SELECT name FROM public.branches WHERE id=s.branch_id),
+  237:     'expires_at',s.expires_at,'server_time',now(),'blocked_until',s.blocked_until,
+  238:     'stations',(SELECT jsonb_agg(jsonb_build_object('id',st.id,'name',st.name) ORDER BY st.sort_order,st.name)
+  239:       FROM public.operational_stations st WHERE st.id=ANY(s.station_ids)), 'tickets',v_tickets);
+  240:   PERFORM set_config('request.jwt.claims',coalesce(v_claims,''),true);
+  241:   PERFORM set_config('request.jwt.claim.sub',coalesce(v_sub,''),true);
+  242:   PERFORM set_config('request.jwt.claim.role',coalesce(v_role,''),true);
+  243:   PERFORM public.neo_access_cache_bump();
+  244:   RETURN v_result;
+  245: EXCEPTION WHEN OTHERS THEN
+  246:   PERFORM set_config('request.jwt.claims',coalesce(v_claims,''),true);
+  247:   PERFORM set_config('request.jwt.claim.sub',coalesce(v_sub,''),true);
+  248:   PERFORM set_config('request.jwt.claim.role',coalesce(v_role,''),true);
+  249:   PERFORM public.neo_access_cache_bump();
+  250:   RAISE;
+  251: END $$;
+  252: REVOKE ALL ON FUNCTION public.neo_production_display_read(text) FROM PUBLIC;
+  253: GRANT EXECUTE ON FUNCTION public.neo_production_display_read(text) TO anon, authenticated;
+  254: 
+  255: -- One PIN authorises one action. Expected status + row locks prevent two staff
+  256: -- claiming the same work. Request IDs make uncertain-network retries idempotent.
+  257: CREATE OR REPLACE FUNCTION public.neo_production_display_act(
+  258:   _token text, _code text, _pin text, _ticket uuid, _to text,
+  259:   _expected text, _request uuid, _reason text DEFAULT NULL
+  260: )
+  261: RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  262: DECLARE s public.neo_production_display_sessions; c public.neo_production_staff_codes;
+  263:   t public.station_tickets; a public.neo_production_display_actions;
+  264:   v_result jsonb; v_actor_name text; v_error text; v_bar boolean;
+  265:   v_claims text:=current_setting('request.jwt.claims',true);
+  266:   v_sub text:=current_setting('request.jwt.claim.sub',true);
+  267:   v_role text:=current_setting('request.jwt.claim.role',true);
+  268: BEGIN
+  269:   s:=public.neo_production_require_session(_token);
+  270:   SELECT * INTO s FROM public.neo_production_display_sessions WHERE id=s.id FOR UPDATE;
+  271:   IF s.closed_at IS NOT NULL OR s.expires_at<=now() OR s.read_only THEN
+  272:     RETURN jsonb_build_object('ok',false,'reason','display_unavailable','message','This display cannot perform production actions.');
+  273:   END IF;
+  274:   IF s.blocked_until>now() THEN
+  275:     RETURN jsonb_build_object('ok',false,'reason','locked','message','Too many attempts. Ask a supervisor for help.','retry_at',s.blocked_until);
+  276:   END IF;
+  277:   IF _request IS NULL OR _expected IS NULL OR _ticket IS NULL
+  278:      OR _to IS NULL OR _to NOT IN ('accepted','preparing','ready','delay')
+  279:      OR length(coalesce(_reason,''))>500
+  280:      OR (_to='delay' AND length(btrim(coalesce(_reason,'')))<3) THEN
+  281:     RETURN jsonb_build_object('ok',false,'reason','invalid_action','message','Choose a valid production action and required reason.');
+  282:   END IF;
+  283:   PERFORM public.neo_production_context(s.opened_by);
+  284:   PERFORM public.neo_production_assert_supervisor(s.id);
+  285:   -- Restore before credential checking; no supervisor authority reaches staff work.
+  286:   PERFORM set_config('request.jwt.claims',coalesce(v_claims,''),true);
+  287:   PERFORM set_config('request.jwt.claim.sub',coalesce(v_sub,''),true);
+  288:   PERFORM set_config('request.jwt.claim.role',coalesce(v_role,''),true);
+  289:   PERFORM public.neo_access_cache_bump();
+  290: 
+  291:   SELECT * INTO c FROM public.neo_production_staff_codes
+  292:     WHERE organization_id=s.organization_id AND staff_code=upper(btrim(left(coalesce(_code,''),24))) FOR UPDATE;
+  293:   IF c.blocked_until>now() THEN
+  294:     RETURN jsonb_build_object('ok',false,'reason','credentials','message','Staff code or PIN not accepted. Try later or reset your PIN in your staff account.');
+  295:   END IF;
+  296:   IF c.user_id IS NULL OR length(btrim(coalesce(_code,'')))>24 OR NOT coalesce(c.enabled,false) OR _pin IS NULL OR _pin !~ '^[0-9]{6}$'
+  297:      OR extensions.crypt(left(coalesce(_pin,''),6),coalesce(c.pin_hash,extensions.gen_salt('bf',10))) IS DISTINCT FROM c.pin_hash THEN
+  298:     -- Return, do not RAISE: rate-limit counters must survive the failed attempt.
+  299:     IF s.attempt_window<now()-interval '15 minutes' THEN s.failed_attempts:=0; s.attempt_window:=now(); END IF;
+  300:     UPDATE public.neo_production_display_sessions SET failed_attempts=s.failed_attempts+1, attempt_window=s.attempt_window,
+  301:       blocked_until=CASE WHEN s.failed_attempts+1>=20 THEN now()+interval '15 minutes' ELSE NULL END WHERE id=s.id;
+  302:     IF c.user_id IS NOT NULL THEN
+  303:       UPDATE public.neo_production_staff_codes SET
+  304:         failed_attempts=CASE WHEN blocked_until IS NOT NULL AND blocked_until<=now() THEN 1 ELSE failed_attempts+1 END,
+  305:         blocked_until=CASE WHEN (CASE WHEN blocked_until IS NOT NULL AND blocked_until<=now() THEN 1 ELSE failed_attempts+1 END)>=5
+  306:           THEN now()+interval '15 minutes' ELSE NULL END
+  307:       WHERE organization_id=s.organization_id AND user_id=c.user_id;
+  308:     END IF;
+  309:     RETURN jsonb_build_object('ok',false,'reason','credentials','message','Staff code or PIN not accepted. Try later or reset your PIN in your staff account.');
+  310:   END IF;
+  311: 
+  312:   PERFORM public.neo_production_context(c.user_id);
+  313:   BEGIN
+  314:     IF public.current_org_id() IS DISTINCT FROM s.organization_id OR NOT public.is_active_staff() THEN
+  315:       RAISE EXCEPTION 'This staff account is not active in this organisation.' USING ERRCODE='42501';
+  316:     END IF;
+  317:     SELECT * INTO t FROM public.station_tickets WHERE id=_ticket AND organization_id=s.organization_id FOR UPDATE;
+  318:     IF t.id IS NULL OR t.branch_id IS DISTINCT FROM s.branch_id OR t.station_id IS NULL
+  319:        OR NOT (t.station_id=ANY(s.station_ids))
+  320:        OR NOT (t.station_id=ANY(public.neo_kitchen_visible_station_ids())) THEN
+  321:       RAISE EXCEPTION 'This ticket is outside your assigned display stations.' USING ERRCODE='42501';
+  322:     END IF;
+  323:     PERFORM public.neo_kitchen_assert_station_authority(t.id);
+  324:     v_bar:=t.station_id IN (SELECT public.neo_bar_station_ids(t.branch_id));
+  325:     IF NOT (public.has_permission('kitchen',CASE _to WHEN 'accepted' THEN 'ticket.accept' WHEN 'ready' THEN 'item.ready' ELSE 'item.prepare' END)
+  326:       OR (v_bar AND public.has_permission('bar','queue','edit'))) THEN
+  327:       RAISE EXCEPTION 'You do not have permission to perform this station action.' USING ERRCODE='42501';
+  328:     END IF;
+  329:     SELECT * INTO a FROM public.neo_production_display_actions WHERE session_id=s.id AND request_id=_request;
+  330:     IF a.id IS NOT NULL THEN
+  331:       IF a.actor_id IS DISTINCT FROM c.user_id OR a.ticket_id IS DISTINCT FROM _ticket
+  332:         OR a.to_status IS DISTINCT FROM _to OR a.from_status IS DISTINCT FROM _expected
+  333:         OR a.reason IS DISTINCT FROM nullif(btrim(_reason),'') THEN
+  334:         RAISE EXCEPTION 'This request ID was already used for a different action.' USING ERRCODE='22023';
+  335:       END IF;
+  336:       v_result:=a.result || jsonb_build_object('idempotent',true);
+  337:     ELSE
+  338:       IF t.status IS DISTINCT FROM _expected THEN
+  339:         RAISE EXCEPTION 'Ticket changed from % to %. Refresh and review it before acting.',_expected,t.status USING ERRCODE='40001';
+  340:       END IF;
+  341:       PERFORM id FROM public.station_ticket_items WHERE ticket_id=t.id ORDER BY id FOR UPDATE;
+  342:       IF (t.assigned_chef_id IS NOT NULL AND t.assigned_chef_id<>c.user_id
+  343:           OR EXISTS(SELECT 1 FROM public.station_ticket_items WHERE ticket_id=t.id
+  344:             AND status NOT IN ('cancelled','completed') AND chef_id IS NOT NULL AND chef_id<>c.user_id))
+  345:           AND NOT public.neo_can_assign_kitchen_work() THEN
+  346:         RAISE EXCEPTION 'Another staff member owns this ticket. A supervisor must reassign it.' USING ERRCODE='42501';
+  347:       END IF;
+  348:       IF _to='delay' THEN
+  349:         IF t.status IN ('ready','served','completed','cancelled') THEN RAISE EXCEPTION 'This ticket is no longer awaiting preparation.'; END IF;
+  350:         UPDATE public.station_tickets SET delay_reason=btrim(_reason),updated_at=now() WHERE id=t.id;
+  351:         INSERT INTO public.station_ticket_status_history(organization_id,ticket_id,from_status,to_status,reason,changed_by)
+  352:           VALUES(s.organization_id,t.id,t.status,t.status,'delay: '||btrim(_reason),c.user_id);
+  353:         v_result:=jsonb_build_object('ticket_status',t.status);
+  354:       ELSE
+  355:         v_result:=public.neo_kitchen_ticket_transition(t.id,_to,NULL);
+  356:       END IF;
+  357:       SELECT full_name INTO v_actor_name FROM public.profiles WHERE id=c.user_id;
+  358:       v_result:=coalesce(v_result,'{}'::jsonb)||jsonb_build_object('ok',true,'actor_name',v_actor_name,'actor_id',c.user_id,'idempotent',false);
+  359:       INSERT INTO public.neo_production_display_actions(session_id,request_id,organization_id,branch_id,station_id,ticket_id,
+  360:         actor_id,supervisor_id,from_status,to_status,reason,result)
+  361:         VALUES(s.id,_request,s.organization_id,s.branch_id,t.station_id,t.id,c.user_id,s.opened_by,
+  362:           _expected,_to,nullif(btrim(_reason),''),v_result);
+  363:     END IF;
+  364:     UPDATE public.neo_production_staff_codes SET failed_attempts=0, blocked_until=NULL WHERE organization_id=s.organization_id AND user_id=c.user_id;
+  365:   EXCEPTION WHEN OTHERS THEN
+  366:     GET STACKED DIAGNOSTICS v_error=MESSAGE_TEXT;
+  367:     -- Nested transaction rolls back all partial ticket changes before returning.
+  368:     v_result:=jsonb_build_object('ok',false,'reason','action_refused','message',v_error);
+  369:   END;
+  370:   PERFORM set_config('request.jwt.claims',coalesce(v_claims,''),true);
+  371:   PERFORM set_config('request.jwt.claim.sub',coalesce(v_sub,''),true);
+  372:   PERFORM set_config('request.jwt.claim.role',coalesce(v_role,''),true);
+  373:   PERFORM public.neo_access_cache_bump();
+  374:   RETURN v_result;
+  375: EXCEPTION WHEN OTHERS THEN
+  376:   PERFORM set_config('request.jwt.claims',coalesce(v_claims,''),true);
+  377:   PERFORM set_config('request.jwt.claim.sub',coalesce(v_sub,''),true);
+  378:   PERFORM set_config('request.jwt.claim.role',coalesce(v_role,''),true);
+  379:   PERFORM public.neo_access_cache_bump();
+  380:   RAISE;
+  381: END $$;
+  382: REVOKE ALL ON FUNCTION public.neo_production_display_act(text,text,text,uuid,text,text,uuid,text) FROM PUBLIC;
+  383: GRANT EXECUTE ON FUNCTION public.neo_production_display_act(text,text,text,uuid,text,text,uuid,text) TO anon, authenticated;
+  384: 
+  385: NOTIFY pgrst, 'reload schema';
+  386: COMMIT;
+  387: SELECT 'Shared production display backend' AS check_name, 'INSTALLED' AS result;
+
+====================================================
+FILE: src/lib/stores-department.ts
+====================================================
+Total lines: 692
+    1: /**
+    2:  * Inventory & Stores department layer.
+    3:  *
+    4:  * The department has two roles. The Storekeeper controls what is held in
+    5:  * Stores: they receive department requisitions, check availability, issue in
+    6:  * full or in part, return a request with a reason, run stock counts and route
+    7:  * shortages to Procurement as a purchase request. The Receiving Clerk works
+    8:  * only on stock coming INTO the organisation â€” supplier deliveries against an
+    9:  * approved order â€” and never issues stock or approves an exception.
+   10:  *
+   11:  * Every write goes through an existing authoritative routine (req_issue,
+   12:  * req_approve, neo_stores_requisition_reject, neo_stores_count_submit_variance)
+   13:  * so stock balances and the audit trail stay owned by the database.
+   14:  */
+   15: import { guardedRpc } from "@/lib/rpc-guard";
+   16: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+   17: import { toast } from "sonner";
+   18: import { supabase } from "@/integrations/supabase/client";
+   19: import { useAuth } from "@/lib/auth";
+   20: import { useActivePropertyFilter } from "@/lib/branch-filter";
+   21: import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
+   22: import { applyStockNeedStatus } from "@/lib/stock-needs";
+   23: 
+   24: // The Stores trail spans many generated table types; call sites narrow.
+   25: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   26: const db = supabase as any;
+   27: 
+   28: export type StoresRow = Record<string, unknown>;
+   29: 
+   30: /** Requisition states that are visible in the Stores queue. */
+   31: export const STORES_OPEN_STATUSES = [
+   32:   "pending-supervisor",
+   33:   "awaiting-stores",
+   34:   "approved",
+   35:   "partially-approved",
+   36:   "ready-for-issue",
+   37:   "partially-issued",
+   38: ] as const;
+   39: 
+   40: export function str(value: unknown, fallback = "â€”"): string {
+   41:   const s = value === null || value === undefined ? "" : String(value);
+   42:   return s.trim() === "" ? fallback : s;
+   43: }
+   44: 
+   45: export function num(value: unknown): number {
+   46:   const n = Number(value ?? 0);
+   47:   return Number.isFinite(n) ? n : 0;
+   48: }
+   49: 
+   50: export function useStoresContext() {
+   51:   const { organizationId, profile } = useAuth();
+   52:   const { branchId } = useActivePropertyFilter();
+   53:   const fallback = (profile as { branch_id?: string | null } | null)?.branch_id ?? null;
+   54:   return { organizationId, branchId: branchId ?? fallback };
+   55: }
+   56: 
+   57: function useStoresInvalidate() {
+   58:   const qc = useQueryClient();
+   59:   return () => {
+   60:     void qc.invalidateQueries({ queryKey: ["stores-department"] });
+   61:     void qc.invalidateQueries({ queryKey: ["inventory"] });
+   62:     void qc.invalidateQueries({ queryKey: ["procurement"] });
+   63:     void qc.invalidateQueries({ queryKey: ["ops"] });
+   64:   };
+   65: }
+   66: 
+   67: /* ------------------------------------------------------------------ *
+   68:  * Department requisitions â€” the Storekeeper's inbox
+   69:  * ------------------------------------------------------------------ */
+   70: 
+   71: export function useStoresRequisitions(scope: "open" | "all" = "open") {
+   72:   const { organizationId, branchId } = useStoresContext();
+   73:   return useQuery({
+   74:     queryKey: ["stores-department", "requisitions", organizationId, branchId, scope],
+   75:     enabled: Boolean(organizationId),
+   76:     queryFn: async () => {
+   77:       let q = db
+   78:         .from("internal_requisitions")
+   79:         .select(
+   80:           "id, request_number, status, priority, request_date, required_date, reason, department_id, source_location_id, destination_location_id, requested_by, issued_at, issued_by, shortage_notes, purchase_request_id, departments(name), source_store:stock_locations!internal_requisitions_source_location_id_fkey(name), internal_requisition_lines(id, description, unit, quantity_requested, quantity_approved, quantity_issued, stock_item_id, stock_items(name, base_unit))",
+   81:         )
+   82:         .order("request_date", { ascending: false })
+   83:         .limit(200);
+   84:       if (branchId) q = q.eq("branch_id", branchId);
+   85:       if (scope === "open") q = q.in("status", STORES_OPEN_STATUSES as unknown as string[]);
+   86:       const { data, error } = await q;
+   87:       if (error) throw new Error(error.message);
+   88:       return (data ?? []) as StoresRow[];
+   89:     },
+   90:   });
+   91: }
+   92: 
+   93: /** On-hand quantity per stock item across the active property's locations. */
+   94: export function useStoresAvailability() {
+   95:   const { organizationId } = useStoresContext();
+   96:   return useQuery({
+   97:     queryKey: ["stores-department", "availability", organizationId],
+   98:     enabled: Boolean(organizationId),
+   99:     queryFn: async () => {
+  100:       const { data, error } = await db
+  101:         .from("stock_levels")
+  102:         .select("stock_item_id, quantity_on_hand, location_id")
+  103:         .limit(5000);
+  104:       if (error) throw new Error(error.message);
+  105:       const byItem = new Map<string, number>();
+  106:       for (const row of (data ?? []) as StoresRow[]) {
+  107:         const key = String(row["stock_item_id"] ?? "");
+  108:         if (!key) continue;
+  109:         byItem.set(key, (byItem.get(key) ?? 0) + num(row["quantity_on_hand"]));
+  110:       }
+  111:       return byItem;
+  112:     },
+  113:   });
+  114: }
+  115: 
+  116: /** Release a requisition still waiting on departmental approval into the Stores queue. */
+  117: export function useReleaseRequisitionToStores() {
+  118:   const invalidate = useStoresInvalidate();
+  119:   return useMutation({
+  120:     mutationFn: async (input: { requisitionId: string }) => {
+  121:       const { error } = await guardedRpc(db, "req_approve", {
+  122:         _requisition: input.requisitionId,
+  123:         _lines: [],
+  124:         _stage: "supervisor",
+  125:       });
+  126:       if (error) throw new Error(error.message);
+  127:     },
+  128:     onSuccess: () => {
+  129:       invalidate();
+  130:       toast.success("Approved â€” the request is now with Stores");
+  131:     },
+  132:     onError: (e: Error) => toast.error(e.message),
+  133:   });
+  134: }
+  135: 
+  136: /**
+  137:  * Name the store the goods will actually leave from. Stock cannot be issued
+  138:  * until this is set, because a movement without an origin is not a movement.
+  139:  */
+  140: export function useSetIssuingStore() {
+  141:   const invalidate = useStoresInvalidate();
+  142:   return useMutation({
+  143:     mutationFn: async (input: { requisitionId: string; locationId: string }) => {
+  144:       const { error } = await db
+  145:         .from("internal_requisitions")
+  146:         .update({ source_location_id: input.locationId })
+  147:         .eq("id", input.requisitionId);
+  148:       if (error) throw new Error(error.message);
+  149:     },
+  150:     onSuccess: () => {
+  151:       invalidate();
+  152:       toast.success("Issuing store set â€” this request can now be issued");
+  153:     },
+  154:     onError: (e: Error) => toast.error(e.message),
+  155:   });
+  156: }
+  157: 
+  158: /**
+  159:  * Map a requisition line to an actual inventory item.
+  160:  * This does not deduct stock or approve the requisition.
+  161:  */
+  162: export function useAssignRequisitionStockItem() {
+  163:   const invalidate = useStoresInvalidate();
+  164: 
+  165:   return useMutation({
+  166:     mutationFn: async (input: {
+  167:       requisitionId: string;
+  168:       lineId: string;
+  169:       stockItemId: string;
+  170:     }) => {
+  171:       const { data, error } = await guardedRpc(
+  172:         db,
+  173:         "neo_requisition_assign_stock_item",
+  174:         {
+  175:           _requisition: input.requisitionId,
+  176:           _line: input.lineId,
+  177:           _stock_item: input.stockItemId,
+  178:         },
+  179:       );
+  180: 
+  181:       if (error) throw new Error(error.message);
+  182: 
+  183:       return data as StoresRow;
+  184:     },
+  185: 
+  186:     onSuccess: () => {
+  187:       invalidate();
+  188:       toast.success("Inventory item linked to requisition");
+  189:     },
+  190: 
+  191:     onError: (error: Error) => {
+  192:       toast.error(error.message);
+  193:     },
+  194:   });
+  195: }
+  196: /** Confirm the quantities Stores will release, before issuing. */
+  197: export function useApproveRequisitionAtStores() {
+  198:   const invalidate = useStoresInvalidate();
+  199:   return useMutation({
+  200:     mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_approved: number }[] }) => {
+  201:       const { error } = await guardedRpc(db, "req_approve", {
+  202:         _requisition: input.requisitionId,
+  203:         _lines: input.lines,
+  204:         _stage: "stores",
+  205:       });
+  206:       if (error) throw new Error(error.message);
+  207:     },
+  208:     onSuccess: () => {
+  209:       invalidate();
+  210:       toast.success("Quantities confirmed â€” ready to issue");
+  211:     },
+  212:     onError: (e: Error) => toast.error(e.message),
+  213:   });
+  214: }
+  215: 
+  216: /** Issue stock against a requisition, in full or in part. */
+  217: export function useIssueRequisition() {
+  218:   const invalidate = useStoresInvalidate();
+  219:   return useMutation({
+  220:     mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_issued: number }[]; attemptId: string }) => {
+  221:       const { data, error } = await guardedRpc(db, "neo_req_issue_safe", {
+  222:         _requisition: input.requisitionId,
+  223:         _lines: input.lines,
+  224:         _attempt: input.attemptId,
+  225:       });
+  226:       if (error) throw new Error(error.message);
+  227:       return (data ?? {}) as StoresRow;
+  228:     },
+  229:     onSuccess: (data) => {
+  230:       invalidate();
+  231:       toast.success(
+  232:         data["partial"] === true
+  233:           ? "Partly issued â€” the outstanding quantity stays open"
+  234:           : "Issued in full and posted to the stock ledger",
+  235:       );
+  236:     },
+  237:     onError: (e: Error) => toast.error(e.message),
+  238:   });
+  239: }
+  240: 
+  241: /** Return a requisition to the department with a written reason. */
+  242: export function useRejectRequisition() {
+  243:   const invalidate = useStoresInvalidate();
+  244:   return useMutation({
+  245:     mutationFn: async (input: { requisitionId: string; reason: string }) => {
+  246:       const { error } = await guardedRpc(db, "neo_stores_requisition_reject", {
+  247:         _requisition: input.requisitionId,
+  248:         _reason: input.reason,
+  249:       });
+  250:       if (error) throw new Error(error.message);
+  251:     },
+  252:     onSuccess: () => {
+  253:       invalidate();
+  254:       toast.success("Requisition returned to the department");
+  255:     },
+  256:     onError: (e: Error) => toast.error(e.message),
+  257:   });
+  258: }
+  259: 
+  260: /** Route a shortage to Procurement as a purchase request. */
+  261: export function useRaiseReplenishment() {
+  262:   const invalidate = useStoresInvalidate();
+  263:   return useMutation({
+  264:     mutationFn: async (input: { requisition: StoresRow; notes: string }) => {
+  265:       // The database builds the request and its lines in one statement, so
+  266:       // Procurement never receives a purchase request with no items on it.
+  267:       const { data, error } = await guardedRpc(db, "neo_stores_shortage_to_pr", {
+  268:         _requisition: String(input.requisition["id"]),
+  269:         _notes: input.notes,
+  270:       });
+  271:       if (error) throw new Error(error.message);
+  272:       return (data ?? {}) as StoresRow;
+  273:     },
+  274:     onSuccess: (data) => {
+  275:       invalidate();
+  276:       const number = str(data["request_number"], "purchase request");
+  277:       toast.success(
+  278:         data["created"] === false
+  279:           ? `Already with Procurement as ${number}`
+  280:           : `Shortage sent to Procurement as ${number} â€” ${num(data["lines"])} line(s)`,
+  281:       );
+  282:     },
+  283:     onError: (e: Error) => toast.error(e.message),
+  284:   });
+  285: }
+  286: 
+  287: /* ------------------------------------------------------------------ *
+  288:  * Stock needs reported by departments, across every module
+  289:  * ------------------------------------------------------------------ */
+  290: 
+  291: export function useAllDepartmentStockNeeds(status = "pending") {
+  292:   const { organizationId, branchId } = useStoresContext();
+  293:   return useQuery({
+  294:     queryKey: ["stores-department", "stock-needs", organizationId, branchId, status],
+  295:     enabled: Boolean(organizationId),
+  296:     queryFn: async () => {
+  297:       let q = db
+  298:         .from("department_stock_needs")
+  299:         .select("*, departments(name)")
+  300:         .order("created_at", { ascending: false })
+  301:         .limit(200);
+  302:       if (branchId) q = q.eq("branch_id", branchId);
+  303:       q = applyStockNeedStatus(q, status);
+  304:       const { data, error } = await q;
+  305:       if (error) throw new Error(error.message);
+  306:       return (data ?? []) as StoresRow[];
+  307:     },
+  308:   });
+  309: }
+  310: 
+  311: /* ------------------------------------------------------------------ *
+  312:  * Stock counts and variances â€” controlled, never silent
+  313:  * ------------------------------------------------------------------ */
+  314: 
+  315: export function useStoresStockTakes() {
+  316:   const { organizationId, branchId } = useStoresContext();
+  317:   return useQuery({
+  318:     queryKey: ["stores-department", "stock-takes", organizationId, branchId],
+  319:     enabled: Boolean(organizationId),
+  320:     queryFn: async () => {
+  321:       let q = db
+  322:         .from("stock_takes")
+  323:         .select(
+  324:           "id, reference, count_type, status, scheduled_for, started_at, completed_at, variance_value, location_id, notes, created_at, stock_locations(name)",
+  325:         )
+  326:         .order("created_at", { ascending: false })
+  327:         .limit(60);
+  328:       if (branchId) q = q.eq("branch_id", branchId);
+  329:       const { data, error } = await q;
+  330:       if (error) throw new Error(error.message);
+  331:       return (data ?? []) as StoresRow[];
+  332:     },
+  333:   });
+  334: }
+  335: 
+  336: export function useStockTakeLines(takeId: string | null) {
+  337:   const { organizationId } = useStoresContext();
+  338:   return useQuery({
+  339:     queryKey: ["stores-department", "stock-take-lines", organizationId, takeId],
+  340:     enabled: Boolean(organizationId) && Boolean(takeId),
+  341:     queryFn: async () => {
+  342:       const { data, error } = await db
+  343:         .from("stock_take_lines")
+  344:         .select("id, stock_item_id, system_quantity, counted_quantity, variance, unit, unit_cost, notes, stock_items(name, base_unit)")
+  345:         .eq("stock_take_id", takeId)
+  346:         .limit(500);
+  347:       if (error) throw new Error(error.message);
+  348:       return (data ?? []) as StoresRow[];
+  349:     },
+  350:   });
+  351: }
+  352: 
+  353: /** Open a count for a store and snapshot the system quantities onto its lines. */
+  354: export function useStartStockCount() {
+  355:   const invalidate = useStoresInvalidate();
+  356:   const { organizationId, branchId } = useStoresContext();
+  357:   const { user } = useAuth();
+  358:   return useMutation({
+  359:     mutationFn: async (input: { locationId: string; countType: string; notes?: string }) => {
+  360:       if (!organizationId) throw new Error("No organisation context");
+  361:       const reference = `CNT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 9000 + 1000)}`;
+  362:       const { data, error } = await db
+  363:         .from("stock_takes")
+  364:         .insert({
+  365:           organization_id: organizationId,
+  366:           branch_id: branchId ?? null,
+  367:           reference,
+  368:           location_id: input.locationId,
+  369:           count_type: input.countType,
+  370:           status: "in-progress",
+  371:           started_at: new Date().toISOString(),
+  372:           counted_by: user?.id ?? null,
+  373:           notes: input.notes ?? null,
+  374:         })
+  375:         .select("id")
+  376:         .single();
+  377:       if (error) throw new Error(error.message);
+  378:       const takeId = String((data as StoresRow)["id"]);
+  379: 
+  380:       // The count only exists once its snapshot lines exist. If the snapshot
+  381:       // fails the header is removed again, so no empty count is left behind.
+  382:       try {
+  383:         const { data: levels, error: lErr } = await db
+  384:           .from("stock_levels")
+  385:           .select("stock_item_id, quantity_on_hand, stock_items(base_unit, average_cost)")
+  386:           .eq("location_id", input.locationId)
+  387:           .limit(1000);
+  388:         if (lErr) throw new Error(lErr.message);
+  389: 
+  390:         const lines = ((levels ?? []) as StoresRow[]).map((level) => ({
+  391:           organization_id: organizationId,
+  392:           stock_take_id: takeId,
+  393:           stock_item_id: level["stock_item_id"],
+  394:           system_quantity: num(level["quantity_on_hand"]),
+  395:           unit: str((level["stock_items"] as StoresRow | null)?.["base_unit"], "unit"),
+  396:           unit_cost: num((level["stock_items"] as StoresRow | null)?.["average_cost"]),
+  397:         }));
+  398:         if (lines.length) {
+  399:           const { error: insErr } = await db.from("stock_take_lines").insert(lines);
+  400:           if (insErr) throw new Error(insErr.message);
+  401:         }
+  402:       } catch (snapshotError) {
+  403:         await db.from("stock_takes").delete().eq("id", takeId);
+  404:         throw snapshotError;
+  405:       }
+  406: 
+  407:       return takeId;
+  408:     },
+  409:     onSuccess: () => {
+  410:       invalidate();
+  411:       toast.success("Count opened with the system quantities snapshotted");
+  412:     },
+  413:     onError: (e: Error) => toast.error(e.message),
+  414:   });
+  415: }
+  416: 
+  417: /** Units that cannot be held in fractions â€” you count whole ones or none. */
+  418: const DISCRETE_UNITS = new Set([
+  419:   "pc",
+  420:   "pcs",
+  421:   "piece",
+  422:   "pieces",
+  423:   "unit",
+  424:   "units",
+  425:   "each",
+  426:   "ea",
+  427:   "bottle",
+  428:   "bottles",
+  429:   "can",
+  430:   "cans",
+  431:   "packet",
+  432:   "packets",
+  433:   "pack",
+  434:   "packs",
+  435:   "box",
+  436:   "boxes",
+  437:   "carton",
+  438:   "cartons",
+  439:   "ream",
+  440:   "reams",
+  441:   "roll",
+  442:   "rolls",
+  443:   "bag",
+  444:   "bags",
+  445:   "tin",
+  446:   "tins",
+  447:   "jar",
+  448:   "jars",
+  449:   "set",
+  450:   "sets",
+  451: ]);
+  452: 
+  453: /** Reject counts that cannot physically exist. Returns an error message, or null. */
+  454: export function validateCountedQuantity(counted: number, unit?: string | null): string | null {
+  455:   if (!Number.isFinite(counted)) return "Enter a counted quantity";
+  456:   if (counted < 0) return "A physical count cannot be negative â€” enter the quantity actually on the shelf";
+  457:   const u = String(unit ?? "").trim().toLowerCase();
+  458:   if (DISCRETE_UNITS.has(u) && !Number.isInteger(counted))
+  459:     return `Count ${u} in whole numbers â€” a part ${u} cannot be counted`;
+  460:   return null;
+  461: }
+  462: 
+  463: export function useRecordCountedQuantity() {
+  464:   const invalidate = useStoresInvalidate();
+  465:   return useMutation({
+  466:     mutationFn: async (input: { lineId: string; counted: number; notes?: string; unit?: string | null }) => {
+  467:       const problem = validateCountedQuantity(input.counted, input.unit);
+  468:       if (problem) throw new Error(problem);
+  469:       const { error } = await db
+  470:         .from("stock_take_lines")
+  471:         .update({ counted_quantity: input.counted, notes: input.notes ?? null })
+  472:         .eq("id", input.lineId);
+  473:       if (error) throw new Error(error.message);
+  474:     },
+  475:     onSuccess: () => invalidate(),
+  476:     onError: (e: Error) => toast.error(e.message),
+  477:   });
+  478: }
+  479: 
+  480: /**
+  481:  * Close the counting stage. Differences do NOT change stock: they raise a
+  482:  * stock adjustment that somebody else has to approve.
+  483:  */
+  484: export function useSubmitCountVariance() {
+  485:   const invalidate = useStoresInvalidate();
+  486:   return useMutation({
+  487:     mutationFn: async (input: { takeId: string; notes?: string }) => {
+  488:       const { data, error } = await guardedRpc(db, "neo_stores_count_submit_variance", {
+  489:         _take: input.takeId,
+  490:         _notes: input.notes ?? null,
+  491:       });
+  492:       if (error) throw new Error(error.message);
+  493:       return (data ?? {}) as StoresRow;
+  494:     },
+  495:     onSuccess: (data) => {
+  496:       invalidate();
+  497:       if (str(data["status"], "") === "closed") toast.success("Count closed â€” no variance found");
+  498:       else toast.success(`${num(data["lines"])} variance line(s) sent for approval`);
+  499:     },
+  500:     onError: (e: Error) => toast.error(e.message),
+  501:   });
+  502: }
+  503: 
+  504: /** Adjustments raised from counts, damage or expiry, awaiting an approver. */
+  505: export function useStoresAdjustments(status = "all") {
+  506:   const { organizationId, branchId } = useStoresContext();
+  507:   return useQuery({
+  508:     queryKey: ["stores-department", "adjustments", organizationId, branchId, status],
+  509:     enabled: Boolean(organizationId),
+  510:     queryFn: async () => {
+  511:       let q = db
+  512:         .from("stock_adjustments")
+  513:         .select(
+  514:           "id, adjustment_number, reason, status, notes, total_value, requested_by, approved_by, approved_at, created_at, location_id, stock_locations(name), stock_adjustment_lines(id, quantity, unit, reason, stock_items(name))",
+  515:         )
+  516:         .order("created_at", { ascending: false })
+  517:         .limit(100);
+  518:       if (branchId) q = q.eq("branch_id", branchId);
+  519:       q = applyStockNeedStatus(q, status);
+  520:       const { data, error } = await q;
+  521:       if (error) throw new Error(error.message);
+  522:       return (data ?? []) as StoresRow[];
+  523:     },
+  524:   });
+  525: }
+  526: 
+  527: /* ------------------------------------------------------------------ *
+  528:  * Stores tasks â€” the Storekeeper assigns, the clerk completes
+  529:  * ------------------------------------------------------------------ */
+  530: 
+  531: export function useStoresDepartment() {
+  532:   return useScopedDepartmentByKey("store|inventory");
+  533: }
+  534: 
+  535: export function useStoresTasks(scope: "department" | "mine" = "department") {
+  536:   const { organizationId, branchId } = useStoresContext();
+  537:   const { user } = useAuth();
+  538:   const department = useStoresDepartment();
+  539:   const departmentId = department.data?.["id"] ? String(department.data["id"]) : null;
+  540:   return useQuery({
+  541:     queryKey: ["stores-department", "tasks", organizationId, branchId, scope, departmentId, user?.id],
+  542:     enabled: Boolean(organizationId) && (scope === "mine" ? Boolean(user?.id) : Boolean(departmentId)),
+  543:     queryFn: async () => {
+  544:       let q = db.from("tasks").select("*").order("due_at", { ascending: true, nullsFirst: false }).limit(200);
+  545:       if (scope === "mine") q = q.eq("assignee_id", user!.id);
+  546:       else if (departmentId) q = q.eq("department_id", departmentId);
+  547:       if (branchId) q = q.eq("branch_id", branchId);
+  548:       const { data, error } = await q;
+  549:       if (error) throw new Error(error.message);
+  550:       return (data ?? []) as StoresRow[];
+  551:     },
+  552:   });
+  553: }
+  554: 
+  555: export function useStoresStaffOptions() {
+  556:   const department = useStoresDepartment();
+  557:   const departmentId = department.data?.id ?? null;
+  558:   return useScopedWorkerOptions({ departmentId, departmentKey: departmentId ? null : "stores" });
+  559: }
+  560: 
+  561: export function useCreateStoresTask() {
+  562:   const invalidate = useStoresInvalidate();
+  563:   const { organizationId, branchId } = useStoresContext();
+  564:   const { user } = useAuth();
+  565:   const department = useStoresDepartment();
+  566:   return useMutation({
+  567:     mutationFn: async (input: {
+  568:       title: string;
+  569:       assigneeId: string;
+  570:       dueAt?: string | null;
+  571:       priority?: string;
+  572:       description: string;
+  573:     }) => {
+  574:       if (!organizationId) throw new Error("No organisation context");
+  575:       // The task record requires instructions, so an empty description is
+  576:       // refused here rather than failing in the database.
+  577:       const description = input.description.trim();
+  578:       if (!description) throw new Error("Describe what the task involves before assigning it.");
+  579:       const { error } = await db.from("tasks").insert({
+  580:         organization_id: organizationId,
+  581:         branch_id: branchId ?? null,
+  582:         department_id: department.data?.["id"] ?? null,
+  583:         title: input.title,
+  584:         description,
+  585:         assignee_id: input.assigneeId,
+  586:         created_by: user?.id ?? null,
+  587:         due_at: input.dueAt || null,
+  588:         priority: input.priority ?? "normal",
+  589:         status: "open",
+  590:       });
+  591:       if (error) throw new Error(error.message);
+  592:     },
+  593:     onSuccess: () => {
+  594:       invalidate();
+  595:       toast.success("Stores task assigned");
+  596:     },
+  597:     onError: (e: Error) => toast.error(e.message),
+  598:   });
+  599: }
+  600: 
+  601: export function useUpdateStoresTask() {
+  602:   const invalidate = useStoresInvalidate();
+  603:   return useMutation({
+  604:     mutationFn: async (input: { taskId: string; status: string }) => {
+  605:       const patch: Record<string, unknown> = { status: input.status };
+  606:       if (input.status === "completed") patch["completed_at"] = new Date().toISOString();
+  607:       const { error } = await db.from("tasks").update(patch).eq("id", input.taskId);
+  608:       if (error) throw new Error(error.message);
+  609:     },
+  610:     onSuccess: () => {
+  611:       invalidate();
+  612:       toast.success("Task updated");
+  613:     },
+  614:     onError: (e: Error) => toast.error(e.message),
+  615:   });
+  616: }
+  617: 
+  618: /* ------------------------------------------------------------------ *
+  619:  * Count reconciliation and manager decisions on corrections
+  620:  * ------------------------------------------------------------------ */
+  621: 
+  622: /**
+  623:  * Compares every counted line against the live stock ledger, records the
+  624:  * difference and flags it as a match, a shortage or an overage. It never
+  625:  * changes stock: a correction still has to be approved.
+  626:  */
+  627: export function useReconcileCountAgainstLedger() {
+  628:   const invalidate = useStoresInvalidate();
+  629:   return useMutation({
+  630:     mutationFn: async (takeId: string) => {
+  631:       const { data, error } = await guardedRpc(db, "neo_stores_count_reconcile", { _take: takeId });
+  632:       if (error) throw new Error(error.message);
+  633:       const result = (data ?? {}) as StoresRow;
+  634:       if (result["ok"] === false) {
+  635:         throw new Error(
+  636:           result["reason"] === "not_permitted"
+  637:             ? "You do not have permission to reconcile stock counts."
+  638:             : "That count could not be reconciled.",
+  639:         );
+  640:       }
+  641:       return result;
+  642:     },
+  643:     onSuccess: (result) => {
+  644:       invalidate();
+  645:       const flagged = num(result["shortage"]) + num(result["overage"]);
+  646:       toast.success(
+  647:         flagged > 0
+  648:           ? `${flagged} line(s) differ from the ledger â€” raise the correction for approval`
+  649:           : "Every counted line agrees with the ledger",
+  650:       );
+  651:     },
+  652:     onError: (e: Error) => toast.error(e.message),
+  653:   });
+  654: }
+  655: 
+  656: /** A manager approves the correction (posting it to stock) or declines it with a reason. */
+  657: export function useDecideStockAdjustment() {
+  658:   const invalidate = useStoresInvalidate();
+  659:   return useMutation({
+  660:     mutationFn: async (input: { adjustmentId: string; decision: "approve" | "reject"; notes?: string | null }) => {
+  661:       const { data, error } = await guardedRpc(db, "neo_stores_adjustment_decide", {
+  662:         _adjustment: input.adjustmentId,
+  663:         _decision: input.decision,
+  664:         _notes: input.notes ?? null,
+  665:       });
+  666:       if (error) throw new Error(error.message);
+  667:       const result = (data ?? {}) as StoresRow;
+  668:       if (result["ok"] === false) {
+  669:         const reason = str(result["reason"], "");
+  670:         throw new Error(
+  671:           reason === "self_approval"
+  672:             ? "You raised this correction, so somebody else has to approve it."
+  673:             : reason === "not_permitted"
+  674:               ? "You do not have permission to approve stock corrections."
+  675:               : reason === "not_pending"
+  676:                 ? `This correction is already ${str(result["status"], "decided")}.`
+  677:                 : "That correction could not be decided.",
+  678:         );
+  679:       }
+  680:       return result;
+  681:     },
+  682:     onSuccess: (result) => {
+  683:       invalidate();
+  684:       toast.success(
+  685:         str(result["decision"], "") === "approve"
+  686:           ? "Correction approved and posted to stock"
+  687:           : "Correction declined",
+  688:       );
+  689:     },
+  690:     onError: (e: Error) => toast.error(e.message),
+  691:   });
+  692: }
+
+====================================================
+FILE: src/lib/marketing-department.ts
+====================================================
+Total lines: 477
+    1: /**
+    2:  * Marketing department layer.
+    3:  *
+    4:  * The department has one Marketing Manager who owns strategy, budget, campaigns
+    5:  * and every outbound commitment, and Social Media Managers who draft content,
+    6:  * keep the publishing calendar and answer social enquiries. A Social Media
+    7:  * Manager never approves their own content, never raises a Stores requisition
+    8:  * or purchase request directly, and never commits spend â€” supply needs and
+    9:  * content both travel upward to the Marketing Manager.
+   10:  *
+   11:  * Reads and writes go through the existing authoritative marketing records
+   12:  * (campaigns, leads, tasks, department stock needs) plus the content workflow
+   13:  * table; this module adds the department-scoped views, not a second source of
+   14:  * truth.
+   15:  */
+   16: import { guardedRpc } from "@/lib/rpc-guard";
+   17: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+   18: import { toast } from "sonner";
+   19: import { supabase } from "@/integrations/supabase/client";
+   20: import { useAuth } from "@/lib/auth";
+   21: import { useActivePropertyFilter } from "@/lib/branch-filter";
+   22: import { useScopedDepartmentByKey } from "@/lib/scoped-options";
+   23: import { applyStockNeedStatus } from "@/lib/stock-needs";
+   24: 
+   25: // The marketing trail spans many generated table types; call sites narrow.
+   26: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   27: const db = supabase as any;
+   28: 
+   29: export type MktRow = Record<string, unknown>;
+   30: 
+   31: export const MKT_CHANNELS = [
+   32:   "instagram",
+   33:   "facebook",
+   34:   "tiktok",
+   35:   "x",
+   36:   "linkedin",
+   37:   "whatsapp",
+   38:   "email",
+   39:   "website",
+   40:   "other",
+   41: ] as const;
+   42: 
+   43: export const MKT_CONTENT_TYPES = ["post", "story", "reel", "video", "article", "newsletter", "ad"] as const;
+   44: 
+   45: export const MKT_CONTENT_STATUSES = [
+   46:   "draft",
+   47:   "submitted",
+   48:   "returned",
+   49:   "approved",
+   50:   "scheduled",
+   51:   "published",
+   52:   "rejected",
+   53: ] as const;
+   54: 
+   55: export const MKT_SUPPLY_SUGGESTIONS = [
+   56:   "Printed brochures",
+   57:   "Roll-up banners",
+   58:   "Branded merchandise",
+   59:   "Photography props",
+   60:   "Stationery",
+   61:   "Signage",
+   62: ] as const;
+   63: 
+   64: export function str(value: unknown, fallback = "â€”"): string {
+   65:   const s = value === null || value === undefined ? "" : String(value);
+   66:   return s.trim() === "" ? fallback : s;
+   67: }
+   68: 
+   69: export function num(value: unknown): number {
+   70:   const n = Number(value ?? 0);
+   71:   return Number.isFinite(n) ? n : 0;
+   72: }
+   73: 
+   74: export function useMarketingContext() {
+   75:   const { organizationId, profile } = useAuth();
+   76:   const { branchId } = useActivePropertyFilter();
+   77:   const fallback = (profile as { branch_id?: string | null } | null)?.branch_id ?? null;
+   78:   return { organizationId, branchId: branchId ?? fallback };
+   79: }
+   80: 
+   81: function useMktInvalidate() {
+   82:   const qc = useQueryClient();
+   83:   return () => {
+   84:     void qc.invalidateQueries({ queryKey: ["marketing-department"] });
+   85:     void qc.invalidateQueries({ queryKey: ["marketing"] });
+   86:     void qc.invalidateQueries({ queryKey: ["crm"] });
+   87:   };
+   88: }
+   89: 
+   90: /** The Marketing department row, used to scope tasks and supply needs. */
+   91: export function useMarketingDepartment() {
+   92:   return useScopedDepartmentByKey("marketing|brand|communication");
+   93: }
+   94: 
+   95: /* ------------------------------------------------------------------ *
+   96:  * Content workflow â€” drafted below, approved above
+   97:  * ------------------------------------------------------------------ */
+   98: 
+   99: export function useMarketingContent(status = "all") {
+  100:   const { organizationId, branchId } = useMarketingContext();
+  101:   return useQuery({
+  102:     queryKey: ["marketing-department", "content", organizationId, branchId, status],
+  103:     enabled: Boolean(organizationId),
+  104:     queryFn: async () => {
+  105:       let q = db
+  106:         .from("marketing_content_items")
+  107:         .select("*")
+  108:         .order("created_at", { ascending: false })
+  109:         .limit(200);
+  110:       if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+  111:       q = applyStockNeedStatus(q, status);
+  112:       const { data, error } = await q;
+  113:       if (error) throw new Error(error.message);
+  114:       return (data ?? []) as MktRow[];
+  115:     },
+  116:   });
+  117: }
+  118: 
+  119: export function useCreateMarketingContent() {
+  120:   const invalidate = useMktInvalidate();
+  121:   const { organizationId, branchId } = useMarketingContext();
+  122:   const { user } = useAuth();
+  123:   return useMutation({
+  124:     mutationFn: async (input: {
+  125:       title: string;
+  126:       channel: string;
+  127:       contentType?: string;
+  128:       body?: string;
+  129:       assetUrl?: string;
+  130:       campaignId?: string | null;
+  131:       plannedFor?: string | null;
+  132:     }) => {
+  133:       if (!organizationId) throw new Error("No organisation context");
+  134:       if (!input.title.trim()) throw new Error("Give the content a title");
+  135:       const { data, error } = await db
+  136:         .from("marketing_content_items")
+  137:         .insert({
+  138:           organization_id: organizationId,
+  139:           branch_id: branchId ?? null,
+  140:           campaign_id: input.campaignId || null,
+  141:           channel: input.channel,
+  142:           content_type: input.contentType ?? "post",
+  143:           title: input.title.trim(),
+  144:           body: input.body?.trim() || null,
+  145:           asset_url: input.assetUrl?.trim() || null,
+  146:           planned_for: input.plannedFor || null,
+  147:           status: "draft",
+  148:           created_by: user?.id ?? null,
+  149:         })
+  150:         .select("id")
+  151:         .single();
+  152:       if (error) throw new Error(error.message);
+  153:       return data as MktRow;
+  154:     },
+  155:     onSuccess: () => {
+  156:       invalidate();
+  157:       toast.success("Content draft saved");
+  158:     },
+  159:     onError: (e: Error) => toast.error(e.message),
+  160:   });
+  161: }
+  162: 
+  163: export function useSubmitMarketingContent() {
+  164:   const invalidate = useMktInvalidate();
+  165:   return useMutation({
+  166:     mutationFn: async (contentId: string) => {
+  167:       const { data, error } = await guardedRpc(db, "neo_marketing_content_submit", { _content: contentId });
+  168:       if (error) throw new Error(error.message);
+  169:       return (data ?? {}) as MktRow;
+  170:     },
+  171:     onSuccess: () => {
+  172:       invalidate();
+  173:       toast.success("Sent to the Marketing Manager for approval");
+  174:     },
+  175:     onError: (e: Error) => toast.error(e.message),
+  176:   });
+  177: }
+  178: 
+  179: export function useReviewMarketingContent() {
+  180:   const invalidate = useMktInvalidate();
+  181:   return useMutation({
+  182:     mutationFn: async (input: {
+  183:       contentId: string;
+  184:       decision: "approve" | "return" | "reject";
+  185:       notes?: string;
+  186:     }) => {
+  187:       const { data, error } = await guardedRpc(db, "neo_marketing_content_review", {
+  188:         _content: input.contentId,
+  189:         _decision: input.decision,
+  190:         _notes: input.notes ?? null,
+  191:       });
+  192:       if (error) throw new Error(error.message);
+  193:       return (data ?? {}) as MktRow;
+  194:     },
+  195:     onSuccess: (data) => {
+  196:       invalidate();
+  197:       toast.success(`Content ${str(data["status"], "reviewed")}`);
+  198:     },
+  199:     onError: (e: Error) => toast.error(e.message),
+  200:   });
+  201: }
+  202: 
+  203: export function useScheduleMarketingContent() {
+  204:   const invalidate = useMktInvalidate();
+  205:   return useMutation({
+  206:     mutationFn: async (input: { contentId: string; scheduledFor: string }) => {
+  207:       if (!input.scheduledFor) throw new Error("Pick a publish date and time");
+  208:       const { data, error } = await guardedRpc(db, "neo_marketing_content_schedule", {
+  209:         _content: input.contentId,
+  210:         _scheduled_for: new Date(input.scheduledFor).toISOString(),
+  211:       });
+  212:       if (error) throw new Error(error.message);
+  213:       return (data ?? {}) as MktRow;
+  214:     },
+  215:     onSuccess: () => {
+  216:       invalidate();
+  217:       toast.success("Content scheduled");
+  218:     },
+  219:     onError: (e: Error) => toast.error(e.message),
+  220:   });
+  221: }
+  222: 
+  223: export function usePublishMarketingContent() {
+  224:   const invalidate = useMktInvalidate();
+  225:   return useMutation({
+  226:     mutationFn: async (input: { contentId: string; reference?: string }) => {
+  227:       const { data, error } = await guardedRpc(db, "neo_marketing_content_publish", {
+  228:         _content: input.contentId,
+  229:         _reference: input.reference ?? null,
+  230:       });
+  231:       if (error) throw new Error(error.message);
+  232:       return (data ?? {}) as MktRow;
+  233:     },
+  234:     onSuccess: () => {
+  235:       invalidate();
+  236:       toast.success("Marked as published");
+  237:     },
+  238:     onError: (e: Error) => toast.error(e.message),
+  239:   });
+  240: }
+  241: 
+  242: /* ------------------------------------------------------------------ *
+  243:  * Social enquiries become leads on the one pipeline
+  244:  * ------------------------------------------------------------------ */
+  245: 
+  246: export function useCreateSocialLead() {
+  247:   const invalidate = useMktInvalidate();
+  248:   const { organizationId, branchId } = useMarketingContext();
+  249:   const { user } = useAuth();
+  250:   return useMutation({
+  251:     mutationFn: async (input: {
+  252:       contactName: string;
+  253:       channel: string;
+  254:       phone?: string;
+  255:       email?: string;
+  256:       interest?: string;
+  257:       requirements?: string;
+  258:       campaignId?: string | null;
+  259:     }) => {
+  260:       if (!organizationId) throw new Error("No organisation context");
+  261:       if (!input.contactName.trim()) throw new Error("Who made the enquiry?");
+  262:       if (!input.phone?.trim() && !input.email?.trim()) {
+  263:         throw new Error("Capture a phone number or an email so the enquiry can be followed up");
+  264:       }
+  265:       const { data: seq } = await guardedRpc(db, "next_document_number", { _doc_type: "lead" });
+  266:       const { error } = await db.from("leads").insert({
+  267:         organization_id: organizationId,
+  268:         branch_id: branchId ?? null,
+  269:         lead_number: seq ?? null,
+  270:         lead_type: "social",
+  271:         contact_name: input.contactName.trim(),
+  272:         phone: input.phone?.trim() || null,
+  273:         email: input.email?.trim() || null,
+  274:         interest: input.interest?.trim() || null,
+  275:         requirements: input.requirements?.trim() || null,
+  276:         preferred_channel: input.channel,
+  277:         source_label: `Social â€” ${input.channel}`,
+  278:         campaign_id: input.campaignId || null,
+  279:         stage: "new",
+  280:         created_by: user?.id ?? null,
+  281:       });
+  282:       if (error) throw new Error(error.message);
+  283:     },
+  284:     onSuccess: () => {
+  285:       invalidate();
+  286:       toast.success("Enquiry logged on the lead pipeline");
+  287:     },
+  288:     onError: (e: Error) => toast.error(e.message),
+  289:   });
+  290: }
+  291: 
+  292: /* ------------------------------------------------------------------ *
+  293:  * Campaigns visible to the department
+  294:  * ------------------------------------------------------------------ */
+  295: 
+  296: export function useMarketingCampaignOptions() {
+  297:   const { organizationId } = useMarketingContext();
+  298:   return useQuery({
+  299:     queryKey: ["marketing-department", "campaign-options", organizationId],
+  300:     enabled: Boolean(organizationId),
+  301:     queryFn: async () => {
+  302:       const { data, error } = await db
+  303:         .from("campaigns")
+  304:         .select("id,name,status")
+  305:         .order("created_at", { ascending: false })
+  306:         .limit(100);
+  307:       if (error) throw new Error(error.message);
+  308:       return (data ?? []) as MktRow[];
+  309:     },
+  310:   });
+  311: }
+  312: 
+  313: /* ------------------------------------------------------------------ *
+  314:  * Department tasks
+  315:  * ------------------------------------------------------------------ */
+  316: 
+  317: export function useMarketingTasks() {
+  318:   const { organizationId, branchId } = useMarketingContext();
+  319:   const department = useMarketingDepartment();
+  320:   const departmentId = department.data?.["id"] ? String(department.data["id"]) : null;
+  321:   return useQuery({
+  322:     queryKey: ["marketing-department", "tasks", organizationId, branchId, departmentId],
+  323:     enabled: Boolean(organizationId),
+  324:     queryFn: async () => {
+  325:       let q = db
+  326:         .from("tasks")
+  327:         .select("*")
+  328:         .order("due_at", { ascending: true, nullsFirst: false })
+  329:         .limit(200);
+  330:       if (departmentId) q = q.eq("department_id", departmentId);
+  331:       if (branchId) q = q.eq("branch_id", branchId);
+  332:       const { data, error } = await q;
+  333:       if (error) throw new Error(error.message);
+  334:       return (data ?? []) as MktRow[];
+  335:     },
+  336:   });
+  337: }
+  338: 
+  339: export function useCreateMarketingTask() {
+  340:   const invalidate = useMktInvalidate();
+  341:   const { organizationId, branchId } = useMarketingContext();
+  342:   const { user } = useAuth();
+  343:   const department = useMarketingDepartment();
+  344:   return useMutation({
+  345:     mutationFn: async (input: {
+  346:       title: string;
+  347:       dueAt?: string | null;
+  348:       priority?: string;
+  349:       description?: string;
+  350:     }) => {
+  351:       if (!organizationId) throw new Error("No organisation context");
+  352:       if (!input.title.trim()) throw new Error("Give the task a title");
+  353:       const { error } = await db.from("tasks").insert({
+  354:         organization_id: organizationId,
+  355:         branch_id: branchId ?? null,
+  356:         department_id: department.data?.["id"] ? String(department.data["id"]) : null,
+  357:         title: input.title.trim(),
+  358:         description: input.description ?? null,
+  359:         priority: input.priority ?? "normal",
+  360:         status: "open",
+  361:         due_at: input.dueAt || null,
+  362:         assignee_id: user?.id ?? null,
+  363:         created_by: user?.id ?? null,
+  364:       });
+  365:       if (error) throw new Error(error.message);
+  366:     },
+  367:     onSuccess: () => {
+  368:       invalidate();
+  369:       toast.success("Marketing task created");
+  370:     },
+  371:     onError: (e: Error) => toast.error(e.message),
+  372:   });
+  373: }
+  374: 
+  375: export function useUpdateMarketingTask() {
+  376:   const invalidate = useMktInvalidate();
+  377:   return useMutation({
+  378:     mutationFn: async (input: { id: string; status: string }) => {
+  379:       const { error } = await db
+  380:         .from("tasks")
+  381:         .update({
+  382:           status: input.status,
+  383:           completed_at: input.status === "completed" ? new Date().toISOString() : null,
+  384:           updated_at: new Date().toISOString(),
+  385:         })
+  386:         .eq("id", input.id);
+  387:       if (error) throw new Error(error.message);
+  388:     },
+  389:     onSuccess: () => {
+  390:       invalidate();
+  391:       toast.success("Task updated");
+  392:     },
+  393:     onError: (e: Error) => toast.error(e.message),
+  394:   });
+  395: }
+  396: 
+  397: /* ------------------------------------------------------------------ *
+  398:  * Supply needs â€” reported by the team, requisitioned by the manager
+  399:  * ------------------------------------------------------------------ */
+  400: 
+  401: export function useMarketingStockNeeds(status = "all") {
+  402:   const { organizationId, branchId } = useMarketingContext();
+  403:   return useQuery({
+  404:     queryKey: ["marketing-department", "stock-needs", organizationId, branchId, status],
+  405:     enabled: Boolean(organizationId),
+  406:     queryFn: async () => {
+  407:       let q = db
+  408:         .from("department_stock_needs")
+  409:         .select("*")
+  410:         .eq("module", "marketing")
+  411:         .order("created_at", { ascending: false })
+  412:         .limit(200);
+  413:       if (branchId) q = q.eq("branch_id", branchId);
+  414:       q = applyStockNeedStatus(q, status);
+  415:       const { data, error } = await q;
+  416:       if (error) throw new Error(error.message);
+  417:       return (data ?? []) as MktRow[];
+  418:     },
+  419:   });
+  420: }
+  421: 
+  422: export function useReportMarketingStockNeed() {
+  423:   const invalidate = useMktInvalidate();
+  424:   const { branchId } = useMarketingContext();
+  425:   return useMutation({
+  426:     mutationFn: async (input: {
+  427:       item: string;
+  428:       quantity: number;
+  429:       unit?: string;
+  430:       priority?: string;
+  431:       notes?: string;
+  432:     }) => {
+  433:       const { data, error } = await guardedRpc(db, "neo_department_stock_need_create", {
+  434:         _item: input.item,
+  435:         _quantity: input.quantity,
+  436:         _unit: input.unit ?? "unit",
+  437:         _priority: input.priority ?? "normal",
+  438:         _notes: input.notes ?? null,
+  439:         _module: "marketing",
+  440:         _department: null,
+  441:         _branch: branchId ?? null,
+  442:       });
+  443:       if (error) throw new Error(error.message);
+  444:       return data as string;
+  445:     },
+  446:     onSuccess: () => {
+  447:       invalidate();
+  448:       toast.success("Supply need sent to the Marketing Manager");
+  449:     },
+  450:     onError: (e: Error) => toast.error(e.message),
+  451:   });
+  452: }
+  453: 
+  454: export function useReviewMarketingStockNeed() {
+  455:   const invalidate = useMktInvalidate();
+  456:   return useMutation({
+  457:     mutationFn: async (input: {
+  458:       needId: string;
+  459:       decision: "acknowledge" | "requisition" | "decline" | "close";
+  460:       notes?: string;
+  461:     }) => {
+  462:       const { data, error } = await guardedRpc(db, "neo_department_stock_need_review", {
+  463:         _need: input.needId,
+  464:         _decision: input.decision,
+  465:         _notes: input.notes ?? null,
+  466:         _requisition: null,
+  467:       });
+  468:       if (error) throw new Error(error.message);
+  469:       return (data ?? {}) as MktRow;
+  470:     },
+  471:     onSuccess: (data) => {
+  472:       invalidate();
+  473:       toast.success(`Supply need ${str(data["status"], "reviewed")}`);
+  474:     },
+  475:     onError: (e: Error) => toast.error(e.message),
+  476:   });
+  477: }

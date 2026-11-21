@@ -1,20 +1,12 @@
-import { useState } from "react";
+import {usePropertyClock} from '@/lib/use-property-clock';
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Plus } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
 import { RecordDialog } from "@/components/kitchen/RecordDialog";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { titleCase, type Row } from "@/lib/kitchen";
-import { useStockLocations } from "@/lib/inventory-data";
 import {
   useKitchenStations,
   usePostProductionBatch,
@@ -50,12 +42,11 @@ export const Route = createFileRoute("/_shell/kitchen/production")({
 function Page() {
   const { can } = useAuth();
   const query = useProductionBatches();
+  const {timeZone} = usePropertyClock();
   const recipes = useRecipes();
   const stations = useKitchenStations();
   const saveBatch = useSaveBatch();
   const postBatch = usePostProductionBatch();
-  const locations = useStockLocations();
-  const [store, setStore] = useState<Record<string, string>>({});
   const canPost = can("kitchen", "production.edit") || can("kitchen", "production.manage");
   const rows = (query.data ?? []) as Row[];
 
@@ -122,7 +113,8 @@ function Page() {
               title="New production batch"
               description="Record a bulk preparation run against an approved recipe."
               submitLabel="Save batch"
-              pending={saveBatch.isPending}
+              pending={saveBatch.isPending || !timeZone}
+              timeZone={timeZone}
               fields={fields}
               onSubmit={(values) =>
                 saveBatch.mutateAsync({ ...values, status: values["status"] ?? "planned" })
@@ -167,50 +159,25 @@ function Page() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {posted
-                        ? "Posted to stock — ingredients used and the produced item received."
+                        ? `${r["remaining_quantity"] ?? 0} ${r["unit"] ?? ""} left. Ingredients are deducted when a sale uses the batch.`
                         : produced > 0
-                          ? "Not yet posted to stock."
-                          : "Record how much was produced before posting to stock."}
+                          ? "Ready to make available in the departmental store for this station."
+                          : "Record the quantity produced first."}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusPill tone={posted ? "success" : String(r["status"]) === "completed" ? "info" : "default"}>
-                      {posted ? "Posted to stock" : titleCase(String(r["status"] ?? "planned"))}
+                      {titleCase(String(r["status"] ?? (posted ? "completed" : "planned")))}
                     </StatusPill>
                     {canPost && !posted && produced > 0 ? (
-                      <>
-                        <Select
-                          value={store[id] ?? "station"}
-                          onValueChange={(v) => setStore((s) => ({ ...s, [id]: v }))}
-                        >
-                          <SelectTrigger className="h-9 w-48">
-                            <SelectValue placeholder="Station store" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="station">Station store</SelectItem>
-                            {(locations.data ?? []).map((l) => (
-                              <SelectItem key={String(l["id"])} value={String(l["id"])}>
-                                {String(l["name"] ?? "Store")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          disabled={postBatch.isPending}
-                          onClick={() =>
-                            void postBatch.mutateAsync({
-                              batchId: id,
-                              locationId: store[id] && store[id] !== "station" ? store[id] : null,
-                            })
-                          }
-                        >
-                          {postBatch.isPending ? (
-                            <Loader2 className="mr-2 size-4 animate-spin" />
-                          ) : null}
-                          Post to stock
-                        </Button>
-                      </>
+                      <Button
+                        size="sm"
+                        disabled={postBatch.isPending}
+                        onClick={() => postBatch.mutate({ batchId: id })}
+                      >
+                        {postBatch.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                        Make batch available
+                      </Button>
                     ) : null}
                   </div>
                 </li>

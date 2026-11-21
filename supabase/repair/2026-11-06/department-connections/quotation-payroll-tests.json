@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 19,
+  "scope": "Isolated exported table shape, real candidate routine bodies and actual authenticated-role RLS visibility. No actual quotation or payroll changed."
+}

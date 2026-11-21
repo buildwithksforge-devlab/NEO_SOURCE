@@ -1,0 +1,185 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+  ],
+  "passed": 4044,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousUniquePasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "priorApplication",
+      "previousUniquePasses": 3920,
+      "retained": 3920,
+      "regressions": []
+    }
+  ],
+  "focusedClient": {
+    "passed": 180,
+    "failed": 0,
+    "skipped": 0
+  },
+  "manifestAndClientRecheck": {
+    "passed": 117,
+    "failed": 0,
+    "skipped": 0
+  },
+  "isolatedSqlChecks": 128,
+  "isolatedByArea": {
+    "count": 29,
+    "store": 29,
+    "posTill": 24,
+    "qaMenu": 14,
+    "routedCash": 32
+  },
+  "typecheck": "passed",
+  "productionBuildSmoke": "passed",
+  "operationalWrites": false,
+  "readOnlyPublicMenuInspection": true,
+  "deployed": false,
+  "advancedOriginalRecords": [
+    "NEO-BKL-A04",
+    "NEO-BKL-J02",
+    "NEO-BKL-J04",
+    "NEO-BKL-I03",
+    "NEO-BKL-G01",
+    "NEO-BKL-G03",
+    "NEO-BKL-C08",
+    "NEO-BKL-M02",
+    "NEO-BKL-C05",
+    "NEO-BKL-C07",
+    "NEO-BKL-R06"
+  ],
+  "newlyStarted": [
+    "NEO-BKL-A04",
+    "NEO-BKL-J02",
+    "NEO-BKL-J04",
+    "NEO-BKL-I03",
+    "NEO-BKL-G01",
+    "NEO-BKL-G03",
+    "NEO-BKL-C08",
+    "NEO-BKL-M02"
+  ],
+  "movedToDeployment": [
+    "NEO-BKL-A04",
+    "NEO-BKL-G03",
+    "NEO-BKL-M02",
+    "NEO-BKL-C05",
+    "NEO-BKL-C07"
+  ],
+  "stageCounts": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 30,
+    "Awaiting deployment/retest": 26,
+    "Awaiting workflow test": 25,
+    "Queued": 22,
+    "Verified done": 1
+  },
+  "codeProgress": {
+    "queued": 22,
+    "activePartial": 30,
+    "awaitingDeploymentRetest": 26,
+    "awaitingWorkflowTest": 25,
+    "awaitingPrintAgentDeployment": 1,
+    "partiallyVerified": 1,
+    "fullyVerified": 1,
+    "note": "Source progress categories are distinct from final acceptance. 105 is the acceptance-open count, not the count untouched."
+  },
+  "isolatedEvidence": {
+    "count": {
+      "passed": true,
+      "checks": 29,
+      "originalHash": "dad9a0e8f3d32a85a1a22cbde949d662",
+      "installedHash": "c16e752accfd06c60527171ecfe685d6",
+      "scope": "Actual count-submission function with synthetic count/adjustment tables and modeled identity, permissions and numbering. No operational stock data accessed."
+    },
+    "store": {
+      "passed": true,
+      "checks": 29,
+      "originalHash": "1cc09feff50c3b81fc68f45da1dd8ecf",
+      "installedHash": "2cde096a47ff1adcd880fbc36d2b9352",
+      "scope": "Actual store issue/return function with synthetic data and modeled movement, cost, permissions and GL dependencies. No operational data accessed; sequential replay and lock placement tested, not a multi-session race certification."
+    },
+    "posTill": {
+      "passed": true,
+      "checks": 24,
+      "originalHash": "e3a09ce80f0bf557e4bfd9520c93b21c",
+      "wrapperHash": "fe6d4802c4b7b16e939c53de4091ebf7",
+      "installedHash": "54ca4b89c5dffe501d5bd3ccd3ac3dc1",
+      "scope": "Actual reviewed payment-recording function and card metadata overload; synthetic tables and modeled settlement/finance/auth/account helpers. No live payment, till or journal changed."
+    },
+    "qaMenu": {
+      "passed": true,
+      "checks": 14,
+      "scope": "Two exact observed QA products; actual public-menu SQL with synthetic catalog, audit and historic transaction tables. Production inspection was read-only; prepared unpublishing script was not applied to production."
+    },
+    "routedCash": {
+      "passed": true,
+      "checks": 32,
+      "original": [
+        {
+          "signature": "neo_cash_till_context(uuid)",
+          "md5": "0056bf3ebc240af86eec6901d53680c2"
+        },
+        {
+          "signature": "neo_cash_request_payment(uuid,numeric,text,text,text)",
+          "md5": "33a7c2397ac3e245cb9d883f0990ebda"
+        },
+        {
+          "signature": "neo_cash_request_pos_payment(uuid,numeric,text,text,text)",
+          "md5": "ca4a6bcb4641691751f5de1c70761206"
+        },
+        {
+          "signature": "neo_cash_settle_request(uuid)",
+          "md5": "8536b8f2fb47d499c37bb423cc5373b2"
+        }
+      ],
+      "installed": [
+        {
+          "signature": "neo_cash_till_context(uuid)",
+          "md5": "36b63a8dd5854b9e11417708478100e5"
+        },
+        {
+          "signature": "neo_cash_request_payment(uuid,numeric,text,text,text)",
+          "md5": "518f3792da29a326e556beffc2656b56"
+        },
+        {
+          "signature": "neo_cash_request_pos_payment(uuid,numeric,text,text,text)",
+          "md5": "fd97015abbb7c524905ec33fb5160ae8"
+        },
+        {
+          "signature": "neo_cash_settle_request(uuid)",
+          "md5": "535ce6e7e209b7b9ffb3b998d344ff87"
+        }
+      ],
+      "scope": "Four actual reviewed cash functions with synthetic tables and modeled identity/permission/numbering helpers. Operational payment, folio and journal triggers are not loaded; full accounting integration remains separate. No production data changed."
+    }
+  },
+  "initialBroadRetest": {
+    "passed": 4043,
+    "failed": 1,
+    "skipped": 155,
+    "issue": "RPC call-site scanner did not recognize new cash wrapper name.",
+    "resolution": "Wrapper uses existing callRpc alias convention; baseline manifest test unchanged. Focused recheck and fresh full suite passed."
+  },
+  "limitations": [
+    "All code remains local/undeployed; no operational database writes.",
+    "SQL 103 is a prepared exact-record metadata repair outside automatic migrations; two QA items remain as observed until controlled application.",
+    "Isolated tests use actual reviewed functions with synthetic tables and explicitly modeled helpers; full accounting triggers, physical inventory, devices and ordinary-role workflows remain separate.",
+    "Per-item/per-attempt locks and sequential replay tested; no multi-session race certification.",
+    "155 skipped tests remain uncertified.",
+    "Protected other-organization valid behavior preserved in isolated cases, not a complete live role audit."
+  ]
+}

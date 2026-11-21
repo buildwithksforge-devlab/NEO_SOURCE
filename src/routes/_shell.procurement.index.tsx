@@ -104,7 +104,7 @@ function Page() {
         <StatCard
           label="Deliveries not yet in stock"
           value={String(pendingReceipts.length)}
-          hint="Goods received notes still to post"
+          hint="Legacy receipts awaiting reconciliation"
           icon={Truck}
           tone={pendingReceipts.length > 0 ? "warning" : "success"}
         />
@@ -227,14 +227,14 @@ function Page() {
                   <StatusPill tone={statusTone(String(g["status"] ?? ""))}>
                     {titleCase(String(g["status"] ?? "draft"))}
                   </StatusPill>
-                  {String(g["status"]) !== "posted" ? (
+                  {String(g["status"]) === "posted" && g["accrual_error"] ? (
                     <Button
                       size="sm"
                       variant="secondary"
                       disabled={postReceipt.isPending}
                       onClick={() => postReceipt.mutate(String(g["id"]))}
                     >
-                      Post to stock
+                      Retry Finance accrual
                     </Button>
                   ) : null}
                 </div>

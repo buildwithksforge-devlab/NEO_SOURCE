@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-08",
+  "batches": [
+    4,
+    5
+  ],
+  "passed": 3787,
+  "failed": 0,
+  "skipped": 155,
+  "baselinePassesRetained": 3667,
+  "typecheck": "passed",
+  "productionBuildSmoke": "passed",
+  "isolatedQuotationPersistence": 10,
+  "isolatedEventOwnership": 21,
+  "operationalWrites": false,
+  "deployed": false,
+  "originalQueueTotal": 106,
+  "fullyVerified": 1,
+  "remainingAcceptance": 105,
+  "advancedOriginalRecords": 12,
+  "specificSourceRepairsReady": 5,
+  "partialSourceProgress": 7,
+  "stages": {
+    "Partially verified": 1,
+    "Awaiting agent deployment": 1,
+    "In progress": 6,
+    "Awaiting deployment/retest": 15,
+    "Queued": 57,
+    "Awaiting workflow test": 25,
+    "Verified done": 1
+  },
+  "limitations": [
+    "Application changes remain local and undeployed.",
+    "SQL 85 is an uninstalled code-only candidate.",
+    "Legacy task ownership is not automatically rewritten.",
+    "Skipped tests and full business workflows are not certified."
+  ]
+}

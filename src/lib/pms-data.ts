@@ -1,3 +1,8 @@
+import { requireFolioCloseResult } from "@/lib/folio-close-result";
+import { requireSavedRecord } from "@/lib/durable-command-result";
+import { requireCheckoutResult } from "@/lib/checkout-reconciliation";
+import {invalidatePaymentViews} from '@/lib/payment-view-refresh';
+import {calendarNights} from '@/lib/availability-search';
 import { guardedRpc } from "@/lib/rpc-guard";
 import { ilikeOrFilter } from "@/lib/or-filter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { DEFAULT_PMS_SETTINGS, type PmsSettings, today } from "@/lib/pms";
+import { stableIdempotencyKey } from "@/lib/transaction-scope";
 
 /* ------------------------------------------------------------------ *
  * Reference data
@@ -146,12 +152,15 @@ export function useReservation(id: string) {
 
 export function useReservationFolios(reservationId: string) {
   const { applyTo, filterKey } = useActivePropertyFilter();
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["pms", "folios", "reservation", reservationId, filterKey],
-    enabled: Boolean(reservationId),
+    queryKey: ["pms", "folios", "reservation", organizationId, reservationId, filterKey],
+    enabled: Boolean(organizationId) && Boolean(reservationId),
     queryFn: async () => {
+      if (!organizationId || !reservationId) throw new Error("Reservation scope is unavailable. Refresh before reading financial history.");
       const { data, error } = await applyTo(supabase.from("folios").select("*, folio_lines(*), payments(*)"), "folios")
         .eq("reservation_id", reservationId)
+        .eq("organization_id", organizationId)
         .order("created_at");
       if (error) throw error;
       return data ?? [];
@@ -160,14 +169,17 @@ export function useReservationFolios(reservationId: string) {
 }
 
 export function useReservationHistory(reservationId: string) {
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["pms", "reservation-history", reservationId],
-    enabled: Boolean(reservationId),
+    queryKey: ["pms", "reservation-history", organizationId, reservationId],
+    enabled: Boolean(organizationId) && Boolean(reservationId),
     queryFn: async () => {
+      if (!organizationId || !reservationId) throw new Error("Reservation scope is unavailable. Refresh before reading financial history.");
       const { data, error } = await supabase
         .from("reservation_history")
         .select("*")
         .eq("reservation_id", reservationId)
+        .eq("organization_id", organizationId)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -185,10 +197,14 @@ export function useAvailability(params: {
   forGroup?: string | null;
   enabled?: boolean;
 }) {
+  const { organizationId } = useAuth();
+  const valid = Boolean(organizationId) && calendarNights(params.arrival, params.departure) > 0
+    && Number.isInteger(params.adults) && params.adults > 0 && Number.isInteger(params.children) && params.children >= 0;
   return useQuery({
-    queryKey: ["pms", "availability", params],
-    enabled: params.enabled !== false && Boolean(params.arrival && params.departure),
+    queryKey: ["pms", "availability", organizationId, params],
+    enabled: params.enabled !== false && valid,
     queryFn: async () => {
+      if (!valid) throw new Error("Sign in and choose valid stay dates and whole guest counts before checking availability.");
       const { data, error } = await guardedRpc(supabase, "pms_available_rooms", {
         _branch: params.branch,
         _arrival: params.arrival,
@@ -270,7 +286,7 @@ export type FrontOfficeMetrics = {
 function useInvalidatePms() {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: ["pms"] });
+    invalidatePaymentViews(qc);
   };
 }
 
@@ -284,7 +300,7 @@ export function useCheckIn() {
         _notes: input.notes,
       });
       if (error) throw error;
-      return data;
+      return requireSavedRecord(data, ["stay_id", "folio_id"], "Check-in did not confirm its saved stay and folio.");
     },
     onSuccess: () => {
       toast.success("Guest checked in — folio opened and housekeeping notified");
@@ -344,8 +360,10 @@ export type CheckInReconciliationRow = {
 };
 
 export function useCheckInReconciliation(branch: string | null) {
+  const { organizationId, user } = useAuth();
   return useQuery({
-    queryKey: ["pms", "checkin-reconciliation", branch],
+    queryKey: ["pms", "checkin-reconciliation", organizationId, user?.id, branch],
+    enabled: Boolean(organizationId && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, 
         "neo_checkin_reconciliation",
@@ -368,7 +386,7 @@ export function useCheckOut() {
         _notes: input.notes,
       });
       if (error) throw error;
-      return data;
+      return requireCheckoutResult(data, input.reservation);
     },
     onSuccess: () => {
       toast.success("Guest checked out — room released for cleaning");
@@ -429,6 +447,7 @@ export function usePostCharge() {
       quantity: number;
       unitPrice: number;
       tax: number;
+      chargeIntent: string;
     }) => {
       const { data, error } = await guardedRpc(supabase, "pms_post_room_charge", {
         _folio: input.folio,
@@ -439,9 +458,12 @@ export function usePostCharge() {
         _tax: input.tax,
         _source_module: "pms",
         _source_record_id: "",
-        _idempotency_key: crypto.randomUUID(),
+        _idempotency_key: stableIdempotencyKey("pms", "reservation-charge", [
+          input.chargeIntent, input.folio, input.category, input.description, input.quantity, input.unitPrice, input.tax,
+        ]),
       });
       if (error) throw error;
+      if (typeof data !== "string" || !data) throw new Error("The charge did not return its saved folio line.");
       return data;
     },
     onSuccess: () => {
@@ -508,7 +530,7 @@ export function useCloseFolio() {
         _reason: input.reason ?? null,
       });
       if (error) throw error;
-      return data;
+      return requireFolioCloseResult(data, input.folio);
     },
     onSuccess: () => {
       toast.success("Folio closed");

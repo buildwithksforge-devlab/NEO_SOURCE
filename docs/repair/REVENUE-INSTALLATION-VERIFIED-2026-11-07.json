@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-07",
+  "diagnostic_version": "pos-folio-reporting-install-v1",
+  "report_definition_matches": true,
+  "retainedFunctionsUnchanged": true,
+  "livePeriod": "2026-11-01 to 2026-11-07",
+  "posSource": 30724.4,
+  "posLedger": 30724.4,
+  "folioSource": 78317.25,
+  "folioLedger": 78317.25,
+  "otherStreams": "Uncertified; separate review required",
+  "scope": "Read-only install postcheck supplied by user, then refreshed signed-in live page inspected. No transactions executed."
+}

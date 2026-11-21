@@ -125,10 +125,10 @@ function NotificationsPage() {
     <GuestScreen hotelSlug={hotelSlug} active="notifications">
       <section className="grid min-w-0 items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
-          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
+          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
             Notifications
           </h1>
-          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: brandFallback.steel }}>
+          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
             {unread > 0
               ? `${unread} update${unread === 1 ? "" : "s"} you have not read yet.`
               : `Updates from ${ws.hotel_name} about your bookings, orders and laundry.`}
@@ -142,7 +142,7 @@ function NotificationsPage() {
               disabled={mark.isPending}
               className="inline-flex min-h-11 items-center border px-5 text-sm font-semibold disabled:opacity-60"
               style={{
-                color: primary,
+                color: "var(--pa-accent-ink)",
                 borderColor: primary,
                 borderRadius: buttonRadius(ws.button_style),
               }}
@@ -183,22 +183,22 @@ function NotificationsPage() {
               <CategoryIcon category={row.category} tint={primary} />
               <div className="min-w-0">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                  <p className="min-w-0 text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <p className="min-w-0 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {row.title}
                   </p>
-                  <span className="shrink-0 text-[0.68rem]" style={{ color: brandFallback.steel }}>
+                  <span className="shrink-0 text-[0.68rem]" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {new Date(row.created_at).toLocaleString()}
                   </span>
                 </div>
                 {row.body ? (
-                  <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+                  <p className="neo-public-copy mt-1 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {row.body}
                   </p>
                 ) : null}
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <span
                     className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em]"
-                    style={{ background: `${primary}14`, color: primary }}
+                    style={{ background: `${primary}14`, color: "var(--pa-accent-ink)" }}
                   >
                     {guestNotificationCategoryLabel(row.category)}
                   </span>
@@ -208,7 +208,7 @@ function NotificationsPage() {
                       type="button"
                       onClick={() => mark.mutate([row.id])}
                       className="text-xs font-medium"
-                      style={{ color: brandFallback.steel }}
+                      style={{ color: "var(--guest-muted, #52627A)" }}
                     >
                       Mark read
                     </button>

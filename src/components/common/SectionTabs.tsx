@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,10 +47,25 @@ export function SectionTabs({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const root = rootPath ?? tabs[0]?.to;
+  const navRef = useRef<HTMLElement>(null);
+  const activeTo = tabs
+    .filter(({ to }) => pathname === to || (to !== root && pathname.startsWith(`${to}/`)))
+    .sort((a, b) => b.to.length - a.to.length)[0]?.to;
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (!nav || !active) return;
+    const bounds = nav.getBoundingClientRect();
+    const target = active.getBoundingClientRect();
+    if (target.left < bounds.left || target.right > bounds.right) {
+      nav.scrollLeft += target.left - bounds.left - (bounds.width - target.width) / 2;
+    }
+  }, [activeTo]);
 
   if (tabs.length === 0) return null;
 
-  const isActive = (to: string) => (to === root ? pathname === to : pathname.startsWith(to));
+  const isActive = (to: string) => to === activeTo;
 
   // Group the tail into a "More" menu rather than squeezing twenty tiny labels
   // onto one line. The current view is always pulled into the visible row.
@@ -71,7 +87,7 @@ export function SectionTabs({
 
   if (variant === "segmented") {
     return (
-      <nav className={cn("neo-scroll-x mb-6 -mx-1 px-1", className)}>
+      <nav ref={navRef} aria-label="Section navigation" className={cn("neo-scroll-x mb-6 -mx-1 px-1", className)}>
         <div className="neo-segment">
           {tabs.map((tab) => {
             const active = isActive(tab.to);
@@ -79,6 +95,7 @@ export function SectionTabs({
               <Link
                 key={tab.to}
                 to={tab.to}
+                activeOptions={{ exact: true }}
                 data-touch-target
                 aria-current={active ? "page" : undefined}
                 className={cn(
@@ -99,6 +116,7 @@ export function SectionTabs({
 
   return (
     <nav
+      ref={navRef}
       aria-label="Section navigation"
       className={cn(
         "neo-scroll-x -mx-1 mb-6 flex items-stretch gap-1 border-b border-outline-subtle px-1",
@@ -111,6 +129,7 @@ export function SectionTabs({
           <Link
             key={tab.to}
             to={tab.to}
+            activeOptions={{ exact: true }}
             data-touch-target
             aria-current={active ? "page" : undefined}
             className={cn(
@@ -148,7 +167,7 @@ export function SectionTabs({
           <DropdownMenuContent align="end" className="max-h-80 w-56 overflow-y-auto">
             {overflow.map((tab) => (
               <DropdownMenuItem key={tab.to} asChild>
-                <Link to={tab.to} aria-current={isActive(tab.to) ? "page" : undefined}>
+                <Link to={tab.to} activeOptions={{ exact: true }} aria-current={isActive(tab.to) ? "page" : undefined}>
                   {tab.icon ? <tab.icon aria-hidden className="size-4 opacity-70" /> : null}
                   {tab.label}
                 </Link>

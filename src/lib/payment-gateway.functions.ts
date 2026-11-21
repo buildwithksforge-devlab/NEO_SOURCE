@@ -54,7 +54,6 @@ type AttemptRow = {
   reference: string | null;
   state: string;
   environment: string | null;
-  callback_token: string | null;
 };
 
 type ConnectionRow = {
@@ -65,7 +64,7 @@ type ConnectionRow = {
   secret_names: unknown;
 };
 
-const TERMINAL_OUTCOMES = new Set(["approved", "declined", "cancelled", "timeout", "reversed"]);
+const TERMINAL_OUTCOMES = new Set(["approved", "declined", "cancelled", "timeout", "reversed", "refunded"]);
 
 function callbackBase(): string | null {
   const configured = process.env["PUBLIC_SITE_URL"];
@@ -103,7 +102,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     const { data: attempt } = await supabase
       .from("payment_attempts")
       .select(
-        "id, organization_id, branch_id, method, provider_code, amount, currency, reference, state, environment, callback_token",
+        "id, organization_id, branch_id, method, provider_code, amount, currency, reference, state, environment",
       )
       .eq("payment_table", "payment_intents")
       .eq("payment_id", data.intentId)
@@ -116,21 +115,30 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     }
     if (!row.provider_code) return { ok: false, reason: "not_provider_backed" };
 
-    const { data: conn } = await supabase
+    const providerConnections = supabase
       .from("integration_connections")
       .select("enabled, status, environment, configuration, secret_names")
+      .eq("organization_id", row.organization_id)
       .eq("provider_code", row.provider_code)
+    const scopedConnections = row.branch_id
+      ? providerConnections.or(`branch_id.eq.${row.branch_id},branch_id.is.null`)
+      : providerConnections.is("branch_id", null);
+    const { data: conn, error: connectionError } = await scopedConnections
       .order("branch_id", { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();
 
     const connection = conn as ConnectionRow | null;
+    if (connectionError) return { ok: false, reason: "provider_lookup_failed", detail: "The payment connection could not be verified for this property." };
     if (!connection || !connection.enabled || connection.status !== "connected") {
       return {
         ok: false,
         reason: "provider_not_connected",
         detail: "No processor is connected for this method, so nothing can be sent.",
       };
+    }
+    if (row.environment !== (connection.environment ?? "sandbox")) {
+      return { ok: false, reason: "provider_environment_changed", detail: "The processor environment changed after this request was opened." };
     }
 
     const config = (connection.configuration ?? {}) as Record<string, unknown>;
@@ -144,8 +152,12 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     }
 
     const base = callbackBase();
-    if (!base || !row.callback_token) {
-      return { ok: false, reason: "callback_unavailable", detail: "This request has no answer address." };
+    if (!base) {
+      return {
+        ok: false,
+        reason: "callback_unavailable",
+        detail: "This request has no answer address.",
+      };
     }
 
     const secretName = String(config["secret_name"] ?? "").trim();
@@ -167,6 +179,41 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       };
     }
 
+    const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+    const { data: claim, error: claimError } = await (
+      supabase as unknown as {
+        rpc: (
+          name: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("neo_payment_intent_claim_dispatch", {
+      _intent: data.intentId,
+      _token: callbackToken,
+    });
+    if (claimError) {
+      return {
+        ok: false,
+        reason: "dispatch_claim_failed",
+        detail: "The payment request could not be safely started.",
+      };
+    }
+    const claimResult = (claim ?? {}) as { ok?: boolean; claimed?: boolean; state?: string };
+    if (!claimResult.ok) {
+      return {
+        ok: false,
+        reason: "dispatch_claim_failed",
+        detail: "The payment request could not be safely started.",
+      };
+    }
+    if (!claimResult.claimed) {
+      return {
+        ok: true,
+        state: claimResult.state ?? "pending",
+        detail: "This payment request is already being sent. No second request was made.",
+      };
+    }
+
     const payload = {
       intent_id: data.intentId,
       amount: Number(row.amount),
@@ -175,7 +222,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       method: row.method,
       terminal_id: config["terminal_id"] ?? null,
       merchant_id: config["merchant_id"] ?? null,
-      callback_url: `${base}/api/public/payments/callback/${row.callback_token}`,
+      callback_url: `${base}/api/public/payments/callback/${callbackToken}`,
       environment: row.environment ?? connection.environment ?? "sandbox",
     };
 
@@ -190,6 +237,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     try {
       const res = await fetch(endpoint, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           ...(secret ? { authorization: `Bearer ${secret}` } : {}),
@@ -209,12 +257,17 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
           detail: `The processor refused the request (${res.status}).`,
           failed: true,
         });
-        return { ok: false, reason: "provider_rejected", detail: `Processor returned ${res.status}.`, state: "failed" };
+        return {
+          ok: false,
+          reason: "provider_rejected",
+          detail: `Processor returned ${res.status}.`,
+          state: "failed",
+        };
       }
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : "The processor could not be reached.";
-      await markSent(supabase, data.intentId, { detail, failed: true });
-      return { ok: false, reason: "provider_unreachable", detail, state: "failed" };
+    } catch {
+      const detail = "The processor did not confirm receipt of this request. Check its status before starting another payment.";
+      await markSent(supabase, data.intentId, { detail, failed: false });
+      return { ok: false, reason: "provider_outcome_unknown", detail, state: "pending" };
     }
 
     const status = String(answer.status ?? "pending").toLowerCase();
@@ -224,15 +277,40 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     if (TERMINAL_OUTCOMES.has(status)) {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const admin = supabaseAdmin as unknown as {
-        rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+        rpc: (
+          fn: string,
+          args?: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: unknown }>;
       };
-      await admin.rpc("neo_payment_intent_apply", {
-        _token: row.callback_token,
+      const applied = await admin.rpc("neo_payment_intent_apply", {
+        _token: callbackToken,
         _outcome: status,
         _provider_reference: answer.reference ?? undefined,
         _detail: answer.message ?? null,
         _payload: answer as Record<string, unknown>,
       });
+      const result = applied.data as {
+        ok?: boolean;
+        state?: string;
+        refund_reconciliation_required?: boolean;
+      } | null;
+      if (result?.refund_reconciliation_required === true) {
+        return {
+          ok: false,
+          reason: "refund_reconciliation_required",
+          detail: "Finance must reconcile the provider's refund before it can be recorded.",
+          ...(typeof result.state === "string" ? { state: result.state } : {}),
+          providerReference: answer.reference ?? null,
+        };
+      }
+      if (applied.error || result?.ok !== true) {
+        return {
+          ok: false,
+          reason: "provider_outcome_unrecorded",
+          detail: "NEØ could not record the processor's answer. Check the existing payment before retrying.",
+          state: "pending",
+        };
+      }
       return { ok: true, state: status, providerReference: answer.reference ?? null };
     }
 
@@ -250,7 +328,11 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     if (qrPayload || qrImageUrl) {
       await supabase.rpc("neo_payment_intent_set_provider_payload", {
         _intent: data.intentId,
-        _payload: { qr_payload: qrPayload, qr_image_url: qrImageUrl, reference: answer.reference ?? null },
+        _payload: {
+          qr_payload: qrPayload,
+          qr_image_url: qrImageUrl,
+          reference: answer.reference ?? null,
+        },
       });
     }
 

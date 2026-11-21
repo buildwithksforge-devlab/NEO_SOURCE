@@ -3,7 +3,7 @@
  * period — exactly what Dashboard, Analytics and Finance display.
  */
 import { useState } from "react";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Download, FileText, Loader2, Printer } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import { factsAuthorised, useFactReconciliation, useFacts, type FactScope } from "@/lib/facts";
 import { exportManagementReportPdf } from "@/lib/report-pdf.functions";
 import { useAuth } from "@/lib/auth";
+import { downloadDocumentPdf, openDocumentPrintWindow } from "@/lib/browser-document";
 
 export function FactExportButton({
   scope,
@@ -43,22 +44,25 @@ export function FactExportButton({
 
   if (!canExport) return null;
 
-  const downloadPdf = async () => {
+  const downloadPdf = async (action: "print" | "download" = "download") => {
+    if (pdfBusy) return;
     if (!scope.from || !scope.to) {
       toast.error("Choose a report period before exporting.");
       return;
     }
     setPdfBusy(true);
+    let preview: ReturnType<typeof openDocumentPrintWindow> | undefined;
     try {
-      const result = await exportPdf({ data: { title, branchId: scope.branchId, from: scope.from, to: scope.to, paths } });
+      if (action === "print") preview = openDocumentPrintWindow();
+      const result = await exportPdf({
+        data: { title, branchId: scope.branchId, from: scope.from, to: scope.to, paths },
+      });
       const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = result.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      if (preview) preview.show(blob, result.filename);
+      else downloadDocumentPdf(blob, result.filename);
     } catch (error) {
+      preview?.close();
       toast.error((error as Error).message);
     } finally {
       setPdfBusy(false);
@@ -67,16 +71,49 @@ export function FactExportButton({
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="outline" className="gap-2" disabled={!ready || pdfBusy} onClick={() => void downloadPdf()}>
-        {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />} Export PDF
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-2"
+        disabled={!ready || pdfBusy}
+        onClick={() => void downloadPdf("print")}
+      >
+        {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}{" "}
+        Print report
       </Button>
       <Button
         size="sm"
         variant="outline"
         className="gap-2"
         disabled={!ready || pdfBusy}
-        title={ready ? "Download the reconciled facts for this property and period" : "Available once the facts have loaded"}
-        onClick={() => downloadTextFile(factExportFilename(scope), factExportCsv({ facts: facts.data, paths, reconciliation: reconciliation.data ?? [], meta: meta.data, scope, scopeLabel }))}
+        onClick={() => void downloadPdf()}
+      >
+        {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}{" "}
+        Export PDF
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-2"
+        disabled={!ready || pdfBusy}
+        title={
+          ready
+            ? "Download the reconciled facts for this property and period"
+            : "Available once the facts have loaded"
+        }
+        onClick={() =>
+          downloadTextFile(
+            factExportFilename(scope),
+            factExportCsv({
+              facts: facts.data,
+              paths,
+              reconciliation: reconciliation.data ?? [],
+              meta: meta.data,
+              scope,
+              scopeLabel,
+            }),
+          )
+        }
       >
         <Download className="size-4" /> Export CSV
       </Button>

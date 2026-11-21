@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Receipt } from "lucide-react";
 import { SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
@@ -173,14 +173,18 @@ function RefundDialog({
   const raise = useRequestCashRefund();
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const [attempt,setAttempt] = useState(()=>crypto.randomUUID());
+  useEffect(()=>{setAmount("");setReason("");setAttempt(crypto.randomUUID());},[target?.id]);
 
   return (
     <Dialog
       open={Boolean(target)}
       onOpenChange={(o) => {
+        if(raise.isPending)return;
         if (!o) {
           setAmount("");
           setReason("");
+          setAttempt(crypto.randomUUID());
         }
         onOpenChange(o);
       }}
@@ -198,6 +202,7 @@ function RefundDialog({
             <Label htmlFor="refund-amount">Amount (max {money(target?.amount ?? 0)})</Label>
             <Input
               id="refund-amount"
+              disabled={raise.isPending}
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -207,6 +212,7 @@ function RefundDialog({
             <Label htmlFor="refund-reason">Reason</Label>
             <Input
               id="refund-reason"
+              disabled={raise.isPending}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Why is this money going back?"
@@ -217,7 +223,7 @@ function RefundDialog({
           <Button
             disabled={
               !target ||
-              Number(amount) <= 0 ||
+              !Number.isFinite(Number(amount)) || Number(amount) <= 0 || Math.abs(Math.round(Number(amount)*100)-Number(amount)*100)>0.000001 ||
               Number(amount) > (target?.amount ?? 0) + 0.009 ||
               reason.trim().length < 3 ||
               raise.isPending
@@ -225,7 +231,7 @@ function RefundDialog({
             onClick={() =>
               target &&
               raise.mutate(
-                { payment: target.id, amount: Number(amount), reason: reason.trim() },
+                { payment: target.id, amount: Number(amount), reason: reason.trim(), attempt },
                 { onSuccess: () => onOpenChange(false) },
               )
             }

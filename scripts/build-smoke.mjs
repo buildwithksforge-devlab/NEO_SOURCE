@@ -22,7 +22,8 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { findBrokenInteropDestructures } from "./bundle-interop.mjs";
 
 const ROOT = process.cwd();
 // TanStack Start/Nitro emits the deployable application under `.output`.
@@ -32,17 +33,6 @@ const DIST = path.join(ROOT, ".output");
 const SKIP_BUILD = process.argv.includes("--no-build");
 const PORT = Number(process.env.SMOKE_PORT ?? 4173);
 const ROUTES = ["/", "/auth"];
-
-/** Helper names that only exist in a TS runtime shim such as tslib. */
-const HELPER_NAMES = [
-  "__extends",
-  "__assign",
-  "__awaiter",
-  "__generator",
-  "__decorate",
-  "__spreadArray",
-  "__importDefault",
-];
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -66,24 +56,6 @@ async function* walk(dir) {
   }
 }
 
-/**
- * Flags `var { __extends, ... } = __toESM(<cjs module>)` — esbuild's interop
- * shape for an ESM shim that destructures a CommonJS default export. When the
- * CommonJS module is a UMD bundle with no real default, every destructured
- * helper is undefined and the module throws on load.
- */
-export function findBrokenInteropDestructures(source) {
-  const hits = [];
-  const pattern = /(?:var|const|let)\s*\{([^}]{0,4000}?)\}\s*=\s*[^;{}]{0,80}?__toESM\(/g;
-  let match;
-  while ((match = pattern.exec(source)) !== null) {
-    const names = match[1];
-    const helper = HELPER_NAMES.find((name) => new RegExp(`\\b${name}\\b`).test(names));
-    if (helper) hits.push(helper);
-  }
-  return hits;
-}
-
 async function scanBundles() {
   const offenders = [];
   for await (const file of walk(DIST)) {
@@ -102,9 +74,47 @@ async function scanBundles() {
  */
 async function smokeRoutes() {
   const entry = path.join(DIST, "server", "index.mjs");
-  const mod = await import(`file://${entry}`);
+  const mod = await import(pathToFileURL(entry).href);
   const handler = mod.default ?? mod;
   if (typeof handler.fetch !== "function") throw new Error("built server exposes no fetch handler");
+
+  // Exercise the real Nitro -> SSR boundary, not only src/server.ts directly.
+  // No remote call or live agent operation occurs: only the managed upstream
+  // fetch is replaced, then restored before the ordinary route checks below.
+  const originalFetch = globalThis.fetch;
+  let printForwards = 0;
+  try {
+    globalThis.fetch = async (input, init) => {
+      if (String(input) !== "https://horizon-prime-os.lovable.app/api/public/print-agent/printers") {
+        throw new Error("Smoke print request reached an unexpected executor");
+      }
+      const headers = new Headers(init?.headers);
+      if (headers.has("cookie") || headers.has("apikey")) throw new Error("Smoke print request forwarded a private browser header");
+      printForwards++;
+      return Response.json({ printers: [] });
+    };
+    const print = await handler.fetch(new Request(`http://localhost:${PORT}/api/public/print-agent/printers`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer neopc_" + "0".repeat(64), cookie: "smoke-only" },
+      body: "{}",
+    }), { NEO_MANAGED_PRINT_ENABLED: "true" }, { waitUntil() {}, passThroughOnException() {} });
+    if (print.status !== 200 || printForwards !== 1) throw new Error("Compiled managed printing did not use its request-local runtime binding");
+    const payload = await print.json();
+    if (!Array.isArray(payload.printers) || payload.printers.length !== 0) throw new Error("Compiled print routing returned an unexpected result");
+    console.log("  ✓ managed print route uses request-local bindings and fixed executor; no live request");
+    let commsForwards=0;
+    const summaryId="e98b312a6ceb488a8c655879fd1294414c8ca3f5371063378ad309e1c8c1f433";
+    globalThis.fetch=async(input,init)=>{
+      if(String(input)!==`https://horizon-prime-os.lovable.app/_serverFn/${summaryId}`)throw new Error("Unexpected communication executor");
+      if(new Headers(init?.headers).has("cookie"))throw new Error("Communication relay forwarded cookie");
+      commsForwards++;return Response.json({masked:true});
+    };
+    const comms=await handler.fetch(new Request(`http://localhost:${PORT}/_serverFn/${summaryId}`,{method:"POST",headers:{authorization:"Bearer smoke.payload.signature","content-type":"application/json"},body:"{}"}),{NEO_MANAGED_COMMS_ENABLED:"true"},{waitUntil(){},passThroughOnException(){}});
+    if(comms.status!==200||commsForwards!==1)throw new Error("Compiled communications did not use request-local runtime bindings");
+    console.log("  ✓ managed communication route uses request-local bindings; no email sent");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   for (const route of ROUTES) {
     const res = await handler.fetch(new Request(`http://localhost:${PORT}${route}`), process.env, {
@@ -118,14 +128,24 @@ async function smokeRoutes() {
       throw new Error(`${route} rendered a module-load interop crash`);
     }
     if (res.status < 400 && !/<html/i.test(body)) throw new Error(`${route} rendered no document`);
-    console.log(`  ✓ ${route} → HTTP ${res.status}`);
+    const cache = res.headers.get("cache-control") ?? "";
+    if (!cache.includes("private") || !cache.includes("no-store")) {
+      throw new Error(`${route} does not protect the dynamic document from shared caching`);
+    }
+    if (!/name="neo-build-id"\s+content="[a-f0-9]{16}"/.test(body)) {
+      throw new Error(`${route} has no actual-source build identity`);
+    }
+    if (/fonts\.(?:googleapis|gstatic)\.com/.test(body)) {
+      throw new Error(`${route} still loads a remote Google font resource`);
+    }
+    console.log(`  ✓ ${route} → HTTP ${res.status}; private/no-store, source identity, local fonts`);
   }
 }
 
 async function main() {
   if (!SKIP_BUILD) {
     console.log("→ production build");
-    await run("npx", ["vite", "build"]);
+    await run(process.execPath, [path.join(ROOT, "node_modules", "vite", "bin", "vite.js"), "build"]);
   }
 
   console.log("→ scanning bundles for ESM/CommonJS interop crashes");

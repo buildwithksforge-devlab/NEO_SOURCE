@@ -18,6 +18,7 @@ export type OutboundMessage = {
   recipient: string;
   subject: string | null;
   body: string;
+  idempotencyKey?: string;
 };
 
 /** Per-organisation provider settings held on `provider_connections.configuration`. */
@@ -100,7 +101,11 @@ export async function sendEmail(
   try {
     response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(message.idempotencyKey ? { "Idempotency-Key": message.idempotencyKey } : {}),
+      },
       body: JSON.stringify({
         from,
         to: [message.recipient],
@@ -112,15 +117,18 @@ export async function sendEmail(
   } catch (error) {
     return {
       ok: false,
-      permanent: false,
-      code: "provider_unreachable",
-      detail: error instanceof Error ? error.message : "The email provider could not be reached.",
+      permanent: true,
+      code: "email_outcome_unknown",
+      detail:
+        "The email provider response was not received. Review provider history before retrying; the email may already have been accepted.",
     };
   }
 
-  const payload = (await response.json().catch(() => null)) as
-    | { id?: string; message?: string; name?: string }
-    | null;
+  const payload = (await response.json().catch(() => null)) as {
+    id?: string;
+    message?: string;
+    name?: string;
+  } | null;
   if (!response.ok) {
     return {
       ok: false,
@@ -130,7 +138,20 @@ export async function sendEmail(
       detail: payload?.message ?? `The email provider refused the message (${response.status}).`,
     };
   }
-  return { ok: true, reference: payload?.id ?? null, detail: "Accepted by the email provider." };
+  if (!payload?.id || typeof payload.id !== "string" || !payload.id.trim()) {
+    return {
+      ok: false,
+      permanent: true,
+      code: "email_outcome_unknown",
+      detail:
+        "The email provider response did not confirm a saved message ID. Review provider history before retrying.",
+    };
+  }
+  return {
+    ok: true,
+    reference: payload.id,
+    detail: "Accepted by the email provider; inbox delivery is not yet confirmed.",
+  };
 }
 
 /**
@@ -192,7 +213,10 @@ export async function sendSms(
   }
 
   const payload = (await response.json().catch(() => null)) as {
-    SMSMessageData?: { Message?: string; Recipients?: { status?: string; statusCode?: number; messageId?: string }[] };
+    SMSMessageData?: {
+      Message?: string;
+      Recipients?: { status?: string; statusCode?: number; messageId?: string }[];
+    };
   } | null;
 
   if (!response.ok) {
@@ -200,7 +224,9 @@ export async function sendSms(
       ok: false,
       permanent: response.status >= 400 && response.status < 500 && response.status !== 429,
       code: `sms_${response.status}`,
-      detail: payload?.SMSMessageData?.Message ?? `The SMS provider refused the message (${response.status}).`,
+      detail:
+        payload?.SMSMessageData?.Message ??
+        `The SMS provider refused the message (${response.status}).`,
     };
   }
 
@@ -214,10 +240,17 @@ export async function sendSms(
       // 4xx-family recipient codes (invalid number, blacklisted) will not change.
       permanent: code >= 400 && code < 500,
       code: `sms_recipient_${code || "unknown"}`,
-      detail: status || payload?.SMSMessageData?.Message || "The SMS provider did not accept the recipient.",
+      detail:
+        status ||
+        payload?.SMSMessageData?.Message ||
+        "The SMS provider did not accept the recipient.",
     };
   }
-  return { ok: true, reference: recipient.messageId ?? null, detail: `Accepted by the SMS provider (${status}).` };
+  return {
+    ok: true,
+    reference: recipient.messageId ?? null,
+    detail: `Accepted by the SMS provider (${status}).`,
+  };
 }
 
 /**
@@ -300,7 +333,8 @@ export async function sendWhatsApp(
     // 131047 is "no open conversation": a template is required, and retrying
     // the same plain message will never succeed.
     const permanent =
-      code === 131047 || (response.status >= 400 && response.status < 500 && response.status !== 429);
+      code === 131047 ||
+      (response.status >= 400 && response.status < 500 && response.status !== 429);
     return {
       ok: false,
       permanent,

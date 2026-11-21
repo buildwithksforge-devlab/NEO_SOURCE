@@ -20,6 +20,9 @@ import {
   useShiftTemplates,
 } from "@/lib/hr-data";
 import { today, type Row } from "@/lib/hr";
+import { useBranchScope } from "@/lib/branches";
+import { useTenant } from "@/lib/tenant";
+import { rosterShiftWindow } from "@/lib/roster-time";
 
 /** Create a roster period for a department before any shift is assigned. */
 export function RosterCreateDialog({
@@ -139,6 +142,8 @@ export function ShiftAssignDialog({
 }) {
   const employees = useEmployees({ status: "active" });
   const templates = useShiftTemplates();
+  const { branches: propertyBranches, loading: propertiesLoading } = useBranchScope();
+  const { tenant, hydrated } = useTenant();
   const write = useHrWrite("roster_assignments", { action: "hr.roster.shift_assigned" });
 
   const [employeeId, setEmployeeId] = useState("");
@@ -163,16 +168,21 @@ export function ShiftAssignDialog({
     (a) => String(a["employee_id"]) === employeeId && String(a["shift_date"]) === shiftDate,
   );
 
-  const canSubmit = Boolean(employeeId) && Boolean(templateId) && inPeriod && !clash;
+  const canSubmit = Boolean(employeeId) && Boolean(templateId) && inPeriod && !clash && !propertiesLoading && hydrated;
 
   const submit = () => {
     if (!template || !employee) return;
-    const startsAt = template["start_time"]
-      ? new Date(`${shiftDate}T${String(template["start_time"]).slice(0, 8)}`).toISOString()
-      : null;
-    const endsAt = template["end_time"]
-      ? new Date(`${shiftDate}T${String(template["end_time"]).slice(0, 8)}`).toISOString()
-      : null;
+    const propertyId = roster["branch_id"] ?? employee["branch_id"] ?? null;
+    const timeZone = propertyBranches.find(branch => branch.id === propertyId)?.timezone
+      || tenant.regional.timezone || "Africa/Nairobi";
+    let startsAt: string, endsAt: string;
+    try {
+      ({ startsAt, endsAt } = rosterShiftWindow(shiftDate, String(template["start_time"] ?? ""),
+        String(template["end_time"] ?? ""), timeZone));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Shift time could not be resolved.");
+      return;
+    }
     write.mutate(
       {
         values: {

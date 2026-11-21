@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 33,
+  "scope": "Isolated exported schema shape, actual ledger/posting/payment controls and refund routines. No live money, refund, stock or guest record changed."
+}

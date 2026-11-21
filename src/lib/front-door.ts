@@ -63,10 +63,11 @@ export type PublicRoomType = {
 };
 
 /** The rooms and rates a listed hotel has already configured. */
-export async function fetchPublicPropertyRooms(slug: string): Promise<PublicRoomType[]> {
-  const { data, error } = await supabase.rpc("neo_public_property_rooms" as never, {
+export async function fetchPublicPropertyRooms(slug: string, signal?: AbortSignal): Promise<PublicRoomType[]> {
+  const request = supabase.rpc("neo_public_property_rooms" as never, {
     _slug: slug,
   } as never);
+  const { data, error } = await (signal ? request.abortSignal(signal) : request);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as PublicRoomType[];
 }

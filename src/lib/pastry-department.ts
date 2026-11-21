@@ -182,9 +182,11 @@ export function useAddPastryPlanItem() {
       dueAt?: string | null;
       instructions?: string;
     }) => {
+      if (!input.product.trim()) throw new Error("Enter a product name.");
+      if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Production quantity must be greater than zero.");
       const { data, error } = await guardedRpc(db, "neo_pastry_plan_item_add", {
         _plan: input.planId,
-        _product: input.product,
+        _product: input.product.trim(),
         _quantity: input.quantity,
         _unit: input.unit ?? "piece",
         _assignee: input.assigneeId ?? null,

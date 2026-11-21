@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -108,12 +109,16 @@ const TERMINAL_HK_JOB_STATUSES = new Set([
 
 const jobDone = (job: HkRow): boolean =>
   TERMINAL_HK_JOB_STATUSES.has(
-    String(job["status"] ?? "").trim().toLowerCase(),
+    String(job["status"] ?? "")
+      .trim()
+      .toLowerCase(),
   );
 
 const jobCompleted = (job: HkRow): boolean =>
   ["completed", "inspected", "closed"].includes(
-    String(job["status"] ?? "").trim().toLowerCase(),
+    String(job["status"] ?? "")
+      .trim()
+      .toLowerCase(),
   );
 
 /**
@@ -148,11 +153,7 @@ export function filterMyJobs(rows: HkRow[], filter: MyWorkFilter, now = new Date
 
         const done = at(j["completed_at"]);
 
-        return (
-          done !== null &&
-          done >= dayStart &&
-          done < dayEnd
-        );
+        return done !== null && done >= dayStart && done < dayEnd;
       });
     }
     default:
@@ -185,14 +186,10 @@ function MyWorkPage() {
   const allRows = (jobs.data ?? []) as HkRow[];
   const openTasks = ((tasks.data ?? []) as HkRow[]).filter(
     (task) =>
-      ![
-        "completed",
-        "cancelled",
-        "rejected",
-        "superseded",
-        "closed",
-      ].includes(
-        String(task["status"] ?? "open").trim().toLowerCase(),
+      !["completed", "cancelled", "rejected", "superseded", "closed"].includes(
+        String(task["status"] ?? "open")
+          .trim()
+          .toLowerCase(),
       ),
   );
   // A task that belongs to a room cleaning job is a reminder, not a second
@@ -235,7 +232,6 @@ function MyWorkPage() {
   const [unit, setUnit] = useState("unit");
   const [needPriority, setNeedPriority] = useState("normal");
   const [needNotes, setNeedNotes] = useState("");
-
 
   const submitHandover = () => {
     if (!handover || handoverOutstanding.length > 0) return;
@@ -356,7 +352,6 @@ function MyWorkPage() {
         ))}
       </div>
 
-
       <div className="mt-6">
         <SectionCard
           title="My rooms"
@@ -460,64 +455,67 @@ function MyWorkPage() {
               {openTasks.map((task) => {
                 const linkedJob = linkedJobByTask.get(String(task["id"])) ?? null;
                 return (
-                <li
-                  key={String(task["id"])}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{str(task["title"], "Task")}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {titleCase(String(task["priority"] ?? "normal"))} · due{" "}
-                      {shortDateTime(task["due_at"])}
-                    </p>
-                    {linkedJob ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Follows room job {str(linkedJob["job_number"], "")} above — it closes when
-                        that clean is finished and inspected.
+                  <li
+                    key={String(task["id"])}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{str(task["title"], "Task")}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {titleCase(String(task["priority"] ?? "normal"))} · due{" "}
+                        {shortDateTime(task["due_at"])}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <OpsBadge value={task["status"]} tone="default" />
-                    {!linkedJob && taskStatus(task) === "open" && mayStart ? (
-                      <Button
-                        size="sm"
-                        disabled={advanceTask.isPending}
-                        onClick={() =>
-                          advanceTask.mutate({
-                            taskId: String(task["id"]),
-                            status: "in-progress",
-                          })
-                        }
-                      >
-                        <PlayCircle className="mr-2 h-4 w-4" /> Start
-                      </Button>
-                    ) : null}
-                    {!linkedJob && taskStatus(task) === "in-progress" && mayComplete ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={advanceTask.isPending}
-                          onClick={() =>
-                            advanceTask.mutate({ taskId: String(task["id"]), status: "review" })
-                          }
-                        >
-                          <Send className="mr-2 h-4 w-4" /> Submit for inspection
-                        </Button>
+                      {linkedJob ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Follows room job {str(linkedJob["job_number"], "")} above — it closes when
+                          that clean is finished and inspected.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <OpsBadge value={task["status"]} tone="default" />
+                      {!linkedJob && taskStatus(task) === "open" && mayStart ? (
                         <Button
                           size="sm"
                           disabled={advanceTask.isPending}
                           onClick={() =>
-                            advanceTask.mutate({ taskId: String(task["id"]), status: "completed" })
+                            advanceTask.mutate({
+                              taskId: String(task["id"]),
+                              status: "in-progress",
+                            })
                           }
                         >
-                          <CheckCircle2 className="mr-2 h-4 w-4" /> Complete
+                          <PlayCircle className="mr-2 h-4 w-4" /> Start
                         </Button>
-                      </>
-                    ) : null}
-                  </div>
-                </li>
+                      ) : null}
+                      {!linkedJob && taskStatus(task) === "in-progress" && mayComplete ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={advanceTask.isPending}
+                            onClick={() =>
+                              advanceTask.mutate({ taskId: String(task["id"]), status: "review" })
+                            }
+                          >
+                            <Send className="mr-2 h-4 w-4" /> Submit for inspection
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={advanceTask.isPending}
+                            onClick={() =>
+                              advanceTask.mutate({
+                                taskId: String(task["id"]),
+                                status: "completed",
+                              })
+                            }
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" /> Complete
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </li>
                 );
               })}
             </ul>
@@ -569,7 +567,7 @@ function MyWorkPage() {
       </Dialog>
 
       <Dialog open={Boolean(handover)} onOpenChange={(open) => !open && setHandover(null)}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="max-h-[90dvh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Finish {handover ? roomLabel(handover) : "room"}</DialogTitle>
             <DialogDescription>
@@ -579,34 +577,36 @@ function MyWorkPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <CleaningChecklistForm
-            lines={handoverLines}
-            entries={checklistEntries}
-            onChange={(label, entry) =>
-              setChecklistEntries((prev) => ({ ...prev, [label]: entry }))
-            }
-            emptyState={
-              <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-                No cleaning standard is configured for this kind of clean yet, so there are no steps
-                to record. Your manager can set one up in the Configuration Centre.
-              </p>
-            }
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor="handover-notes">Notes for the supervisor</Label>
-            <Textarea
-              id="handover-notes"
-              value={handoverNotes}
-              onChange={(e) => setHandoverNotes(e.target.value)}
-              placeholder="Anything the inspection should check"
+          <DialogBody className="min-w-0 space-y-4">
+            <CleaningChecklistForm
+              lines={handoverLines}
+              entries={checklistEntries}
+              onChange={(label, entry) =>
+                setChecklistEntries((prev) => ({ ...prev, [label]: entry }))
+              }
+              emptyState={
+                <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+                  No cleaning standard is configured for this kind of clean yet, so there are no
+                  steps to record. Your manager can set one up in the Configuration Centre.
+                </p>
+              }
             />
-          </div>
-          {handoverOutstanding.length > 0 ? (
-            <p className="text-xs text-destructive">
-              Still to record: {handoverOutstanding.join(", ")}
-            </p>
-          ) : null}
+
+            <div className="space-y-2">
+              <Label htmlFor="handover-notes">Notes for the supervisor</Label>
+              <Textarea
+                id="handover-notes"
+                value={handoverNotes}
+                onChange={(e) => setHandoverNotes(e.target.value)}
+                placeholder="Anything the inspection should check"
+              />
+            </div>
+            {handoverOutstanding.length > 0 ? (
+              <p className="text-xs text-destructive">
+                Still to record: {handoverOutstanding.join(", ")}
+              </p>
+            ) : null}
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setHandover(null)}>
               Cancel

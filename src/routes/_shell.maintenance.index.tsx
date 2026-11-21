@@ -125,6 +125,14 @@ function Page() {
   const [newDue, setNewDue] = useState("");
   const [newEstimate, setNewEstimate] = useState("");
 
+  const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [verificationNote, setVerificationNote] = useState("");
+  const changeStatus = (id: string, status: string) => {
+    if (status === "closed") {
+      setVerificationId(id);
+      setVerificationNote("");
+    } else saveWO.mutate({ id, status });
+  };
   const [pmOpen, setPmOpen] = useState(false);
   const [pmName, setPmName] = useState("");
   const [pmType, setPmType] = useState("preventive");
@@ -504,8 +512,8 @@ function Page() {
                           <SelectContent>
                             {(technicians.data ?? []).length === 0 ? (
                               <div className="px-3 py-3 text-xs text-muted-foreground">
-                                No one at this property can currently receive maintenance work.
-                                Give their role the Maintenance “My jobs” permission first.
+                                No one at this property can currently receive maintenance work. Give
+                                their role the Maintenance “My jobs” permission first.
                               </div>
                             ) : (
                               (technicians.data ?? []).map((s) => (
@@ -700,7 +708,7 @@ function Page() {
                           holdsRoom(o) ? (
                             <OpsBadge value="Blocked" tone="destructive" />
                           ) : (
-                            <OpsBadge value="Available" tone="success" />
+                            <OpsBadge value="No job hold" tone="info" />
                           )
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -711,8 +719,7 @@ function Page() {
                           <Select
                             value={String(o["status"])}
                             onValueChange={(v) =>
-                              v !== String(o["status"]) &&
-                              saveWO.mutate({ id: String(o["id"]), status: v })
+                              v !== String(o["status"]) && changeStatus(String(o["id"]), v)
                             }
                           >
                             <SelectTrigger className="h-9 w-40">
@@ -746,9 +753,7 @@ function Page() {
                           {String(o["status"]) === "awaiting-verification" ? (
                             <Button
                               size="sm"
-                              onClick={() =>
-                                saveWO.mutate({ id: String(o["id"]), status: "closed" })
-                              }
+                              onClick={() => changeStatus(String(o["id"]), "closed")}
                               disabled={saveWO.isPending}
                             >
                               Verify &amp; close
@@ -964,6 +969,43 @@ function Page() {
           </QueryState>
         </SectionCard>
       )}
+      <Dialog
+        open={Boolean(verificationId)}
+        onOpenChange={(value) => {
+          if (!value) setVerificationId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verify and close repair</DialogTitle>
+          </DialogHeader>
+          <Label htmlFor="maintenance-verification-note">Independent verification note</Label>
+          <Textarea
+            id="maintenance-verification-note"
+            value={verificationNote}
+            onChange={(event) => setVerificationNote(event.target.value)}
+            placeholder="Record the repair checks and result"
+          />
+          <p className="text-sm text-muted-foreground">
+            The server records the verifier. Closing does not remove the room hold; release follows
+            verified closure and preserves other maintenance holds.
+          </p>
+          <DialogFooter>
+            <Button
+              disabled={!verificationId || !verificationNote.trim() || saveWO.isPending}
+              onClick={() => {
+                if (verificationId)
+                  saveWO.mutate(
+                    { id: verificationId, status: "closed", note: verificationNote.trim() },
+                    { onSuccess: () => setVerificationId(null) },
+                  );
+              }}
+            >
+              Confirm verification
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </OpsGuard>
   );
 }

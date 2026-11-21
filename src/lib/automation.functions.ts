@@ -12,22 +12,33 @@ async function assertAutomation(
   context: { supabase: { rpc: (fn: never, args: never) => Promise<{ data: unknown }> } },
   action: "view" | "create" | "edit" | "delete" | "approve" | "override",
 ) {
-  const { data } = await context.supabase.rpc("has_permission" as never, {
-    _module: "automation",
-    _action: action,
-  } as never);
-  if (data !== true) throw new Error("You do not have permission to perform this automation action.");
+  const { data } = await context.supabase.rpc(
+    "has_permission" as never,
+    {
+      _module: "automation",
+      _action: action,
+    } as never,
+  );
+  if (data !== true)
+    throw new Error("You do not have permission to perform this automation action.");
 }
 
 async function tenant(context: { supabase: { from: (t: never) => never }; userId: string }) {
   const client = context.supabase as unknown as {
     from: (t: string) => {
       select: (c: string) => {
-        eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: { organization_id: string } | null }> };
+        eq: (
+          c: string,
+          v: string,
+        ) => { maybeSingle: () => Promise<{ data: { organization_id: string } | null }> };
       };
     };
   };
-  const { data } = await client.from("profiles").select("organization_id").eq("id", context.userId).maybeSingle();
+  const { data } = await client
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", context.userId)
+    .maybeSingle();
   if (!data?.organization_id) throw new Error("No organisation is linked to this account.");
   return data.organization_id;
 }
@@ -41,9 +52,12 @@ export const sendProcurementDeliveryReminders = createServerFn({ method: "POST" 
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: allowed } = await (
-      context as unknown as { supabase: { rpc: (fn: string, args: unknown) => Promise<{ data: unknown }> } }
+      context as unknown as {
+        supabase: { rpc: (fn: string, args: unknown) => Promise<{ data: unknown }> };
+      }
     ).supabase.rpc("has_permission", { _module: "procurement", _action: "edit" });
-    if (allowed !== true) throw new Error("You do not have permission to send procurement reminders.");
+    if (allowed !== true)
+      throw new Error("You do not have permission to send procurement reminders.");
 
     const org = await tenant(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -69,7 +83,13 @@ export const runAutomationEngine = createServerFn({ method: "POST" })
     const queue = await engine.processCommunicationQueue(supabaseAdmin, org);
     const escalations = await engine.processEscalations(supabaseAdmin, org);
 
-    return { ...report, scheduledProcessed: scheduled, procurementReminders, queue, escalationsRaised: escalations };
+    return {
+      ...report,
+      scheduledProcessed: scheduled,
+      procurementReminders,
+      queue,
+      escalationsRaised: escalations,
+    };
   });
 
 /** Read-only status; managers must see that a queued message is not sent. */
@@ -79,8 +99,10 @@ export const getOutboundReleaseStatus = createServerFn({ method: "GET" })
     await assertAutomation(context as never, "view");
     const cutoff = process.env["NEO_OUTBOUND_CUTOFF"] ?? "";
     return {
-      enabled: process.env["NEO_OUTBOUND_ENABLED"] === "true" &&
-        Boolean(cutoff) && Number.isFinite(Date.parse(cutoff)),
+      enabled:
+        process.env["NEO_OUTBOUND_ENABLED"] === "true" &&
+        Boolean(cutoff) &&
+        Number.isFinite(Date.parse(cutoff)),
       cutoff: Number.isFinite(Date.parse(cutoff)) ? cutoff : null,
     };
   });
@@ -115,7 +137,10 @@ export const retryWorkflowFailure = createServerFn({ method: "POST" })
     if (!failure) throw new Error("Failure record not found.");
 
     if (failure.event_id) {
-      await supabaseAdmin.from("domain_events").update({ status: "retrying" }).eq("id", failure.event_id);
+      await supabaseAdmin
+        .from("domain_events")
+        .update({ status: "retrying" })
+        .eq("id", failure.event_id);
     }
     await supabaseAdmin
       .from("workflow_failures")
@@ -139,16 +164,25 @@ export const refreshProviderStatus = createServerFn({ method: "POST" })
 
     const catalogue = [
       { provider: "resend", display_name: "Resend", channel: "email", secrets: ["RESEND_API_KEY"] },
-      { provider: "whatsapp", display_name: "WhatsApp Business API", channel: "whatsapp", secrets: ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID"] },
-      { provider: "africastalking", display_name: "Africa's Talking", channel: "sms", secrets: ["AT_API_KEY", "AT_USERNAME"] },
+      {
+        provider: "whatsapp",
+        display_name: "WhatsApp Business API",
+        channel: "whatsapp",
+        secrets: ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID"],
+      },
+      {
+        provider: "africastalking",
+        display_name: "Africa's Talking",
+        channel: "sms",
+        secrets: ["AT_API_KEY", "AT_USERNAME"],
+      },
       { provider: "openai", display_name: "OpenAI", channel: "ai", secrets: ["OPENAI_API_KEY"] },
     ];
 
     // A workspace that has connected its own account is connected even when no
     // platform-wide key exists: its own credentials are what will be used.
-    const { loadProviderSecrets, providerHasCredentials, CREDENTIAL_FIELDS } = await import(
-      "@/lib/provider-credentials.server"
-    );
+    const { loadProviderSecrets, providerHasCredentials, CREDENTIAL_FIELDS } =
+      await import("@/lib/provider-credentials.server");
     const stored = await loadProviderSecrets(supabaseAdmin, org);
 
     const results: { provider: string; status: string; missing: string[]; source: string }[] = [];
@@ -158,28 +192,35 @@ export const refreshProviderStatus = createServerFn({ method: "POST" })
       const partial = fields.length
         ? fields.some((field) => (stored[item.provider] ?? {})[field])
         : item.secrets.some((name) => process.env[name]);
-      const status = check.ready ? "connected" : partial ? "configuration_incomplete" : "not_configured";
-      results.push({ provider: item.provider, status, missing: check.missing, source: check.source });
-      await supabaseAdmin
-        .from("provider_connections")
-        .upsert(
-          {
-            organization_id: org,
-            provider: item.provider,
-            display_name: item.display_name,
-            channel: item.channel,
-            status,
-            secret_names: item.secrets as never,
-            last_checked_at: new Date().toISOString(),
-            last_error: check.ready
-              ? null
-              : check.missing.length
-                ? `Still needed: ${check.missing.join(", ")}`
-                : "No account details have been saved for this provider yet.",
-            enabled: check.ready,
-          },
-          { onConflict: "organization_id,provider" },
-        );
+      const status = check.ready
+        ? "connected"
+        : partial
+          ? "configuration_incomplete"
+          : "not_configured";
+      results.push({
+        provider: item.provider,
+        status,
+        missing: check.missing,
+        source: check.source,
+      });
+      await supabaseAdmin.from("provider_connections").upsert(
+        {
+          organization_id: org,
+          provider: item.provider,
+          display_name: item.display_name,
+          channel: item.channel,
+          status,
+          secret_names: item.secrets as never,
+          last_checked_at: new Date().toISOString(),
+          last_error: check.ready
+            ? null
+            : check.missing.length
+              ? `Still needed: ${check.missing.join(", ")}`
+              : "No account details have been saved for this provider yet.",
+          enabled: check.ready,
+        },
+        { onConflict: "organization_id,provider" },
+      );
     }
     return results;
   });
@@ -195,9 +236,8 @@ export const getProviderCredentialSummary = createServerFn({ method: "POST" })
     await assertAutomation(context as never, "view");
     const org = await tenant(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { loadProviderSecrets, maskCredential, CREDENTIAL_FIELDS } = await import(
-      "@/lib/provider-credentials.server"
-    );
+    const { loadProviderSecrets, maskCredential, CREDENTIAL_FIELDS } =
+      await import("@/lib/provider-credentials.server");
     const stored = await loadProviderSecrets(supabaseAdmin, org);
 
     const summary: Record<string, Record<string, string | null>> = {};
@@ -222,7 +262,8 @@ export const saveProviderCredentials = createServerFn({ method: "POST" })
     await assertAutomation(context as never, "edit");
     const org = await tenant(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { loadProviderSecrets, CREDENTIAL_FIELDS } = await import("@/lib/provider-credentials.server");
+    const { loadProviderSecrets, CREDENTIAL_FIELDS } =
+      await import("@/lib/provider-credentials.server");
 
     const fields = CREDENTIAL_FIELDS[data.provider];
     if (!fields) throw new Error("That provider cannot be connected from this screen.");
@@ -337,16 +378,36 @@ export const generateAiBrief = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await assertAutomation(context as never, "view");
     const org = await tenant(context as never);
-    const apiKey = process.env["OPENAI_API_KEY"];
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const [events, failures, queue, escalations] = await Promise.all([
-      supabaseAdmin.from("domain_events").select("event_type, status").eq("organization_id", org).gte("occurred_at", since),
-      supabaseAdmin.from("workflow_failures").select("error_category").eq("organization_id", org).eq("status", "new"),
-      supabaseAdmin.from("communication_queue").select("status, channel").eq("organization_id", org).gte("created_at", since),
-      supabaseAdmin.from("escalation_events").select("subject_type").eq("organization_id", org).gte("created_at", since),
+      supabaseAdmin
+        .from("domain_events")
+        .select("event_type, status")
+        .eq("organization_id", org)
+        .gte("occurred_at", since),
+      supabaseAdmin
+        .from("workflow_failures")
+        .select("error_category")
+        .eq("organization_id", org)
+        .eq("status", "new"),
+      supabaseAdmin
+        .from("communication_queue")
+        .select("status, channel")
+        .eq("organization_id", org)
+        .gte("created_at", since),
+      supabaseAdmin
+        .from("escalation_events")
+        .select("subject_type")
+        .eq("organization_id", org)
+        .gte("created_at", since),
     ]);
+
+    if ([events, failures, queue, escalations].some((result) => result.error)) {
+      throw new Error("The automation figures could not be loaded. No summary was generated.");
+    }
 
     const facts = {
       period: { from: since, to: new Date().toISOString() },
@@ -358,58 +419,30 @@ export const generateAiBrief = createServerFn({ method: "POST" })
       escalations: (escalations.data ?? []).length,
     };
 
-    if (!apiKey) {
-      return {
-        configured: false as const,
-        reason: "An AI provider key has not been added to the backend, so no summary can be produced.",
-        facts,
-        summary: null,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an operations assistant for a hotel group. Summarise ONLY the supplied figures. Never invent events, guests or amounts. If a figure is zero, say there is insufficient data for that area.",
-          },
-          { role: "user", content: JSON.stringify(facts) },
+    const { generateNarrative } = await import("@/lib/ai-assistant.server");
+    const narrative = await generateNarrative(
+      {
+        question: "Summarise the recorded automation activity.",
+        intentId: "automation_brief",
+        period: facts.period,
+        metrics: [
+          { label: "Recorded events", value: String(facts.events) },
+          { label: "Failed events", value: String(facts.failedEvents) },
+          { label: "Open failures", value: String(facts.openFailures) },
+          { label: "Queued messages", value: String(facts.messagesQueued) },
+          { label: "Suppressed messages", value: String(facts.messagesSuppressed) },
+          { label: "Escalations", value: String(facts.escalations) },
         ],
-      }),
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      let message = `The AI provider rejected the request (HTTP ${response.status}).`;
-      try {
-        const parsed = JSON.parse(detail) as { error?: { message?: string; code?: string } };
-        if (parsed.error?.code === "credit_balance_exhausted" || parsed.error?.message?.includes("credits")) {
-          message = "The AI provider account has no credits remaining, so no summary can be produced. Add credits and try again.";
-        } else if (parsed.error?.message) {
-          message = parsed.error.message;
-        }
-      } catch {
-        /* non-JSON provider error: keep the status-based message */
-      }
-      return {
-        configured: false as const,
-        reason: message,
-        facts,
-        summary: null,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-    const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+      },
+      org,
+    );
     return {
-      configured: true as const,
-      reason: null,
+      configured: narrative.status === "ok",
+      reason:
+        narrative.status === "ok" ? null : (narrative.detail ?? "The summary is unavailable."),
       facts,
-      summary: json.choices?.[0]?.message?.content ?? "",
+      summary: narrative.text,
+      provider: narrative.provider,
       generatedAt: new Date().toISOString(),
     };
   });

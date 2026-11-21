@@ -1,0 +1,22 @@
+{
+  "recordedOn": "2026-11-07",
+  "diagnostic_version": "catering-recovery-postcheck-v1",
+  "recovery_verified": true,
+  "checks": {
+    "canonical_posted": true,
+    "expected_entries": true,
+    "one_posted_journal": true,
+    "order_preserved": true,
+    "original_payment_only": true,
+    "receipt_posted": true
+  },
+  "journalId": "242e406e-c446-4e5a-89fe-918d6203a1a0",
+  "journalNumber": "JV-SCN-2026-000380",
+  "accountingDate": "2026-11-02",
+  "debit": 4635,
+  "credit": 4635,
+  "receiptAttempts": 2,
+  "lastError": null,
+  "evidenceSource": "User supplied operational SQL 73 JSON; live receipt previously observed posted",
+  "remainingScope": "Service completion, wider reconciliation and original full UAT workflows remain separate"
+}

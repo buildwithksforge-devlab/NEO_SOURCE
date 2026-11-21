@@ -24,7 +24,7 @@ export type QueryErrorReport = {
 };
 
 /** PostgREST codes that mean "the select references something that isn't there". */
-const SCHEMA_CODES = new Set(["42703", "42P01", "PGRST204", "PGRST200", "PGRST100"]);
+const SCHEMA_CODES = new Set(["42703", "42P01", "PGRST204", "PGRST200", "PGRST100", "PGRST202", "PGRST203", "42883"]);
 
 export function isSchemaMismatch(error: QueryErrorLike): boolean {
   if (!error) return false;

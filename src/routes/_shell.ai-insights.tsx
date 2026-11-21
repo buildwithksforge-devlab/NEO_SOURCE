@@ -259,7 +259,8 @@ function IntelligencePage() {
   );
 
   const propertyLabel =
-    branchScope.activeBranch?.name ?? (globalBranchId ? "Selected property" : "All permitted properties");
+    branchScope.activeBranch?.name ??
+    (globalBranchId ? "Selected property" : "All permitted properties");
 
   const answerScope = scopeOf(data, propertyLabel);
   // Role-specific intelligence: the engine is identical for everyone, the
@@ -305,7 +306,15 @@ function IntelligencePage() {
   async function ask(question: string) {
     const id = `${Date.now()}-${turns.length}`;
     setTurns((prev) => [
-      { id, question, answer: null, narrative: null, narrativeStatus: null, pending: true, error: null },
+      {
+        id,
+        question,
+        answer: null,
+        narrative: null,
+        narrativeStatus: null,
+        pending: true,
+        error: null,
+      },
       ...prev,
     ]);
     setAsking(true);
@@ -336,13 +345,14 @@ function IntelligencePage() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "NEØ could not answer that request.";
-      setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, pending: false, error: message } : t)));
+      setTurns((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, pending: false, error: message } : t)),
+      );
       toast.error(message);
     } finally {
       setAsking(false);
     }
   }
-
 
   // Not everyone holds executive intelligence rights. Those people still get
   // NEØ — reduced to their own work, built entirely from permitted records.
@@ -359,7 +369,7 @@ function IntelligencePage() {
             reason={data.reason === "no_organisation" ? "setup" : "denied"}
             subject="NEØ Intelligence"
           />
-        ) : myWork.isLoading ? (
+        ) : myWork.isPending ? (
           <LoadingState variant="cards" rows={3} />
         ) : myWork.error ? (
           <ErrorState error={myWork.error} title="My work unavailable" />
@@ -374,7 +384,6 @@ function IntelligencePage() {
       </div>
     );
   }
-
 
   const num = (k: string) =>
     brief[k] === null || brief[k] === undefined ? null : Number(brief[k]);
@@ -428,7 +437,6 @@ function IntelligencePage() {
             : ""
         }
       />
-
 
       {intel.isLoading ? (
         <LoadingState variant="cards" rows={4} />
@@ -494,14 +502,19 @@ function IntelligencePage() {
           />
 
           {investigation ? (
-            <InvestigationPane investigation={investigation} onClose={() => setInvestigating(null)} />
+            <InvestigationPane
+              investigation={investigation}
+              onClose={() => setInvestigating(null)}
+            />
           ) : null}
 
           {mode === "my-work" ? (
-            myWork.isLoading ? (
+            myWork.isPending ? (
               <LoadingState variant="cards" rows={3} />
             ) : myWork.error ? (
               <ErrorState error={myWork.error} title="My work unavailable" />
+            ) : myWork.data?.authorised !== true ? (
+              <AccessDeniedPanel reason="denied" subject="My work" />
             ) : (
               <MyWorkBoard
                 items={myWork.data?.items ?? []}
@@ -513,7 +526,6 @@ function IntelligencePage() {
           ) : null}
 
           {mode === "today" && isMobile ? (
-
             <div className="space-y-4" data-testid="intelligence-mobile">
               <p className="text-xs text-muted-foreground">{lens.note}</p>
               {discoveries.length === 0 ? (
@@ -538,9 +550,21 @@ function IntelligencePage() {
                 <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Ask NEØ
                 </p>
-                <AskComposer onAsk={(q) => { setMode("ask"); void ask(q); }} busy={asking} compact />
+                <AskComposer
+                  onAsk={(q) => {
+                    setMode("ask");
+                    void ask(q);
+                  }}
+                  busy={asking}
+                  compact
+                />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <VoiceAskButton onResult={(q) => { setMode("ask"); void ask(q); }} />
+                  <VoiceAskButton
+                    onResult={(q) => {
+                      setMode("ask");
+                      void ask(q);
+                    }}
+                  />
                   <GraphFullscreen
                     viz={
                       history.length > 1
@@ -601,15 +625,31 @@ function IntelligencePage() {
                   />
                 )}
 
-                <SupportingFindings discoveries={supportingDiscoveries} onInvestigate={setInvestigating} />
+                <SupportingFindings
+                  discoveries={supportingDiscoveries}
+                  onInvestigate={setInvestigating}
+                />
 
                 <div className="neo-ask-bar rounded-2xl border border-outline-subtle p-3">
                   <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     Ask NEØ
                   </p>
-                  <AskComposer onAsk={(q) => { setMode("ask"); void ask(q); }} busy={asking} compact />
+                  <AskComposer
+                    onAsk={(q) => {
+                      setMode("ask");
+                      void ask(q);
+                    }}
+                    busy={asking}
+                    compact
+                  />
                   <div className="mt-3">
-                    <SuggestedQuestions onAsk={(q) => { setMode("ask"); void ask(q); }} busy={asking} />
+                    <SuggestedQuestions
+                      onAsk={(q) => {
+                        setMode("ask");
+                        void ask(q);
+                      }}
+                      busy={asking}
+                    />
                   </div>
                 </div>
 
@@ -617,13 +657,21 @@ function IntelligencePage() {
                   <WhatsGoingWell positives={positives} />
                 </RoutineDisclosure>
 
-                <RoutineDisclosure label="What changed against the previous period" count={changes.filter((c) => c.material).length}>
+                <RoutineDisclosure
+                  label="What changed against the previous period"
+                  count={changes.filter((c) => c.material).length}
+                >
                   <WhatChanged changes={changes} loading={priorIntel.isLoading} />
                 </RoutineDisclosure>
 
-                <RoutineDisclosure label="Everything else NEØ noticed" count={routineDiscoveries.length}>
+                <RoutineDisclosure
+                  label="Everything else NEØ noticed"
+                  count={routineDiscoveries.length}
+                >
                   {routineDiscoveries.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nothing further was detected in this scope.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Nothing further was detected in this scope.
+                    </p>
                   ) : (
                     <ul className="grid gap-3 xl:grid-cols-2">
                       {routineDiscoveries.map((d) => (
@@ -713,7 +761,13 @@ function IntelligencePage() {
                   num("net_recognised_revenue") !== null && num("sellable_rooms")
                     ? Math.round(
                         (num("net_recognised_revenue") as number) /
-                          Math.max(1, Math.round(((num("sellable_rooms") as number) * (num("occupancy_rate") ?? 0)) / 100)),
+                          Math.max(
+                            1,
+                            Math.round(
+                              ((num("sellable_rooms") as number) * (num("occupancy_rate") ?? 0)) /
+                                100,
+                            ),
+                          ),
                       )
                     : null
                 }
@@ -726,535 +780,580 @@ function IntelligencePage() {
 
           {mode === "explore" && (
             <>
-          <IntelligenceRail active={activeSection} />
+              <IntelligenceRail active={activeSection} />
 
-          {/* ---------- 01 Executive Pulse ---------- */}
-          <IntelligenceSection
-            id="executive-pulse"
-            index={1}
-            title="Executive Pulse"
-            description={`Today's operating position for ${data?.period?.from ?? "—"} → ${data?.period?.to ?? "—"}.`}
-          >
-            <SectionCard title="Front office & operations" description="Rooms, arrivals and work in hand.">
-              <MetricGrid>
-                <MetricTile
-                  label="Occupancy"
-                  value={percent(num("occupancy_rate"))}
-                  hint={`${count(num("sellable_rooms"))} sellable rooms`}
-                />
-                <MetricTile
-                  label="Arrivals today"
-                  value={count(num("arrivals_today"))}
-                  hint={`${count(num("departures_today"))} departures`}
-                />
-                <MetricTile
-                  label="Rooms unavailable"
-                  value={count(num("unavailable_rooms"))}
-                  hint="Blocked, out of order or not sellable"
-                />
-                <MetricTile
-                  label="Overdue tasks"
-                  value={count(num("overdue_tasks"))}
-                  hint={`${count(num("pending_approvals"))} approvals waiting`}
-                />
-              </MetricGrid>
-            </SectionCard>
-
-            <SectionCard
-              title={narrative?.status === "ok" ? "AI narrative (interpretation)" : "System advisories"}
-              description={
-                narrative?.status === "ok"
-                  ? `Written by ${narrative.model ?? "the configured model"} from the figures above only.`
-                  : "Deterministic summary of the figures above. No model was used."
-              }
-              actions={
-                <Button size="sm" variant="outline" onClick={handleNarrative} disabled={generating}>
-                  <Sparkles className="size-4" /> {generating ? "Writing…" : "Generate narrative"}
-                </Button>
-              }
-            >
-              {narrative?.status === "ok" && narrative.text ? (
-                <p className="whitespace-pre-line text-sm">{narrative.text}</p>
-              ) : (
-                <ul className="divide-y divide-outline-subtle">
-                  {(data?.departments ?? []).map((d) => (
-                    <li
-                      key={d.department}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{d.department}</p>
-                        <p className="text-sm leading-snug text-muted-foreground">{d.headline}</p>
-                      </div>
-                      <Button asChild size="sm" variant="ghost" className="shrink-0">
-                        <Link to={d.drill_to}>Open</Link>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {narrative && narrative.status !== "ok" ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {narrative.status === "not_configured"
-                    ? "No AI provider is configured for this workspace, so NEØ shows the deterministic advisories instead of generated text."
-                    : (narrative.detail ??
-                      "AI temporarily unavailable — deterministic advisories shown.")}
-                </p>
-              ) : null}
-            </SectionCard>
-
-            <IntelligenceTrace narrative={narrative} />
-          </IntelligenceSection>
-
-          {/* ---------- 02 Revenue & Demand ---------- */}
-          <IntelligenceSection
-            id="revenue-demand"
-            index={2}
-            title="Revenue & Demand"
-            description="Recognised, collected and committed value against forward demand."
-          >
-            <SectionCard title="Financial position" description="Same period, same property scope.">
-              <MetricGrid>
-                {moneyVisible ? (
-                  <>
-                    <MetricTile
-                      label="Recognised revenue"
-                      value={money(num("net_recognised_revenue"), currency)}
-                      hint="Posted, net of reversals"
-                    />
-                    <MetricTile
-                      label="Finalised POS sales"
-                      value={money(num("pos_finalised_sales"), currency)}
-                      hint="Settled orders only"
-                    />
-                    <MetricTile
-                      label="Open POS value"
-                      value={money(num("pos_open_value"), currency)}
-                      hint="Operational value — not revenue"
-                    />
-                    <MetricTile
-                      label="Collected"
-                      value={money(num("collected"), currency)}
-                      hint={`Receivables ${money(num("receivables"), currency)}`}
-                    />
-                    <MetricTile
-                      label="Confirmed event forecast"
-                      value={money(num("event_confirmed_forecast"), currency)}
-                      hint="Forecast — not recognised"
-                    />
-                    <MetricTile
-                      label="Provisional event forecast"
-                      value={money(num("event_provisional_forecast"), currency)}
-                      hint="Pipeline only"
-                    />
-                  </>
-                ) : (
-                  <InsetPanel className="col-span-full text-sm text-muted-foreground">
-                    Financial values are hidden because your roles do not include finance, analytics
-                    or reporting access.
-                  </InsetPanel>
-                )}
-              </MetricGrid>
-            </SectionCard>
-
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                <MetricTile
-                  label="Average occupancy"
-                  value={percent(data?.demand?.average_occupancy ?? null)}
-                  hint={`${count(data?.demand?.sample_days)} day(s) with recorded occupancy`}
-                  icon={Gauge}
-                  tone={data?.demand?.sufficient ? "success" : "warning"}
-                />
-                <MetricTile
-                  label="Forecast confidence"
-                  dense
-                  value={
-                    data?.demand?.confidence === "high"
-                      ? "High"
-                      : data?.demand?.confidence === "moderate"
-                        ? "Moderate"
-                        : "Insufficient history"
-                  }
-                  hint={data?.demand?.method ?? ""}
-                />
-              </div>
-
-              <ChartCard
-                title="Demand & occupancy"
-                subtitle="Occupancy % by day · selected period"
-                series={[{ label: "Occupancy %", color: chartSeriesColor(0), kind: "area" }]}
-                source="neo_intelligence · ops_room_state"
-                empty={history.length === 0}
-                emptyTitle="No occupancy history in this period"
-                emptyDescription="Occupancy is only charted from recorded room states — nothing is interpolated."
+              {/* ---------- 01 Executive Pulse ---------- */}
+              <IntelligenceSection
+                id="executive-pulse"
+                index={1}
+                title="Executive Pulse"
+                description={`Today's operating position for ${data?.period?.from ?? "—"} → ${data?.period?.to ?? "—"}.`}
               >
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history} margin={{ left: -18, right: 8, top: 6 }}>
-                    <ChartGradients idPrefix="neoi" />
-                    <CartesianGrid {...GRID_PROPS} />
-                    <XAxis dataKey="day" {...AXIS_PROPS} minTickGap={16} />
-                    <YAxis {...AXIS_PROPS} unit="%" width={38} domain={[0, 100]} />
-                    <Tooltip
-                      {...TOOLTIP_PROPS}
-                      formatter={(v: number | string) => [`${v}%`, "Occupancy"]}
+                <SectionCard
+                  title="Front office & operations"
+                  description="Rooms, arrivals and work in hand."
+                >
+                  <MetricGrid>
+                    <MetricTile
+                      label="Occupancy"
+                      value={percent(num("occupancy_rate"))}
+                      hint={`${count(num("sellable_rooms"))} sellable rooms`}
                     />
-                    <Area
-                      {...LINE_PROPS}
-                      dataKey="occupancy"
-                      name="Occupancy"
-                      stroke={chartSeriesColor(0)}
-                      fill={chartFill(0, "neoi")}
+                    <MetricTile
+                      label="Arrivals today"
+                      value={count(num("arrivals_today"))}
+                      hint={`${count(num("departures_today"))} departures`}
                     />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
+                    <MetricTile
+                      label="Rooms unavailable"
+                      value={count(num("unavailable_rooms"))}
+                      hint="Blocked, out of order or not sellable"
+                    />
+                    <MetricTile
+                      label="Overdue tasks"
+                      value={count(num("overdue_tasks"))}
+                      hint={`${count(num("pending_approvals"))} approvals waiting`}
+                    />
+                  </MetricGrid>
+                </SectionCard>
 
-            <SectionCard
-              title="Next 14 days on the books"
-              description="Forward reservations against sellable rooms, by arrival date."
-            >
-              {forward.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No forward reservations recorded.</p>
-              ) : (
-                <TableScroll>
-                  <table className="w-full min-w-[34rem] text-sm">
-                    <thead>
-                      <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
-                        <th className="neo-sticky-col py-2 pr-3">Date</th>
-                        <th className="py-2">On the books</th>
-                        <th className="py-2">Sellable</th>
-                        <th className="py-2">Pace</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {forward.map((r) => (
-                        <tr key={r.day} className="border-b border-border/60">
-                          <td className="neo-sticky-col py-2 pr-3">{r.day}</td>
-                          <td className="py-2 tabular-nums">{r.onBooks}</td>
-                          <td className="py-2 tabular-nums">{r.sellable}</td>
-                          <td className="py-2 tabular-nums">
-                            {r.sellable > 0
-                              ? `${((r.onBooks * 100) / r.sellable).toFixed(0)}%`
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableScroll>
-              )}
-            </SectionCard>
-          </IntelligenceSection>
-
-          {/* ---------- 03 Guest Experience ---------- */}
-          <IntelligenceSection
-            id="guest-experience"
-            index={3}
-            title="Guest Experience"
-            description="Rated feedback received in this period, by theme."
-          >
-            <SectionCard title="Guest sentiment" description={data?.sentiment?.note ?? ""}>
-              <MetricGrid className="mb-3">
-                <MetricTile label="Responses" value={count(data?.sentiment?.responses)} />
-                <MetricTile
-                  label="Average rating"
-                  value={
-                    data?.sentiment?.average_rating != null
-                      ? data.sentiment.average_rating.toFixed(2)
-                      : "—"
+                <SectionCard
+                  title={
+                    narrative?.trace?.provider === "local"
+                      ? "Local metric summary"
+                      : narrative?.status === "ok"
+                        ? "AI narrative (interpretation)"
+                        : "System advisories"
                   }
-                />
-                <MetricTile
-                  label="Ratings of 2 or below"
-                  value={count(data?.sentiment?.detractors)}
-                />
-              </MetricGrid>
-              {(data?.sentiment?.themes ?? []).length === 0 ? (
-                <AwaitingData
-                  title="No rated feedback in this period"
-                  detail="Sentiment is only reported from feedback records actually received — nothing is inferred."
-                />
-              ) : (
-                <ul className="divide-y divide-border text-sm">
-                  {(data?.sentiment?.themes ?? []).map((t) => (
-                    <li
-                      key={t.category}
-                      className="flex flex-wrap items-center justify-between gap-2 py-2"
+                  description={
+                    narrative?.trace?.provider === "local"
+                      ? "Built locally from authorised figures. No external AI request was made."
+                      : narrative?.status === "ok"
+                        ? `Written by ${narrative.model ?? "the configured model"} from the figures above only.`
+                        : "Deterministic summary of the figures above. No model was used."
+                  }
+                  actions={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleNarrative}
+                      disabled={generating}
                     >
-                      <span className="min-w-0">{t.category}</span>
-                      <span className="numeric text-muted-foreground">
-                        {t.responses} response(s) · avg {t.average_rating}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-          </IntelligenceSection>
-
-          {/* ---------- 04 Operational Risk ---------- */}
-          <IntelligenceSection
-            id="operational-risk"
-            index={4}
-            title="Operational Risk"
-            description="Patterns worth reviewing, each with the records behind it. Observations, never accusations."
-            aside={
-              <StatusPill tone={criticalCount > 0 ? "destructive" : "info"}>
-                {count(anomalies.length)} open signal(s)
-              </StatusPill>
-            }
-          >
-            <SectionCard title="Control exceptions" description="Unposted, failed and blocked work.">
-              <MetricGrid>
-                <MetricTile
-                  label="Unposted eligible records"
-                  value={count(num("unmatched_eligible"))}
-                  hint="Awaiting Finance posting"
-                />
-                <MetricTile
-                  label="Failed postings"
-                  value={count(num("failed_postings"))}
-                  hint="Require an authorised recovery action"
-                />
-                <MetricTile
-                  label="Failed workflows"
-                  value={count(num("failed_workflows"))}
-                  hint="Unresolved automation failures"
-                />
-                <MetricTile
-                  label="Approvals waiting"
-                  value={count(num("pending_approvals"))}
-                  hint="Pending or executing"
-                />
-              </MetricGrid>
-            </SectionCard>
-
-            <SectionCard
-              title="Anomaly monitoring"
-              description="Each signal links to the operational records that produced it."
-            >
-              {anomalies.length === 0 ? (
-                <AwaitingData
-                  title="No anomalies detected"
-                  detail="Nothing in this property and period met an anomaly rule."
-                />
-              ) : (
-                <ul className="grid gap-3 lg:grid-cols-2">
-                  {anomalies.map((a) => (
-                    <li
-                      key={a.key}
-                      data-severity={a.severity}
-                      className={
-                        "surface-quiet neo-card-pad flex min-w-0 flex-col gap-2 border-l-[3px] " +
-                        (a.severity === "critical"
-                          ? "border-l-destructive"
-                          : a.severity === "warning"
-                            ? "border-l-warning"
-                            : "border-l-primary/50")
-                      }
-                    >
-                      <div className="flex min-w-0 items-start gap-2">
-                        {a.severity === "warning" || a.severity === "critical" ? (
-                          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-                        ) : (
-                          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">{a.title}</p>
-                          <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
-                            {a.detail}
-                          </p>
-                          <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                            {a.evidence}
-                          </p>
-                        </div>
-                      </div>
-                      <div
-                        data-action-cluster
-                        className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1"
-                      >
-                        <StatusPill tone={severityTone(a.severity)}>{a.severity}</StatusPill>
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={a.drill_to}>Review records</Link>
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-          </IntelligenceSection>
-
-          {/* ---------- 05 Cost & Inventory ---------- */}
-          <IntelligenceSection
-            id="cost-inventory"
-            index={5}
-            title="Cost & Inventory"
-            description="Recipe costing coverage and menu margin, plus supplier obligations."
-          >
-            {moneyVisible ? (
-              <SectionCard title="Supplier obligations" description="Approved commitments in scope.">
-                <MetricGrid>
-                  <MetricTile
-                    label="Payables"
-                    value={money(num("payables"), currency)}
-                    hint="Approved supplier obligations"
-                  />
-                </MetricGrid>
-              </SectionCard>
-            ) : null}
-
-            <SectionCard title="Menu & recipe profitability" description={data?.menu?.note ?? ""}>
-              <MetricGrid className="mb-3">
-                <MetricTile label="Menu items" value={count(data?.menu?.items_total)} />
-                <MetricTile label="With costed recipe" value={count(data?.menu?.items_costed)} />
-                <MetricTile
-                  label="Cost coverage"
-                  value={percent(data?.menu?.coverage_percent ?? null)}
-                />
-              </MetricGrid>
-              {(data?.menu?.items ?? []).length === 0 ? (
-                <AwaitingData
-                  title="No costed menu item yet"
-                  detail="A margin is only reported when a menu item has both a price and a costed recipe."
-                />
-              ) : (
-                <TableScroll>
-                  <table className="w-full min-w-[34rem] text-sm">
-                    <thead>
-                      <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
-                        <th className="py-2">Item</th>
-                        <th className="py-2">Price</th>
-                        <th className="py-2">Portion cost</th>
-                        <th className="py-2">Margin</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data?.menu?.items ?? []).map((m) => (
-                        <tr key={m.item} className="border-b border-border/60">
-                          <td className="py-2">{m.item}</td>
-                          <td className="py-2 tabular-nums">{money(m.price, currency)}</td>
-                          <td className="py-2 tabular-nums">{money(m.cost, currency)}</td>
-                          <td className="py-2 tabular-nums">{percent(m.margin_percent ?? null)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableScroll>
-              )}
-            </SectionCard>
-          </IntelligenceSection>
-
-          {/* ---------- 06 Workforce ---------- */}
-          <IntelligenceSection
-            id="workforce"
-            index={6}
-            title="Workforce"
-            description="Work in hand and readiness signals available from operational records."
-          >
-            <SectionCard title="Work readiness" description="Derived from tasks and approvals in scope.">
-              <MetricGrid>
-                <MetricTile
-                  label="Overdue tasks"
-                  value={count(num("overdue_tasks"))}
-                  hint="Past due and not completed"
-                />
-                <MetricTile
-                  label="Approvals waiting"
-                  value={count(num("pending_approvals"))}
-                  hint="Blocking downstream work"
-                />
-              </MetricGrid>
-              <AwaitingData
-                title="Rostered coverage not yet reported"
-                detail="Shift, attendance and station coverage figures will appear here once scheduling records exist for this property and period. NEØ does not estimate workforce coverage."
-              />
-            </SectionCard>
-          </IntelligenceSection>
-
-          {/* ---------- 07 Recommendations ---------- */}
-          <IntelligenceSection
-            id="recommendations"
-            index={7}
-            title="Recommendations"
-            description="Advisory only. NEØ never changes or publishes a rate, and never acts on your behalf."
-          >
-            <SectionCard
-              title="Rate suggestions (advisory only)"
-              description="Each line shows the published plan against forward demand so a human can decide."
-            >
-              {(data?.rate_suggestions ?? []).length === 0 ? (
-                <AwaitingData
-                  title="No advisory available"
-                  detail="No active room type with a published rate plan is in scope."
-                />
-              ) : (
-                <TableScroll>
-                  <table className="w-full min-w-[34rem] text-sm">
-                    <thead>
-                      <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
-                        <th className="neo-sticky-col py-2 pr-3">Room type</th>
-                        <th className="py-2">Rate plan</th>
-                        <th className="py-2">Current rate</th>
-                        <th className="py-2">Sellable rooms</th>
-                        <th className="py-2">On books (14d)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data?.rate_suggestions ?? []).map((r) => (
-                        <tr
-                          key={`${r.room_type}-${r.rate_plan ?? "none"}`}
-                          className="border-b border-border/60"
+                      <Sparkles className="size-4" />{" "}
+                      {generating ? "Writing…" : "Generate narrative"}
+                    </Button>
+                  }
+                >
+                  {narrative?.status === "ok" && narrative.text ? (
+                    <p className="whitespace-pre-line text-sm">{narrative.text}</p>
+                  ) : (
+                    <ul className="divide-y divide-outline-subtle">
+                      {(data?.departments ?? []).map((d) => (
+                        <li
+                          key={d.department}
+                          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2.5"
                         >
-                          <td className="neo-sticky-col py-2 pr-3 font-medium">{r.room_type}</td>
-                          <td className="py-2 text-muted-foreground">
-                            {r.rate_plan ?? "No active plan"}
-                          </td>
-                          <td className="py-2 tabular-nums">
-                            {moneyVisible ? money(r.current_rate, currency) : "—"}
-                          </td>
-                          <td className="py-2 tabular-nums">{r.rooms_of_type}</td>
-                          <td className="py-2 tabular-nums">{r.on_the_books_next_14}</td>
-                        </tr>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground">{d.department}</p>
+                            <p className="text-sm leading-snug text-muted-foreground">
+                              {d.headline}
+                            </p>
+                          </div>
+                          <Button asChild size="sm" variant="ghost" className="shrink-0">
+                            <Link to={d.drill_to}>Open</Link>
+                          </Button>
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
-                </TableScroll>
-              )}
-            </SectionCard>
+                    </ul>
+                  )}
 
-            <SectionCard
-              title="Departmental advisories"
-              description="Deterministic headlines with a direct route to the underlying records."
-            >
-              {(data?.departments ?? []).length === 0 ? (
-                <AwaitingData
-                  title="No departmental advisory"
-                  detail="Advisories appear once departmental records exist for this property and period."
-                />
-              ) : (
-                <ul className="divide-y divide-outline-subtle">
-                  {(data?.departments ?? []).map((d) => (
-                    <li
-                      key={`rec-${d.department}`}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{d.department}</p>
-                        <p className="text-sm leading-snug text-muted-foreground">{d.headline}</p>
-                      </div>
-                      <Button asChild size="sm" variant="outline" className="shrink-0">
-                        <Link to={d.drill_to}>Open records</Link>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-          </IntelligenceSection>
+                  {narrative && narrative.status !== "ok" ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {narrative.status === "not_configured"
+                        ? "No AI provider is configured for this workspace, so NEØ shows the deterministic advisories instead of generated text."
+                        : (narrative.detail ??
+                          "AI temporarily unavailable — deterministic advisories shown.")}
+                    </p>
+                  ) : null}
+                </SectionCard>
+
+                <IntelligenceTrace narrative={narrative} />
+              </IntelligenceSection>
+
+              {/* ---------- 02 Revenue & Demand ---------- */}
+              <IntelligenceSection
+                id="revenue-demand"
+                index={2}
+                title="Revenue & Demand"
+                description="Recognised, collected and committed value against forward demand."
+              >
+                <SectionCard
+                  title="Financial position"
+                  description="Same period, same property scope."
+                >
+                  <MetricGrid>
+                    {moneyVisible ? (
+                      <>
+                        <MetricTile
+                          label="Recognised revenue"
+                          value={money(num("net_recognised_revenue"), currency)}
+                          hint="Posted, net of reversals"
+                        />
+                        <MetricTile
+                          label="Finalised POS sales"
+                          value={money(num("pos_finalised_sales"), currency)}
+                          hint="Settled orders only"
+                        />
+                        <MetricTile
+                          label="Open POS value"
+                          value={money(num("pos_open_value"), currency)}
+                          hint="Operational value — not revenue"
+                        />
+                        <MetricTile
+                          label="Collected"
+                          value={money(num("collected"), currency)}
+                          hint={`Receivables ${money(num("receivables"), currency)}`}
+                        />
+                        <MetricTile
+                          label="Confirmed event forecast"
+                          value={money(num("event_confirmed_forecast"), currency)}
+                          hint="Forecast — not recognised"
+                        />
+                        <MetricTile
+                          label="Provisional event forecast"
+                          value={money(num("event_provisional_forecast"), currency)}
+                          hint="Pipeline only"
+                        />
+                      </>
+                    ) : (
+                      <InsetPanel className="col-span-full text-sm text-muted-foreground">
+                        Financial values are hidden because your roles do not include finance,
+                        analytics or reporting access.
+                      </InsetPanel>
+                    )}
+                  </MetricGrid>
+                </SectionCard>
+
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                    <MetricTile
+                      label="Average occupancy"
+                      value={percent(data?.demand?.average_occupancy ?? null)}
+                      hint={`${count(data?.demand?.sample_days)} day(s) with recorded occupancy`}
+                      icon={Gauge}
+                      tone={data?.demand?.sufficient ? "success" : "warning"}
+                    />
+                    <MetricTile
+                      label="Forecast confidence"
+                      dense
+                      value={
+                        data?.demand?.confidence === "high"
+                          ? "High"
+                          : data?.demand?.confidence === "moderate"
+                            ? "Moderate"
+                            : "Insufficient history"
+                      }
+                      hint={data?.demand?.method ?? ""}
+                    />
+                  </div>
+
+                  <ChartCard
+                    title="Demand & occupancy"
+                    subtitle="Occupancy % by day · selected period"
+                    series={[{ label: "Occupancy %", color: chartSeriesColor(0), kind: "area" }]}
+                    source="neo_intelligence · ops_room_state"
+                    empty={history.length === 0}
+                    emptyTitle="No occupancy history in this period"
+                    emptyDescription="Occupancy is only charted from recorded room states — nothing is interpolated."
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={history} margin={{ left: -18, right: 8, top: 6 }}>
+                        <ChartGradients idPrefix="neoi" />
+                        <CartesianGrid {...GRID_PROPS} />
+                        <XAxis dataKey="day" {...AXIS_PROPS} minTickGap={16} />
+                        <YAxis {...AXIS_PROPS} unit="%" width={38} domain={[0, 100]} />
+                        <Tooltip
+                          {...TOOLTIP_PROPS}
+                          formatter={(v: number | string) => [`${v}%`, "Occupancy"]}
+                        />
+                        <Area
+                          {...LINE_PROPS}
+                          dataKey="occupancy"
+                          name="Occupancy"
+                          stroke={chartSeriesColor(0)}
+                          fill={chartFill(0, "neoi")}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+                </div>
+
+                <SectionCard
+                  title="Next 14 days on the books"
+                  description="Forward reservations against sellable rooms, by arrival date."
+                >
+                  {forward.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No forward reservations recorded.
+                    </p>
+                  ) : (
+                    <TableScroll>
+                      <table className="w-full min-w-[34rem] text-sm">
+                        <thead>
+                          <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
+                            <th className="neo-sticky-col py-2 pr-3">Date</th>
+                            <th className="py-2">On the books</th>
+                            <th className="py-2">Sellable</th>
+                            <th className="py-2">Pace</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {forward.map((r) => (
+                            <tr key={r.day} className="border-b border-border/60">
+                              <td className="neo-sticky-col py-2 pr-3">{r.day}</td>
+                              <td className="py-2 tabular-nums">{r.onBooks}</td>
+                              <td className="py-2 tabular-nums">{r.sellable}</td>
+                              <td className="py-2 tabular-nums">
+                                {r.sellable > 0
+                                  ? `${((r.onBooks * 100) / r.sellable).toFixed(0)}%`
+                                  : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </TableScroll>
+                  )}
+                </SectionCard>
+              </IntelligenceSection>
+
+              {/* ---------- 03 Guest Experience ---------- */}
+              <IntelligenceSection
+                id="guest-experience"
+                index={3}
+                title="Guest Experience"
+                description="Rated feedback received in this period, by theme."
+              >
+                <SectionCard title="Guest sentiment" description={data?.sentiment?.note ?? ""}>
+                  <MetricGrid className="mb-3">
+                    <MetricTile label="Responses" value={count(data?.sentiment?.responses)} />
+                    <MetricTile
+                      label="Average rating"
+                      value={
+                        data?.sentiment?.average_rating != null
+                          ? data.sentiment.average_rating.toFixed(2)
+                          : "—"
+                      }
+                    />
+                    <MetricTile
+                      label="Ratings of 2 or below"
+                      value={count(data?.sentiment?.detractors)}
+                    />
+                  </MetricGrid>
+                  {(data?.sentiment?.themes ?? []).length === 0 ? (
+                    <AwaitingData
+                      title="No rated feedback in this period"
+                      detail="Sentiment is only reported from feedback records actually received — nothing is inferred."
+                    />
+                  ) : (
+                    <ul className="divide-y divide-border text-sm">
+                      {(data?.sentiment?.themes ?? []).map((t) => (
+                        <li
+                          key={t.category}
+                          className="flex flex-wrap items-center justify-between gap-2 py-2"
+                        >
+                          <span className="min-w-0">{t.category}</span>
+                          <span className="numeric text-muted-foreground">
+                            {t.responses} response(s) · avg {t.average_rating}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SectionCard>
+              </IntelligenceSection>
+
+              {/* ---------- 04 Operational Risk ---------- */}
+              <IntelligenceSection
+                id="operational-risk"
+                index={4}
+                title="Operational Risk"
+                description="Patterns worth reviewing, each with the records behind it. Observations, never accusations."
+                aside={
+                  <StatusPill tone={criticalCount > 0 ? "destructive" : "info"}>
+                    {count(anomalies.length)} open signal(s)
+                  </StatusPill>
+                }
+              >
+                <SectionCard
+                  title="Control exceptions"
+                  description="Unposted, failed and blocked work."
+                >
+                  <MetricGrid>
+                    <MetricTile
+                      label="Unposted eligible records"
+                      value={count(num("unmatched_eligible"))}
+                      hint="Awaiting Finance posting"
+                    />
+                    <MetricTile
+                      label="Failed postings"
+                      value={count(num("failed_postings"))}
+                      hint="Require an authorised recovery action"
+                    />
+                    <MetricTile
+                      label="Failed workflows"
+                      value={count(num("failed_workflows"))}
+                      hint="Unresolved automation failures"
+                    />
+                    <MetricTile
+                      label="Approvals waiting"
+                      value={count(num("pending_approvals"))}
+                      hint="Pending or executing"
+                    />
+                  </MetricGrid>
+                </SectionCard>
+
+                <SectionCard
+                  title="Anomaly monitoring"
+                  description="Each signal links to the operational records that produced it."
+                >
+                  {anomalies.length === 0 ? (
+                    <AwaitingData
+                      title="No anomalies detected"
+                      detail="Nothing in this property and period met an anomaly rule."
+                    />
+                  ) : (
+                    <ul className="grid gap-3 lg:grid-cols-2">
+                      {anomalies.map((a) => (
+                        <li
+                          key={a.key}
+                          data-severity={a.severity}
+                          className={
+                            "surface-quiet neo-card-pad flex min-w-0 flex-col gap-2 border-l-[3px] " +
+                            (a.severity === "critical"
+                              ? "border-l-destructive"
+                              : a.severity === "warning"
+                                ? "border-l-warning"
+                                : "border-l-primary/50")
+                          }
+                        >
+                          <div className="flex min-w-0 items-start gap-2">
+                            {a.severity === "warning" || a.severity === "critical" ? (
+                              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+                            ) : (
+                              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground">{a.title}</p>
+                              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
+                                {a.detail}
+                              </p>
+                              <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                                {a.evidence}
+                              </p>
+                            </div>
+                          </div>
+                          <div
+                            data-action-cluster
+                            className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1"
+                          >
+                            <StatusPill tone={severityTone(a.severity)}>{a.severity}</StatusPill>
+                            <Button asChild size="sm" variant="outline">
+                              <Link to={a.drill_to}>Review records</Link>
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SectionCard>
+              </IntelligenceSection>
+
+              {/* ---------- 05 Cost & Inventory ---------- */}
+              <IntelligenceSection
+                id="cost-inventory"
+                index={5}
+                title="Cost & Inventory"
+                description="Recipe costing coverage and menu margin, plus supplier obligations."
+              >
+                {moneyVisible ? (
+                  <SectionCard
+                    title="Supplier obligations"
+                    description="Approved commitments in scope."
+                  >
+                    <MetricGrid>
+                      <MetricTile
+                        label="Payables"
+                        value={money(num("payables"), currency)}
+                        hint="Approved supplier obligations"
+                      />
+                    </MetricGrid>
+                  </SectionCard>
+                ) : null}
+
+                <SectionCard
+                  title="Menu & recipe profitability"
+                  description={data?.menu?.note ?? ""}
+                >
+                  <MetricGrid className="mb-3">
+                    <MetricTile label="Menu items" value={count(data?.menu?.items_total)} />
+                    <MetricTile
+                      label="With costed recipe"
+                      value={count(data?.menu?.items_costed)}
+                    />
+                    <MetricTile
+                      label="Cost coverage"
+                      value={percent(data?.menu?.coverage_percent ?? null)}
+                    />
+                  </MetricGrid>
+                  {(data?.menu?.items ?? []).length === 0 ? (
+                    <AwaitingData
+                      title="No costed menu item yet"
+                      detail="A margin is only reported when a menu item has both a price and a costed recipe."
+                    />
+                  ) : (
+                    <TableScroll>
+                      <table className="w-full min-w-[34rem] text-sm">
+                        <thead>
+                          <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
+                            <th className="py-2">Item</th>
+                            <th className="py-2">Price</th>
+                            <th className="py-2">Portion cost</th>
+                            <th className="py-2">Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(data?.menu?.items ?? []).map((m) => (
+                            <tr key={m.item} className="border-b border-border/60">
+                              <td className="py-2">{m.item}</td>
+                              <td className="py-2 tabular-nums">{money(m.price, currency)}</td>
+                              <td className="py-2 tabular-nums">{money(m.cost, currency)}</td>
+                              <td className="py-2 tabular-nums">
+                                {percent(m.margin_percent ?? null)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </TableScroll>
+                  )}
+                </SectionCard>
+              </IntelligenceSection>
+
+              {/* ---------- 06 Workforce ---------- */}
+              <IntelligenceSection
+                id="workforce"
+                index={6}
+                title="Workforce"
+                description="Work in hand and readiness signals available from operational records."
+              >
+                <SectionCard
+                  title="Work readiness"
+                  description="Derived from tasks and approvals in scope."
+                >
+                  <MetricGrid>
+                    <MetricTile
+                      label="Overdue tasks"
+                      value={count(num("overdue_tasks"))}
+                      hint="Past due and not completed"
+                    />
+                    <MetricTile
+                      label="Approvals waiting"
+                      value={count(num("pending_approvals"))}
+                      hint="Blocking downstream work"
+                    />
+                  </MetricGrid>
+                  <AwaitingData
+                    title="Rostered coverage not yet reported"
+                    detail="Shift, attendance and station coverage figures will appear here once scheduling records exist for this property and period. NEØ does not estimate workforce coverage."
+                  />
+                </SectionCard>
+              </IntelligenceSection>
+
+              {/* ---------- 07 Recommendations ---------- */}
+              <IntelligenceSection
+                id="recommendations"
+                index={7}
+                title="Recommendations"
+                description="Advisory only. NEØ never changes or publishes a rate, and never acts on your behalf."
+              >
+                <SectionCard
+                  title="Rate suggestions (advisory only)"
+                  description="Each line shows the published plan against forward demand so a human can decide."
+                >
+                  {(data?.rate_suggestions ?? []).length === 0 ? (
+                    <AwaitingData
+                      title="No advisory available"
+                      detail="No active room type with a published rate plan is in scope."
+                    />
+                  ) : (
+                    <TableScroll>
+                      <table className="w-full min-w-[34rem] text-sm">
+                        <thead>
+                          <tr className="sticky top-0 z-[1] border-b border-border bg-card text-left text-xs uppercase text-muted-foreground">
+                            <th className="neo-sticky-col py-2 pr-3">Room type</th>
+                            <th className="py-2">Rate plan</th>
+                            <th className="py-2">Current rate</th>
+                            <th className="py-2">Sellable rooms</th>
+                            <th className="py-2">On books (14d)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(data?.rate_suggestions ?? []).map((r) => (
+                            <tr
+                              key={`${r.room_type}-${r.rate_plan ?? "none"}`}
+                              className="border-b border-border/60"
+                            >
+                              <td className="neo-sticky-col py-2 pr-3 font-medium">
+                                {r.room_type}
+                              </td>
+                              <td className="py-2 text-muted-foreground">
+                                {r.rate_plan ?? "No active plan"}
+                              </td>
+                              <td className="py-2 tabular-nums">
+                                {moneyVisible ? money(r.current_rate, currency) : "—"}
+                              </td>
+                              <td className="py-2 tabular-nums">{r.rooms_of_type}</td>
+                              <td className="py-2 tabular-nums">{r.on_the_books_next_14}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </TableScroll>
+                  )}
+                </SectionCard>
+
+                <SectionCard
+                  title="Departmental advisories"
+                  description="Deterministic headlines with a direct route to the underlying records."
+                >
+                  {(data?.departments ?? []).length === 0 ? (
+                    <AwaitingData
+                      title="No departmental advisory"
+                      detail="Advisories appear once departmental records exist for this property and period."
+                    />
+                  ) : (
+                    <ul className="divide-y divide-outline-subtle">
+                      {(data?.departments ?? []).map((d) => (
+                        <li
+                          key={`rec-${d.department}`}
+                          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground">{d.department}</p>
+                            <p className="text-sm leading-snug text-muted-foreground">
+                              {d.headline}
+                            </p>
+                          </div>
+                          <Button asChild size="sm" variant="outline" className="shrink-0">
+                            <Link to={d.drill_to}>Open records</Link>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SectionCard>
+              </IntelligenceSection>
             </>
           )}
         </div>

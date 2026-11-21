@@ -23,7 +23,7 @@ describe("public commerce IA", () => {
     expect(favourites).toContain('Favourites');
     expect(folio).toContain('/guest/$hotelSlug/checkout');
     expect(guestCheckout).toContain('useGuestFolioMpesaCheckout');
-    expect(mpesaFunctions).toContain('neo_guest_folio_mpesa_start');
+    expect(mpesaFunctions).toMatch(/rpc\("neo_mpesa_collection_start",\s*\{\s*_source_module: "guest_folio"/);
   });
 });
 

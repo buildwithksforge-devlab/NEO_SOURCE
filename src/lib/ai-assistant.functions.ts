@@ -16,20 +16,25 @@ import { generateNarrative } from "@/lib/ai-assistant.server";
 
 export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { question: string; branchId?: string | null; from?: string; to?: string }) => {
-    const question = String(input?.question ?? "").trim();
-    if (!question) throw new Error("Ask a question first.");
-    if (question.length > 500) throw new Error("Please shorten the question.");
-    return {
-      question,
-      branchId: input.branchId ?? null,
-      from: input.from ?? null,
-      to: input.to ?? null,
-    };
-  })
+  .inputValidator(
+    (input: { question: string; branchId?: string | null; from?: string; to?: string }) => {
+      const question = String(input?.question ?? "").trim();
+      if (!question) throw new Error("Ask a question first.");
+      if (question.length > 500) throw new Error("Please shorten the question.");
+      return {
+        question,
+        branchId: input.branchId ?? null,
+        from: input.from ?? null,
+        to: input.to ?? null,
+      };
+    },
+  )
   .handler(async ({ data, context }) => {
     const client = context.supabase as unknown as {
-      rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+      rpc: (
+        fn: string,
+        args?: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: { message: string } | null }>;
       from: (t: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
     };
 
@@ -57,10 +62,15 @@ export const askAssistant = createServerFn({ method: "POST" })
     const allowedAi = await client.rpc("has_permission", { _module: "ai", _action: "create" });
     const isAdmin = await client.rpc("is_org_admin");
     if (allowedAi.data !== true && isAdmin.data !== true) {
-      await logInteraction({ refused: true, refusal_reason: "no_ai_permission", result_classification: "refusal" });
+      await logInteraction({
+        refused: true,
+        refusal_reason: "no_ai_permission",
+        result_classification: "refusal",
+      });
       return {
         refused: true as const,
-        answer: "You do not have permission to use the AI assistant. Ask an administrator for the AI assistant permission.",
+        answer:
+          "You do not have permission to use the AI assistant. Ask an administrator for the AI assistant permission.",
         classification: "refusal",
       };
     }
@@ -68,7 +78,11 @@ export const askAssistant = createServerFn({ method: "POST" })
     // 2. Allowlisted intent only — no free-form querying is possible.
     const intent = resolveIntent(data.question);
     if (!intent) {
-      await logInteraction({ refused: true, refusal_reason: "no_matching_intent", result_classification: "refusal" });
+      await logInteraction({
+        refused: true,
+        refusal_reason: "no_matching_intent",
+        result_classification: "refusal",
+      });
       return { refused: true as const, answer: REFUSAL_MESSAGE, classification: "refusal" };
     }
 
@@ -163,12 +177,15 @@ export const askAssistant = createServerFn({ method: "POST" })
     });
 
     // 6. Optional labelled narrative. Facts stand alone if AI is unavailable.
-    const narrative = await generateNarrative({
-      question: data.question,
-      intentId: intent.id,
-      period,
-      metrics: metrics.map((m) => ({ label: m.label, value: m.value })),
-    }, organizationId);
+    const narrative = await generateNarrative(
+      {
+        question: data.question,
+        intentId: intent.id,
+        period,
+        metrics: metrics.map((m) => ({ label: m.label, value: m.value })),
+      },
+      organizationId,
+    );
 
     await logInteraction({
       resolved_intent: intent.id,
@@ -183,7 +200,7 @@ export const askAssistant = createServerFn({ method: "POST" })
       user_id: context.userId,
       feature: "assistant",
       model: narrative.model,
-      request_count: narrative.status === "ok" ? 1 : 0,
+      request_count: narrative.status === "ok" && narrative.provider !== "local" ? 1 : 0,
       error: narrative.status === "ok" ? null : (narrative.detail ?? narrative.status),
       limit_status: narrative.status === "ok" ? "ok" : narrative.status,
     });
@@ -196,7 +213,6 @@ export const askAssistant = createServerFn({ method: "POST" })
       period,
       branchScoped: Boolean(branchScope),
       scope,
-
 
       metrics,
       sources: intent.sources,

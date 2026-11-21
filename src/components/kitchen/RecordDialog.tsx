@@ -1,3 +1,5 @@
+import { propertyDateTimeToIso } from "@/lib/property-clock";
+import { recordFieldsError } from "@/lib/record-field-validation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export type FieldSpec = {
@@ -48,6 +56,7 @@ export function RecordDialog({
   extraInvalid,
   onOpenChange,
   contentClassName,
+  timeZone,
 }: {
   title: string;
   description?: string;
@@ -57,13 +66,16 @@ export function RecordDialog({
   pending?: boolean;
   onSubmit: (values: Record<string, unknown>) => Promise<unknown> | unknown;
   /** Extra capture surface rendered below the fields (e.g. a repeatable row table). */
-  extra?: ReactNode;
+  extra?: ReactNode | ((values: Values) => ReactNode);
   /** Blocks submit while the extra surface is incomplete. */
-  extraInvalid?: boolean;
+  extraInvalid?: boolean | ((values: Values) => boolean);
   onOpenChange?: (open: boolean) => void;
   contentClassName?: string;
+  timeZone?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [values, setValues] = useState<Values>(() => initialValues(fields));
 
   useEffect(() => {
@@ -71,6 +83,7 @@ export function RecordDialog({
   }, [open, fields]);
 
   const change = (next: boolean) => {
+    setProblem(null);
     setOpen(next);
     onOpenChange?.(next);
   };
@@ -80,31 +93,53 @@ export function RecordDialog({
   const missing = fields.filter((f) => f.required && !values[f.name]?.trim());
 
   async function submit() {
-    if (missing.length > 0) return;
-    const payload: Record<string, unknown> = {};
-    for (const f of fields) {
-      const raw = values[f.name]?.trim() ?? "";
-      if (raw === "") {
-        payload[f.name] = null;
-        continue;
-      }
-      payload[f.name] = f.type === "number" ? Number(raw) : raw;
+    if (missing.length > 0 || pending || submitting) return;
+    const message = recordFieldsError(fields, values);
+    if (message) {
+      setProblem(message);
+      return;
     }
-    await onSubmit(payload);
-    change(false);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const f of fields) {
+        const raw = values[f.name]?.trim() ?? "";
+        if (raw === "") {
+          payload[f.name] = null;
+          continue;
+        }
+        payload[f.name] =
+          f.type === "number"
+            ? Number(raw)
+            : f.type === "datetime-local" && timeZone !== undefined
+              ? propertyDateTimeToIso(raw, timeZone)
+              : raw;
+      }
+      setSubmitting(true);
+      await onSubmit(payload);
+      change(false);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "The record could not be saved.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={change}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className={`max-h-[85vh] overflow-y-auto sm:max-w-xl ${contentClassName ?? ""}`}>
+      <DialogContent
+        className={`max-h-[85vh] overflow-y-auto sm:max-w-xl ${contentClassName ?? ""}`}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
           {fields.map((f) => (
-            <div key={f.name} className={`space-y-2 ${f.full || f.type === "textarea" ? "sm:col-span-2" : ""}`}>
+            <div
+              key={f.name}
+              className={`space-y-2 ${f.full || f.type === "textarea" ? "sm:col-span-2" : ""}`}
+            >
               <Label htmlFor={`fld-${f.name}`}>
                 {f.label}
                 {f.required ? <span className="ml-1 text-destructive">*</span> : null}
@@ -142,12 +177,34 @@ export function RecordDialog({
             </div>
           ))}
         </div>
-        {extra ? <div className="mt-4">{extra}</div> : null}
+        {extra ? (
+          <div className="mt-4">{typeof extra === "function" ? extra(values) : extra}</div>
+        ) : null}
+        {timeZone !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {timeZone
+              ? `Times are in ${timeZone}.`
+              : "Choose a property and wait for its timezone before saving."}
+          </p>
+        ) : null}
+        {problem ? (
+          <p role="alert" className="text-sm text-destructive">
+            {problem}
+          </p>
+        ) : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => change(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={pending || missing.length > 0 || Boolean(extraInvalid)}>
+          <Button
+            onClick={() => void submit()}
+            disabled={
+              pending ||
+              submitting ||
+              missing.length > 0 ||
+              (typeof extraInvalid === "function" ? extraInvalid(values) : Boolean(extraInvalid))
+            }
+          >
             {submitLabel}
           </Button>
         </DialogFooter>

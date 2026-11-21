@@ -59,13 +59,16 @@ export function useMyStations() {
   const { branchId } = useActivePropertyFilter();
   const userId = user?.id ?? null;
   return useQuery({
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     queryKey: ["station-stock", "my-stations", organizationId, branchId, userId],
     enabled: Boolean(organizationId && userId),
     queryFn: async (): Promise<MyStation[]> => {
       let q = db
         .from("user_stations")
         .select("station_id, is_primary, operational_stations(name, station_type, active)")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("organization_id", organizationId);
       if (branchId) q = q.eq("branch_id", branchId);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
@@ -88,15 +91,19 @@ export function useMyStations() {
 
 /** The store locations a station draws from. Empty means the mapping is missing. */
 export function useStationStores(stationId: string | null) {
-  const { organizationId } = useAuth();
+  const { organizationId, user } = useAuth();
+  const { branchId } = useActivePropertyFilter();
   return useQuery({
-    queryKey: ["station-stock", "stores", organizationId, stationId],
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    queryKey: ["station-stock", "stores", organizationId, user?.id, branchId, stationId],
     enabled: Boolean(organizationId && stationId),
     queryFn: async (): Promise<{ locationId: string; locationName: string }[]> => {
       const { data, error } = await db
         .from("station_consumption_stores")
         .select("location_id, stock_locations(name)")
-        .eq("station_id", stationId);
+        .eq("station_id", stationId)
+        .eq("organization_id", organizationId);
       if (error) throw new Error(error.message);
       return ((data ?? []) as Raw[])
         .map((r) => ({
@@ -110,10 +117,13 @@ export function useStationStores(stationId: string | null) {
 
 /** Ingredient balances held in the station's own store. */
 export function useStationStockLevels(locationIds: string[]) {
-  const { organizationId } = useAuth();
+  const { organizationId, user } = useAuth();
+  const { branchId } = useActivePropertyFilter();
   const key = locationIds.slice().sort().join(",");
   return useQuery({
-    queryKey: ["station-stock", "levels", organizationId, key],
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    queryKey: ["station-stock", "levels", organizationId, user?.id, branchId, key],
     enabled: Boolean(organizationId) && locationIds.length > 0,
     queryFn: async (): Promise<StationStockRow[]> => {
       const { data, error } = await db
@@ -169,10 +179,13 @@ export function useStationStockLevels(locationIds: string[]) {
 
 /** Movements POS service has already caused in the station's store. */
 export function useStationConsumption(locationIds: string[]) {
-  const { organizationId } = useAuth();
+  const { organizationId, user } = useAuth();
+  const { branchId } = useActivePropertyFilter();
   const key = locationIds.slice().sort().join(",");
   return useQuery({
-    queryKey: ["station-stock", "consumption", organizationId, key],
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    queryKey: ["station-stock", "consumption", organizationId, user?.id, branchId, key],
     enabled: Boolean(organizationId) && locationIds.length > 0,
     queryFn: async (): Promise<StationConsumptionRow[]> => {
       const { data, error } = await db
@@ -203,4 +216,9 @@ export function reorderAlerts(rows: StationStockRow[]): StationStockRow[] {
 
 export function unconfiguredItems(rows: StationStockRow[]): StationStockRow[] {
   return rows.filter((r) => r.reorderPoint === null);
+}
+
+/** Retain a selection only while it remains in the current assignment list. */
+export function currentStationId(selected: string | null, stations: readonly { stationId: string }[]): string | null {
+  return stations.find(s => s.stationId === selected)?.stationId ?? stations[0]?.stationId ?? null;
 }

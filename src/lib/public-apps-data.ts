@@ -70,6 +70,14 @@ export function usePublicWorkspaces() {
   });
 }
 
+export function usePublishedDeliveryLink(branchId: string | null) {
+  const workspaces = usePublicWorkspaces();
+  const matches = workspaces.data?.filter(
+    (workspace) => workspace.app_key === "delivery" && workspace.published && workspace.branch_id === branchId,
+  );
+  return branchId && matches?.length === 1 ? publicUrlFor("delivery", matches[0]!.slug) : null;
+}
+
 export function useBranchOptions() {
   const { organizationId } = useAuth();
   return useQuery({

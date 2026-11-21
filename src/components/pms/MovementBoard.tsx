@@ -1,7 +1,6 @@
 import { PermittedLink } from "@/components/common/PermittedLink";
 import { useState } from "react";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BedDouble, CalendarCheck2 } from "lucide-react";
 import { Atomic, RowActions, SectionCard, TableScroll } from "@/components/common/DataDisplay";
@@ -14,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatDate, money, titleCase, today } from "@/lib/pms";
 import { useReservations } from "@/lib/pms-data";
+import { reservationFolioIndex } from "@/lib/reservation-folio-index";
 import { EmptyState, QueryState, ReservationStatusBadge } from "@/components/pms/PmsShared";
 import { RevertCheckInDialog } from "@/components/pms/RevertCheckInDialog";
 import {
@@ -26,7 +26,7 @@ import {
 
 type Scope = "arrivals" | "departures" | "in-house";
 
-/** Open folio balances keyed by reservation, so the board can block a checkout that still owes money. */
+/** Open folio navigation; checkout independently reloads every canonical folio position. */
 function useOpenFolioIndex() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useAuth();
@@ -34,14 +34,10 @@ function useOpenFolioIndex() {
     queryKey: ["pms", "folio-index", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("folios").select("id, reservation_id, balance, status"), "folios")
+      const { data, error } = await applyTo(supabase.from("folios").select("id, reservation_id, folio_type, currency, balance, status"), "folios")
         .in("status", ["open", "under-review", "reopened"]);
       if (error) throw error;
-      const index: Record<string, { id: string; balance: number }> = {};
-      for (const f of data ?? []) {
-        if (f.reservation_id) index[f.reservation_id] = { id: f.id, balance: Number(f.balance) };
-      }
-      return index;
+      return reservationFolioIndex(data ?? []);
     },
   });
 }
@@ -101,7 +97,7 @@ export function MovementBoard({ scope }: { scope: Scope }) {
             description="Reservations appear here automatically once they are created with matching dates."
             action={
               <Button asChild size="sm" variant="outline">
-                <PermittedLink to="/pms/reservations/new">New reservation</PermittedLink>
+                <PermittedLink to="/pms/reservations/new" hideWhenDenied>New reservation</PermittedLink>
               </Button>
             }
           />
@@ -127,9 +123,9 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="neo-sticky-col whitespace-nowrap font-mono text-xs">
-                      <Link to="/pms/reservations/$id" params={{ id: row.id }} className="text-primary hover:underline">
+                      <PermittedLink to="/pms/reservations/$id" params={{ id: row.id }} className="text-primary hover:underline">
                         {row.confirmation_number}
-                      </Link>
+                      </PermittedLink>
                     </TableCell>
                     <TableCell>
                       <div className="flex min-w-0 items-center gap-2">
@@ -164,7 +160,7 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                       <ReservationStatusBadge status={row.status} />
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      <Atomic>{folio ? money(folio.balance) : "—"}</Atomic>
+                      <Atomic>{folio ? folio.count > 1 ? `${folio.count} open folios` : folio.balance !== null ? money(folio.balance) : "Review balances" : "—"}</Atomic>
                     </TableCell>
                     <TableCell>
                       <RowActions>
@@ -189,8 +185,8 @@ export function MovementBoard({ scope }: { scope: Scope }) {
                         ) : null}
                         {mayAct && scope === "departures" ? (
                           <>
-                            {folio ? <RecordPaymentDialog folioId={folio.id} balance={folio.balance} /> : null}
-                            <CheckOutDialog reservation={row} balance={folio?.balance ?? 0} />
+                            {folio?.count === 1 && folio.balance !== null && folio.balance > 0 ? <RecordPaymentDialog folioId={folio.id} balance={folio.balance} /> : null}
+                            <CheckOutDialog reservation={row} />
                           </>
                         ) : null}
                       </RowActions>

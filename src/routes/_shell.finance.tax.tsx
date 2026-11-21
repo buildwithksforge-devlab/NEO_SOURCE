@@ -1,3 +1,4 @@
+import { formatTaxCodeRate, taxCodeFractionFromPercent } from "@/lib/tax-code-rate";
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, SectionCard, StatCard } from "@/components/common/DataDisplay";
 import {
@@ -16,11 +17,15 @@ import {
   useAccounts,
   useEtimsSubmissions,
   useFinanceInsert,
+  useFinanceUpdate,
   useInvoices,
   useTaxCodes,
   useTaxTransactions,
 } from "@/lib/finance-data";
 import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
+import { SalesTaxProfiles } from "@/components/finance/SalesTaxProfiles";
+import { SalesTaxReport } from "@/components/finance/SalesTaxReport";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_shell/finance/tax")({
   head: financeHead(
@@ -40,7 +45,8 @@ function TaxPage() {
   const submissions = useEtimsSubmissions();
   const accounts = useAccounts();
   const invoices = useInvoices("all");
-  const createCode = useFinanceInsert("tax_codes", "finance.tax_code.created");
+  const createCode = useFinanceInsert("tax_codes", "finance.tax_code.created", { branchScoped: false });
+  const updateCode = useFinanceUpdate("tax_codes", "finance.tax_code.updated");
 
   const unfiled = (invoices.data ?? []).filter(
     (inv: Record<string, unknown>) =>
@@ -59,13 +65,18 @@ function TaxPage() {
   const codeFields: FieldSpec[] = [
     { name: "code", label: "Tax code", required: true, placeholder: "VAT16" },
     { name: "name", label: "Name", required: true, placeholder: "VAT standard rate" },
-    { name: "rate", label: "Rate (%)", type: "number", required: true },
+    {
+      name: "sales_calculation", label: "Calculation", type: "select", required: true,
+      options: [{ value: "percentage", label: "Percentage" }, { value: "fixed", label: "Fixed per unit" }],
+    },
+    { name: "rate", label: "Percentage or fixed amount per unit", type: "number", required: true, min: 0, step: 0.01 },
+    { name: "sales_description", label: "Description" },
     {
       name: "treatment",
       label: "Treatment",
       type: "select",
       required: true,
-      options: ["standard", "zero_rated", "exempt", "reverse_charge", "levy"].map((v) => ({
+      options: ["standard", "zero_rated", "exempt", "withholding", "service_charge"].map((v) => ({
         value: v,
         label: titleCase(v),
       })),
@@ -89,8 +100,8 @@ function TaxPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Finance"
-        title="Tax & Compliance"
-        description="Tax is calculated from the tax code on each line, not typed in. Rate changes are versioned by effective date so historical documents keep their original rate."
+        title="Tax Management & Compliance"
+        description="Configure sales tax codes and profiles, review liabilities, and track fiscal submissions."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -110,7 +121,7 @@ function TaxPage() {
 
       <SectionCard
         title="Tax codes"
-        description="Standard, zero-rated, exempt, reverse-charge and levy codes with effective dating."
+        description="Standard, zero-rated, exempt, withholding and service-charge codes with effective dating."
         actions={
           <FormDialog
             title="New tax code"
@@ -119,11 +130,24 @@ function TaxPage() {
             {(close) => (
               <RecordForm
                 fields={codeFields}
+                initial={{ sales_calculation: "percentage", treatment: "standard", inclusive: true }}
                 submitLabel="Create tax code"
                 busy={createCode.isPending}
-                onSubmit={(values) =>
-                  createCode.mutate({ ...values, active: true }, { onSuccess: close })
-                }
+                validate={(values) => values["sales_calculation"] !== "fixed" && num(values["rate"]) > 100
+                  ? "Enter a percentage between 0 and 100." : null}
+                onSubmit={async (values) => {
+                  await createCode.mutateAsync({
+                    ...values,
+                    code: String(values["code"]).trim(),
+                    name: String(values["name"]).trim(),
+                    effective_to: values["effective_to"] || null,
+                    tax_account_id: values["tax_account_id"] || null,
+                    rate: values["sales_calculation"] === "fixed" ? 0 : taxCodeFractionFromPercent(values["rate"]),
+                    sales_fixed_amount: values["sales_calculation"] === "fixed" ? num(values["rate"]) : 0,
+                    active: true,
+                  });
+                  close();
+                }}
               />
             )}
           </FormDialog>
@@ -141,13 +165,13 @@ function TaxPage() {
           }
         >
           <DataTable
-            head={["Code", "Name", "Rate", "Treatment", "Inclusive", "Effective", "Status"]}
+            head={["Code", "Name", "Rate", "Treatment", "Inclusive", "Effective", "Status", ""]}
           >
             {(codes.data ?? []).map((c) => (
               <tr key={String(c["id"])}>
                 <td className="py-2 pr-4 font-mono text-xs">{String(c["code"])}</td>
                 <td className="py-2 pr-4">{String(c["name"])}</td>
-                <td className="py-2 pr-4">{num(c["rate"])}%</td>
+                <td className="py-2 pr-4">{c["sales_calculation"] === "fixed" ? `${num(c["sales_fixed_amount"]).toFixed(2)} per unit` : formatTaxCodeRate(c["rate"])}</td>
                 <td className="py-2 pr-4">{titleCase(String(c["treatment"]))}</td>
                 <td className="py-2 pr-4">{c["inclusive"] ? "Yes" : "No"}</td>
                 <td className="py-2 pr-4">
@@ -157,11 +181,20 @@ function TaxPage() {
                 <td className="py-2 pr-4">
                   <FinStatus value={c["active"] ? "approved" : "cancelled"} />
                 </td>
+                <td className="py-2 pr-4">
+                  <Button variant="ghost" size="sm" disabled={updateCode.isPending} onClick={() =>
+                    updateCode.mutate({ id: String(c["id"]), values: { active: !c["active"] } },
+                      { onSuccess: () => void codes.refetch() })
+                  }>{c["active"] ? "Archive" : "Activate"}</Button>
+                </td>
               </tr>
             ))}
           </DataTable>
         </FinanceQueryState>
       </SectionCard>
+
+      <SalesTaxProfiles />
+      <SalesTaxReport />
 
       <SectionCard
         title="Awaiting fiscalisation"

@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 9,
+  "scope": "Actual exported routing, station/store selection, item transitions and sellability guard with synthetic rows; print/provider and stock movement effects are separate tests."
+}

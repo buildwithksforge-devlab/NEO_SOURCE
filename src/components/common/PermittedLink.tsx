@@ -1,27 +1,42 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useVisibility } from "@/lib/visibility";
+import { useOptionalAuth } from "@/lib/auth";
 
-/**
- * A link the workspace is allowed to offer.
- *
- * Backend enforcement stays mandatory, but the UI must never lead a user into
- * a page their role cannot open. Every dashboard card, quick action, handoff
- * and deep link routes through this component: when the destination fails the
- * same `canSeePage` check the sidebar and route guard apply, the label is
- * rendered as plain text (or hidden entirely) instead of a dead link.
- */
+type PermittedLinkProps = {
+  to: string;
+  className?: string | undefined;
+  children: ReactNode;
+  hideWhenDenied?: boolean | undefined;
+  [key: string]: unknown;
+};
+
 export function usePagePermitted(): (path: string) => boolean {
-  // Outside a session context (isolated component tests, a shell that has not
-  // hydrated yet) the UI simply does not narrow anything — backend enforcement
-  // is unaffected, and no reader is stranded by a missing provider.
-  let visibility: ReturnType<typeof useVisibility> | null = null;
-  try {
-    visibility = useVisibility();
-  } catch {
-    visibility = null;
+  const visibility = useVisibility();
+
+  return (path: string) => visibility.canSeePage(path);
+}
+
+function AuthenticatedPermittedLink({
+  to,
+  className,
+  children,
+  hideWhenDenied,
+  ...rest
+}: PermittedLinkProps) {
+  const permitted = usePagePermitted()(to);
+
+  if (!permitted) {
+    if (hideWhenDenied) return null;
+
+    return <span className={className}>{children}</span>;
   }
-  return (path: string) => (visibility ? visibility.canSeePage(path) : true);
+
+  return (
+    <Link to={to} className={className} {...(rest as Record<string, never>)}>
+      {children}
+    </Link>
+  );
 }
 
 export function PermittedLink({
@@ -30,21 +45,25 @@ export function PermittedLink({
   children,
   hideWhenDenied,
   ...rest
-}: {
-  to: string;
-  className?: string;
-  children: ReactNode;
-  hideWhenDenied?: boolean;
-  [key: string]: unknown;
-}) {
-  const permitted = usePagePermitted()(to);
-  if (!permitted) {
-    if (hideWhenDenied) return null;
-    return <span className={className}>{children}</span>;
+}: PermittedLinkProps) {
+  const auth = useOptionalAuth();
+
+  if (!auth) {
+    return (
+      <Link to={to} className={className} {...(rest as Record<string, never>)}>
+        {children}
+      </Link>
+    );
   }
+
   return (
-    <Link to={to} className={className} {...(rest as Record<string, never>)}>
+    <AuthenticatedPermittedLink
+      to={to}
+      className={className}
+      hideWhenDenied={hideWhenDenied}
+      {...rest}
+    >
       {children}
-    </Link>
+    </AuthenticatedPermittedLink>
   );
 }

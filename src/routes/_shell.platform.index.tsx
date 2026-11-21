@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { SectionCard, StatCard } from "@/components/common/DataDisplay";
 import {
@@ -14,6 +14,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { PublicAppChecks } from "@/components/platform/PublicAppChecks";
+import { WorkflowReadiness } from "@/components/platform/WorkflowReadiness";
+import { usePublicAppHealth } from "@/lib/platform-public-app-health";
+import { useGoLiveReadiness } from "@/lib/go-live";
+import { canAccessPath } from "@/lib/nav-permissions";
 import {
   Select,
   SelectContent,
@@ -55,6 +60,8 @@ function ReadinessScreen() {
   const findings = useSecurityFindings();
   const uat = useUatSignoffs();
   const connections = useIntegrationConnections();
+  const publicApps = usePublicAppHealth();
+  const workflow = useGoLiveReadiness();
   const seed = useSeedReadinessGates();
   const saveGate = useSaveRecord("readiness_gates", "readiness.gate_updated");
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -62,7 +69,10 @@ function ReadinessScreen() {
   const rows = gates.data ?? [];
   const orgGates = rows.filter((g) => g["organization_id"] === organizationId);
   const templates = rows.filter((g) => g["organization_id"] === null);
-  const active = (orgGates.length ? orgGates : templates) as unknown as GateLike[];
+  const active = (orgGates.length ? orgGates : templates).map((gate) => ({
+    ...gate,
+    status: ["passed", "waived"].includes(gate["status"]) && !String(gate["evidence_reference"] ?? "").trim() ? "not_started" : gate["status"],
+  })) as unknown as GateLike[];
   const score = useMemo(() => readinessScore(active), [active]);
 
   const defectStatus = useMemo(
@@ -88,32 +98,58 @@ function ReadinessScreen() {
   }
 
   const canEdit = can("platform", "edit");
+  const approvalsVerified = gates.isSuccess && defects.isSuccess;
+  const publicBlocked = publicApps.isSuccess && publicApps.data.some((check) => check.status === "blocked");
+  const publishedVerified = publicApps.isSuccess && publicApps.data.every((check) =>
+    check.state === "unpublished" ? check.status !== "blocked" : check.status === "verified");
+  const propertyChecks = publicApps.branchId && workflow.isSuccess ? workflow.data.checks : [];
+  const propertyBlocked = propertyChecks.filter((check) => check.status === "blocked").length;
+  const propertyReady = propertyChecks.length > 0 && propertyChecks.every((check) => check.status === "ready");
+  const signedOff = approvalsVerified && orgGates.length > 0 && score.goLive;
+  const canGoLive = signedOff && defectStatus.releasable && publishedVerified && propertyReady
+    && findings.isSuccess && uat.isSuccess && connections.isSuccess
+    && openFindings.length === 0 && uatPending.length === 0 && unverifiedIntegrations.length === 0;
+  const releaseBlocked = (defects.isSuccess && !defectStatus.releasable) || publicBlocked || propertyBlocked > 0;
 
   return (
     <div className="space-y-6">
       <TruthNotice>
-        Readiness is calculated only from recorded evidence. A gate stays open until someone with
-        authority marks it passed and attaches an evidence reference — the platform never marks
-        itself ready.
+        Check the selected property’s live results below. Organisation sign-off requires a saved evidence reference on each mandatory gate.
       </TruthNotice>
 
       <div className="neo-kpi-grid">
-        <StatCard lead label="Mandatory gates passed" value={`${score.passed} / ${score.total}`} />
-        <StatCard label="Release-blocking defects" value={String(defectStatus.blocking)} />
-        <StatCard label="Open security findings" value={String(openFindings.length)} />
-        <StatCard label="UAT scripts outstanding" value={String(uatPending.length)} />
+        <StatCard lead label="Mandatory gates passed" value={gates.isSuccess ? `${score.passed} / ${score.total}` : "Unverified"} />
+        <StatCard label="Release-blocking defects" value={defects.isSuccess ? String(defectStatus.blocking) : "Unverified"} />
+        <StatCard label="All open defects" value={defects.isSuccess ? String(defectStatus.open) : "Unverified"} />
+        <StatCard label="Open security findings" value={findings.isSuccess ? String(openFindings.length) : "Unverified"} />
+        <StatCard label="UAT scripts outstanding" value={uat.isSuccess ? String(uatPending.length) : "Unverified"} />
       </div>
 
+      <SectionCard title="Go-live verdict" actions={
+        <TonePill tone={releaseBlocked ? "danger" : canGoLive ? "success" : "warning"}>
+          {releaseBlocked ? "Blocked" : canGoLive ? "Readiness checks passed" : "Evidence outstanding"}
+        </TonePill>
+      }>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <span>{propertyChecks.length ? `${propertyBlocked} blocked property checks` : "Property evidence awaiting verification"}</span>
+          {isAdmin || canAccessPath(can, "/platform/quality") ? <Link to="/platform/quality" className="font-medium underline">Review defects</Link> : null}
+          {isAdmin || canAccessPath(can, "/platform/simulation") ? <Link to="/platform/simulation" className="font-medium underline">Review end-to-end test runs</Link> : null}
+        </div>
+      </SectionCard>
+
+      <PublicAppChecks />
+      <WorkflowReadiness />
+
       <SectionCard
-        title={score.goLive ? "All mandatory gates satisfied" : "Go-live is blocked"}
+        title="Organisation approval"
         description={
-          score.goLive
-            ? "Every mandatory readiness gate has been verified or formally waived by an authorised approver."
-            : `${score.blocking.length} mandatory gate(s) still require verification before this property can go live.`
+          !approvalsVerified ? "Approval and defect evidence could not yet be verified."
+            : signedOff ? "Every mandatory organisation gate has a decision and evidence reference."
+            : `${score.blocking.length} mandatory gate(s) still need evidence.`
         }
         actions={
-          <TonePill tone={score.goLive ? "success" : "warning"}>
-            {score.goLive ? "Ready" : "Not ready"}
+          <TonePill tone={signedOff ? "success" : "warning"}>
+            {!approvalsVerified ? "Unverified" : signedOff ? "Signed off" : "Pending"}
           </TonePill>
         }
       >
@@ -140,7 +176,7 @@ function ReadinessScreen() {
               disabled={seed.isPending || templates.length === 0}
             >
               <ShieldCheck className="mr-2 size-4" />
-              Create checklist for this property
+              Create organisation checklist
             </Button>
           ) : null
         }
@@ -166,6 +202,7 @@ function ReadinessScreen() {
                 {(orgGates.length ? orgGates : templates).map((g) => {
                   const id = String(g["id"]);
                   const editable = canEdit && orgGates.length > 0;
+                  const proof = (evidence[id] ?? String(g["evidence_reference"] ?? "")).trim();
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -181,21 +218,24 @@ function ReadinessScreen() {
                         {editable ? (
                           <Select
                             value={String(g["status"])}
-                            onValueChange={(status) =>
+                            onValueChange={(status) => {
+                              const signedOff = status === "passed" || status === "waived";
+                              if (signedOff && !proof) return;
                               saveGate.mutate({
                                 id,
                                 status,
-                                verified_by: status === "passed" ? (user?.id ?? null) : null,
-                                verified_at: status === "passed" ? new Date().toISOString() : null,
-                              })
-                            }
+                                ...(signedOff ? { evidence_reference: proof } : {}),
+                                verified_by: signedOff ? (user?.id ?? null) : null,
+                                verified_at: signedOff ? new Date().toISOString() : null,
+                              });
+                            }}
                           >
                             <SelectTrigger className="h-8 w-40">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {GATE_STATUSES.map((s) => (
-                                <SelectItem key={s} value={s}>
+                                <SelectItem key={s} value={s} disabled={(s === "passed" || s === "waived") && !proof}>
                                   {humanise(s)}
                                 </SelectItem>
                               ))}

@@ -751,6 +751,7 @@ export async function processCommunicationQueue(admin: Admin, org: string, limit
         recipient: message.recipient,
         subject: message.subject,
         body: message.rendered_body,
+        idempotencyKey: `communication/${org}/${message.id}`,
       },
       (provider.configuration ?? {}) as Record<string, unknown>,
       secrets[provider.provider] ?? {},

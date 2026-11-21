@@ -1,0 +1,29 @@
+-- NEØ F02
+-- Preserve the deposit configuration selected per reservation.
+-- Existing financial columns and operational records remain unchanged.
+
+ALTER TABLE public.reservations
+ADD COLUMN IF NOT EXISTS deposit_basis text;
+
+ALTER TABLE public.reservations
+ADD COLUMN IF NOT EXISTS deposit_value numeric;
+
+COMMENT ON COLUMN public.reservations.deposit_basis
+IS 'Reservation deposit calculation basis: percentage or fixed.';
+
+COMMENT ON COLUMN public.reservations.deposit_value
+IS 'Percentage value or fixed amount selected when the reservation was created.';
+
+ALTER TABLE public.reservations
+ADD CONSTRAINT reservations_deposit_basis_valid
+CHECK (
+    deposit_basis IS NULL
+    OR deposit_basis IN ('percentage', 'fixed')
+);
+
+ALTER TABLE public.reservations
+ADD CONSTRAINT reservations_deposit_value_valid
+CHECK (
+    deposit_value IS NULL
+    OR deposit_value >= 0
+);

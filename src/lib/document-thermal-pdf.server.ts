@@ -4,7 +4,7 @@
  * Financial truth still comes exclusively from neo_document_payload().
  * This file owns presentation only:
  * - fixed 80 mm roll width
- * - variable document height
+ * - fixed-width pages with a short final page
  * - receipt-safe wrapping
  * - canonical totals
  * - payment / transaction metadata
@@ -13,11 +13,14 @@
  * A4 business documents remain in document-pdf.server.ts.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, PrintScaling, rgb, type PDFFont } from "pdf-lib";
+import { embedDocumentFonts } from "./document-fonts.server";
 import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { documentTraceCode } from "./document-trace";
+import { receiptFeedbackLink } from "./print-receipt-feedback.server";
+import { embedDocumentLogo } from "./document-logo.server";
 
 type ReceiptLine = {
   description?: string | null;
@@ -225,6 +228,7 @@ export async function buildThermalReceiptPdf(
   const metaSource = payload.meta ?? {};
   const lines = Array.isArray(payload.lines) ? payload.lines : [];
   const rawTotals = Array.isArray(payload.totals) ? payload.totals : [];
+  const chargedToRoom = document.status === "charged-to-room";
 
   const documentNumber = clean(document.number) || "Unnumbered";
   const documentTitle = clean(document.title) || "Receipt";
@@ -258,16 +262,45 @@ export async function buildThermalReceiptPdf(
   const partyName = clean(payload.party?.name);
 
   const qrPayload = clean(metaSource["qr_payload"]);
+  const brand = (identity["brand"] ?? {}) as Record<string, unknown>;
+  const feedbackLink = receiptFeedbackLink(brand["receiptFeedbackUrl"]);
+  const paymentDetails = ([
+    ["M-Pesa Paybill", clean(brand["receiptPaybill"])],
+    ["Paybill account", clean(brand["receiptPaybillAccount"])],
+    ["M-Pesa Till", clean(brand["receiptTill"])],
+    ["Payment instructions", clean(brand["receiptPaymentInstructions"])],
+  ] as const).filter(([, value]) => Boolean(value));
+  const staffLabels: Record<string, string> = {
+    waiter: "Served by", "served by": "Served by", cashier: "Received by",
+    "collected by": "Received by", "received by": "Received by", "checked by": "Checked by",
+  };
+  const paymentKeys = new Set(["payment method", "payment status", "payment references", "payment reference", "external reference", "cash tendered", "change due"]);
+  const metaKey = (key: string) => key.toLowerCase().replace(/_/g, " ");
+  const staff = new Map<string, string>();
+  for (const [key, value] of Object.entries(metaSource)) {
+    const label = staffLabels[metaKey(key)];
+    if (label && isScalar(value) && scalarText(value) && !staff.has(label)) staff.set(label, scalarText(value));
+  }
+  const staffEntries = ["Served by", "Received by", "Checked by"].flatMap((label) => {
+    const value = staff.get(label);
+    return value ? [[label, value] as const] : [];
+  });
 
   const topMeta = Object.entries(metaSource)
     .filter(
       ([key, value]) =>
         key !== "qr_payload" &&
+        !staffLabels[metaKey(key)] &&
+        !paymentKeys.has(metaKey(key)) &&
         !fiscalKey(key) &&
         isScalar(value) &&
         scalarText(value),
     )
     .map(([key, value]) => [humanLabel(key), scalarText(value)] as const);
+
+  const paymentMeta = Object.entries(metaSource).filter(([key, value]) =>
+    paymentKeys.has(metaKey(key)) && isScalar(value) && scalarText(value)
+  ).map(([key, value]) => [humanLabel(key), scalarText(value)] as const);
 
   const fiscalMeta = Object.entries(metaSource)
     .filter(
@@ -280,6 +313,8 @@ export async function buildThermalReceiptPdf(
     .map(([key, value]) => [humanLabel(key), scalarText(value)] as const);
 
   const seenTotalLabels = new Set<string>();
+  const uniqueSummaryLabels = new Set(["total", "grand total", "balance", "balance due", "amount due", "paid"]);
+  let reachedPaymentRows = false;
 
   const totals = rawTotals.filter((total) => {
     if (!total) return false;
@@ -290,15 +325,30 @@ export async function buildThermalReceiptPdf(
 
     const key = label.toLowerCase();
 
+    if (reachedPaymentRows && !uniqueSummaryLabels.has(key)) return true;
     if (seenTotalLabels.has(key)) return false;
 
     seenTotalLabels.add(key);
+    if (key === "total" || key === "grand total") reachedPaymentRows = true;
     return true;
+  }).map((total) => {
+    if (!chargedToRoom) return total;
+    const label = total.label.trim().toLowerCase();
+    if (label === "balance") return { ...total, label: "Transferred to guest folio" };
+    if (label === "paid") return { ...total, label: "Paid at POS" };
+    return total;
   });
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
+  const { regular, bold } = await embedDocumentFonts(pdf);
+  let logoUrl = clean(property["logo_url"]);
+  if (!logoUrl && payload.branch_id && typeof supabase.from === "function") {
+    const { data: branch } = await supabase.from("branches").select("logo_url")
+      .eq("id", payload.branch_id).maybeSingle();
+    logoUrl = clean(branch?.logo_url);
+  }
+  const logo = await embedDocumentLogo(pdf, [logoUrl, clean(brand["logoLight"]), clean(brand["logoDark"])]);
 
   // 80 mm roll = ~226.77 PDF points.
   const paperWidth = 226.77;
@@ -306,23 +356,31 @@ export async function buildThermalReceiptPdf(
   const contentWidth = paperWidth - margin * 2;
   const amountWidth = 72;
   const itemWidth = contentWidth - amountWidth - 8;
+  const itemLineHeight = Math.ceil(Math.max(bold.heightAtSize(8.5), regular.heightAtSize(8.5))) + 1;
+  const noteLineHeight = Math.ceil(regular.heightAtSize(7)) + 1;
 
   const black = rgb(0.05, 0.05, 0.05);
   const muted = rgb(0.35, 0.35, 0.35);
   const rule = rgb(0.2, 0.2, 0.2);
 
-  const estimateMetaHeight = (
-    entries: readonly (readonly [string, string])[],
-  ) =>
-    entries.reduce((height, [label, value]) => {
-      const available = contentWidth - 60;
-      const wrapped = wrap(value, regular, 7.6, available);
-      return height + Math.max(1, wrapped.length) * 9 + 2;
-    }, 0);
+  const pairLines = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number) => {
+    const valueWidth = Math.min(contentWidth * 0.55, Math.max(60, valueFont.widthOfTextAtSize(value, valueSize)));
+    return {
+      labels: wrap(label, labelFont, labelSize, contentWidth - valueWidth - 8),
+      values: wrap(value, valueFont, valueSize, valueWidth),
+      lineHeight: Math.max(labelSize, valueSize) + 3,
+    };
+  };
+  const pairHeight = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number) => {
+    const pair = pairLines(label, value, labelFont, valueFont, labelSize, valueSize);
+    return Math.max(1, pair.labels.length, pair.values.length) * pair.lineHeight;
+  };
+  const estimateMetaHeight = (entries: readonly (readonly [string, string])[]) =>
+    entries.reduce((height, [label, value]) => height + pairHeight(label + ":", value, bold, regular, 7.3, 7.6), 0);
 
   const estimateLineHeight = (line: ReceiptLine) => {
     const description = clean(line.description) || "Item";
-    const descriptionLines = wrap(description, regular, 8.5, itemWidth);
+    const descriptionLines = wrap(description, bold, 8.5, itemWidth);
 
     const detailParts: string[] = [];
     const quantity = qty(line.quantity);
@@ -337,63 +395,27 @@ export async function buildThermalReceiptPdf(
       detailParts.push(`@ ${unitPrice}`);
     }
 
-    const note = clean(line.note);
-    if (note) detailParts.push(note);
+    const detailHeight = detailParts.reduce((height, part) => height + wrap(part, regular, 7.1, contentWidth - 5).length * 9, 0);
+    const noteHeight = wrap(clean(line.note), regular, 7, itemWidth).length * noteLineHeight;
 
-    const detailHeight = detailParts.length * 9;
-
-    return Math.max(1, descriptionLines.length) * 10 + detailHeight + 7;
+    return Math.max(1, descriptionLines.length) * itemLineHeight + detailHeight + noteHeight + 7;
   };
 
-  const propertyNameLines = wrap(propertyName, bold, 11.5, contentWidth);
-  const addressLines = propertyAddress
-    ? wrap(propertyAddress, regular, 7.5, contentWidth)
-    : [];
+  // Cap PDF page length at 297 mm so viewers and drivers don't try to
+  // compress an entire long receipt onto one printable sheet.
+  const paperHeight = 841.89;
 
-  let estimatedHeight = 0;
-
-  estimatedHeight += 18;
-  estimatedHeight += propertyNameLines.length * 13;
-  estimatedHeight += addressLines.length * 9;
-  if (propertyPhone) estimatedHeight += 9;
-  if (propertyEmail) estimatedHeight += 9;
-  if (taxId) estimatedHeight += 9;
-
-  estimatedHeight += 34;
-
-  if (document.date) estimatedHeight += 11;
-  if (partyName) estimatedHeight += 11;
-
-  estimatedHeight += estimateMetaHeight(topMeta);
-
-  estimatedHeight += 28;
-
-  for (const line of lines) {
-    estimatedHeight += estimateLineHeight(line);
-  }
-
-  estimatedHeight += 18;
-
-  estimatedHeight += Math.max(1, totals.length) * 13;
-  estimatedHeight += 22;
-
-  if (fiscalMeta.length) {
-    estimatedHeight += 20 + estimateMetaHeight(fiscalMeta);
-  }
-
-  if (qrPayload) {
-    estimatedHeight += 112;
-  }
-
-  estimatedHeight += 78;
-
-  // Continuous thermal roll: width is fixed; length grows with content.
-  // The extra reserve protects against font/wrap rounding without compressing.
-  const paperHeight = Math.max(320, Math.min(12000, estimatedHeight + 70));
-
-  const page = pdf.addPage([paperWidth, paperHeight]);
+  let page = pdf.addPage([paperWidth, paperHeight]);
 
   let y = paperHeight - 15;
+
+  const continueRoll = (space: number) => {
+    if (y - space >= 15) return false;
+    page = pdf.addPage([paperWidth, paperHeight]);
+    y = paperHeight - 15;
+    drawWrappedCentered(`Receipt ${documentNumber} · page ${pdf.getPageCount()}`, 8.5, bold, 12);
+    return true;
+  };
 
   const drawLeft = (
     value: string,
@@ -474,7 +496,7 @@ export async function buildThermalReceiptPdf(
       });
     }
 
-    y -= 7;
+    y -= 10;
   };
 
   const drawWrappedCentered = (
@@ -490,48 +512,31 @@ export async function buildThermalReceiptPdf(
     }
   };
 
-  const drawMetaEntries = (
-    entries: readonly (readonly [string, string])[],
-  ) => {
-    for (const [label, value] of entries) {
-      const labelText = `${label}:`;
-      const labelWidth = Math.min(
-        58,
-        bold.widthOfTextAtSize(labelText, 7.3) + 4,
-      );
-
-      const valueWidth = contentWidth - labelWidth;
-      const wrapped = wrap(value, regular, 7.6, valueWidth);
-
-      drawLeft(labelText, margin, 7.3, bold, muted);
-
-      if (!wrapped.length) {
-        y -= 10;
-        continue;
-      }
-
-      wrapped.forEach((part, index) => {
-        if (index > 0) {
-          y -= 9;
-        }
-
-        page.drawText(part, {
-          x: margin + labelWidth,
-          y,
-          size: 7.6,
-          font: regular,
-          color: black,
-        });
-      });
-
-      y -= 10;
+  const drawPair = (label: string, value: string, labelFont: PDFFont, valueFont: PDFFont, labelSize: number, valueSize: number, labelColor = black) => {
+    const pair = pairLines(label, value, labelFont, valueFont, labelSize, valueSize);
+    const lineCount = Math.max(1, pair.labels.length, pair.values.length);
+    for (let index = 0; index < lineCount; index++) {
+      continueRoll(pair.lineHeight + 3);
+      const left = pair.labels[index];
+      const right = pair.values[index];
+      if (left) drawLeft(left, margin, labelSize, labelFont, labelColor);
+      if (right) drawRight(right, paperWidth - margin, valueSize, valueFont);
+      y -= pair.lineHeight;
     }
+  };
+  const drawMetaEntries = (entries: readonly (readonly [string, string])[]) => {
+    for (const [label, value] of entries) drawPair(label + ":", value, bold, regular, 7.3, 7.6, muted);
   };
 
   // ----------------------------------------------------------------
   // PROPERTY IDENTITY
   // ----------------------------------------------------------------
 
+  if (logo) {
+    const scaled = logo.scaleToFit(122, 42);
+    page.drawImage(logo, { x: (paperWidth - scaled.width) / 2, y: y - scaled.height, ...scaled });
+    y -= scaled.height + 12;
+  }
   drawWrappedCentered(propertyName.toUpperCase(), 11.5, bold, 13);
 
   if (propertyAddress) {
@@ -556,11 +561,9 @@ export async function buildThermalReceiptPdf(
   y -= 3;
   lineRule(true);
 
-  drawCentered("RECEIPT", 10, bold);
-  y -= 13;
-
-  drawCentered(documentNumber, 8.5, bold);
-  y -= 10;
+  y -= 4;
+  drawWrappedCentered("RECEIPT", 10, bold, 13);
+  drawWrappedCentered(documentNumber, 8.5, bold, 10);
 
   lineRule(true);
 
@@ -571,15 +574,11 @@ export async function buildThermalReceiptPdf(
   const receiptDate = dateTime(document.date);
 
   if (receiptDate) {
-    drawLeft("Date:", margin, 7.5, bold, muted);
-    drawRight(receiptDate, paperWidth - margin, 7.5, regular);
-    y -= 10;
+    drawPair("Date:", receiptDate, bold, regular, 7.5, 7.5, muted);
   }
 
   if (partyName) {
-    drawLeft(clean(payload.party?.label) || "Guest:", margin, 7.5, bold, muted);
-    drawRight(partyName, paperWidth - margin, 7.5, regular);
-    y -= 10;
+    drawPair(clean(payload.party?.label) || "Guest:", partyName, bold, regular, 7.5, 7.5, muted);
   }
 
   if (topMeta.length) {
@@ -593,68 +592,40 @@ export async function buildThermalReceiptPdf(
   // ITEMS
   // ----------------------------------------------------------------
 
-  drawLeft("ITEM", margin, 7.3, bold);
-  drawRight("AMOUNT", paperWidth - margin, 7.3, bold);
-  y -= 10;
-
-  lineRule(false);
+  const drawItemHead = () => {
+    drawLeft("ITEM", margin, 7.3, bold);
+    drawRight("AMOUNT", paperWidth - margin, 7.3, bold);
+    y -= 10;
+    lineRule(false);
+  };
+  continueRoll(35 + (lines[0] ? Math.min(estimateLineHeight(lines[0]), paperHeight - 100) : 0));
+  drawItemHead();
 
   for (const line of lines) {
+    const reserved = Math.min(estimateLineHeight(line), paperHeight - 90);
+    if (continueRoll(reserved + 22)) drawItemHead();
     const description = clean(line.description) || "Item";
     const amount = money(line.total, currency);
 
-    const descriptionLines = wrap(description, regular, 8.5, itemWidth);
-
-    const rowTop = y;
+    const descriptionLines = wrap(description, bold, 8.5, itemWidth);
 
     for (const [index, part] of descriptionLines.entries()) {
-      page.drawText(part, {
-        x: margin,
-        y: rowTop - index * 10,
-        size: 8.5,
-        font: index === 0 ? bold : regular,
-        color: black,
-      });
+      if (continueRoll(itemLineHeight + 5)) drawItemHead();
+      drawLeft(part, margin, 8.5, index === 0 ? bold : regular);
+      if (index === 0 && amount) drawRight(amount, paperWidth - margin, 8.3, bold);
+      y -= itemLineHeight;
     }
-
-    if (amount) {
-      const amountTextWidth = bold.widthOfTextAtSize(amount, 8.3);
-
-      page.drawText(amount, {
-        x: paperWidth - margin - amountTextWidth,
-        y: rowTop,
-        size: 8.3,
-        font: bold,
-        color: black,
-      });
-    }
-
-    y = rowTop - Math.max(1, descriptionLines.length) * 10;
 
     const quantity = qty(line.quantity);
     const unitPrice = money(line.unit_price, currency);
     const unit = clean(line.unit);
 
-    if (quantity && unitPrice) {
-      drawLeft(
-        `${quantity}${unit ? ` ${unit}` : ""} × ${unitPrice}`,
-        margin + 5,
-        7.1,
-        regular,
-        muted,
-      );
-      y -= 9;
-    } else if (quantity) {
-      drawLeft(
-        `Qty ${quantity}${unit ? ` ${unit}` : ""}`,
-        margin + 5,
-        7.1,
-        regular,
-        muted,
-      );
-      y -= 9;
-    } else if (unitPrice) {
-      drawLeft(`@ ${unitPrice}`, margin + 5, 7.1, regular, muted);
+    const quantityText = [quantity, unit].filter(Boolean).join(" ");
+    const detail = quantity && unitPrice ? `${quantityText} × ${unitPrice}` :
+      quantity ? `Qty ${quantityText}` : unitPrice ? `@ ${unitPrice}` : "";
+    for (const part of wrap(detail, regular, 7.1, contentWidth - 5)) {
+      if (continueRoll(14)) drawItemHead();
+      drawLeft(part, margin + 5, 7.1, regular, muted);
       y -= 9;
     }
 
@@ -662,58 +633,94 @@ export async function buildThermalReceiptPdf(
 
     if (note) {
       for (const part of wrap(note, regular, 7, itemWidth)) {
+        if (continueRoll(noteLineHeight + 5)) drawItemHead();
         drawLeft(part, margin + 5, 7, regular, muted);
-        y -= 8;
+        y -= noteLineHeight;
       }
     }
 
     y -= 4;
   }
 
+  continueRoll(24);
   lineRule(true);
 
   // ----------------------------------------------------------------
   // TOTALS
   // ----------------------------------------------------------------
 
+  let paymentHeading = false;
+  let totalShown = false;
+  let taxHeading = false;
+  let taxCents = 0;
+  let taxRows = 0;
+  const drawTaxTotal = () => {
+    if (taxRows > 1) {
+      continueRoll(26);
+      drawPair("Total tax", money(taxCents / 100, currency), bold, bold, 8, 8);
+    }
+    taxRows = 0;
+    taxCents = 0;
+  };
   for (const total of totals) {
-    const label = clean(total.label);
+    const label = clean(total.label).replace(/^Tax(?=\s*·|$)/i, "Recorded tax");
     const value = money(total.amount, currency);
 
     if (!label || !value) continue;
 
+    const isTax = !totalShown && (/^Recorded tax$/i.test(label) || /·\s*(Included|Added)$/i.test(label));
+    if (!isTax && taxRows) drawTaxTotal();
     const emphasised =
       Boolean(total.emphasis) ||
       /^(total|amount due|balance due|grand total)$/i.test(label);
 
-    if (emphasised) {
-      y -= 2;
-
-      page.drawLine({
-        start: { x: margin, y: y + 5 },
-        end: { x: paperWidth - margin, y: y + 5 },
-        thickness: 1.2,
-        color: black,
-      });
-
-      drawLeft(label.toUpperCase(), margin, 10, bold);
-      drawRight(value, paperWidth - margin, 10, bold);
-
-      y -= 14;
-
-      page.drawLine({
-        start: { x: margin, y: y + 5 },
-        end: { x: paperWidth - margin, y: y + 5 },
-        thickness: 1.2,
-        color: black,
-      });
-
-      y -= 5;
-    } else {
-      drawLeft(label, margin, 8, regular);
-      drawRight(value, paperWidth - margin, 8, bold);
-      y -= 11;
+    continueRoll(pairHeight(label, value, bold, bold, 10, 10) + 45);
+    if (isTax) {
+      if (!taxHeading) {
+        drawLeft("TAX BREAKDOWN", margin, 7.5, bold);
+        y -= 13;
+        taxHeading = true;
+      }
+      taxRows += 1;
+      taxCents += Math.round(Number(total.amount) * 100);
     }
+    if (totalShown && !paymentHeading) {
+      drawLeft("PAYMENTS & BALANCE", margin, 7.5, bold);
+      y -= 13;
+      paymentHeading = true;
+    }
+
+    if (emphasised) {
+      // Reserve a separate band above and below the entire wrapped total row.
+      y -= 2;
+      page.drawLine({start: {x: margin, y: y + 3}, end: {x: paperWidth - margin, y: y + 3}, thickness: 1.2, color: black});
+      y -= 10;
+      totalShown ||= /^(total|grand total)$/i.test(label);
+      drawPair(label.toUpperCase(), value, bold, bold, 10, 10);
+      page.drawLine({start: {x: margin, y: y + 1}, end: {x: paperWidth - margin, y: y + 1}, thickness: 1.2, color: black});
+      y -= 10;
+    } else {
+      drawPair(label, value, regular, bold, 8, 8);
+    }
+  }
+  if (taxRows) drawTaxTotal();
+
+  if (paymentMeta.length) {
+    continueRoll(18 + estimateMetaHeight(paymentMeta));
+    if (!paymentHeading) {
+      drawLeft("PAYMENTS & BALANCE", margin, 7.5, bold);
+      y -= 13;
+    }
+    drawMetaEntries(paymentMeta);
+  }
+
+  if (paymentDetails.length) {
+    continueRoll(24 + estimateMetaHeight(paymentDetails));
+    y -= 3;
+    lineRule(true);
+    drawLeft("HOW TO PAY", margin, 7.5, bold);
+    y -= 13;
+    drawMetaEntries(paymentDetails);
   }
 
   // ----------------------------------------------------------------
@@ -721,6 +728,7 @@ export async function buildThermalReceiptPdf(
   // ----------------------------------------------------------------
 
   if (fiscalMeta.length || qrPayload) {
+    continueRoll(25 + estimateMetaHeight(fiscalMeta) + (qrPayload ? 112 : 0));
     y -= 3;
     lineRule(true);
 
@@ -770,12 +778,32 @@ export async function buildThermalReceiptPdf(
     }
   }
 
+  if (feedbackLink) {
+    continueRoll(115);
+    try {
+      const imageUrl = await QRCode.toDataURL(feedbackLink, { errorCorrectionLevel: "M", margin: 4, width: 250 });
+      const qrImage = await pdf.embedPng(Buffer.from(imageUrl.split(",", 2)[1] ?? "", "base64"));
+      lineRule(true);
+      drawCentered("SCAN TO LEAVE FEEDBACK", 8, bold);
+      y -= 10;
+      const size = 76;
+      page.drawImage(qrImage, { x: (paperWidth - size) / 2, y: y - size, width: size, height: size });
+      y -= size + 7;
+    } catch { /* An invalid QR destination must never block the receipt. */ }
+  }
+
   // ----------------------------------------------------------------
   // PROVENANCE / FOOTER
   // ----------------------------------------------------------------
 
+  continueRoll(92 + estimateMetaHeight(staffEntries));
   y -= 4;
   lineRule(true);
+
+  if (staffEntries.length) {
+    drawMetaEntries(staffEntries);
+    y -= 4;
+  }
 
   drawCentered("Thank you for your business.", 8.2, bold);
   y -= 12;
@@ -810,6 +838,11 @@ export async function buildThermalReceiptPdf(
     regular,
     muted,
   );
+  const unusedPaper = Math.max(0, y - 14);
+  if (unusedPaper > 0) {
+    page.translateContent(0, -unusedPaper);
+    page.setSize(paperWidth, paperHeight - unusedPaper);
+  }
 
   pdf.setTitle(`Receipt ${documentNumber}`);
   pdf.setAuthor(clean(identity["organisation"]) || propertyName);

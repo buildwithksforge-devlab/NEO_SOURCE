@@ -20,11 +20,14 @@ export type PublicWorkspace = {
   branch_id: string | null;
   app_key: PublicAppKey;
   slug: string;
+  guest_slug?: string;
   published: boolean;
   app_name: string;
   hotel_name: string;
   logo_url: string | null;
   icon_url: string | null;
+  hero_url?: string | null;
+  currency?: string | null;
   primary_color: string;
   secondary_color: string;
   background_color: string;

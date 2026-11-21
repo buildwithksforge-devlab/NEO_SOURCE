@@ -1,0 +1,11 @@
+{
+  "diagnostic_version": "anonymous-published-menu-inspection-v1",
+  "counts": {
+    "delivery": 25,
+    "pickup": 25,
+    "room-service": 25
+  },
+  "uniquePublishedItems": 26,
+  "candidates": [],
+  "scope": "Read-only public storefront menu RPC for Savannah Nairobi; anonymous public key only. Candidate names are evidence for review, not instructions to remove products. No rows changed."
+}

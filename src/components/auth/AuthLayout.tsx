@@ -1,3 +1,4 @@
+import {AppInstallButton} from '@/components/app/AppInstallation';
 import type { ReactNode } from "react";
 import { ExternalLink, Instagram } from "lucide-react";
 import { CREATOR_URL, NeoLockup, NeoSymbol, PoweredByNeoSignature } from "@/components/brand/NeoIdentity";
@@ -103,6 +104,7 @@ export function AuthLayout({
               <p className="mt-2.5 text-[0.9375rem] leading-relaxed text-neo-steel">{subtitle}</p>
             ) : null}
             <div className="mt-7 text-neo-midnight">{children}</div>
+            <div className="mt-5 flex flex-wrap justify-center"><AppInstallButton/></div>
             {footer ? (
               <div className="mt-7 border-t border-neo-mist pt-5 text-[0.8125rem] leading-relaxed text-neo-steel">
                 {footer}

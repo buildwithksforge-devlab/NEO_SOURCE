@@ -1,0 +1,112 @@
+﻿NEO PRINTER INTEGRATION AUDIT
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:62: () => available.find((p) => (role ? p.printer_role === role : false)) ?? available[0],
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\common\SendToPrinterButton.tsx:123: {p.printer_role ? ` · ${p.printer_role.replace(/_/g, " ")}` : ""}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31787: print_jobs: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31859: foreignKeyName: "print_jobs_branch_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31866: foreignKeyName: "print_jobs_created_by_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31873: foreignKeyName: "print_jobs_order_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31880: foreignKeyName: "print_jobs_organization_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31887: foreignKeyName: "print_jobs_original_printer_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31890: referencedRelation: "printer_profiles"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31894: foreignKeyName: "print_jobs_printer_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31897: referencedRelation: "printer_profiles"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31902: printer_profiles: {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31907: connection_type: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31910: fallback_printer_id: string | null
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31919: printer_role: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31930: connection_type?: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31933: fallback_printer_id?: string | null
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31942: printer_role?: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31953: connection_type?: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31956: fallback_printer_id?: string | null
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31965: printer_role?: string
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31974: foreignKeyName: "printer_profiles_branch_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31981: foreignKeyName: "printer_profiles_department_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31988: foreignKeyName: "printer_profiles_fallback_printer_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31989: columns: ["fallback_printer_id"]
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31991: referencedRelation: "printer_profiles"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:31995: foreignKeyName: "printer_profiles_organization_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\integrations\supabase\types.ts:32002: foreignKeyName: "printer_profiles_station_id_fkey"
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\branch-filter.ts:247: "printer_profiles",
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:433: const { data, error } = await applyTo(supabase.from("printer_profiles").select("*, operational_stations(name)"), "printer_profiles")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1389: export function useSaveRecord(table: "restaurant_areas" | "restaurant_tables" | "menus" | "menu_categories" | "menu_items" | "modifier_groups" | "modifier_options" | "printer_profiles" | "table_reservations") {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pos-data.ts:1401: ["restaurant_areas", "restaurant_tables", "menus", "menu_items", "printer_profiles", "table_reservations"].includes(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:33: printer_role: string | null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:37: fallback_printer_id: string | null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:38: connection_type: string | null;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:51: export type PrintJob = {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:111: .from("printer_profiles")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:131: export function usePrintJobs(
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:141: .from("print_jobs")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:150: return (data ?? []) as PrintJob[];
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:189: .from("print_jobs")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:243: .from("printer_profiles")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:247: .from("printer_profiles")
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\printing.ts:395: export function useRetryPrintJob() {
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\business-documents.test.ts:13: const offenders = routeFiles.filter((file) => readFileSync(file, "utf8").includes("window.print("));
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:25: usePrintJobs,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:28: useRetryPrintJob,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:73: const jobs = usePrintJobs(organizationId);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:80: const retryJob = useRetryPrintJob();
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:226: value={p.fallback_printer_id ?? "none"}
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.platform.printers.tsx:228: savePrinter.mutate({ id: p.id, fallback_printer_id: v === "none" ? null : v })
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.settings.tsx:50: const savePrinter = useSaveRecord("printer_profiles");
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:474: CREATE TABLE public.printer_profiles (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:479: printer_role text NOT NULL DEFAULT 'receipt',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:481: connection_type text NOT NULL DEFAULT 'browser',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:488: CONSTRAINT printer_profiles_status_chk CHECK (status IN ('connected','not-configured','offline','error'))
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:491: CREATE TABLE public.print_jobs (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:494: printer_id uuid REFERENCES public.printer_profiles(id) ON DELETE SET NULL,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:581: 'pos_payments','pos_void_requests','pos_refund_requests','pos_discounts','bar_tabs','printer_profiles',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:582: 'print_jobs','recipes','recipe_ingredients','inventory_posting_events','pos_settings'
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:599: 'pos_discounts','bar_tabs','printer_profiles','print_jobs','recipes','recipe_ingredients',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:617: 'modifier_groups','modifier_options','menu_item_modifier_groups','pos_discounts','printer_profiles',
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql:684: CREATE POLICY print_jobs_write ON public.print_jobs FOR ALL TO authenticated
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:2: ALTER TABLE public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:4: ADD COLUMN IF NOT EXISTS fallback_printer_id uuid REFERENCES public.printer_profiles(id),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:12: ALTER TABLE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:14: ADD COLUMN IF NOT EXISTS original_printer_id uuid REFERENCES public.printer_profiles(id),
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:24: CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_idem_uidx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:25: ON public.print_jobs(organization_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:26: CREATE INDEX IF NOT EXISTS print_jobs_queue_idx ON public.print_jobs(organization_id, status, next_attempt_at);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:27: CREATE INDEX IF NOT EXISTS print_jobs_printer_idx ON public.print_jobs(printer_id, created_at DESC);
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:29: GRANT SELECT, INSERT, UPDATE ON public.print_jobs TO authenticated;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:30: GRANT ALL ON public.print_jobs TO service_role;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:37: DECLARE p public.printer_profiles; j uuid;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:39: SELECT * INTO p FROM public.printer_profiles WHERE id = _printer;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:46: SELECT id INTO j FROM public.print_jobs WHERE organization_id = p.organization_id AND idempotency_key = _idempotency;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:49: INSERT INTO public.print_jobs(organization_id, branch_id, printer_id, original_printer_id, document_type, title, payload, status, max_attempts, idempotency_key, created_by)
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:58: DECLARE jb public.print_jobs; fb uuid; new_status text; fell_over boolean := false; backoff integer;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:60: SELECT * INTO jb FROM public.print_jobs WHERE id = _job;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:68: UPDATE public.print_jobs SET status='completed', attempts=attempts+1, completed_at=now(), last_error=NULL WHERE id=_job;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:69: UPDATE public.printer_profiles SET health_status='online', last_success_at=now(), last_checked_at=now(), last_error=NULL WHERE id=jb.printer_id;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:73: SELECT fallback_printer_id, coalesce(retry_backoff_seconds,30) INTO fb, backoff
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:74: FROM public.printer_profiles WHERE id = jb.printer_id;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:76: UPDATE public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:82: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:88: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:93: UPDATE public.print_jobs SET status='failed', attempts=attempts+1, last_error=_error WHERE id=_job;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:102: DECLARE jb public.print_jobs;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:104: SELECT * INTO jb FROM public.print_jobs WHERE id=_job;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql:110: UPDATE public.print_jobs SET status='queued', attempts=0, next_attempt_at=now(), last_error=NULL WHERE id=_job;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:3: CREATE INDEX IF NOT EXISTS print_jobs_pos_receipt_history_idx
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:4: ON public.print_jobs (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:26: p public.printer_profiles;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:38: FROM public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:56: FROM public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:136: FROM public.print_jobs pj
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:154: FROM public.print_jobs pj
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:197: INSERT INTO public.print_jobs (
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:249: jb public.print_jobs;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:257: FROM public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:304: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:313: UPDATE public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:329: fallback_printer_id,
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:334: FROM public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:337: UPDATE public.printer_profiles
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:349: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:363: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:378: UPDATE public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:406: jb public.print_jobs;
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:410: FROM public.print_jobs
+C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261003093000_enforce_pos_receipt_first_print_reprint.sql:456: UPDATE public.print_jobs

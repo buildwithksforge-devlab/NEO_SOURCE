@@ -7,7 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PAYMENT_METHOD_CATALOGUE, paymentMethod } from "@/lib/payment-methods";
+import { PAYMENT_METHOD_CATALOGUE, paymentAdapterCapabilities, paymentMethod } from "@/lib/payment-methods";
 import { EXTERNAL_METHODS } from "@/lib/pos";
 import { RPC_MANIFEST } from "@/lib/rpc-manifest";
 
@@ -28,6 +28,21 @@ describe("payment method catalogue", () => {
     }
   });
 
+  it("reports the actual NEØ collection path separately from external refund recording", () => {
+    expect(paymentAdapterCapabilities("m-pesa")).toEqual({
+      collection: "stk-prompt",
+      refundExecution: "external-confirmation-only",
+    });
+    for (const method of ["card-terminal", "qr"]) {
+      expect(paymentAdapterCapabilities(method)).toEqual({
+        collection: "processor-handoff",
+        refundExecution: "external-confirmation-only",
+      });
+    }
+    expect(paymentAdapterCapabilities("card")).toBeUndefined();
+    expect(paymentAdapterCapabilities("unconfigured-provider")).toBeUndefined();
+  });
+
   it("gives every provider-backed method one place it is set up", () => {
     for (const m of PAYMENT_METHOD_CATALOGUE.filter((x) => x.kind === "provider")) {
       expect(m.configPath, `${m.value} needs a configuration route`).toBeTruthy();
@@ -37,7 +52,7 @@ describe("payment method catalogue", () => {
 
 describe("checkout screens use the one picker", () => {
   const surfaces = [
-    "src/routes/_shell.pos.orders.$id.tsx",
+    "src/components/pos/PosPaymentDialog.tsx",
     "src/components/events/EventBillDialog.tsx",
     "src/components/pms/DepositPanel.tsx",
     "src/components/pms/ReservationActions.tsx",
@@ -65,5 +80,29 @@ describe("provider intents", () => {
     expect(route).toContain("token.length < 16");
     expect(route).toContain("No outcome in payload");
     expect(route).toContain("neo_payment_intent_apply");
+  });
+
+  it("keeps provider callback bearer tokens hashed and dispatches each intent once", () => {
+    const migration = read(
+      "supabase/migrations/20261112140000_provider_payment_dispatch_safety.sql",
+    );
+    const gateway = read("src/lib/payment-gateway.functions.ts");
+    const open = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_open"),
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_claim_dispatch"),
+    );
+    const apply = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION public.neo_payment_intent_apply"),
+    );
+
+    expect(open).toContain("'environment', env");
+    expect(open).not.toContain("'callback_token'");
+    expect(migration).toContain("extensions.digest(convert_to(_token, 'UTF8'), 'sha256')");
+    expect(apply).toContain("WHERE callback_token = encode(");
+    expect(gateway).toContain("neo_payment_intent_claim_dispatch");
+    expect(gateway).toContain(
+      "const callbackToken = `${crypto.randomUUID()}${crypto.randomUUID()}`",
+    );
+    expect(gateway).not.toContain("row.callback_token");
   });
 });

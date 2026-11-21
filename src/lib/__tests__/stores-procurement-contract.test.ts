@@ -14,7 +14,10 @@ import { ROLE_FEATURE_TEMPLATES } from "@/lib/role-templates";
 import { RPC_MANIFEST } from "@/lib/rpc-manifest";
 import { outstandingOf } from "@/lib/stores-lifecycle";
 
-const SQL = readFileSync(join(process.cwd(), "src/lib/__tests__/fixtures/stores-procurement.sql"), "utf8");
+const SQL = readFileSync(
+  join(process.cwd(), "src/lib/__tests__/fixtures/stores-procurement.sql"),
+  "utf8",
+);
 
 const fn = (name: string) => {
   const start = SQL.indexOf(`FUNCTION public.${name}(`);
@@ -72,7 +75,9 @@ describe("exactly-once submissions", () => {
     for (const [name, body] of Object.entries(WRITE_ROUTINES)) {
       expect(body, `${name} must demand an attempt key`).toContain("attempt_key_required");
       expect(body, `${name} must replay a repeated submission`).toContain("'replayed', true");
-      expect(body, `${name} must record the attempt`).toContain("INSERT INTO public.procurement_attempts");
+      expect(body, `${name} must record the attempt`).toContain(
+        "INSERT INTO public.procurement_attempts",
+      );
     }
   });
 
@@ -137,7 +142,13 @@ describe("issues and returns", () => {
 
 describe("scope and privilege", () => {
   it("every routine works inside the caller's organisation and property scope", () => {
-    for (const [name, body] of Object.entries({ ...WRITE_ROUTINES, decide, approveOrder, lowStock, reconcile })) {
+    for (const [name, body] of Object.entries({
+      ...WRITE_ROUTINES,
+      decide,
+      approveOrder,
+      lowStock,
+      reconcile,
+    })) {
       expect(body, `${name} must resolve the organisation`).toContain("public.current_org_id()");
       expect(body, `${name} must honour property scope`).toContain("public.neo_branch_in_scope");
     }
@@ -149,12 +160,20 @@ describe("scope and privilege", () => {
       "neo_procurement_request_decide",
       "neo_procurement_order_from_request",
       "neo_procurement_order_approve",
-      "neo_stores_receive_goods",
+      "neo_blind_receiving_orders",
+      "neo_submit_blind_receiving_count",
+      "neo_receiving_custody_queue",
+      "neo_accept_receiving_custody",
+      "neo_blind_receiving_review_queue",
+      "neo_blind_receiving_decide",
+      "neo_blind_receiving_approved_queue",
+      "neo_post_approved_blind_receiving",
       "neo_stores_issue",
       "neo_stores_low_stock_scan",
     ]) {
       expect(RPC_MANIFEST[name], `${name} missing from the manifest`).toBe("authenticated");
     }
+    expect(RPC_MANIFEST["neo_stores_receive_goods"]).toBeUndefined();
   });
 });
 
@@ -210,5 +229,7 @@ describe("outstanding quantity helper", () => {
 
   it("never goes negative after an over-receipt", () => {
     expect(outstandingOf({ quantity: 10, received_quantity: 12 })).toBe(0);
+    expect(outstandingOf({ quantity: 10, received_quantity: 6, accepted_quantity: 4 })).toBe(6);
+    expect(outstandingOf({ quantity: 10, received_quantity: 6, rejected_quantity: 2 })).toBe(6);
   });
 });

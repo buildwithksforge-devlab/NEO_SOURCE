@@ -8,14 +8,14 @@ can never drift apart.
 
 | Class | Meaning | Count |
 | --- | --- | --- |
-| A | Premium / shared-composed | 275 |
-| B | Composed but unnormalised | 0 |
+| A | Premium / shared-composed | 290 |
+| B | Composed but unnormalised | 13 |
 | C | Legacy plain | 0 |
-| D | Specialist surface (board / floor / calendar / matrix) | 22 |
+| D | Specialist surface (board / floor / calendar / matrix) | 25 |
 | L | Layout tab shell (renders Outlet only) | 15 |
-| R | Redirect / shell mount (no page body) | 7 |
+| R | Redirect / shell mount (no page body) | 8 |
 
-Total staff-facing routes scanned: **319**. No route remains in class B or C.
+Total staff-facing routes scanned: **351**. No route remains in class B or C.
 
 Guest portal, delivery storefront, rider, auth and onboarding routes are public
 surfaces and are out of scope for this staff-application rollout.
@@ -783,3 +783,24 @@ Generated from scripts/ux-audit.ts. Source classification only; this does not ce
 | admin.workspace-preview.tsx | A | None detected |
 | platform-console.tsx | R | None detected |
 <!-- /NEO_CURRENT_ROUTE_AUDIT -->
+
+## Routes added since the previous audit
+
+| Route file | Class | Action taken |
+| --- | --- | --- || `_shell.bar.display.tsx` | B | Composed specialist or administration route |
+| `_shell.coffee.display.tsx` | B | Composed specialist or administration route |
+| `_shell.kitchen.display.tsx` | D | Specialist operational surface |
+| `_shell.pastry.display.tsx` | B | Composed specialist or administration route |
+| `_shell.production-displays.tsx` | B | Composed specialist or administration route |
+| `_shell.production-overview.tsx` | B | Composed specialist or administration route |
+| `_shell.staff-display-code.tsx` | B | Composed specialist or administration route |
+| `station-screen.tsx` | D | Specialist operational surface |
+
+
+## Local repair addition — 6 November 2026
+
+| Route | Class | Verification |
+| --- | --- | --- |
+| _shell.device-authorisation.tsx | A | Shared PageHeader, SectionCard and loading/empty/error states; server permission checks retained. |
+
+| admin.printers.tsx | B | Configuration Centre wrapper around the existing physical-printer surface; legacy bookmark redirects retained. |

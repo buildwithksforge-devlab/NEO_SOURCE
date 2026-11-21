@@ -1,3 +1,5 @@
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Inventory & Stores department layer.
  *
@@ -13,6 +15,7 @@
  * so stock balances and the audit trail stay owned by the database.
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireSavedRecord } from "@/lib/durable-command-result";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,12 +59,7 @@ export function useStoresContext() {
 
 function useStoresInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["stores-department"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-    void qc.invalidateQueries({ queryKey: ["procurement"] });
-    void qc.invalidateQueries({ queryKey: ["ops"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 /* ------------------------------------------------------------------ *
@@ -107,6 +105,11 @@ export function useStoresAvailability() {
         const key = String(row["stock_item_id"] ?? "");
         if (!key) continue;
         byItem.set(key, (byItem.get(key) ?? 0) + num(row["quantity_on_hand"]));
+        const locationId = String(row["location_id"] ?? "");
+        if (locationId) {
+          const storeKey = `${locationId}:${key}`;
+          byItem.set(storeKey, (byItem.get(storeKey) ?? 0) + num(row["quantity_on_hand"]));
+        }
       }
       return byItem;
     },
@@ -126,8 +129,9 @@ export function useReleaseRequisitionToStores() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Approved — the request is now with Stores");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -137,6 +141,49 @@ export function useReleaseRequisitionToStores() {
  * Name the store the goods will actually leave from. Stock cannot be issued
  * until this is set, because a movement without an origin is not a movement.
  */
+/**
+ * Assign the destination store for a departmental requisition.
+ *
+ * This only selects the receiving location.
+ * No stock is moved by this operation.
+ *
+ * Actual stock movements remain the responsibility
+ * of the authoritative database issue function.
+ */
+export function useSetReceivingStore() {
+  const invalidate = useStoresInvalidate();
+
+  return useMutation({
+    mutationFn: async (input: { requisitionId: string; locationId: string }) => {
+      const { data, error } = await db
+        .from("internal_requisitions")
+        .update({
+          destination_location_id: input.locationId,
+        })
+        .eq("id", input.requisitionId)
+        .select("id, destination_location_id")
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.destination_location_id !== input.locationId) {
+        throw new Error("Receiving store was not saved. Check Stores permissions.");
+      }
+    },
+
+    onSuccess: () => {
+      const refresh = invalidate();
+      toast.success("Receiving departmental store assigned");
+      return refresh;
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
 export function useSetIssuingStore() {
   const invalidate = useStoresInvalidate();
   return useMutation({
@@ -148,18 +195,53 @@ export function useSetIssuingStore() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Issuing store set — this request can now be issued");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
 
+/**
+ * Map a requisition line to an actual inventory item.
+ * This does not deduct stock or approve the requisition.
+ */
+export function useAssignRequisitionStockItem() {
+  const invalidate = useStoresInvalidate();
+
+  return useMutation({
+    mutationFn: async (input: { requisitionId: string; lineId: string; stockItemId: string }) => {
+      const { data, error } = await guardedRpc(db, "neo_requisition_assign_stock_item", {
+        _requisition: input.requisitionId,
+        _line: input.lineId,
+        _stock_item: input.stockItemId,
+      });
+
+      if (error) throw new Error(error.message);
+
+      return data as StoresRow;
+    },
+
+    onSuccess: () => {
+      const refresh = invalidate();
+      toast.success("Inventory item linked to requisition");
+      return refresh;
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
 /** Confirm the quantities Stores will release, before issuing. */
 export function useApproveRequisitionAtStores() {
   const invalidate = useStoresInvalidate();
   return useMutation({
-    mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_approved: number }[] }) => {
+    mutationFn: async (input: {
+      requisitionId: string;
+      lines: { id: string; quantity_approved: number }[];
+    }) => {
       const { error } = await guardedRpc(db, "req_approve", {
         _requisition: input.requisitionId,
         _lines: input.lines,
@@ -168,8 +250,9 @@ export function useApproveRequisitionAtStores() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Quantities confirmed — ready to issue");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -179,21 +262,32 @@ export function useApproveRequisitionAtStores() {
 export function useIssueRequisition() {
   const invalidate = useStoresInvalidate();
   return useMutation({
-    mutationFn: async (input: { requisitionId: string; lines: { id: string; quantity_issued: number }[] }) => {
-      const { data, error } = await guardedRpc(db, "req_issue", {
+    mutationFn: async (input: {
+      requisitionId: string;
+      lines: { id: string; quantity_issued: number }[];
+      attemptId: string;
+    }) => {
+      const { data, error } = await guardedRpc(db, "neo_req_issue_safe", {
         _requisition: input.requisitionId,
         _lines: input.lines,
+        _attempt: input.attemptId,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as StoresRow;
+      if (!data || typeof data !== "object" || data["ok"] !== true) {
+        throw new Error(
+          String(data?.["message"] ?? data?.["reason"] ?? "Stock issue was not confirmed."),
+        );
+      }
+      return data as StoresRow;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(
         data["partial"] === true
           ? "Partly issued — the outstanding quantity stays open"
           : "Issued in full and posted to the stock ledger",
       );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -211,8 +305,9 @@ export function useRejectRequisition() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Requisition returned to the department");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -233,13 +328,14 @@ export function useRaiseReplenishment() {
       return (data ?? {}) as StoresRow;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       const number = str(data["request_number"], "purchase request");
       toast.success(
         data["created"] === false
           ? `Already with Procurement as ${number}`
           : `Shortage sent to Procurement as ${number} — ${num(data["lines"])} line(s)`,
       );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -302,7 +398,9 @@ export function useStockTakeLines(takeId: string | null) {
     queryFn: async () => {
       const { data, error } = await db
         .from("stock_take_lines")
-        .select("id, stock_item_id, system_quantity, counted_quantity, variance, unit, unit_cost, notes, stock_items(name, base_unit)")
+        .select(
+          "id, stock_item_id, system_quantity, counted_quantity, variance, unit, unit_cost, notes, stock_items(name, base_unit)",
+        )
         .eq("stock_take_id", takeId)
         .limit(500);
       if (error) throw new Error(error.message);
@@ -368,8 +466,9 @@ export function useStartStockCount() {
       return takeId;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Count opened with the system quantities snapshotted");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -414,8 +513,11 @@ const DISCRETE_UNITS = new Set([
 /** Reject counts that cannot physically exist. Returns an error message, or null. */
 export function validateCountedQuantity(counted: number, unit?: string | null): string | null {
   if (!Number.isFinite(counted)) return "Enter a counted quantity";
-  if (counted < 0) return "A physical count cannot be negative — enter the quantity actually on the shelf";
-  const u = String(unit ?? "").trim().toLowerCase();
+  if (counted < 0)
+    return "A physical count cannot be negative — enter the quantity actually on the shelf";
+  const u = String(unit ?? "")
+    .trim()
+    .toLowerCase();
   if (DISCRETE_UNITS.has(u) && !Number.isInteger(counted))
     return `Count ${u} in whole numbers — a part ${u} cannot be counted`;
   return null;
@@ -423,15 +525,33 @@ export function validateCountedQuantity(counted: number, unit?: string | null): 
 
 export function useRecordCountedQuantity() {
   const invalidate = useStoresInvalidate();
+  const { organizationId } = useAuth();
   return useMutation({
-    mutationFn: async (input: { lineId: string; counted: number; notes?: string; unit?: string | null }) => {
+    mutationFn: async (input: {
+      lineId: string;
+      counted: number;
+      notes?: string;
+      unit?: string | null;
+    }) => {
       const problem = validateCountedQuantity(input.counted, input.unit);
       if (problem) throw new Error(problem);
-      const { error } = await db
+      if (!organizationId) throw new Error("Choose a workspace before recording a count.");
+      const { data, error } = await db
         .from("stock_take_lines")
         .update({ counted_quantity: input.counted, notes: input.notes ?? null })
-        .eq("id", input.lineId);
+        .eq("id", input.lineId)
+        .eq("organization_id", organizationId)
+        .select("id,counted_quantity")
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (
+        !data ||
+        data.id !== input.lineId ||
+        data.counted_quantity == null ||
+        !Number.isFinite(Number(data.counted_quantity)) ||
+        Number(data.counted_quantity) !== input.counted
+      )
+        throw new Error("The physical count was not saved. Refresh before retrying.");
     },
     onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
@@ -451,12 +571,21 @@ export function useSubmitCountVariance() {
         _notes: input.notes ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as StoresRow;
+      const saved = requireSavedRecord(data, ["status"], "The count submission was not confirmed.");
+      if (!["closed", "awaiting-approval"].includes(String(saved["status"])))
+        throw new Error("The saved count is not closed or awaiting approval.");
+      return saved;
     },
     onSuccess: (data) => {
-      invalidate();
+      const refresh = invalidate();
       if (str(data["status"], "") === "closed") toast.success("Count closed — no variance found");
-      else toast.success(`${num(data["lines"])} variance line(s) sent for approval`);
+      else
+        toast.success(
+          data["lines"] == null
+            ? "Count is awaiting variance approval"
+            : `${num(data["lines"])} variance line(s) sent for approval`,
+        );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -499,10 +628,23 @@ export function useStoresTasks(scope: "department" | "mine" = "department") {
   const department = useStoresDepartment();
   const departmentId = department.data?.["id"] ? String(department.data["id"]) : null;
   return useQuery({
-    queryKey: ["stores-department", "tasks", organizationId, branchId, scope, departmentId, user?.id],
-    enabled: Boolean(organizationId) && (scope === "mine" ? Boolean(user?.id) : Boolean(departmentId)),
+    queryKey: [
+      "stores-department",
+      "tasks",
+      organizationId,
+      branchId,
+      scope,
+      departmentId,
+      user?.id,
+    ],
+    enabled:
+      Boolean(organizationId) && (scope === "mine" ? Boolean(user?.id) : Boolean(departmentId)),
     queryFn: async () => {
-      let q = db.from("tasks").select("*").order("due_at", { ascending: true, nullsFirst: false }).limit(200);
+      let q = db
+        .from("tasks")
+        .select("*")
+        .order("due_at", { ascending: true, nullsFirst: false })
+        .limit(200);
       if (scope === "mine") q = q.eq("assignee_id", user!.id);
       else if (departmentId) q = q.eq("department_id", departmentId);
       if (branchId) q = q.eq("branch_id", branchId);
@@ -537,7 +679,7 @@ export function useCreateStoresTask() {
       // refused here rather than failing in the database.
       const description = input.description.trim();
       if (!description) throw new Error("Describe what the task involves before assigning it.");
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: department.data?.["id"] ?? null,
@@ -549,11 +691,11 @@ export function useCreateStoresTask() {
         priority: input.priority ?? "normal",
         status: "open",
       });
-      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Stores task assigned");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -569,8 +711,9 @@ export function useUpdateStoresTask() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Task updated");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -599,16 +742,35 @@ export function useReconcileCountAgainstLedger() {
             : "That count could not be reconciled.",
         );
       }
+      const fields = ["lines", "match", "shortage", "overage", "not_counted"];
+      if (
+        result["ok"] !== true ||
+        result["take_id"] !== takeId ||
+        fields.some((field) => !Number.isInteger(result[field]) || Number(result[field]) < 0) ||
+        Number(result["lines"]) !==
+          Number(result["match"]) +
+            Number(result["shortage"]) +
+            Number(result["overage"]) +
+            Number(result["not_counted"])
+      )
+        throw new Error("The server did not confirm the stock reconciliation totals.");
       return result;
     },
     onSuccess: (result) => {
-      invalidate();
+      const refresh = invalidate();
       const flagged = num(result["shortage"]) + num(result["overage"]);
+      if (num(result["not_counted"]) > 0) {
+        toast.warning(
+          `${num(result["not_counted"])} line(s) remain uncounted — this count is incomplete`,
+        );
+        return;
+      }
       toast.success(
         flagged > 0
           ? `${flagged} line(s) differ from the ledger — raise the correction for approval`
           : "Every counted line agrees with the ledger",
       );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -618,7 +780,11 @@ export function useReconcileCountAgainstLedger() {
 export function useDecideStockAdjustment() {
   const invalidate = useStoresInvalidate();
   return useMutation({
-    mutationFn: async (input: { adjustmentId: string; decision: "approve" | "reject"; notes?: string | null }) => {
+    mutationFn: async (input: {
+      adjustmentId: string;
+      decision: "approve" | "reject";
+      notes?: string | null;
+    }) => {
       const { data, error } = await guardedRpc(db, "neo_stores_adjustment_decide", {
         _adjustment: input.adjustmentId,
         _decision: input.decision,
@@ -638,15 +804,30 @@ export function useDecideStockAdjustment() {
                 : "That correction could not be decided.",
         );
       }
+      if (
+        result["ok"] !== true ||
+        result["adjustment"] !== input.adjustmentId ||
+        result["decision"] !== input.decision
+      )
+        throw new Error("The server did not confirm the requested stock correction decision.");
+      const posting = result["result"] as StoresRow | null;
+      if (
+        !posting ||
+        !(input.decision === "approve" ? ["posted", "already-posted"] : ["rejected"]).includes(
+          String(posting["status"]),
+        )
+      )
+        throw new Error("The stock correction did not reach its confirmed final status.");
       return result;
     },
     onSuccess: (result) => {
-      invalidate();
+      const refresh = invalidate();
       toast.success(
         str(result["decision"], "") === "approve"
           ? "Correction approved and posted to stock"
           : "Correction declined",
       );
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

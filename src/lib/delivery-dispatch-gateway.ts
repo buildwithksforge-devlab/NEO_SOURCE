@@ -10,6 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { useAuth } from "@/lib/auth";
 import { dispatchCourierJob, type CourierDispatchResult } from "@/lib/delivery-gateway.functions";
 
 export type CourierJob = {
@@ -32,22 +33,19 @@ export type CourierOpenResult = {
 };
 
 /** Is a courier service actually connected for this workspace? */
-export function useCourierConnected() {
+export function useCourierConnections() {
+  const { organizationId } = useAuth();
   return useQuery({
-    queryKey: ["courier-connection"],
+    queryKey: ["courier-connection", organizationId],
+    enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("integration_connections")
-        .select("enabled, status, environment")
-        .eq("provider_code", "courier_gateway")
-        .limit(1)
-        .maybeSingle();
-      if (error) return { connected: false, environment: null as string | null };
-      const row = data as { enabled?: boolean; status?: string; environment?: string | null } | null;
-      return {
-        connected: Boolean(row?.enabled) && row?.status === "connected",
-        environment: row?.environment ?? null,
-      };
+        .select("branch_id, enabled, status")
+        .eq("organization_id", organizationId ?? "")
+        .eq("provider_code", "courier_gateway");
+      if (error) throw new Error(error.message);
+      return new Map(data.map((row) => [row.branch_id, row.enabled && row.status === "connected"]));
     },
     staleTime: 60_000,
   });
@@ -85,9 +83,11 @@ export function useSendToCourier() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { orderId: string }): Promise<CourierDispatchResult> => {
-      const { data, error } = await guardedRpc(supabase, "neo_delivery_dispatch_open", {
-        _order: input.orderId,
-      });
+      const open = () => guardedRpc(supabase, "neo_delivery_dispatch_open", { _order: input.orderId });
+      const first = await open();
+      // The unique open-job index can reject a simultaneous insert. Its
+      // winning transaction is now visible and returns the existing job.
+      const { data, error } = first.error?.code === "23505" ? await open() : first;
       if (error) throw new Error(error.message);
       const opened = (data ?? { ok: false }) as CourierOpenResult;
       if (!opened.ok || !opened.job_id) {

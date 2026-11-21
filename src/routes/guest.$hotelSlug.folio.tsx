@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Loader2, Receipt } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { brandFallback } from "@/lib/public-apps";
@@ -9,6 +11,8 @@ import { useCustomerSession } from "@/lib/public-session";
 import { money } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useGuestBill, useGuestPaymentAvailability } from "@/lib/guest-ordering";
+import { exportGuestBillDocument } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf } from "@/lib/browser-document";
 
 export const Route = createFileRoute("/guest/$hotelSlug/folio")({
   head: () => ({
@@ -29,36 +33,51 @@ function FolioPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { user, loading } = useCustomerSession();
-  // Ownership is resolved inside the database routine from the signed-in
-  // account, so no customer id ever leaves the browser.
-  const bill = useGuestBill(ws.organization_id, Boolean(user));
-  const paymentAvailability = useGuestPaymentAvailability(ws.organization_id);
+  // The database resolves ownership from the signed-in account.
+  const bill = useGuestBill(ws.organization_id, ws.branch_id, user?.id);
+  const paymentAvailability = useGuestPaymentAvailability(ws.organization_id, Boolean(user));
   useGuestScreenView(ws.organization_id, "folio", Boolean(user));
 
   const list = bill.data?.folios ?? [];
   const payments = bill.data?.payments ?? [];
   const [selected, setSelected] = useState<string | null>(null);
+  const [downloadId, setDownloadId] = useState<string | null>(null);
+  const exportDocument = useServerFn(exportGuestBillDocument);
   const activeFolio = list.find((f) => f.id === selected) ?? list[0];
   const currency = activeFolio?.currency ?? "KES";
   const lines = activeFolio?.lines ?? [];
 
+  async function download(kind: "folio" | "receipt", id: string) {
+    if (downloadId) return;
+    setDownloadId(id);
+    try {
+      const result = await exportDocument({ data: { slug: hotelSlug, id, kind } });
+      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      downloadDocumentPdf(new Blob([bytes], { type: "application/pdf" }), result.filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The PDF could not be downloaded.");
+    } finally {
+      setDownloadId(null);
+    }
+  }
+
   return (
     <GuestScreen hotelSlug={hotelSlug} active="trips">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
-          My bill
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
-          Everything posted to your account at {ws.hotel_name}, exactly as the property's ledger holds it.
-        </p>
-      </section>
+      <GuestPageIntro title="My bill" description={ws.hotel_name} />
 
-      {!loading && !user ? (
-        <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your bill" description="Your folio, confirmed payments and receipts are visible only to your account." />
-      ) : bill.isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+      {loading || bill.isLoading ? (
+        <div className="flex justify-center py-10 text-[var(--guest-muted)]" role="status">
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+          <span className="sr-only">Loading your bill</span>
         </div>
+      ) : !user ? (
+        <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your bill" description="Your folio, confirmed payments and receipts are visible only to your account." />
+      ) : bill.isError ? (
+        <PublicEmptyState
+          title="Your bill couldn’t load"
+          description="Try again to view charges and payments at this property."
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void bill.refetch()}>Retry bill</button>}
+        />
       ) : list.length === 0 ? (
         <GuestSection title="Folios">
           <PublicEmptyState
@@ -78,10 +97,11 @@ function FolioPage() {
                       key={f.id}
                       type="button"
                       onClick={() => setSelected(f.id)}
-                      className="rounded-full border px-3 py-1.5 text-xs font-medium"
+                      aria-pressed={isActive}
+                      className="min-h-11 rounded-full border px-3 py-1.5 text-sm font-medium"
                       style={{
                         borderColor: isActive ? ws.primary_color : "rgba(0,0,0,0.1)",
-                        color: isActive ? ws.primary_color : brandFallback.steel,
+                        color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)",
                       }}
                     >
                       {f.folio_number ?? f.id.slice(0, 8)} · {f.status}
@@ -95,11 +115,18 @@ function FolioPage() {
           <GuestSection
             title={`Folio ${activeFolio?.folio_number ?? ""}`}
             description={`Opened ${activeFolio?.opened_at ? new Date(activeFolio.opened_at).toLocaleDateString() : "—"} · ${activeFolio?.status ?? ""}`}
+            action={activeFolio?.folio_number ? <button type="button" className="neo-guest-outline-action"
+              disabled={Boolean(downloadId)} onClick={() => void download("folio", activeFolio.id)}>
+              {downloadId === activeFolio.id ? "Preparing PDF…" : "Download statement"}
+            </button> : null}
           >
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Figure label="Net charges" value={money(activeFolio?.net_revenue, currency)} />
-              <Figure label="VAT" value={money(activeFolio?.tax, currency)} />
+              <Figure label="Taxes" value={money(activeFolio?.tax, currency)} />
               <Figure label="Service charge" value={money(activeFolio?.service_charge, currency)} />
+              {(activeFolio?.charge_components ?? []).map((charge) => (
+                <Figure key={charge.key} label={charge.label} value={money(charge.amount, currency)} />
+              ))}
               <Figure label="Gross billed" value={money(activeFolio?.gross_obligation, currency)} />
               <Figure label="Collected" value={money(activeFolio?.collected, currency)} />
             </dl>
@@ -107,10 +134,10 @@ function FolioPage() {
               className="neo-public-row mt-4 rounded-xl px-4 py-3"
               style={{ background: "rgba(0,0,0,0.03)" }}
             >
-              <span className="text-sm font-medium" style={{ color: brandFallback.steel }}>
+              <span className="text-sm font-medium" style={{ color: "var(--guest-muted, #52627A)" }}>
                  Outstanding
               </span>
-              <span className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
+              <span className="text-lg font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                  {money(activeFolio?.outstanding, currency)}
               </span>
             </div>
@@ -130,15 +157,15 @@ function FolioPage() {
                 {lines.map((line) => (
                   <li key={line.id} className="neo-public-row py-3">
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                      <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                         {line.description ?? "Charge"}
                       </span>
-                      <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                      <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {line.posting_date ? new Date(line.posting_date).toLocaleDateString() : "—"} · qty{" "}
                         {line.quantity ?? 1}
                       </span>
                     </span>
-                    <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(line.net_amount, currency)}
                     </span>
                   </li>
@@ -158,18 +185,22 @@ function FolioPage() {
               {payments.map((p) => (
                 <li key={p.id} className="neo-public-row rounded-xl border border-black/5 p-3">
                   <span className="flex min-w-0 items-center gap-3">
-                    <Receipt className="size-4" style={{ color: brandFallback.steel }} aria-hidden />
+                    <Receipt className="size-4" style={{ color: "var(--guest-muted, #52627A)" }} aria-hidden />
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium" style={{ color: brandFallback.secondary }}>
+                      <span className="block text-sm font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                         <span data-public-id>{p.receipt_number ?? "Receipt"}</span>
                       </span>
-                      <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                      <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {p.paid_at ? new Date(p.paid_at).toLocaleString() : "—"} · {p.method ?? ""}
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {money(p.amount, p.currency ?? "KES")}
+                    {p.receipt_number ? <button type="button" className="neo-guest-outline-action"
+                      disabled={Boolean(downloadId)} onClick={() => void download("receipt", p.id)}>
+                      {downloadId === p.id ? "Preparing PDF…" : "Download PDF"}
+                    </button> : null}
                   </span>
                 </li>
               ))}
@@ -178,7 +209,7 @@ function FolioPage() {
         </GuestSection>
       ) : null}
 
-      <div className="mt-4 px-1 text-center text-xs" style={{ color: brandFallback.steel }}>
+      <div className="mt-4 px-1 text-center text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
         <Link to="/guest/$hotelSlug/trips" params={{ hotelSlug }} className="underline">
           Back to my stay
         </Link>
@@ -190,10 +221,10 @@ function FolioPage() {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-black/5 p-3">
-      <dt className="text-xs" style={{ color: brandFallback.steel }}>
+      <dt className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+      <dd className="mt-1 text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
         {value}
       </dd>
     </div>

@@ -26,6 +26,7 @@ export const LOCATION_TYPES = [
   { key: "store", label: "Main store" },
   { key: "kitchen", label: "Kitchen store" },
   { key: "bar", label: "Bar store" },
+  { key: "minibar", label: "Minibar store" },
   { key: "housekeeping", label: "Housekeeping store" },
   { key: "maintenance", label: "Maintenance store" },
   { key: "cold-room", label: "Cold room" },
