@@ -61,6 +61,7 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
             {queue.map((order) => {
               const job = jobs.data?.get(order.order_id);
               const connected = courier.data?.get(order.branch_id) ?? courier.data?.get(null);
+              const courierActive = job != null && ["sent", "accepted", "picked_up", "delivered"].includes(job.state);
               return (
               <div
                 key={order.order_id}
@@ -79,11 +80,13 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
                     {order.contact_name ?? "Guest"} · {money(order.grand_total)} ·{" "}
                     {titleCase(order.payment_method ?? "unspecified")} · requested {shortDateTime(order.requested_at)}
                   </p>
+                  {job?.state_detail && <p className="text-sm text-muted-foreground">{job.state_detail}</p>}
                 </div>
                 {mayAssign ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
                     <Button
                       size="sm"
+                      disabled={courierActive || jobs.isPending || jobs.isError || sendToCourier.isPending}
                       onClick={() => setTarget({ id: order.order_id, number: order.order_number })}
                     >
                       Assign rider
@@ -92,13 +95,11 @@ export function DispatchBoard({ branchId }: { branchId?: string | null | undefin
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={sendToCourier.isPending || Boolean(job)}
+                        disabled={sendToCourier.isPending || jobs.isPending || jobs.isError || courierActive || !connected}
                         onClick={() => sendToCourier.mutate({ orderId: order.order_id })}
                       >
                         <Truck className="mr-1.5 h-4 w-4" />
-                        {job
-                          ? `Courier: ${titleCase(job.state)}`
-                          : "Send to courier"}
+                        {courierActive ? `Courier: ${titleCase(job.state)}` : job ? "Retry courier" : "Send to courier"}
                       </Button>
                     ) : null}
                   </div>

@@ -83,9 +83,11 @@ export function useSendToCourier() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { orderId: string }): Promise<CourierDispatchResult> => {
-      const { data, error } = await guardedRpc(supabase, "neo_delivery_dispatch_open", {
-        _order: input.orderId,
-      });
+      const open = () => guardedRpc(supabase, "neo_delivery_dispatch_open", { _order: input.orderId });
+      const first = await open();
+      // The unique open-job index can reject a simultaneous insert. Its
+      // winning transaction is now visible and returns the existing job.
+      const { data, error } = first.error?.code === "23505" ? await open() : first;
       if (error) throw new Error(error.message);
       const opened = (data ?? { ok: false }) as CourierOpenResult;
       if (!opened.ok || !opened.job_id) {

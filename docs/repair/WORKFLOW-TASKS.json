@@ -122,8 +122,8 @@
       "title": "Scope courier dispatch and require a saved acknowledgement",
       "status": "LOCAL_VERIFIED",
       "source_commit": "33fbaac",
-      "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A provider response must be reflected in the saved dispatch state before the client reports success. Six focused handler tests passed."],
-      "next_action": "Verify a configured courier and callback in a sandbox. The existing send routine still needs an atomic claim and explicit reconciliation of uncertain network outcomes before simultaneous sends and retries are certified.",
+      "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed."],
+      "next_action": "Install 20261121123500_courier_handoff_exclusivity.sql before publishing the worker change. Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
       "live_acceptance": "OPEN"
     },
     {
