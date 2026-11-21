@@ -2526,8 +2526,14 @@ html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system
 .neo-guest-header .neo-public-wrap { padding-block: .5rem; }
 .neo-guest-app :is(.neo-guest-header, .neo-guest-footer) [class*="text-white"] { color: var(--guest-muted); }
 .neo-guest-app :is(.neo-guest-header, .neo-guest-footer) .text-white { color: var(--guest-text); }
-.neo-guest-header nav a { color: var(--guest-muted) !important; }
-.neo-guest-header nav a[aria-current="page"] { color: var(--guest-text) !important; }
+.neo-guest-app .neo-guest-tabbar { order: 1; }
+@media (min-width: 1024px) {
+  .neo-guest-app.neo-customer-frame .neo-guest-tabbar {
+    order: 0;
+    width: min(calc(100% - 2rem), 39rem);
+    margin-block: .65rem 0;
+  }
+}
 .neo-guest-header [aria-label="Help and settings"],
 .neo-guest-header [aria-label^="Notifications"] { border-color: var(--guest-border); }
 .neo-guest-footer a:hover { text-decoration: underline; }
@@ -2700,6 +2706,7 @@ html[data-guest-appearance="light"] .neo-guest-app[data-guest-appearance="system
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
+  gap: .35rem;
   padding: .35rem .65rem;
   border: 1px solid #ffffff42;
   border-radius: 999px;

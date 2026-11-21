@@ -1,7 +1,7 @@
 import { accessibleAccent, normalizedHex, primaryInk } from "@/lib/public-palette";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Receipt, ShoppingBag, Utensils } from "lucide-react";
+import { ArrowLeft, Receipt, ShoppingBag, Utensils } from "lucide-react";
 import {
   brandFallback,
   brandInitials,
@@ -161,7 +161,7 @@ export function PublicAppShell({
         <span className="truncate text-sm font-semibold text-white">
           {ws.hotel_name || ws.app_name}
         </span>
-        <span className="truncate text-xs text-white/75">{ws.app_name}</span>
+        <span className="truncate text-xs text-white/75">{hotelSlug ? "Delivery & collection" : ws.app_name}</span>
       </span>
     </span>
   );
@@ -196,7 +196,9 @@ export function PublicAppShell({
                 {deliveryLinks}
               </nav>
               {ws.guest_slug ? (
-                <Link to="/guest/$hotelSlug" params={{ hotelSlug: ws.guest_slug }} className="neo-delivery-guest-link">Stay &amp; Dine</Link>
+                <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug: ws.guest_slug }} search={{ section: "dining" }} className="neo-delivery-guest-link">
+                  <ArrowLeft className="size-3.5" aria-hidden /> Guest dining
+                </Link>
               ) : null}
             </div>
           ) : null}

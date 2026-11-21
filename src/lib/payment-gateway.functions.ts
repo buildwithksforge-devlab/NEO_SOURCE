@@ -115,21 +115,30 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     }
     if (!row.provider_code) return { ok: false, reason: "not_provider_backed" };
 
-    const { data: conn } = await supabase
+    const providerConnections = supabase
       .from("integration_connections")
       .select("enabled, status, environment, configuration, secret_names")
+      .eq("organization_id", row.organization_id)
       .eq("provider_code", row.provider_code)
+    const scopedConnections = row.branch_id
+      ? providerConnections.or(`branch_id.eq.${row.branch_id},branch_id.is.null`)
+      : providerConnections.is("branch_id", null);
+    const { data: conn, error: connectionError } = await scopedConnections
       .order("branch_id", { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();
 
     const connection = conn as ConnectionRow | null;
+    if (connectionError) return { ok: false, reason: "provider_lookup_failed", detail: "The payment connection could not be verified for this property." };
     if (!connection || !connection.enabled || connection.status !== "connected") {
       return {
         ok: false,
         reason: "provider_not_connected",
         detail: "No processor is connected for this method, so nothing can be sent.",
       };
+    }
+    if (row.environment !== (connection.environment ?? "sandbox")) {
+      return { ok: false, reason: "provider_environment_changed", detail: "The processor environment changed after this request was opened." };
     }
 
     const config = (connection.configuration ?? {}) as Record<string, unknown>;
@@ -228,6 +237,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     try {
       const res = await fetch(endpoint, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           ...(secret ? { authorization: `Bearer ${secret}` } : {}),
@@ -254,10 +264,10 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
           state: "failed",
         };
       }
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : "The processor could not be reached.";
-      await markSent(supabase, data.intentId, { detail, failed: true });
-      return { ok: false, reason: "provider_unreachable", detail, state: "failed" };
+    } catch {
+      const detail = "The processor did not confirm receipt of this request. Check its status before starting another payment.";
+      await markSent(supabase, data.intentId, { detail, failed: false });
+      return { ok: false, reason: "provider_outcome_unknown", detail, state: "pending" };
     }
 
     const status = String(answer.status ?? "pending").toLowerCase();

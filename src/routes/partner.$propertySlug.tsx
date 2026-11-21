@@ -291,7 +291,7 @@ function PartnerPortal() {
       {data && section === "invoices" ? (
         <>
           <PartnerRecordsList kind="invoices" rows={data.invoices ?? []} currency={currency} onAsk={askAbout} />
-          <CreditInvoices branchId={branchId} relationshipId={active} />
+          <CreditInvoices branchId={branchId} relationshipId={active} onAsk={askAbout} />
         </>
       ) : null}
       {data && section === "messages" ? (
@@ -351,6 +351,7 @@ const recordFields = {
   orders: { title: "Purchase orders", reference: "order_number", amount: "total_amount", dates: [["Expected delivery", "expected_date"], ["Created", "created_at"]] },
   deliveries: { title: "Deliveries received", reference: "grn_number", amount: "total_value", dates: [["Received", "received_at"]] },
   invoices: { title: "Invoices and payment status", reference: "invoice_number", amount: "amount", dates: [["Due", "due_date"], ["Issued", "invoice_date"]] },
+  credit: { title: "Credit invoices from this hotel", reference: "invoice_number", amount: "total", dates: [["Due", "due_date"], ["Issued", "issue_date"]] },
 } as const;
 
 const partnerDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
@@ -377,6 +378,7 @@ function PartnerRecordsList({ kind, rows, currency, onAsk }: {
           {rows.map((row, index) => {
             const reference = String(row[fields.reference] ?? "");
             const rowCurrency = typeof row["currency"] === "string" ? row["currency"] : currency;
+            const paidAmount = row["paid_amount"] ?? row["amount_paid"];
             return (
               <li key={`${reference}:${index}`} className="min-w-0 rounded-2xl border border-white/10 bg-white/[.07] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -388,7 +390,8 @@ function PartnerRecordsList({ kind, rows, currency, onAsk }: {
                   {fields.dates.map(([label, field]) => row[field] ? (
                     <div key={field} className="flex justify-between gap-2"><dt>{label}</dt><dd>{formatPartnerDate(row[field])}</dd></div>
                   ) : null)}
-                  {row["paid_amount"] != null ? <div className="flex justify-between gap-2"><dt>Paid</dt><dd>{formatPartnerAmount(row["paid_amount"], rowCurrency)}</dd></div> : null}
+                  {paidAmount != null ? <div className="flex justify-between gap-2"><dt>Paid</dt><dd>{formatPartnerAmount(paidAmount, rowCurrency)}</dd></div> : null}
+                  {kind === "credit" && row["balance"] != null ? <div className="flex justify-between gap-2"><dt>Balance</dt><dd>{formatPartnerAmount(row["balance"], rowCurrency)}</dd></div> : null}
                   {row["invoiced_amount"] != null ? <div className="flex justify-between gap-2"><dt>Invoiced</dt><dd>{formatPartnerAmount(row["invoiced_amount"], rowCurrency)}</dd></div> : null}
                   {row["is_partial"] === true ? <div><dt>Partial delivery</dt></div> : null}
                   {row["match_status"] ? <div className="flex justify-between gap-2"><dt>Matching</dt><dd className="capitalize">{String(row["match_status"]).replace(/[_-]/g, " ")}</dd></div> : null}
@@ -648,13 +651,16 @@ function Shell({
 function CreditInvoices({
   branchId,
   relationshipId,
+  onAsk,
 }: {
   branchId: string | null;
   relationshipId: string | null;
+  onAsk: (subject: string) => void;
 }) {
   const invoices = usePartnerCreditInvoices(branchId, relationshipId);
+  if (invoices.isError) return <Panel><button type="button" className="text-white underline" onClick={() => void invoices.refetch()}>Credit invoices could not load. Try again</button></Panel>;
   if (invoices.isLoading) return null;
   const rows = invoices.data ?? [];
   if (rows.length === 0) return null;
-  return <RecordTable title="Credit invoices from this hotel" rows={rows} />;
+  return <PartnerRecordsList kind="credit" rows={rows} onAsk={onAsk} />;
 }

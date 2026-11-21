@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { SectionCard, StatCard } from "@/components/common/DataDisplay";
 import {
@@ -17,6 +17,8 @@ import { Progress } from "@/components/ui/progress";
 import { PublicAppChecks } from "@/components/platform/PublicAppChecks";
 import { WorkflowReadiness } from "@/components/platform/WorkflowReadiness";
 import { usePublicAppHealth } from "@/lib/platform-public-app-health";
+import { useGoLiveReadiness } from "@/lib/go-live";
+import { canAccessPath } from "@/lib/nav-permissions";
 import {
   Select,
   SelectContent,
@@ -59,6 +61,7 @@ function ReadinessScreen() {
   const uat = useUatSignoffs();
   const connections = useIntegrationConnections();
   const publicApps = usePublicAppHealth();
+  const workflow = useGoLiveReadiness();
   const seed = useSeedReadinessGates();
   const saveGate = useSaveRecord("readiness_gates", "readiness.gate_updated");
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -97,7 +100,16 @@ function ReadinessScreen() {
   const canEdit = can("platform", "edit");
   const approvalsVerified = gates.isSuccess && defects.isSuccess;
   const publicBlocked = publicApps.isSuccess && publicApps.data.some((check) => check.status === "blocked");
-  const approved = approvalsVerified && score.goLive && defectStatus.releasable && !publicBlocked;
+  const publishedVerified = publicApps.isSuccess && publicApps.data.every((check) =>
+    check.state === "unpublished" ? check.status !== "blocked" : check.status === "verified");
+  const propertyChecks = publicApps.branchId && workflow.isSuccess ? workflow.data.checks : [];
+  const propertyBlocked = propertyChecks.filter((check) => check.status === "blocked").length;
+  const propertyReady = propertyChecks.length > 0 && propertyChecks.every((check) => check.status === "ready");
+  const signedOff = approvalsVerified && orgGates.length > 0 && score.goLive;
+  const canGoLive = signedOff && defectStatus.releasable && publishedVerified && propertyReady
+    && findings.isSuccess && uat.isSuccess && connections.isSuccess
+    && openFindings.length === 0 && uatPending.length === 0 && unverifiedIntegrations.length === 0;
+  const releaseBlocked = (defects.isSuccess && !defectStatus.releasable) || publicBlocked || propertyBlocked > 0;
 
   return (
     <div className="space-y-6">
@@ -106,11 +118,24 @@ function ReadinessScreen() {
       </TruthNotice>
 
       <div className="neo-kpi-grid">
-        <StatCard lead label="Mandatory gates passed" value={`${score.passed} / ${score.total}`} />
+        <StatCard lead label="Mandatory gates passed" value={gates.isSuccess ? `${score.passed} / ${score.total}` : "Unverified"} />
         <StatCard label="Release-blocking defects" value={defects.isSuccess ? String(defectStatus.blocking) : "Unverified"} />
-        <StatCard label="Open security findings" value={String(openFindings.length)} />
-        <StatCard label="UAT scripts outstanding" value={String(uatPending.length)} />
+        <StatCard label="All open defects" value={defects.isSuccess ? String(defectStatus.open) : "Unverified"} />
+        <StatCard label="Open security findings" value={findings.isSuccess ? String(openFindings.length) : "Unverified"} />
+        <StatCard label="UAT scripts outstanding" value={uat.isSuccess ? String(uatPending.length) : "Unverified"} />
       </div>
+
+      <SectionCard title="Go-live verdict" actions={
+        <TonePill tone={releaseBlocked ? "danger" : canGoLive ? "success" : "warning"}>
+          {releaseBlocked ? "Blocked" : canGoLive ? "Readiness checks passed" : "Evidence outstanding"}
+        </TonePill>
+      }>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <span>{propertyChecks.length ? `${propertyBlocked} blocked property checks` : "Property evidence awaiting verification"}</span>
+          {isAdmin || canAccessPath(can, "/platform/quality") ? <Link to="/platform/quality" className="font-medium underline">Review defects</Link> : null}
+          {isAdmin || canAccessPath(can, "/platform/simulation") ? <Link to="/platform/simulation" className="font-medium underline">Review end-to-end test runs</Link> : null}
+        </div>
+      </SectionCard>
 
       <PublicAppChecks />
       <WorkflowReadiness />
@@ -119,13 +144,12 @@ function ReadinessScreen() {
         title="Organisation approval"
         description={
           !approvalsVerified ? "Approval and defect evidence could not yet be verified."
-            : !defectStatus.releasable || publicBlocked ? "Review the open release blockers before go-live."
-            : score.goLive ? "Every mandatory organisation gate has a decision and evidence reference."
+            : signedOff ? "Every mandatory organisation gate has a decision and evidence reference."
             : `${score.blocking.length} mandatory gate(s) still need evidence.`
         }
         actions={
-          <TonePill tone={approved ? "success" : "warning"}>
-            {approved ? "Approved" : !approvalsVerified ? "Unverified" : "Pending"}
+          <TonePill tone={signedOff ? "success" : "warning"}>
+            {!approvalsVerified ? "Unverified" : signedOff ? "Signed off" : "Pending"}
           </TonePill>
         }
       >

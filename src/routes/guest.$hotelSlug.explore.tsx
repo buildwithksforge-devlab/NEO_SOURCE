@@ -293,12 +293,12 @@ function ExplorePage() {
       {/* -------------------------------------------------------- dining */}
       {tab === "dining" ? (
         <>
-          {delivery.data ? (
-            <div className="neo-guest-dining-paths mt-4">
-              {activeStay.data ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug }} search={{ room: true }} className="neo-guest-outline-action">Order to my room</Link> : null}
-              <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">Delivery &amp; collection <ChevronRight className="size-4" aria-hidden /></Link>
-            </div>
-          ) : null}
+          <div className="neo-guest-dining-paths mt-4">
+            {activeStay.data ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug }} search={{ room: true }} className="neo-guest-outline-action">Order to my room</Link> : null}
+            {delivery.data ? <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">Delivery &amp; collection <ChevronRight className="size-4" aria-hidden /></Link> : null}
+            {delivery.data ? <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">View cart</Link> : null}
+            <Link to="/guest/$hotelSlug/favourites" params={{ hotelSlug }} className="neo-guest-outline-action">Favourites</Link>
+          </div>
           {dishes.length ? (
             <div className="relative mt-5">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--guest-muted)]" aria-hidden />

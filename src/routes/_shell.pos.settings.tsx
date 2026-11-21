@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { PosGuard } from "@/components/pos/PosShared";
+import { PaymentReadinessPanel } from "@/components/payments/PaymentReadinessPanel";
 import { DEFAULT_POS_SETTINGS, type PosSettings } from "@/lib/pos";
 import { usePosSettings, useSavePosSettings } from "@/lib/pos-data";
 
@@ -108,6 +109,8 @@ function SettingsPage() {
           </Button>
         </SectionCard>
       </div>
+
+      <div className="mt-6"><PaymentReadinessPanel title="Payment methods and setup" /></div>
 
       <SectionCard
         className="mt-6"

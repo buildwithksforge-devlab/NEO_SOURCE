@@ -42,10 +42,8 @@ const tabForScreen: Partial<Record<GuestTab, (typeof tabs)[number]["key"]>> = {
 /**
  * The hotel companion shell.
  *
- * Width decides the navigation, not the route: a phone gets a safe-area bottom
- * bar, a laptop gets a real top navigation and the bottom bar disappears
- * entirely. The property's own identity — its logo, name and location — stays
- * in view on every screen.
+ * One set of destinations sits in the safe-area dock on phones and below
+ * the property header on wider screens.
  */
 export function GuestScreen({
   hotelSlug,
@@ -95,21 +93,11 @@ export function GuestScreen({
         } as React.CSSProperties
       }
     >
-      <GuestHeader hotelSlug={hotelSlug} active={active} />
-
-      <div ref={scrollFrame} className="neo-customer-content" data-scroll-restoration-id="guest-body">
-        <PullToRefresh scrollTarget={() => scrollFrame.current}>
-          <main className="neo-public-wrap flex-1 py-5 sm:py-8">
-            <PreviewBanner experience="Guest" />
-            <div className="min-w-0">{children}</div>
-          </main>
-        </PullToRefresh>
-        <GuestFooter hotelSlug={hotelSlug} />
-      </div>
+      <GuestHeader hotelSlug={hotelSlug} />
 
       <nav
         aria-label="Guest app"
-        className="neo-app-dock neo-guest-tabbar lg:hidden"
+        className="neo-app-dock neo-guest-tabbar"
       >
         <ul className="contents">
           {tabs.map((tab) => {
@@ -132,6 +120,16 @@ export function GuestScreen({
           })}
         </ul>
       </nav>
+
+      <div ref={scrollFrame} className="neo-customer-content" data-scroll-restoration-id="guest-body">
+        <PullToRefresh scrollTarget={() => scrollFrame.current}>
+          <main className="neo-public-wrap flex-1 py-5 sm:py-8">
+            <PreviewBanner experience="Guest" />
+            <div className="min-w-0">{children}</div>
+          </main>
+        </PullToRefresh>
+        <GuestFooter hotelSlug={hotelSlug} />
+      </div>
     </div>
   );
 }

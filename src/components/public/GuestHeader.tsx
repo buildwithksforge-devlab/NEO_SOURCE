@@ -43,17 +43,6 @@ import { useGuestActiveStay } from "@/lib/guest-ordering";
 import { useGuestProfile } from "@/lib/guest-app";
 import { unreadCount, useGuestNotifications } from "@/lib/guest-notifications";
 
-/** Desktop destinations — the wider set a guest moves between. */
-export const guestDesktopNav = [
-  { key: "home", label: "Home", to: "/guest/$hotelSlug" },
-  { key: "book", label: "Stay", to: "/guest/$hotelSlug/book" },
-  { key: "explore", label: "Explore", to: "/guest/$hotelSlug/explore" },
-  { key: "favourites", label: "Favourites", to: "/guest/$hotelSlug/favourites" },
-  { key: "laundry", label: "Services", to: "/guest/$hotelSlug/laundry" },
-  { key: "orders", label: "Orders", to: "/guest/$hotelSlug/orders" },
-  { key: "stay", label: "My Stay", to: "/guest/$hotelSlug/stay" },
-] as const;
-
 /** The hotel's mark: configured media first, a lettered plate only as fallback. */
 function PropertyMark({ ws, size = 44 }: { ws: PublicWorkspace; size?: number }) {
   const label = ws.hotel_name || ws.app_name || "Hotel";
@@ -104,7 +93,7 @@ function StayBadge({ tone, children }: { tone: string; children: string }) {
   );
 }
 
-export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: string }) {
+export function GuestHeader({ hotelSlug }: { hotelSlug: string }) {
   const ws = useWorkspace();
   const { user } = useCustomerSession();
   const queryClient = useQueryClient();
@@ -156,29 +145,7 @@ export function GuestHeader({ hotelSlug, active }: { hotelSlug: string; active: 
           </span>
         </Link>
 
-        <nav aria-label="Guest navigation" className="ml-auto hidden items-center gap-1 lg:flex">
-          {guestDesktopNav.map((entry) => {
-            const isActive = entry.key === (active === "trips" ? "stay" : active);
-            return (
-              <Link
-                key={entry.key}
-                to={entry.to}
-                params={{ hotelSlug }}
-                activeOptions={{ exact: true }}
-                aria-current={isActive ? "page" : undefined}
-                className="min-h-9 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
-                style={{
-                  color: isActive ? "#ffffff" : "rgba(255,255,255,0.62)",
-                  background: isActive ? `${primary}33` : "transparent",
-                }}
-              >
-                {entry.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {stayLabel ? (
             <span className="hidden sm:inline-flex">
               <StayBadge tone={primary}>{stayLabel}</StayBadge>
