@@ -2,10 +2,11 @@
   "updated": "2026-11-21",
   "active_task": "WF11-T01",
   "preview_release": {
-    "commit": "ffc50d0",
-    "build": "07b0cc8c387619fc",
-    "worker_version": "9c2ea129-35ce-4df3-b7fb-234f88a63fb1",
-    "verified_public_evidence": "HTTP 200 with matching build ID on sign-in, five Guest routes, Delivery checkout and Partner. Guest and Delivery served the same property. The Windows print-agent ZIP matched its published checksum."
+    "commit": "f66dbae",
+    "build": "8ebeebd0848ee56a",
+    "worker_version": "c9fd3ab3-01f8-4888-a8f4-e87955e3ab9d",
+    "verified_public_evidence": "Eight published routes returned HTTP 200 with the prepared build ID. The Standard Double deep link rendered its room and Browse rooms while session detection was pending. Guest dining navigation, favourites, transfers and the return from Delivery checkout rendered as expected.",
+    "preflight": "TypeScript, production smoke, installed RPC checks and the full offline run passed. The offline run recorded 5462 passed, 0 failed and 155 skipped cases. The selected local workflow command passed 361 tests and 27 readiness checks."
   },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
@@ -89,9 +90,18 @@
       "chains": ["WF01", "WF26", "WF30", "WF34"],
       "title": "Verify release readiness, saved defect counts and local Simulation",
       "status": "BLOCKED",
-      "source_commit": "ffc50d0",
-      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. The local server credential returned HTTP 401 on a read-only Simulation registry check."],
-      "next_action": "Configure a valid server credential for the intended test project locally, confirm the Simulation registry, then run the two isolated workspaces. Capture actual defect counts and workflow evidence in Platform & Readiness before accepting an overall pass.",
+      "source_commit": "f66dbae",
+      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. npm run test:simulation:local works with isolated fixtures. The connection checker distinguishes missing configuration, rejected keys, missing schema and refused access. The current local credential fails server-key validation. The new cleanup test checks the saved registry state before reporting success."],
+      "next_action": "Connect browser-based Simulation with a valid server credential for the intended test project. Run the two isolated workspaces and capture the saved defect counts and workflow evidence in Platform & Readiness.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF05-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Validate receiving custody and requested recount rollout",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["28 tests passed across blind receiving review, GRN handoff and document history. The Preview database returned PGRST202 for neo_request_receiving_recount."],
+      "next_action": "Review the installed receiving function definitions before applying the pending custody migration. After rollout, check independent review, requested recount, GRN retrieval and the linked payable with controlled property records.",
       "live_acceptance": "OPEN"
     },
     {
