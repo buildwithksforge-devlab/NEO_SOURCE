@@ -147,7 +147,7 @@ describe("header and footer are full-bleed shell chrome", () => {
   });
 
   it("the header row spans the whole staff frame", () => {
-    expect(topbar).toContain('className="sticky top-0 z-30 w-full');
+    expect(topbar).toMatch(/<header className="[^"]*\bsticky top-0 z-30 w-full\b/);
     expect(topbar).toContain("neo-page-gutter neo-shell-bleed");
     // Nothing narrows the chrome before the right edge of the frame.
     expect(topbar).not.toContain("max-w-7xl");

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/common/DataDisplay";
+import { NeoDatePicker } from "@/components/common/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,12 +103,23 @@ function CustodyForm({ count, onAccepted }: {
               <label>Delivered<Input required type="number" min="0" step="any" name={line.line_id + "-delivered"} /></label>
               <label>Rejected<Input required type="number" min="0" step="any" name={line.line_id + "-rejected"} /></label>
               <label>Batch<Input name={line.line_id + "-batch"} /></label>
-              <label>Expiry<Input type="date" name={line.line_id + "-expiry"} /></label>
+              <CustodyExpiry name={line.line_id + "-expiry"} />
             </fieldset>
           ))}
           <Button type="submit" disabled={accept.isPending}>Record count and accept custody</Button>
         </form>
       )}
+    </div>
+  );
+}
+
+function CustodyExpiry({ name }: { name: string }) {
+  const [date, setDate] = useState("");
+  return (
+    <div>
+      <label htmlFor={name}>Expiry</label>
+      <NeoDatePicker id={name} value={date} onChange={setDate} />
+      <input type="hidden" name={name} value={date} />
     </div>
   );
 }

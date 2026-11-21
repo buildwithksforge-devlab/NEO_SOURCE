@@ -44,4 +44,12 @@ Passes and waivers expire after 24 hours for property checks and seven days for 
 
 Add `--verify-local` after the evidence file to collect build and offline test results from a clean checkout at the supplied commit SHA. Command logs go to stderr and the report goes to stdout. Preserve both when saving release evidence.
 
+## Test workflows locally
+
+Run `npm run test:simulation:local` from the repository with Node 22 and the locked dependencies installed. It uses isolated PostgreSQL fixtures and writes `.output/local-workflow-tests.json`. The suite covers Guest, Delivery, PIN, POS, money, receipts, procurement, stock, and other selected departmental chains.
+
+To open the app on Windows, run `powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1`. For browser-based Simulation, the browser and server must use the same Supabase project. Set `VITE_SUPABASE_URL`, `SUPABASE_URL`, the matching publishable keys, and the server-only `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. This can be an isolated local Supabase instance if its schema is provisioned. Run `npm run check:simulation` to verify the registry connection without creating records. Recheck after restarting the app.
+
+Use signed-in test workspaces for hosted state, role and device walkthroughs. The local fixtures provide evidence for the cases in the report. Processor settlement, physical print, and real department handoffs require their own evidence.
+
 Use controlled data for workflow and rehearsal evidence. For the live property gates, use the Go-Live configuration checks, saved integrity checks, Quality defects, and reconciliation records. For the external gates, reference the physical print result and provider confirmation for the enabled integrations. The CLI evaluates supplied evidence. Live collection, evidence ownership and approval remain in the existing operational surfaces.

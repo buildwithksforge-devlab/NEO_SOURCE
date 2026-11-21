@@ -25,7 +25,19 @@ import {
 
 export const Route = createFileRoute("/guest/$hotelSlug/book")({
   validateSearch: (search): { room?: string } =>
-    typeof search["room"] === "string" ? { room: search["room"] } : {},
+    typeof search["room"] === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(search["room"])
+      ? { room: search["room"].toLowerCase() } : {},
+  loaderDeps: ({ search }) => ({ room: search.room }),
+  loader: async ({ params, deps, abortController }) => {
+    if (!deps.room) return null;
+    try {
+      const signal = AbortSignal.any([abortController.signal, AbortSignal.timeout(3500)]);
+      const rooms = await fetchPublicPropertyRooms(params.hotelSlug, signal);
+      return rooms.find((entry) => entry.room_type_id === deps.room) ?? null;
+    } catch {
+      return null;
+    }
+  },
   head: ({ params }) => ({
     meta: [
       { title: "Book a Stay — NEØ Guest" },
@@ -45,8 +57,13 @@ export const Route = createFileRoute("/guest/$hotelSlug/book")({
     ],
     links: [canonicalLink(`/guest/${params.hotelSlug}/book`)],
   }),
-  component: BookPage,
+  component: BookingRoute,
 });
+
+function BookingRoute() {
+  const { room } = Route.useSearch();
+  return <BookPage key={room ?? "browse"} />;
+}
 
 function isoDay(offsetDays: number) {
   const d = new Date();
@@ -58,6 +75,7 @@ function BookPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { room } = Route.useSearch();
+  const linkedRoom = Route.useLoaderData();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const catalogue = useQuery({
@@ -97,7 +115,8 @@ function BookPage() {
   const booking = useCreateGuestBooking(ws.organization_id);
 
   const chosen = (offers.data ?? []).find((o) => o.room_type_id === selected) ?? null;
-  const selectedRoom = catalogue.data?.find((entry) => entry.room_type_id === selected);
+  const selectedRoom = catalogue.data?.find((entry) => entry.room_type_id === selected)
+    ?? (linkedRoom?.room_type_id === selected ? linkedRoom : null);
 
   const breakdown = chosen ? roomQuoteBreakdown(chosen) : null;
 
@@ -121,17 +140,7 @@ function BookPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <GuestScreen hotelSlug={hotelSlug} active="book">
-        <div className="flex justify-center py-16">
-          <Loader2 className="size-6 animate-spin" aria-label="Loading" />
-        </div>
-      </GuestScreen>
-    );
-  }
-
-  if (!user) {
+  if (loading || !user) {
     return (
       <GuestScreen hotelSlug={hotelSlug} active="book">
         <GuestPageIntro title={selectedRoom?.name ?? "Book a stay"}
@@ -140,10 +149,14 @@ function BookPage() {
           {selectedRoom?.from_rate != null ? (
             <span className="neo-guest-outline-action">From {money(selectedRoom.from_rate, selectedRoom.currency ?? ws.currency ?? "KES")} / night</span>
           ) : null}
-          <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} className="neo-guest-outline-action">Browse rooms</Link>
+          <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "rooms" }} className="neo-guest-outline-action">Browse rooms</Link>
         </GuestPageIntro>
         <GuestSection title="Check dates and availability">
-          <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to book" description="You’ll return here to check dates and book." />
+          {loading ? (
+            <p role="status" className="flex items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" aria-hidden /> Checking your guest session…
+            </p>
+          ) : <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to book" description="You’ll return here to check dates and book." />}
         </GuestSection>
       </GuestScreen>
     );
@@ -189,8 +202,10 @@ function BookPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="book">
-      <GuestPageIntro title="Book a stay" description={ws.hotel_name}
-        image={selectedRoom?.images[0] ?? ws.hero_url} />
+      <GuestPageIntro title={selectedRoom?.name ?? "Book a stay"} description={ws.hotel_name}
+        image={selectedRoom?.images[0] ?? ws.hero_url}>
+        <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "rooms" }} className="neo-guest-outline-action">Browse rooms</Link>
+      </GuestPageIntro>
       <GuestSection title="Dates and guests" surface>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SectionCard } from "@/components/common/DataDisplay";
-import { Input } from "@/components/ui/input";
+import { NeoDatePicker } from "@/components/common/DatePicker";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useFinanceCtx, useFinanceFactScope } from "@/lib/finance-data";
@@ -36,8 +36,8 @@ export function SalesTaxReport() {
   return (
     <SectionCard title="Posted sales tax" description="Menu sales with saved tax profiles and posted journals. Refund reversals follow the original liability accounts.">
       <div className="flex flex-wrap gap-4">
-        <div><Label htmlFor="sales-tax-from">From</Label><Input id="sales-tax-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></div>
-        <div><Label htmlFor="sales-tax-to">Through</Label><Input id="sales-tax-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></div>
+        <div><Label htmlFor="sales-tax-from">From</Label><NeoDatePicker id="sales-tax-from" value={from} max={to} onChange={setFrom} /></div>
+        <div><Label htmlFor="sales-tax-to">Through</Label><NeoDatePicker id="sales-tax-to" value={to} min={from} onChange={setTo} /></div>
       </div>
       {!validDates && <p className="mt-3 text-sm" role="alert">Choose a valid reporting period.</p>}
       {summary.isLoading && <p className="mt-3 text-sm" aria-live="polite">Loading posted sales</p>}

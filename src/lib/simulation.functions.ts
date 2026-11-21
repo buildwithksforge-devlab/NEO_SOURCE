@@ -8,6 +8,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { simulationConfigurationIssue, simulationConnectionActions, simulationRegistryIssue } from "./simulation/connection-status";
 
 type Ctx = { supabase: unknown; userId: string };
 
@@ -28,6 +29,8 @@ async function adminTenant(context: Ctx) {
 }
 
 async function admin() {
+  const issue = simulationConfigurationIssue(process.env);
+  if (issue) throw new Error(simulationConnectionActions[issue]);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
 }
@@ -36,11 +39,14 @@ export const checkSimulationService = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await adminTenant(context as unknown as Ctx);
+    const checkedAt = new Date().toISOString();
+    const configurationIssue = simulationConfigurationIssue(process.env);
+    if (configurationIssue) return { available: false, issue: configurationIssue, checkedAt };
     try {
-      const { error } = await (await admin()).from("neo_test_environments").select("id", { head: true }).limit(0);
-      return { available: !error, checkedAt: new Date().toISOString() };
+      const { error, status } = await (await admin()).from("neo_test_environments").select("id", { head: true }).limit(0);
+      return { available: !error, issue: error ? simulationRegistryIssue(status, error.code) : null, checkedAt };
     } catch {
-      return { available: false, checkedAt: new Date().toISOString() };
+      return { available: false, issue: "unreachable" as const, checkedAt };
     }
   });
 
@@ -96,11 +102,13 @@ export const cleanTestEnvironment = createServerFn({ method: "POST" })
     const org = await adminTenant(context as unknown as Ctx);
     const supabaseAdmin = await admin();
     const runner = await import("./simulation/runner.server");
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from("neo_test_environments")
       .select("*")
       .eq("control_org_id", org)
-      .eq("status", "active");
+      .in("status", ["active", "cleanup_failed"]);
+    if (error) throw new Error("Simulation could not load environments to clean. Recheck the connection before retrying.");
+    if (!data?.length) throw new Error("No test environments were found to clean.");
     const result = await runner.cleanEnvironment(supabaseAdmin, (data ?? []) as never);
     return result;
   });

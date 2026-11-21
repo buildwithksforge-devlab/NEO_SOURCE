@@ -621,6 +621,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   fin_seed_finance_defaults: "authenticated",
   neo_hr_set_staff_identity: "authenticated",
   neo_finance_readiness: "authenticated",
+  neo_preview_menu_sales_tax: "authenticated",
+  neo_sales_tax_finance_summary: "authenticated",
   neo_go_live_readiness: "authenticated",
   neo_menu_validation_states: "authenticated",
   neo_approval_seed_authority: "authenticated",

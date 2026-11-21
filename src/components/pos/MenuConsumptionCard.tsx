@@ -213,6 +213,7 @@ export function MenuConsumptionCard({
       {mode !== "none" ? (
         <div className="space-y-1 rounded-lg border border-border/60 p-3 text-sm">
           <p className="font-medium">Departmental stock</p>
+          <p className="text-xs text-muted-foreground">Each sale uses the departmental store mapped to this item's station. Menu items cannot override that store.</p>
           {storesLoading ? <p>Checking the station’s store…</p> : storesFailed ? <p>Store mapping could not be loaded.</p>
             : stores?.length ? <p>{stores.map((store) => store.locationName).join(", ")}</p>
             : <p className="text-warning">Assign this item to a station with a departmental store before selling it.</p>}

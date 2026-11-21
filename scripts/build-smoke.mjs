@@ -23,6 +23,7 @@ import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { findBrokenInteropDestructures } from "./bundle-interop.mjs";
 
 const ROOT = process.cwd();
 // TanStack Start/Nitro emits the deployable application under `.output`.
@@ -32,17 +33,6 @@ const DIST = path.join(ROOT, ".output");
 const SKIP_BUILD = process.argv.includes("--no-build");
 const PORT = Number(process.env.SMOKE_PORT ?? 4173);
 const ROUTES = ["/", "/auth"];
-
-/** Helper names that only exist in a TS runtime shim such as tslib. */
-const HELPER_NAMES = [
-  "__extends",
-  "__assign",
-  "__awaiter",
-  "__generator",
-  "__decorate",
-  "__spreadArray",
-  "__importDefault",
-];
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -64,24 +54,6 @@ async function* walk(dir) {
     if (entry.isDirectory()) yield* walk(full);
     else if (/\.(m?js|cjs)$/.test(entry.name)) yield full;
   }
-}
-
-/**
- * Flags `var { __extends, ... } = __toESM(<cjs module>)` — esbuild's interop
- * shape for an ESM shim that destructures a CommonJS default export. When the
- * CommonJS module is a UMD bundle with no real default, every destructured
- * helper is undefined and the module throws on load.
- */
-export function findBrokenInteropDestructures(source) {
-  const hits = [];
-  const pattern = /(?:var|const|let)\s*\{([^}]{0,4000}?)\}\s*=\s*[^;{}]{0,80}?__toESM\(/g;
-  let match;
-  while ((match = pattern.exec(source)) !== null) {
-    const names = match[1];
-    const helper = HELPER_NAMES.find((name) => new RegExp(`\\b${name}\\b`).test(names));
-    if (helper) hits.push(helper);
-  }
-  return hits;
 }
 
 async function scanBundles() {

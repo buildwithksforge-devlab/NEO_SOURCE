@@ -262,17 +262,16 @@ export async function runFullSystemTest(
 export async function cleanEnvironment(admin: Admin, rows: EnvironmentRow[]) {
   const problems: string[] = [];
   const details: { label: string; cleaned: boolean; problems: string[] }[] = [];
-  let removed = 0;
+  const removed = new Set<string>();
 
   for (const row of rows) {
     const result = await purgeEnvironment(admin, { orgId: row.test_org_id, accounts: row.accounts ?? [] });
     const accountsGone = result.accountsRemoved === (row.accounts ?? []).length;
-    const cleaned = result.organisationRemoved && result.leftovers.length === 0 && accountsGone && result.problems.length === 0;
+    let cleaned = result.organisationRemoved && result.leftovers.length === 0 && accountsGone && result.problems.length === 0;
     if (!accountsGone) result.problems.push("Some temporary accounts could not be removed.");
 
     if (cleaned) {
-      removed += 1;
-      await admin
+      const { data, error } = await admin
         .from("neo_test_environments")
         .update({
           status: "purged",
@@ -281,27 +280,44 @@ export async function cleanEnvironment(admin: Admin, rows: EnvironmentRow[]) {
           accounts: [],
           cleanup_problems: [],
         } as never)
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !data) {
+        cleaned = false;
+        result.problems.push("The registry did not confirm the cleanup status.");
+      } else {
+        removed.add(row.id);
+      }
     } else {
-      await admin
+      const { data, error } = await admin
         .from("neo_test_environments")
         .update({ status: "cleanup_failed", cleanup_problems: result.problems } as never)
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !data) result.problems.push("The registry did not confirm the cleanup failure status.");
     }
     details.push({ label: row.label, cleaned, problems: result.problems });
     problems.push(...result.problems.map((p) => `${row.label}: ${p}`));
   }
 
   // Nothing may keep a credential once a run is over.
-  const { data: leftoverSecrets } = await admin
+  const { data: leftoverSecrets, error: verificationError } = await admin
     .from("neo_test_environments")
-    .select("id, accounts")
+    .select("id, accounts, status")
     .in("id", rows.map((r) => r.id));
-  for (const row of (leftoverSecrets ?? []) as { id: string; accounts: unknown }[]) {
+  if (verificationError || leftoverSecrets?.length !== rows.length) {
+    problems.push("The registry could not verify every cleanup record.");
+  }
+  for (const row of leftoverSecrets ?? []) {
+    if (removed.has(row.id) && row.status !== "purged") {
+      problems.push("A completed cleanup is missing its purged registry status.");
+    }
     if (JSON.stringify(row.accounts ?? []).toLowerCase().includes("password")) {
       problems.push("A test environment record still holds credential material.");
     }
   }
 
-  return { removed, problems, details, verified: problems.length === 0 };
+  return { removed: removed.size, problems, details, verified: problems.length === 0 };
 }
