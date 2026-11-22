@@ -91,7 +91,16 @@ describe("provider payment dispatch safety", () => {
         ('${legacyAttempt}', '${org}', '${legacyAttempt}', 'cancelled', 'legacy-callback-token');
     `);
     await db.exec(migration);
+    const refundPreflight = readFileSync("supabase/repair/2026-11-21/provider-refund-preflight.sql", "utf8");
+    expect((await db.query(refundPreflight)).rows).toMatchObject([{
+      callback_installed: true, matches_legacy_baseline: true, refund_guard_installed: false,
+      service_can_apply: true, anonymous_can_apply: false, browser_can_apply: false,
+    }]);
     await db.exec(readFileSync("supabase/migrations/20261121123600_provider_refund_reconciliation_guard.sql", "utf8"));
+    expect((await db.query(refundPreflight)).rows).toMatchObject([{
+      matches_legacy_baseline: false, refund_guard_installed: true,
+      service_can_apply: true, anonymous_can_apply: false, browser_can_apply: false,
+    }]);
     await db.query(
       `INSERT INTO public.payment_attempts
         (id, organization_id, payment_id, state)

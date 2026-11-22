@@ -1,12 +1,12 @@
 {
-  "updated": "2026-11-21",
+  "updated": "2026-11-22",
   "active_task": "WF11-T01",
   "preview_release": {
-    "commit": "7185da1",
-    "build": "53ebadf0bae69c38",
-    "worker_version": "770269f3-2a38-4f58-b6a8-b5bc94247085",
-    "verified_public_evidence": "The home, Staff PIN, station-screen, Guest Explore and Delivery routes returned HTTP 200 with the new Preview build ID. The published Personal PIN asset contains Display sign-in setup. The new courier claim and station account routines are installed and reject anonymous calls. Signed-in station and courier sandbox acceptance remain open.",
-    "preflight": "The exact committed release passed TypeScript, production build smoke and the required rollout RPC checks. The owner and staff station entry change passed 53 focused local checks. The previous bf82044 release recorded 5478 offline tests passed, 0 failed and 155 skipped."
+    "commit": "7909473",
+    "build": "1de6c43a2f96143c",
+    "worker_version": "c4444243-145c-4c5c-8d2a-1e2b26d3819d",
+    "verified_public_evidence": "Staff PIN, Guest Services, Transfers and Order History returned HTTP 200 with the new Preview build ID. The new Transfers and Orders assets were fetched and verified. Signed-in actions and property-level workflow acceptance remain open.",
+    "preflight": "The exact committed release passed TypeScript, production build smoke and the required rollout RPC checks. Guest and adjacent commerce tests passed 87 focused checks. The preceding owner and staff station entry change passed 53 focused local checks."
   },
   "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
   "tasks": [
@@ -74,7 +74,7 @@
       "status": "LOCAL_VERIFIED",
       "source_commit": "ffc50d0",
       "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
-      "next_action": "Connect and prove each intended processor in a sandbox. Verify callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout needs its own end-to-end implementation and acceptance.",
+      "next_action": "Use provider-refund-preflight.sql to verify the installed callback definition and grants before applying the refund guard. Connect and prove each intended processor in a sandbox, including callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout needs its own end-to-end implementation and acceptance.",
       "live_acceptance": "OPEN"
     },
     {
@@ -170,6 +170,7 @@
         "mobile_reference": "The supplied Medora image guides the layout: an image-led welcome, an overview with a strong first action, a compact icon dock, and details that retain the same palette and type. Use NEØ's own imagery, labels and data."
       },
       "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history."],
+      "live_evidence": ["Preview build 1de6c43a2f96143c serves the Guest Transfers, Orders and Services routes and the new Transfer and Orders assets."],
       "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
       "live_acceptance": "OPEN"
     }

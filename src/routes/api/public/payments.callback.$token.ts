@@ -29,15 +29,25 @@ export const Route = createFileRoute("/api/public/payments/callback/$token")({
         const token = String(params.token ?? "").trim();
         if (token.length < 16) return new Response("Invalid callback token", { status: 401 });
 
-        let body: Body = {};
+        let body: Body;
         try {
-          body = (await request.json()) as Body;
+          const payload: unknown = await request.json();
+          if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+            return new Response("Invalid payload", { status: 400 });
+          }
+          body = payload as Body;
         } catch {
           return new Response("Invalid payload", { status: 400 });
         }
 
-        const outcome = String(body.outcome ?? body.status ?? "").trim();
+        const providedOutcome = body.outcome ?? body.status;
+        const outcome = typeof providedOutcome === "string" ? providedOutcome.trim() : "";
         if (!outcome) return new Response("No outcome in payload", { status: 400 });
+        const reference = body.reference ?? body.authorization_code ?? null;
+        const detail = body.detail ?? body.message ?? null;
+        if ((reference !== null && typeof reference !== "string") || (detail !== null && typeof detail !== "string")) {
+          return new Response("Invalid payload", { status: 400 });
+        }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const admin = supabaseAdmin as unknown as {
@@ -50,8 +60,8 @@ export const Route = createFileRoute("/api/public/payments/callback/$token")({
         const applied = await trustedRpc(admin, "neo_payment_intent_apply", {
           _token: token,
           _outcome: outcome,
-          _provider_reference: body.reference ?? body.authorization_code ?? null,
-          _detail: body.detail ?? body.message ?? null,
+          _provider_reference: reference,
+          _detail: detail,
           _payload: body as Record<string, unknown>,
         });
 
