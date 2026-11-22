@@ -43,8 +43,15 @@ beforeAll(async () => {
       ('${otherInvoice}','${org}','${otherBranch}','${customer}','USD','issued',100,0,100,'INV-2');
   `);
   await db.exec(readFileSync("supabase/migrations/20260921073325_50507baf-ba3e-4fe1-b637-f3478f8206e0.sql", "utf8"));
-  await db.exec(migration);
-  await db.exec(migration);
+  const preflight = readFileSync("supabase/repair/2026-11-22/receivables-and-folio-transfer-preflight.sql", "utf8");
+  const lf = migration.replaceAll("\r\n", "\n");
+  for (const sql of [lf, lf.replaceAll("\n", "\r\n"), lf]) {
+    await db.exec(sql);
+    expect((await db.query(preflight)).rows).toContainEqual(expect.objectContaining({
+      signature: "public.neo_ar_record_customer_payment(uuid,numeric,text,text,date,text,uuid,text,uuid)",
+      rollout_status: "installed", anonymous_execute: false, authenticated_execute: true,
+    }));
+  }
 }, 60000);
 
 afterAll(async () => db?.close());

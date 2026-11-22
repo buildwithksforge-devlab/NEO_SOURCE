@@ -1,9 +1,14 @@
 BEGIN;
 
 DO $transfer_baseline$
+DECLARE
+  definition text := pg_get_functiondef(to_regprocedure('public.folio_transfer_line(uuid,uuid,text)'));
 BEGIN
-  IF coalesce(md5(pg_get_functiondef(to_regprocedure('public.folio_transfer_line(uuid,uuid,text)'))), '')
-    NOT IN ('edfa202791098f169e5a2694d6714211', 'c521335319e62a91ceaf1754490d64ee') THEN
+  IF NOT coalesce(
+    md5(definition) IN ('edfa202791098f169e5a2694d6714211', 'c521335319e62a91ceaf1754490d64ee')
+    OR md5(replace(definition, chr(13) || chr(10), chr(10))) IN (
+      'edfa202791098f169e5a2694d6714211', '223f0fe9c6f3e84c00b773f81250c525'
+    ), false) THEN
     RAISE EXCEPTION 'Installed folio transfer definition differs from the reviewed versions.';
   END IF;
 END;

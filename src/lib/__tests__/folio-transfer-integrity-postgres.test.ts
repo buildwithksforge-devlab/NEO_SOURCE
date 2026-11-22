@@ -43,9 +43,16 @@ it("moves a full charge once to its verified group master and preserves the scop
   const reverse = readFileSync("supabase/migrations/20260915111852_0b712746-bc13-4708-ae26-6979ffdab2cb.sql", "utf8");
   await db.exec(old.slice(old.indexOf("CREATE OR REPLACE FUNCTION public.folio_transfer_line"), old.indexOf("CREATE OR REPLACE FUNCTION public.folio_reverse_line")));
   await db.exec(reverse.slice(reverse.indexOf("CREATE OR REPLACE FUNCTION public.folio_reverse_line"), reverse.indexOf("CREATE OR REPLACE FUNCTION public.neo_post_pos_order")));
-  const migration = readFileSync("supabase/migrations/20261122041100_folio_transfer_integrity.sql", "utf8");
-  await db.exec(migration);
-  await db.exec(migration);
+  await db.exec("CREATE ROLE anon; CREATE ROLE authenticated; REVOKE ALL ON FUNCTION public.folio_transfer_line(uuid,uuid,text) FROM PUBLIC; GRANT EXECUTE ON FUNCTION public.folio_transfer_line(uuid,uuid,text) TO authenticated;");
+  const migration = readFileSync("supabase/migrations/20261122041100_folio_transfer_integrity.sql", "utf8").replaceAll("\r\n", "\n");
+  const preflight = readFileSync("supabase/repair/2026-11-22/receivables-and-folio-transfer-preflight.sql", "utf8");
+  for (const sql of [migration, migration.replaceAll("\n", "\r\n"), migration]) {
+    await db.exec(sql);
+    expect((await db.query(preflight)).rows).toContainEqual(expect.objectContaining({
+      signature: "public.folio_transfer_line(uuid,uuid,text)", rollout_status: "installed",
+      anonymous_execute: false, authenticated_execute: true,
+    }));
+  }
   const move = (to: string) => db.query("SELECT folio_transfer_line($1,$2,'Send to group bill') AS line", [charge, to]);
   await expect(move(outside)).rejects.toMatchObject({ code: "42501" });
   await db.query("UPDATE group_bookings SET master_folio_id=$1", [other]);

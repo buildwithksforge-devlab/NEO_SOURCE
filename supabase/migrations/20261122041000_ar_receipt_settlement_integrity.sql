@@ -1,10 +1,16 @@
 BEGIN;
 
 DO $ar_receipt_baseline$
-BEGIN
-  IF coalesce(md5(pg_get_functiondef(to_regprocedure(
+DECLARE
+  definition text := pg_get_functiondef(to_regprocedure(
     'public.neo_ar_record_customer_payment(uuid,numeric,text,text,date,text,uuid,text,uuid)'
-  ))), '') NOT IN ('eafa41a8305e6f621675f9ab66ea753e', 'ce4983e5f70316dcd9cdc185b88a5321') THEN
+  ));
+BEGIN
+  IF NOT coalesce(
+    md5(definition) IN ('eafa41a8305e6f621675f9ab66ea753e', 'ce4983e5f70316dcd9cdc185b88a5321')
+    OR md5(replace(definition, chr(13) || chr(10), chr(10))) IN (
+      'eafa41a8305e6f621675f9ab66ea753e', '06b710c4fa6e97a0643da5db46506d10'
+    ), false) THEN
     RAISE EXCEPTION 'Installed receivables receipt definition differs from the reviewed versions.';
   END IF;
 END;

@@ -62,8 +62,8 @@
       "title": "Protect whole-charge group master transfers and company invoice receipt settlement",
       "status": "AWAITING_INSTALLATION",
       "local_evidence": ["A whole posted charge moves once to its verified group master and preserves the original reversal and tax amount. A company invoice receipt retry returns the saved receipt and journal, including after full settlement."],
-      "live_evidence": ["The 07:10:39 export confirms both original routines are on supported baselines, with authenticated execution and no anonymous execution."],
-      "next_action": "Apply the guarded receivables and folio transfer migrations, then rerun receivables-and-folio-transfer-preflight.sql and compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
+      "live_evidence": ["The 07:18:07 export confirms the receipt function matches the reviewed LF definition and the folio transfer is still on its supported baseline. Both have authenticated execution and no anonymous execution. The finance preflight now recognises LF and CRLF."],
+      "next_action": "Apply the guarded folio transfer migration, then rerun receivables-and-folio-transfer-preflight.sql and compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
       "live_acceptance": "OPEN"
     },
     {
