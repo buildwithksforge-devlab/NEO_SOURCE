@@ -488,7 +488,7 @@ function FolioDetailPage() {
 
       <PostChargeDialog folioId={id} open={charging} onClose={() => setCharging(false)} />
       <TransferDialog key={transferLine?.id ?? "closed"} line={transferLine} folioId={id}
-        branchId={f["branch_id"]} currency={f["currency"]} onClose={() => setTransferLine(null)} />
+        branchId={f?.["branch_id"]} currency={f?.["currency"]} onClose={() => setTransferLine(null)} />
       <ReverseDialog line={reverseLine} onClose={() => setReverseLine(null)} />
       <ReopenDialog folioId={id} open={reopening} onClose={() => setReopening(false)} />
     </div>

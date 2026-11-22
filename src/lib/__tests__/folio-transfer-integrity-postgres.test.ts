@@ -3,7 +3,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, expect, it } from "vitest";
 
 const id = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
-const [org, branch, source, master, other, group, reservation, charge, outside] = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(id);
+const [org, branch, source, master, other, group, reservation, charge, outside] =
+  [id(1), id(2), id(3), id(4), id(5), id(6), id(7), id(8), id(9)] as const;
 const db = new PGlite();
 afterAll(async () => db.close());
 
