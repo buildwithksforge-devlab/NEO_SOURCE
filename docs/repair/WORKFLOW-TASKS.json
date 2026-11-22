@@ -62,7 +62,8 @@
       "title": "Protect whole-charge group master transfers and company invoice receipt settlement",
       "status": "AWAITING_INSTALLATION",
       "local_evidence": ["A whole posted charge moves once to its verified group master and preserves the original reversal and tax amount. A company invoice receipt retry returns the saved receipt and journal, including after full settlement."],
-      "next_action": "Check receivables-and-folio-transfer-preflight.sql, verify both installed definitions, then compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
+      "live_evidence": ["The 07:10:39 export confirms both original routines are on supported baselines, with authenticated execution and no anonymous execution."],
+      "next_action": "Apply the guarded receivables and folio transfer migrations, then rerun receivables-and-folio-transfer-preflight.sql and compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
       "live_acceptance": "OPEN"
     },
     {
@@ -90,11 +91,11 @@
       "id": "WF11-T02",
       "chains": ["WF03", "WF11", "WF12", "WF23"],
       "title": "Verify configurable payment methods by channel, property and processor",
-      "status": "AWAITING_INSTALLATION",
+      "status": "AWAITING_LIVE_RESULTS",
       "source_commit": "ffc50d0",
       "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
-      "live_evidence": ["The 04:00:25 export shows the refund guard installed with service-only execution. The open, mark-sent and claim routines exist with unreviewed definitions. The read-only Preview API check recognises claim and denies unauthenticated execution."],
-      "next_action": "Compare all four function definitions from provider-dispatch-definition-review.sql with the repository. Connect and prove the processor sandbox contracts for hosted card and QR checkout, verified callback, full and partial refund, and clearing accounts. Current public checkout supports its configured M-Pesa, cash or pay-on-collection flows.",
+      "live_evidence": ["The 07:11:04 export contains the four installed definitions. Each matches pg_get_functiondef from the current repository migrations byte for byte when the migration uses LF line endings. The callback is service-only; the three intent and dispatch routines allow authenticated and service execution without anonymous grants. The preflight now recognises the published definitions and Windows line endings."],
+      "next_action": "Connect and prove the processor sandbox contracts for hosted card and QR checkout, verified callback, full and partial refund, and clearing accounts. Current public checkout supports its configured M-Pesa, cash or pay-on-collection flows.",
       "live_acceptance": "OPEN"
     },
     {

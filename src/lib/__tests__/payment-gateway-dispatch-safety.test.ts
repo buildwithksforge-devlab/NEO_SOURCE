@@ -109,6 +109,16 @@ describe("provider payment dispatch safety", () => {
     );
   }, 30_000);
 
+  it("recognises all reviewed installed payment definitions and their execution grants", async () => {
+    const dispatchPreflight = readFileSync("supabase/repair/2026-11-21/provider-dispatch-baseline.sql", "utf8");
+    expect((await db.query(dispatchPreflight)).rows).toMatchObject([
+      { operation: "apply", deployment_state: "refund_safe", anonymous_can_execute: false, browser_can_execute: false, service_can_execute: true },
+      ...["claim", "mark_sent", "open"].map((operation) => ({
+        operation, deployment_state: "dispatch_safe", anonymous_can_execute: false, browser_can_execute: true, service_can_execute: false,
+      })),
+    ]);
+  });
+
   afterAll(async () => {
     await db.close();
   });
