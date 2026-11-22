@@ -7,6 +7,33 @@ import { NEO_SYMBOL_BASE64 } from '@/lib/document-symbol';
 afterEach(()=>vi.restoreAllMocks());
 const baseline={document:{number:'LAYOUT-ONLY-001',date:'2026-11-10T12:00:00Z',status:'closed'},property:{name:'Sample Property',currency:'KES'},identity:{organisation:'Sample Company',organisation_id:'a6000000-0000-4000-8000-000000000001'},branch_id:'a6000000-0000-4000-8000-000000000002',generated_at:'2026-11-10T12:30:00Z',party:{label:'Guest',name:'Layout sample'},lines:[{description:'Lunch',quantity:1,unit_price:1854,total:1854}],totals:[{label:'Total',amount:1854,emphasis:true},{label:'Tendered',amount:2000},{label:'Change',amount:146}],meta:{cashier:'Sample cashier'}};
 describe('thermal receipt actual PDF layout',()=>{
+ it('keeps a moderate branded QR receipt and its footer on one roll page', async()=>{
+  const payload=structuredClone(baseline);
+  Object.assign(payload.property,{address:'100 Crown Avenue, Westlands, Nairobi',city:'Nairobi',country:'Kenya',
+   timezone:'Africa/Nairobi',
+   phone:'+254 20 500 1000',email:'nairobi@savannacrown.example'});
+  Object.assign(payload.identity,{tax_id:'P000000000T',brand:{logoLight:'data:image/png;base64,'+NEO_SYMBOL_BASE64,
+   receiptQrDestination:'socials',receiptFeedbackUrl:'https://example.com/savanna-crown',
+   receiptPaybill:'254254',receiptPaybillAccount:'901393',receiptTill:'102913'}});
+  payload.lines=[
+   {description:'Heineken 330ml',quantity:3,unit_price:600,total:1800},
+   {description:'Balozi',quantity:5,unit_price:350,total:1750},
+   {description:'Fish Curry',quantity:1,unit_price:1900,total:1900},
+   {description:'Pancakes & Fruit',quantity:1,unit_price:900,total:900},
+  ];
+  payload.totals=[{label:'Subtotal',amount:6350},{label:'Discount',amount:0},
+   {label:'Service charge',amount:0},{label:'Net before tax',amount:5474.13},
+   {label:'16% VAT Standard rate (VAT 16%) · Included',amount:875.87},
+   {label:'Total',amount:6350,emphasis:true},{label:'Paid',amount:0},{label:'Balance',amount:6350}];
+  payload.meta={cashier:'Cynthia Kibet','Payment status':'unpaid'} as any;
+  const drawText=vi.spyOn(PDFPage.prototype,'drawText');
+  const result=await buildThermalReceiptPdf({rpc:vi.fn().mockResolvedValue({data:payload,error:null})} as any,
+   {type:'pos_receipt',id:'sample'});
+  expect((await PDFDocument.load(Buffer.from(result.base64,'base64'))).getPageCount()).toBe(1);
+  expect(drawText.mock.calls.map(([value])=>value)).toEqual(expect.arrayContaining([
+   '10 Nov 2026 15:00','Generated 10 Nov 2026 15:30',
+  ]));
+ });
  for(const variant of ['standard','long-labels','wrapped-items','charged-to-room','branded-long','split-tender','menu-qr'])it(variant+' keeps text and rules apart',async()=>{
   const payload=structuredClone(baseline);
   if(variant==='long-labels'){payload.party.name='Guest with a very long name that must stay inside the receipt';payload.meta={cashier:'Cashier name with several long words',original_external_payment_confirmation_reference:'A'.repeat(70)} as any;payload.totals.unshift({label:'Remaining balance after previous confirmed payments',amount:1854,emphasis:false});}

@@ -61,6 +61,12 @@ function TaxPage() {
   const failed = (submissions.data ?? []).filter((s) =>
     ["failed", "rejected", "retry_required"].includes(String(s["status"])),
   );
+  const liabilityAccounts = (accounts.data ?? []).filter((account) =>
+    account["category"] === "liability" && account["active"] && account["postable"] && !account["is_header"]
+  );
+  const taxAccountOptions = liabilityAccounts.map((account) => ({
+    value: String(account["id"]), label: `${account["code"]} — ${account["name"]}`,
+  }));
 
   const codeFields: FieldSpec[] = [
     { name: "code", label: "Tax code", required: true, placeholder: "VAT16" },
@@ -86,12 +92,9 @@ function TaxPage() {
     { name: "effective_to", label: "Effective to", type: "date" },
     {
       name: "tax_account_id",
-      label: "Tax account",
+      label: "Active, postable tax liability account",
       type: "select",
-      options: (accounts.data ?? []).map((a) => ({
-        value: String(a["id"]),
-        label: `${a["code"]} — ${a["name"]}`,
-      })),
+      options: taxAccountOptions,
     },
     { name: "etims_code", label: "Fiscal / eTIMS code", placeholder: "B" },
   ];
@@ -182,6 +185,24 @@ function TaxPage() {
                   <FinStatus value={c["active"] ? "approved" : "cancelled"} />
                 </td>
                 <td className="py-2 pr-4">
+                  <FormDialog
+                    trigger={<Button variant="outline" size="sm">Tax account</Button>}
+                    title={`Tax account for ${String(c["code"])}`}
+                    description="Choose an active, postable liability account for this tax code before a new sale uses it."
+                  >
+                    {(close) => <RecordForm
+                      key={String(c["id"])}
+                      fields={[{ name: "tax_account_id", label: "Tax liability account", type: "select", required: true, options: taxAccountOptions }]}
+                      initial={{ tax_account_id: c["tax_account_id"] ?? "" }}
+                      submitLabel="Save tax account"
+                      busy={updateCode.isPending}
+                      onSubmit={async (values) => {
+                        await updateCode.mutateAsync({ id: String(c["id"]), values: { tax_account_id: values["tax_account_id"] } });
+                        await codes.refetch();
+                        close();
+                      }}
+                    />}
+                  </FormDialog>
                   <Button variant="ghost" size="sm" disabled={updateCode.isPending} onClick={() =>
                     updateCode.mutate({ id: String(c["id"]), values: { active: !c["active"] } },
                       { onSuccess: () => void codes.refetch() })

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTenant } from "@/lib/tenant";
 import { documentTypeLabels } from "@/lib/tenant-defaults";
 import { cn } from "@/lib/utils";
-import { receiptQrDestination, receiptQrLink } from "@/lib/receipt-qr";
+import { receiptQrConfig, receiptQrDestination, receiptQrLink } from "@/lib/receipt-qr";
 
 export const Route = createFileRoute("/admin/documents")({
   head: () => ({
@@ -33,6 +33,7 @@ function DocumentsPage() {
   const qrDestination = receiptQrDestination(tenant.brand.receiptQrDestination);
   const qrUrl = tenant.brand.receiptFeedbackUrl ?? "";
   const invalidQrUrl = qrUrl.trim().length > 0 && !receiptQrLink(qrUrl);
+  const receiptQr = receiptQrConfig(tenant.brand);
 
   if (!doc) return null;
 
@@ -95,7 +96,9 @@ function DocumentsPage() {
                       aria-describedby="receipt-qr-help"
                       onChange={(event) => updateBrand({ receiptFeedbackUrl: event.target.value })} />
                     <p id="receipt-qr-help" className={cn("text-xs", invalidQrUrl ? "text-destructive" : "text-muted-foreground")}>
-                      {invalidQrUrl ? "Enter an HTTPS link to print this QR code." : "NEØ generates the QR code from this HTTPS link."}
+                      {invalidQrUrl ? "Enter a valid HTTPS link; receipts will not show a QR code until it is fixed."
+                        : !receiptQr ? "No QR link is saved. Receipts will not show a QR code."
+                        : `${receiptQr.caption}. This link will appear as a QR code on new downloads and reprints.`}
                     </p>
                   </div>
                 )}

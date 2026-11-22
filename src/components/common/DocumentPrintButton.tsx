@@ -173,6 +173,9 @@ export function DocumentPrintButton({
         },
       };
       let result = await run(input);
+      if (!result || typeof result.base64 !== "string") {
+        throw new Error("The document service returned no PDF. Please try again; if it continues, report this receipt number.");
+      }
       let bytes: Uint8Array<ArrayBuffer>;
       try {
         bytes = decodeDocumentPdf(result.base64);
@@ -180,6 +183,9 @@ export function DocumentPrintButton({
         // Export is read-only. A single retry handles an incomplete response
         // without queuing another print job or changing the sale.
         result = await run(input);
+        if (!result || typeof result.base64 !== "string") {
+          throw new Error("The document service returned no PDF. Please try again; if it continues, report this receipt number.");
+        }
         try {
           bytes = decodeDocumentPdf(result.base64);
         } catch {

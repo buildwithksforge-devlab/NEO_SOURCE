@@ -75,23 +75,27 @@ const humanLabel = (value: string): string =>
     .trim()
     .replace(/^./, (c) => c.toUpperCase());
 
-const dateTime = (value: unknown): string => {
+const dateTime = (value: unknown, timeZone: string): string => {
   const raw = clean(value);
   if (!raw) return "";
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
 
-  return parsed
-    .toLocaleString("en-KE", {
+  const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
       month: "short",
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    })
-    .replace(",", "");
+      timeZone,
+    };
+  try {
+    return parsed.toLocaleString("en-KE", options).replace(",", "");
+  } catch {
+    return parsed.toLocaleString("en-KE", { ...options, timeZone: "UTC" }).replace(",", "");
+  }
 };
 
 const money = (value: unknown, currency: string): string => {
@@ -260,6 +264,7 @@ export async function buildThermalReceiptPdf(
     clean(property["currency"]) ||
     clean(identity["currency"]) ||
     "KES";
+  const propertyTimeZone = clean(property["timezone"]) || "UTC";
 
   const partyName = clean(payload.party?.name);
 
@@ -583,7 +588,7 @@ export async function buildThermalReceiptPdf(
   // TRANSACTION IDENTITY
   // ----------------------------------------------------------------
 
-  const receiptDate = dateTime(document.date);
+  const receiptDate = dateTime(document.date, propertyTimeZone);
 
   if (receiptDate) {
     drawPair("Date:", receiptDate, bold, regular, 7.5, 7.5, muted);
@@ -795,7 +800,17 @@ export async function buildThermalReceiptPdf(
   // PROVENANCE / FOOTER
   // ----------------------------------------------------------------
 
-  continueRoll(92 + estimateMetaHeight(staffEntries));
+  const trace = documentTraceCode({
+    organizationId: clean(identity["organisation_id"]) || null,
+    propertyId: payload.branch_id ?? null,
+    documentType: input.type,
+    documentNumber,
+  });
+  const generated = dateTime(payload.generated_at, propertyTimeZone);
+  const traceLines = trace ? wrap(trace, regular, 5.7, contentWidth) : [];
+  const footerHeight = 4 + 10 + estimateMetaHeight(staffEntries) + (staffEntries.length ? 4 : 0)
+    + 12 + traceLines.length * 7 + (generated ? 8 : 0) + 2 + 8 + 8 + 15;
+  continueRoll(footerHeight);
   y -= 4;
   lineRule(true);
 
@@ -807,21 +822,12 @@ export async function buildThermalReceiptPdf(
   drawCentered("Thank you for your business.", 8.2, bold);
   y -= 12;
 
-  const trace = documentTraceCode({
-    organizationId: clean(identity["organisation_id"]) || null,
-    propertyId: payload.branch_id ?? null,
-    documentType: input.type,
-    documentNumber,
-  });
-
   if (trace) {
-    for (const part of wrap(trace, regular, 5.7, contentWidth)) {
+    for (const part of traceLines) {
       drawCentered(part, 5.7, regular, muted);
       y -= 7;
     }
   }
-
-  const generated = dateTime(payload.generated_at);
 
   if (generated) {
     drawCentered(`Generated ${generated}`, 5.7, regular, muted);

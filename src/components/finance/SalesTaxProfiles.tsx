@@ -25,8 +25,9 @@ export function SalesTaxProfiles() {
   const create = useFinanceInsert("sales_tax_profiles", "finance.sales_tax_profile.created", { branchScoped: false });
   const update = useFinanceUpdate("sales_tax_profiles", "finance.sales_tax_profile.updated");
   const options = [...new Map((codes.data ?? [])
-    .filter((code) => ["standard", "zero_rated", "exempt"].includes(String(code["treatment"])))
+    .filter((code) => code["active"] && ["standard", "zero_rated", "exempt"].includes(String(code["treatment"])))
     .map((code) => [String(code["code"]), String(code["name"])] as const))];
+  const inactiveRules = rules.filter((rule) => !options.some(([code]) => code === rule.code));
   const reset = () => {
     setEditing(""); setName(""); setTreatment("standard"); setRules([]); setSelectedCode(""); setWorkspaceDefault(false);
   };
@@ -56,6 +57,11 @@ export function SalesTaxProfiles() {
                 {profile.active ? "" : " · Archived"}
                 {profile.workspace_default ? " · Workspace default" : ""}
               </p>
+              {profile.active && profile.rules.some((rule) => !options.some(([code]) => code === rule.code)) && (
+                <p role="alert" className="text-sm text-destructive">
+                  This profile contains a cancelled or unavailable tax code. Edit it before the next sale.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => {
@@ -102,6 +108,9 @@ export function SalesTaxProfiles() {
               </li>
             ))}
           </ol>
+          {inactiveRules.length > 0 && <p role="alert" className="text-sm text-destructive">
+            Remove cancelled or unavailable codes: {inactiveRules.map((rule) => rule.code).join(", ")}.
+          </p>}
           <div className="flex gap-2">
             <select aria-label="Tax code" className="min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
               value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)}>
@@ -116,7 +125,7 @@ export function SalesTaxProfiles() {
           </div>
         </>}
         <div className="flex gap-2">
-          <Button type="submit" disabled={!name.trim() || (treatment === "standard" && !rules.length) || create.isPending || update.isPending}>
+          <Button type="submit" disabled={!name.trim() || (treatment === "standard" && (!rules.length || inactiveRules.length > 0)) || create.isPending || update.isPending}>
             {editing ? "Save profile" : "Create profile"}
           </Button>
           {editing && <Button type="button" variant="ghost" onClick={reset}>Cancel</Button>}

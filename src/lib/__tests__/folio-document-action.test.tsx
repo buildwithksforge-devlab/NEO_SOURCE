@@ -269,6 +269,15 @@ describe("folio statement document action", () => {
     expect(clicks).toEqual([]);
   });
 
+  it("reports an empty export response without another slow request", async () => {
+    exportSpy.mockResolvedValue(undefined);
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: /download pdf/i }));
+    await waitFor(() => expect(exportSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect((screen.getByRole("button", { name: /download pdf/i }) as HTMLButtonElement).disabled).toBe(false));
+    expect(clicks).toEqual([]);
+  });
+
   it("closes the preparing window on a denied/failed export", async () => {
     exportSpy.mockRejectedValue(new Error("Not permitted"));
     render(<Page />);
