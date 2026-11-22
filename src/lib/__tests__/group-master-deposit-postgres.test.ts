@@ -41,7 +41,7 @@ beforeAll(async () => {
   `);
   await db.exec(original("20260822043443_f3a7e77b-a12a-4433-93ed-81aca39fbfd2.sql", "pms_group_master_folio"));
   await db.exec(original("20260924153000_front_office_connected_guards.sql", "pms_group_record_deposit"));
-  expect((await db.query(preflight)).rows.map((row) => row.rollout_status)).toEqual(["supported baseline", "supported baseline"]);
+  expect((await db.query<{ rollout_status: string }>(preflight)).rows.map((row) => row.rollout_status)).toEqual(["supported baseline", "supported baseline"]);
   await db.exec(sql);
 });
 

@@ -52,7 +52,17 @@
       "title": "Link group deposits to the verified master folio and protect reference retries",
       "status": "AWAITING_INSTALLATION",
       "local_evidence": ["The guarded migration serializes master creation and deposit retries for the same group. Retries compare the saved payment, method, amount, currency and folio. The billing screen opens the verified folio and shows its balance and currency."],
-      "next_action": "Run group-master-deposit-preflight.sql, install the matching migration, then verify the two installed definitions. Check a controlled group deposit and its Finance entries. Shared charge allocation and corporate credit settlement remain separate workflow work.",
+      "live_evidence": ["The 04:00:56 export identified both group billing routines as supported baselines."],
+      "next_action": "Apply the guarded group master deposit migration and confirm both installed definitions. Check a controlled group deposit and its Finance entries.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF17-T02",
+      "chains": ["WF17", "WF18", "WF23"],
+      "title": "Protect whole-charge group master transfers and company invoice receipt settlement",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["A whole posted charge moves once to its verified group master and preserves the original reversal and tax amount. A company invoice receipt retry returns the saved receipt and journal, including after full settlement."],
+      "next_action": "Check receivables-and-folio-transfer-preflight.sql, verify both installed definitions, then compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
       "live_acceptance": "OPEN"
     },
     {
@@ -83,8 +93,8 @@
       "status": "AWAITING_INSTALLATION",
       "source_commit": "ffc50d0",
       "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
-      "live_evidence": ["The 2026-11-22 refund preflight export digest affdacd43bd2b9f451158084f8c826da exactly matches the September provider callback in the repository. The export confirms only the service role can execute it. The November dispatch and refund callback definitions are absent."],
-      "next_action": "Run provider-dispatch-baseline.sql to verify the open, mark-sent, claim and apply definitions, then apply the guarded NEO_PROVIDER_PAYMENT_ROLLOUT.sql from build-provider-payment-rollout.mjs. Connect and prove each processor in a sandbox, including callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout still requires implementation and acceptance.",
+      "live_evidence": ["The 04:00:25 export shows the refund guard installed with service-only execution. The open, mark-sent and claim routines exist with unreviewed definitions. The read-only Preview API check recognises claim and denies unauthenticated execution."],
+      "next_action": "Compare all four function definitions from provider-dispatch-definition-review.sql with the repository. Connect and prove the processor sandbox contracts for hosted card and QR checkout, verified callback, full and partial refund, and clearing accounts. Current public checkout supports its configured M-Pesa, cash or pay-on-collection flows.",
       "live_acceptance": "OPEN"
     },
     {

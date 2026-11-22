@@ -891,6 +891,7 @@ export function useRecordCustomerReceipt() {
       paidOn?: string | undefined;
       notes?: string | undefined;
       campaignId?: string | undefined;
+      intentKey?: string | undefined;
       /** Which of the hotel's accounts received the money. */
       destinationAccountId?: string | null | undefined;
     }) => {
@@ -902,10 +903,11 @@ export function useRecordCustomerReceipt() {
         _paid_on: input.paidOn ?? null,
         _notes: input.notes ?? null,
         _campaign: input.campaignId ?? null,
+        _intent_key: input.intentKey ?? null,
         _account: input.destinationAccountId ?? null,
       } as never);
       if (error) throw error;
-      return (data ?? {}) as {
+      const receipt = (data ?? {}) as {
         ok?: boolean;
         payment_id?: string;
         receipt_number?: string;
@@ -914,6 +916,8 @@ export function useRecordCustomerReceipt() {
         invoice_balance?: number;
         duplicate_prevented?: boolean;
       };
+      if (receipt.ok !== true || !receipt.payment_id) throw new Error("The receipt could not be verified. Review the invoice before entering it again.");
+      return receipt;
     },
     onSuccess: (r) => {
       if (r.duplicate_prevented) toast.info("That receipt was already recorded.");

@@ -487,7 +487,8 @@ function FolioDetailPage() {
       </QueryState>
 
       <PostChargeDialog folioId={id} open={charging} onClose={() => setCharging(false)} />
-      <TransferDialog line={transferLine} folioId={id} onClose={() => setTransferLine(null)} />
+      <TransferDialog key={transferLine?.id ?? "closed"} line={transferLine} folioId={id}
+        branchId={f["branch_id"]} currency={f["currency"]} onClose={() => setTransferLine(null)} />
       <ReverseDialog line={reverseLine} onClose={() => setReverseLine(null)} />
       <ReopenDialog folioId={id} open={reopening} onClose={() => setReopening(false)} />
     </div>
@@ -647,10 +648,14 @@ function Field({
 function TransferDialog({
   line,
   folioId,
+  branchId,
+  currency,
   onClose,
 }: {
   line: LineRow | null;
   folioId: string;
+  branchId: string | null | undefined;
+  currency: string | null | undefined;
   onClose: () => void;
 }) {
   const transfer = useTransferFolioLine();
@@ -658,7 +663,7 @@ function TransferDialog({
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
   const options = ((folios.data ?? []) as Record<string, any>[]).filter(
-    (f) => String(f["id"]) !== folioId,
+    (f) => Boolean(branchId && currency) && f["id"] !== folioId && f["branch_id"] === branchId && f["currency"] === currency,
   );
 
   return (
@@ -667,8 +672,7 @@ function TransferDialog({
         <DialogHeader>
           <DialogTitle>Transfer charge</DialogTitle>
           <DialogDescription>
-            The charge is reversed here and re-posted on the receiving folio, with both sides linked
-            by one correlation key.
+            Move the full charge, including taxes and discounts, to an open folio in the same property and currency.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -687,6 +691,13 @@ function TransferDialog({
                 ))}
               </SelectContent>
             </Select>
+            {folios.isError ? (
+              <button type="button" className="text-left text-sm underline" onClick={() => void folios.refetch()}>
+                Receiving folios could not load. Try again
+              </button>
+            ) : !folios.isLoading && options.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No eligible receiving folios are open.</p>
+            ) : null}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="transfer-reason">Reason</Label>
@@ -697,7 +708,7 @@ function TransferDialog({
             />
           </div>
           <Button
-            disabled={!target || reason.trim().length < 3 || transfer.isPending}
+            disabled={!options.some((folio) => folio["id"] === target) || reason.trim().length < 3 || transfer.isPending}
             onClick={() =>
               transfer.mutate(
                 { line: line!.id, target, reason: reason.trim() },

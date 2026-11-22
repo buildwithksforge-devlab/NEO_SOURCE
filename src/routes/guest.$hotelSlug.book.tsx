@@ -75,6 +75,7 @@ function BookPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { room } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const linkedRoom = Route.useLoaderData();
   const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
@@ -91,7 +92,7 @@ function BookPage() {
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [requests, setRequests] = useState("");
-  const [selected, setSelected] = useState<string | null>(room ?? null);
+  const selected = room ?? null;
   const [confirmed, setConfirmed] = useState<{ reference: string; quote: RoomOffer; arrival: string; departure: string; adults: number; children: number } | null>(null);
   const review = useRef<HTMLDivElement>(null);
   // One intent per search, so a double tap or a refresh returns the same stay.
@@ -319,8 +320,8 @@ function BookPage() {
                     <BrandButton
                       variant={active ? "solid" : "outline"}
                       onClick={() => {
-                        setSelected(offer.room_type_id);
-                        requestAnimationFrame(() => review.current?.focus());
+                        void navigate({ search: { room: offer.room_type_id }, resetScroll: false })
+                          .then(() => requestAnimationFrame(() => review.current?.focus()));
                       }}
                     >
                       {active ? "Review selected room" : "Choose this room"}

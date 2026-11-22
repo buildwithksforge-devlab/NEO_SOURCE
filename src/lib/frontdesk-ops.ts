@@ -582,7 +582,7 @@ export function useOpenFolios() {
     queryKey: ["pms", "open-folios", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(supabase.from("folios").select("id, folio_number, folio_type, customers(full_name)"), "folios")
+      const { data, error } = await applyTo(supabase.from("folios").select("id, folio_number, folio_type, branch_id, currency, customers(full_name)"), "folios")
         .eq("status", "open")
         .order("opened_at", { ascending: false })
         .limit(200);

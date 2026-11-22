@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Handshake, Loader2, MessageSquareText, PackageCheck, ShoppingBag } from "lucide-react";
+import { FileText, Handshake, Loader2, MessageSquareText, PackageCheck, Search, ShoppingBag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { usePartnerCreditInvoices } from "@/lib/partner-billing";
@@ -27,9 +27,11 @@ import { downloadDocumentPdf } from "@/lib/browser-document";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
-  validateSearch: (search: Record<string, unknown>): { section?: PartnerSection } => {
+  validateSearch: (search: Record<string, unknown>): { section?: PartnerSection; relationship?: string } => {
     const section = SECTIONS.find((item) => item.key === search["section"])?.key;
-    return section ? { section } : {};
+    const relationship = typeof search["relationship"] === "string" &&
+      /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(search["relationship"]) ? search["relationship"] : undefined;
+    return { ...(section ? { section } : {}), ...(relationship ? { relationship } : {}) };
   },
   head: () => ({
     meta: [
@@ -76,12 +78,12 @@ type PartnerRecords = {
 
 type PartnerSection = "overview" | "orders" | "deliveries" | "invoices" | "messages";
 
-const SECTIONS: { key: PartnerSection; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "orders", label: "Orders" },
-  { key: "deliveries", label: "Deliveries" },
-  { key: "invoices", label: "Invoices" },
-  { key: "messages", label: "Messages" },
+const SECTIONS: { key: PartnerSection; label: string; icon: typeof Handshake }[] = [
+  { key: "overview", label: "Overview", icon: Handshake },
+  { key: "orders", label: "Orders", icon: ShoppingBag },
+  { key: "deliveries", label: "Deliveries", icon: PackageCheck },
+  { key: "invoices", label: "Invoices", icon: FileText },
+  { key: "messages", label: "Messages", icon: MessageSquareText },
 ];
 
 const refusal: Record<string, string> = {
@@ -94,13 +96,12 @@ const refusal: Record<string, string> = {
 function PartnerPortal() {
   const { propertySlug } = Route.useParams();
   useTrackEntry(propertySlug, "partner");
-  const [selected, setSelected] = useState<string | null>(null);
   const [messageSubject, setMessageSubject] = useState("");
   const [downloadingOrder, setDownloadingOrder] = useState<string | null>(null);
   const exportOrder = useServerFn(exportPartnerPurchaseOrder);
-  const { section = "overview" } = Route.useSearch();
+  const { section = "overview", relationship: selected } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const setSection = (next: PartnerSection) => void navigate({ search: { section: next } });
+  const setSection = (next: PartnerSection) => void navigate({ search: (prev) => ({ ...prev, section: next }) });
   const { user, loading: sessionLoading } = useCustomerSession();
 
 
@@ -230,13 +231,15 @@ function PartnerPortal() {
 
   return (
     <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}>
-      <section className="neo-partner-hero">
-        <span className="grid size-12 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" /></span>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-white">Partner workspace</h1>
-          <p className="mt-2 text-sm text-white/75">Follow your orders, deliveries, invoices and messages with {property.data.property_name}.</p>
-        </div>
-      </section>
+      {section === "overview" ? (
+        <section className="neo-partner-hero mt-4">
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" aria-hidden /></span>
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold text-white">Partner workspace</h2>
+            <p className="mt-2 text-sm text-white/75">Follow your orders, deliveries, invoices and messages with {property.data.property_name}.</p>
+          </div>
+        </section>
+      ) : null}
 
       {relationships.length > 1 ? (
         <div className="my-4 flex flex-wrap gap-2">
@@ -246,8 +249,8 @@ function PartnerPortal() {
               type="button"
               aria-pressed={rel.id === active}
               onClick={() => {
-                setSelected(rel.id);
                 setMessageSubject("");
+                void navigate({ search: (prev) => ({ ...prev, relationship: rel.id }) });
               }}
               className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
                 rel.id === active ? "bg-white text-[#020A1C]" : "bg-white/10 text-white/70"
@@ -302,16 +305,16 @@ function PartnerPortal() {
       ) : null}
 
       {data && section === "orders" ? (
-        <PartnerRecordsList kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
+        <PartnerRecordsList key={active} kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
           onDownload={(number) => void downloadOrder(number)} downloading={downloadingOrder} />
       ) : null}
       {data && section === "deliveries" ? (
-        <PartnerRecordsList kind="deliveries" rows={data.deliveries ?? []} currency={currency} onAsk={askAbout} />
+        <PartnerRecordsList key={active} kind="deliveries" rows={data.deliveries ?? []} currency={currency} onAsk={askAbout} />
       ) : null}
       {data && section === "invoices" ? (
         <>
-          <PartnerRecordsList kind="invoices" rows={data.invoices ?? []} currency={currency} onAsk={askAbout} />
-          <CreditInvoices branchId={branchId} relationshipId={active} onAsk={askAbout} />
+          <PartnerRecordsList key={active} kind="invoices" rows={data.invoices ?? []} currency={currency} onAsk={askAbout} />
+          <CreditInvoices key={active} branchId={branchId} relationshipId={active} onAsk={askAbout} />
         </>
       ) : null}
       {data && section === "messages" ? (
@@ -390,14 +393,32 @@ function PartnerRecordsList({ kind, rows, currency, onAsk, onDownload, downloadi
   downloading?: string | null;
 }) {
   const fields = recordFields[kind];
+  const [query, setQuery] = useState("");
+  const search = query.trim().toLowerCase();
+  const visible = rows.filter((row) => !search || [row[fields.reference], row["status"]].some(
+    (value) => String(value ?? "").replace(/[_-]/g, " ").toLowerCase().includes(search.replace(/[_-]/g, " ")),
+  ));
   return (
     <Panel>
-      <h2 className="text-base font-semibold text-white">{fields.title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-white">{fields.title}</h2>
+        {rows.length ? <span className="text-xs tabular-nums text-white/75" role="status">{visible.length} of {rows.length}</span> : null}
+      </div>
+      {rows.length ? (
+        <label className="mt-3 flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-white">
+          <Search className="size-4 shrink-0" aria-hidden />
+          <span className="sr-only">Search {fields.title.toLowerCase()}</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by reference or status" className="min-w-0 flex-1 bg-transparent py-2 text-sm placeholder:text-white/65" />
+        </label>
+      ) : null}
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-white/60">Nothing recorded for your business yet.</p>
+      ) : visible.length === 0 ? (
+        <p className="mt-3 text-sm text-white/75">No matching records. <button type="button" className="min-h-11 underline" onClick={() => setQuery("")}>Clear search</button></p>
       ) : (
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-          {rows.map((row, index) => {
+          {visible.map((row, index) => {
             const reference = String(row[fields.reference] ?? "");
             const rowCurrency = typeof row["currency"] === "string" ? row["currency"] : currency;
             const paidAmount = row["paid_amount"] ?? row["amount_paid"];
@@ -645,19 +666,20 @@ function Shell({
         {section && onSection ? (
           <nav
             aria-label="Partner sections"
-            className="neo-partner-tabs mt-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"
+            className="neo-partner-tabs mt-6 grid grid-cols-5 gap-1"
           >
-            {SECTIONS.map((s) => (
+            {SECTIONS.map(({ key, label, icon: Icon }) => (
               <button
-                key={s.key}
+                key={key}
                 type="button"
-                onClick={() => onSection(s.key)}
-                aria-current={s.key === section ? "page" : undefined}
-                className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                  s.key === section ? "bg-[var(--pa-primary)] text-[var(--pa-on-primary)] shadow-sm" : "bg-white/10 text-white/85 hover:bg-white/15"
+                onClick={() => onSection(key)}
+                aria-current={key === section ? "page" : undefined}
+                className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-2 text-[.625rem] font-semibold transition-colors sm:flex-row sm:gap-2 sm:text-xs ${
+                  key === section ? "bg-[var(--pa-primary)] text-[var(--pa-on-primary)] shadow-sm" : "text-white/85 hover:bg-white/15"
                 }`}
               >
-                {s.label}
+                <Icon className="size-4 shrink-0" aria-hidden />
+                {label}
               </button>
             ))}
           </nav>
