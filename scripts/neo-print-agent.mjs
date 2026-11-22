@@ -389,8 +389,10 @@ function escPos(job) {
         }
       }
     }
+    const caption = typeof job.feedback_qr_caption === "string" &&
+      /^[A-Za-z ]{1,40}$/.test(job.feedback_qr_caption) ? job.feedback_qr_caption : "Scan to leave feedback";
     feedback = Buffer.concat([
-      Buffer.from("Scan to leave feedback\n", "ascii"),
+      Buffer.from(caption + "\n", "ascii"),
       Buffer.from([27, 97, 1, 29, 118, 48, 0, stride & 255, stride >> 8, size & 255, size >> 8]),
       data, Buffer.from([10, 27, 97, 0]),
     ]);

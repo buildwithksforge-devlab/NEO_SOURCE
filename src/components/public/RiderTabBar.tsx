@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { fetchRelationshipProperty } from "@/lib/front-door";
 import { brandFallback } from "@/lib/public-apps";
 import { normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 
 const tabs = [
   { key: "home", label: "Home", icon: Home, to: "/rider" },
@@ -29,6 +30,7 @@ export function useRiderBrand(branchId: string | null, userId?: string) {
     property: match,
     primary,
     style: {
+      ...(match?.brand ? brandStyle(match.brand) : {}),
       "--pa-primary": primary,
       "--pa-on-primary": primaryInk(primary),
       "--pa-secondary": normalizedHex(match?.brand?.accent || brandFallback.secondary, brandFallback.secondary),

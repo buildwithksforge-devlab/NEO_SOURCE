@@ -100,7 +100,7 @@ function AccountPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="account">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
+      <section className="neo-rider-card p-6">
         <h1 className="text-2xl font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           My account
         </h1>
@@ -117,7 +117,7 @@ function AccountPage() {
             { to: "/guest/$hotelSlug/orders", label: "Orders", detail: "Food, delivery and live status", icon: Receipt },
             { to: "/guest/$hotelSlug/folio", label: "Bills & receipts", detail: "Your own folio and confirmed payments", icon: Sparkles },
             { to: "/guest/$hotelSlug/laundry", label: "Laundry", detail: "Prices, requests and progress", icon: Shirt },
-            { to: "/guest/$hotelSlug/explore", label: "Saved dishes", detail: "Return to favourites and the live menu", icon: Heart },
+            { to: "/guest/$hotelSlug/favourites", label: "Saved dishes", detail: "Open your favourites", icon: Heart },
           ].map((entry) => {
             const Icon = entry.icon;
             return (

@@ -3,7 +3,7 @@
  * Source-only route inventory. A route existing in the generated tree does not
  * prove its access rules, actions, documents or downstream workflow work.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -87,6 +87,63 @@ const report = {
 if (process.argv.includes("--write")) {
   writeFileSync(path.join(root, "docs/repair/SIDEBAR-ROUTE-BASELINE.json"),
     JSON.stringify(report, null, 2) + "\n");
+}
+
+if (process.argv.includes("--actions")) {
+  const routesDirectory = path.join(root, "src/routes");
+  const routePaths = new Map(
+    [...generatedTree.matchAll(/'([^']+)': \{\s*id: '[^']+'\s*path: '[^']+'\s*fullPath: '([^']+)'/g)]
+      .map(([, id, fullPath]) => [id, fullPath]),
+  );
+  const actionRoutes = readdirSync(routesDirectory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .flatMap((entry) => {
+      const absolute = path.join(entry.parentPath, entry.name);
+      const file = path.relative(root, absolute).split(path.sep).join("/");
+      const source = ts.createSourceFile(file, readFileSync(absolute, "utf8"), ts.ScriptTarget.Latest, true);
+      const controls = [];
+      const commands = [];
+      let routeId;
+      function inspect(node) {
+        const line = () => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+        if (ts.isCallExpression(node)) {
+          const name = node.expression.getText(source);
+          if (name === "createFileRoute") routeId = text(node.arguments[0]);
+          if (/(^|\.)(guardedRpc|rpc|useMutation|useServerFn|mutate|mutateAsync)$/.test(name)) {
+            const destination = node.arguments.find(ts.isStringLiteralLike)?.text;
+            commands.push({ line: line(), command: name, ...(destination ? { destination } : {}) });
+          }
+        }
+        if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          const name = node.tagName.getText(source);
+          const attributes = node.attributes.properties.filter(ts.isJsxAttribute);
+          const action = attributes.find((attribute) => /^(onClick|onSubmit|onSelect|to|href|action)$/.test(attribute.name.getText(source)));
+          if (action || /^(button|a|form|Link|[\w.]*Button)$/.test(name)) {
+            const label = attributes.find((attribute) => /^(aria-label|label|title)$/.test(attribute.name.getText(source)));
+            controls.push({
+              line: line(),
+              element: name,
+              ...(label?.initializer ? { label: label.initializer.getText(source) } : {}),
+              ...(action ? { action: action.getText(source) } : {}),
+            });
+          }
+        }
+        ts.forEachChild(node, inspect);
+      }
+      inspect(source);
+      return routeId ? [{ route: routePaths.get(routeId) ?? routeId, file, controls, commands }] : [];
+    });
+  const output = path.join(root, ".output");
+  mkdirSync(output, { recursive: true });
+  writeFileSync(path.join(output, "route-action-inventory.json"), JSON.stringify({
+    scope: "Static route-file scan. Follow controls into imported components and server handlers to verify expected effects.",
+    routes: actionRoutes,
+  }, null, 2) + "\n");
+  console.log(JSON.stringify({
+    routeFiles: actionRoutes.length,
+    controls: actionRoutes.reduce((sum, route) => sum + route.controls.length, 0),
+    commands: actionRoutes.reduce((sum, route) => sum + route.commands.length, 0),
+  }));
 }
 console.log(JSON.stringify(report.counts));
 if (missingSidebarRoutes.length) {

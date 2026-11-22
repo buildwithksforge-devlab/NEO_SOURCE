@@ -48,6 +48,15 @@ export function PaymentReadinessPanel({ title = "Payment methods" }: { title?: s
         {isAdmin || canAccessPath(can, "/platform/integrations") ? <Link to="/platform/integrations" className="underline underline-offset-2">Card and QR gateway setup</Link> : null}
         {isAdmin || canAccessPath(can, "/admin/payments-mpesa") ? <Link to="/admin/payments-mpesa" className="underline underline-offset-2">M-Pesa setup</Link> : null}
       </div>
+      <details className="mb-4 rounded-lg border border-border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">How payments reach NEØ</summary>
+        <dl className="mt-3 grid gap-3 text-muted-foreground sm:grid-cols-2">
+          <div><dt className="font-medium text-foreground">Standalone PDQ</dt><dd>Take the card payment on the bank terminal. Record Card terminal at the till with the bank slip reference and receiving account. Finance can match it to the settlement.</dd></div>
+          <div><dt className="font-medium text-foreground">Integrated PDQ</dt><dd>Connect a supported acquirer in Integration Centre. POS sends the amount to the processor, then waits for its confirmation. Verify the connection on the property before taking payments.</dd></div>
+          <div><dt className="font-medium text-foreground">M-Pesa and bank transfer</dt><dd>M-Pesa STK sends a prompt to the customer’s phone. A bank transfer is recorded against the receiving account once the funds arrive, then matched in bank reconciliation.</dd></div>
+          <div><dt className="font-medium text-foreground">Online checkout and QR</dt><dd>Delivery checkout supports configured M-Pesa, cash or payment on collection. Public hosted card and QR still require integration. The receipt link QR opens the chosen page.</dd></div>
+        </dl>
+      </details>
       {readiness.isLoading ? (
         <LoadingState variant="table" rows={4} />
       ) : readiness.isError || rows.length === 0 ? (

@@ -125,12 +125,13 @@ test("lost completion acknowledgement surfaces as an error without a second phys
     );
   });
 });
-test("POS receipts send split payment instructions and a feedback raster before cutting", async () => {
+test("POS receipts send split payment instructions and the configured QR caption before cutting", async () => {
   await tcpFixture(async (address, chunks, received) => {
     const feedback = Array.from({ length: 29 }, (_, row) => row === 8 ? "0".repeat(8) + "1" + "0".repeat(20) : "0".repeat(29));
     const api = mockApi({
       job_id: jobId, claim_id: claimId, document_type: "pos_receipt",
       feedback_qr: feedback,
+      feedback_qr_caption: "Scan to view the menu",
       payload: { document: {
         document: { title: "Receipt", number: "FIXTURE" },
         property: { name: "Fixture property" },
@@ -159,7 +160,8 @@ test("POS receipts send split payment instructions and a feedback raster before 
       assert.ok(bytes.includes(Buffer.from(label)), label);
     }
     const raster = bytes.indexOf(Buffer.from([29, 118, 48, 0]));
-    assert.ok(raster > bytes.indexOf(Buffer.from("Scan to leave feedback")));
+    const caption = bytes.indexOf(Buffer.from("Scan to view the menu"));
+    assert.ok(caption >= 0 && raster > caption);
     assert.ok(bytes.lastIndexOf(Buffer.from([29, 86, 0])) > raster);
   });
 });

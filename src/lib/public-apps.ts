@@ -6,6 +6,8 @@
  * so the browser never dictates which tenant it is looking at.
  */
 
+import type { ExperienceBrand } from "./experience-brand";
+
 export type PublicAppKey = "guest" | "delivery" | "rider";
 
 export const publicAppLabels: Record<PublicAppKey, string> = {
@@ -42,6 +44,7 @@ export type PublicWorkspace = {
   terms_text: string | null;
   policy_text: string | null;
   features: Record<string, boolean>;
+  experience_brand?: ExperienceBrand | null;
 };
 
 /**

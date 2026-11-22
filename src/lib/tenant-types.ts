@@ -72,6 +72,7 @@ export type BrandSettings = Timestamps & {
   splashImage: string | null;
   logoText: string;
   receiptFeedbackUrl?: string;
+  receiptQrDestination?: import("./receipt-qr").ReceiptQrDestination;
   receiptPaybill?: string;
   receiptPaybillAccount?: string;
   receiptTill?: string;

@@ -19,7 +19,7 @@ import QRCode from "qrcode";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { documentTraceCode } from "./document-trace";
-import { receiptFeedbackLink } from "./print-receipt-feedback.server";
+import { receiptQrConfig } from "./receipt-qr";
 import { embedDocumentLogo } from "./document-logo.server";
 
 type ReceiptLine = {
@@ -263,7 +263,7 @@ export async function buildThermalReceiptPdf(
 
   const qrPayload = clean(metaSource["qr_payload"]);
   const brand = (identity["brand"] ?? {}) as Record<string, unknown>;
-  const feedbackLink = receiptFeedbackLink(brand["receiptFeedbackUrl"]);
+  const receiptQr = receiptQrConfig(brand);
   const paymentDetails = ([
     ["M-Pesa Paybill", clean(brand["receiptPaybill"])],
     ["Paybill account", clean(brand["receiptPaybillAccount"])],
@@ -778,13 +778,13 @@ export async function buildThermalReceiptPdf(
     }
   }
 
-  if (feedbackLink) {
+  if (receiptQr) {
     continueRoll(115);
     try {
-      const imageUrl = await QRCode.toDataURL(feedbackLink, { errorCorrectionLevel: "M", margin: 4, width: 250 });
+      const imageUrl = await QRCode.toDataURL(receiptQr.url, { errorCorrectionLevel: "M", margin: 4, width: 250 });
       const qrImage = await pdf.embedPng(Buffer.from(imageUrl.split(",", 2)[1] ?? "", "base64"));
       lineRule(true);
-      drawCentered("SCAN TO LEAVE FEEDBACK", 8, bold);
+      drawCentered(receiptQr.caption.toUpperCase(), 8, bold);
       y -= 10;
       const size = 76;
       page.drawImage(qrImage, { x: (paperWidth - size) / 2, y: y - size, width: size, height: size });

@@ -16,6 +16,7 @@ import { fetchPropertyForVisitor, type PublicProperty } from "@/lib/front-door";
 import { BrandMark, PoweredByNeo } from "@/components/public/PublicAppShell";
 import { brandFallback } from "@/lib/public-apps";
 import { normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { useNeoSignOut, useNeoSwitchAccount } from "@/lib/session-exit";
 import { useAuth } from "@/lib/auth";
@@ -649,6 +650,7 @@ function Shell({
   const background = normalizedHex(property?.brand?.surface || brandFallback.background, brandFallback.background);
   return (
     <PublicSurface className="neo-branded-app" style={{
+      ...(property?.brand ? brandStyle(property.brand) : {}),
       "--pa-primary": primary, "--pa-on-primary": primaryInk(primary), "--pa-secondary": secondary, "--pa-background": background,
     } as React.CSSProperties}>
       <PublicTopBar

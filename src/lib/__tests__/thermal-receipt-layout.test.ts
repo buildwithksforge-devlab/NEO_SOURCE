@@ -7,7 +7,7 @@ import { NEO_SYMBOL_BASE64 } from '@/lib/document-symbol';
 afterEach(()=>vi.restoreAllMocks());
 const baseline={document:{number:'LAYOUT-ONLY-001',date:'2026-11-10T12:00:00Z',status:'closed'},property:{name:'Sample Property',currency:'KES'},identity:{organisation:'Sample Company',organisation_id:'a6000000-0000-4000-8000-000000000001'},branch_id:'a6000000-0000-4000-8000-000000000002',generated_at:'2026-11-10T12:30:00Z',party:{label:'Guest',name:'Layout sample'},lines:[{description:'Lunch',quantity:1,unit_price:1854,total:1854}],totals:[{label:'Total',amount:1854,emphasis:true},{label:'Tendered',amount:2000},{label:'Change',amount:146}],meta:{cashier:'Sample cashier'}};
 describe('thermal receipt actual PDF layout',()=>{
- for(const variant of ['standard','long-labels','wrapped-items','charged-to-room','branded-long','split-tender'])it(variant+' keeps text and rules apart',async()=>{
+ for(const variant of ['standard','long-labels','wrapped-items','charged-to-room','branded-long','split-tender','menu-qr'])it(variant+' keeps text and rules apart',async()=>{
   const payload=structuredClone(baseline);
   if(variant==='long-labels'){payload.party.name='Guest with a very long name that must stay inside the receipt';payload.meta={cashier:'Cashier name with several long words',original_external_payment_confirmation_reference:'A'.repeat(70)} as any;payload.totals.unshift({label:'Remaining balance after previous confirmed payments',amount:1854,emphasis:false});}
   if(variant==='wrapped-items'){payload.lines=[{description:'Very long item description WITHANUNBROKENIDENTIFIERTHATSHOULDWRAP on the receipt',quantity:2,unit_price:927,total:1854,note:'A long preparation note that wraps across several lines without touching the following row'} as any];}
@@ -18,6 +18,9 @@ describe('thermal receipt actual PDF layout',()=>{
   if (variant === "split-tender") {
    payload.totals = [{label:"Total",amount:1854,emphasis:true},
     {label:"Cash",amount:1000,emphasis:false},{label:"Cash",amount:854,emphasis:false}];
+  }
+  if (variant === "menu-qr") {
+   Object.assign(payload.identity, { brand: { receiptQrDestination: "menu", receiptFeedbackUrl: "https://property.example/menu" } });
   }
   if(variant==='branded-long') {
    Object.assign(payload.identity,{brand:{logoLight:'data:image/png;base64,'+NEO_SYMBOL_BASE64,
@@ -50,6 +53,7 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered).toContain('Transferred to guest folio');
   }
   if (variant === "split-tender") expect(texts.filter((entry) => entry.text === "Cash")).toHaveLength(2);
+  if (variant === "menu-qr") expect(texts.map((entry) => entry.text)).toContain("SCAN TO VIEW THE MENU");
   if(variant==='branded-long'){
    const rendered=texts.map(t=>t.text);
    expect(rendered).toContain('SCAN TO LEAVE FEEDBACK');

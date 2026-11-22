@@ -28,4 +28,13 @@ describe("published palette contrast", () => {
       4.5,
     );
   });
+  it("retains different property palettes in dark mode with readable controls", () => {
+    const blue = guestPalette("#184FC8", "#F7F9FC");
+    const peach = guestPalette("#F8AB54", "#F7F9FC");
+    expect(blue["--guest-ground-dark"]).not.toBe(peach["--guest-ground-dark"]);
+    for (const palette of [blue, peach]) {
+      expect(colorContrast("#F1F5F9", palette["--guest-surface-dark"])).toBeGreaterThanOrEqual(4.5);
+      expect(colorContrast(palette["--pa-accent-ink-dark"], palette["--guest-ground-dark"])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });

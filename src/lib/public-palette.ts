@@ -18,6 +18,12 @@ function rgb(value: string) {
   const h = normalizedHex(value);
   return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 }
+function blendTone(base: string, tint: string) {
+  const channels = rgb(tint);
+  return "#" + rgb(base).map((channel, index) =>
+    Math.round(channel * 0.88 + (channels[index] ?? 0) * 0.12).toString(16).padStart(2, "0"),
+  ).join("");
+}
 export function relativeLuminance(value: string) {
   return rgb(value)
     .map((v) => {
@@ -59,14 +65,20 @@ export function guestPalette(primary: string, background: string) {
   const fill = normalizedHex(primary),
     ground = normalizedHex(background, "#F7F9FC"),
     dark = relativeLuminance(ground) < 0.2;
+  const darkGround = dark ? ground : blendTone("#111827", fill);
+  const darkSurface = blendTone("#172033", fill);
+  const lightGround = dark ? blendTone("#F7F9FC", fill) : ground;
   return {
     "--pa-primary": fill,
     "--pa-on-primary": primaryInk(fill),
     "--pa-accent-ink": accessibleAccent(fill, ground),
-    "--pa-accent-ink-dark": accessibleAccent(fill, "#111827"),
-    "--pa-accent-ink-light": accessibleAccent(fill, "#F7F9FC"),
+    "--pa-accent-ink-dark": accessibleAccent(fill, darkGround),
+    "--pa-accent-ink-light": accessibleAccent(fill, lightGround),
+    "--guest-ground-dark": darkGround,
+    "--guest-surface-dark": darkSurface,
+    "--guest-ground-light": lightGround,
     "--guest-ground": ground,
-    "--guest-surface": dark ? "#172033" : "#FFFFFF",
+    "--guest-surface": dark ? darkSurface : "#FFFFFF",
     "--guest-text": dark ? "#F1F5F9" : "#10213A",
     "--guest-muted": dark ? "#B3C0D2" : "#52627A",
     "--guest-border": dark ? "#344156" : "#DCE3EC",

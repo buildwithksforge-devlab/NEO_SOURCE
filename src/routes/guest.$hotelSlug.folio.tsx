@@ -176,7 +176,7 @@ function FolioPage() {
         </>
       )}
 
-      {user ? (
+      {user && bill.isSuccess ? (
         <GuestSection title="Receipts" description="Payments the property has receipted to your account.">
           {payments.length === 0 ? (
             <PublicEmptyState title="No receipts yet" description="Receipts appear here as soon as a payment is recorded." />

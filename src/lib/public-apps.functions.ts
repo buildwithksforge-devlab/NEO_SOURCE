@@ -52,6 +52,7 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         terms_text: null,
         policy_text: null,
         features: property.services || {},
+        experience_brand: property.brand ?? null,
       };
     }
 
@@ -72,6 +73,10 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
         ...delivery,
         hotel_name: property.property_name,
         logo_url: property.media?.logo_url || property.logo_url || delivery.logo_url,
+        primary_color: property.brand?.primary || delivery.primary_color,
+        secondary_color: property.brand?.accent || delivery.secondary_color,
+        background_color: property.brand?.surface || delivery.background_color,
+        experience_brand: property.brand ?? null,
       };
     }
 

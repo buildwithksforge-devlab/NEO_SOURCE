@@ -1,5 +1,6 @@
 import { useGuestDisplayPrefs } from "@/lib/guest-display-preferences";
 import { guestPalette } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 import { useEffect, useRef, type ReactNode } from "react";
 import { writeLaunchLockup } from "@/lib/brand-cache";
 import { useWorkspace } from "@/components/public/PublicAppShell";
@@ -80,6 +81,7 @@ export function GuestScreen({
       data-high-contrast={prefs.highContrast}
       style={
         {
+          ...(ws.experience_brand ? brandStyle(ws.experience_brand) : {}),
           ...guestPalette(primary, ws.background_color || brandFallback.background),
           background: "var(--guest-ground)",
           "--pa-primary": primary,

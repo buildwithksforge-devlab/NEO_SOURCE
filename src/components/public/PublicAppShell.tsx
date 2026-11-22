@@ -1,4 +1,5 @@
 import { accessibleAccent, normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Receipt, ShoppingBag, Utensils } from "lucide-react";
@@ -174,6 +175,7 @@ export function PublicAppShell({
       data-guest-connected={guestSlug ? "true" : undefined}
       style={
         {
+          ...(ws.experience_brand ? brandStyle(ws.experience_brand) : {}),
           "--pa-background": background,
           "--pa-primary": primary,
           "--pa-on-primary": primaryInk(primary),

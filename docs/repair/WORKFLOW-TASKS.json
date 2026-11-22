@@ -215,7 +215,15 @@
       "status": "IN_PROGRESS",
       "source_routes": ["src/lib/navigation.ts", "src/lib/nav-permissions.ts", "src/routeTree.gen.ts", "src/routes"],
       "local_evidence": ["The current static inventory lists 191 sidebar destinations, 408 generated routes and 200 direct or hidden paths. Every generated staff route resolves to a capability or an explicitly permitted staff surface. Mixed-case paths use the canonical capability, unknown staff paths are denied and protected content waits for effective grants. The role-dashboard list and boot prefetch use the same per-staff, per-workspace cache key. A failed dashboard access check offers retry."],
-      "next_action": "Check hidden routes, tabs, drawers, dialogs, controls and deep links in the source against the user's sidebar list. For each consequential action, record server authorization, saved effects, downstream queue or ledger, retry and failure evidence before changing its status.",
+      "action_inventory": "node scripts/audit-navigation-routes.mjs --actions writes route files, controls and command call sites to .output/route-action-inventory.json. This static scan does not verify imported controls or runtime behaviour.",
+      "reviewed_actions": [
+        {"route": "/admin/documents", "action": "Choose a receipt QR destination and enter its link", "expected": "The saved brand setting supplies the same HTTPS destination and caption to the PDF and print agent."},
+        {"route": "/pos/orders/$id", "action": "Download or reprint a receipt", "expected": "Downloads use the scoped thermal PDF. The print agent places the configured QR caption and raster before the cut."},
+        {"route": "/guest/$hotelSlug/account", "action": "Open Bills & receipts or Saved dishes", "expected": "Each link opens its intended property-scoped screen."},
+        {"route": "/guest/$hotelSlug/folio", "action": "Download a statement or posted receipt", "expected": "The guest downloads their own saved document. Empty receipts are shown only after a successful bill read."},
+        {"route": "/partner/$propertySlug", "action": "Download LPO", "expected": "The PDF resolves the issued order for the selected supplier relationship and property. Supplier quote attachment and retrieval still need review."}
+      ],
+      "next_action": "Follow the remaining inventoried controls into imported components and server handlers. Record authorization, saved effects, downstream handoffs, failure and retry evidence before closing each workflow.",
       "live_acceptance": "OPEN"
     },
     {
