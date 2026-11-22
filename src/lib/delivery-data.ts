@@ -676,10 +676,10 @@ export type PinStatus = {
  * The signed-in customer's own collection PIN. The database refuses this for
  * anyone else, including every member of staff and every rider.
  */
-export function useMyOrderPin(orderId?: string) {
+export function useMyOrderPin(orderId: string, userId: string) {
   return useQuery({
-    queryKey: ["delivery", "pin", orderId],
-    enabled: Boolean(orderId),
+    queryKey: ["delivery", "pin", orderId, userId],
+    enabled: Boolean(orderId && userId),
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_delivery_pin_for_customer", { _order: orderId });
       if (error) throw new Error(error.message);

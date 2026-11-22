@@ -12,10 +12,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
+import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+import { useCustomerSession } from "@/lib/public-session";
 import { useMyOrderPin } from "@/lib/delivery-data";
-import { supabase } from "@/integrations/supabase/client";
-import { guardedRpc } from "@/lib/rpc-guard";
-import { validateMpesaReceiptCode } from "@/lib/delivery-mpesa-reference";
+import { submitDeliveryMpesaReference } from "@/lib/delivery-mpesa-reference";
 import { STALE_LOCATION_SECONDS, locationAgeSeconds, useDeliveryLive } from "@/lib/delivery-live";
 import {
   money,
@@ -59,9 +59,26 @@ const commonMilestones: Record<string, string> = {
 };
 
 function TrackPage() {
+  const { hotelSlug, orderReference } = Route.useParams();
+  const { user, loading } = useCustomerSession();
+  if (loading || !user) {
+    return (
+      <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+        {loading ? <p className="py-10 text-center" role="status">Checking your account…</p> : (
+          <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to track your order"
+            description="Use the same account you used to place the order." />
+        )}
+      </PublicAppShell>
+    );
+  }
+  return <CustomerTracking key={JSON.stringify([user.id, hotelSlug, orderReference])} userId={user.id} />;
+}
+
+function CustomerTracking({ userId }: { userId: string }) {
   const ws = useWorkspace();
   const { hotelSlug, orderReference } = Route.useParams();
-  const order = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id);
+  const order = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id, userId);
+  const orderId = String(order.data?.["id"] ?? "");
 
   const status = String(order.data?.["order_status"] ?? "");
   const isPickup = order.data?.["fulfilment_type"] === "pickup";
@@ -75,7 +92,7 @@ function TrackPage() {
   const [retryPhone, setRetryPhone] = useState("");
   const [tillReceiptCode, setTillReceiptCode] = useState("");
   const [tillSubmitting, setTillSubmitting] = useState(false);
-  const [tillSubmitted, setTillSubmitted] = useState(false);
+  const [tillStatus, setTillStatus] = useState<"submitted" | "merchant_verified" | null>(null);
   const paymentMethod = String(order.data?.["payment_method"] ?? "");
   const paymentStatus = String(order.data?.["payment_status"] ?? "");
   // An M-Pesa request that failed, was declined or never completed leaves the
@@ -240,39 +257,18 @@ function TrackPage() {
                   onChange={(e) => setTillReceiptCode(e.target.value)}
                   placeholder="Transaction code"
                   autoComplete="off"
-                  disabled={tillSubmitting || tillSubmitted}
+                  disabled={tillSubmitting || tillStatus !== null}
                 />
 
                 <BrandButton
                   className="mt-3 w-full"
-                  disabled={tillSubmitting || tillSubmitted || !tillReceiptCode.trim()}
+                  disabled={tillSubmitting || tillStatus !== null || !orderId || !tillReceiptCode.trim()}
                   onClick={async () => {
+                    setTillSubmitting(true);
                     try {
-                      const code = validateMpesaReceiptCode(tillReceiptCode);
-                      setTillSubmitting(true);
-
-                      const { data, error } = await guardedRpc<{
-                            ok?: boolean;
-                            status?: string;
-                            detail?: string;
-                            reason?: string;
-                          }>(supabase,
-                        "neo_delivery_mpesa_till_claim_submit",
-                        {
-                          _order: String(order.data?.["id"] ?? ""),
-                          _receipt: code,
-                        }
-                      );
-
-                      if (error) throw new Error(error.message);
-                      if (!data?.ok) {
-                        throw new Error(
-                          data?.detail ?? data?.reason ?? "Reference not accepted."
-                        );
-                      }
-
-                      setTillSubmitted(true);
-                      toast.success("Reference submitted for Finance verification.");
+                      const saved = await submitDeliveryMpesaReference(orderId, tillReceiptCode);
+                      setTillStatus(saved);
+                      toast.success(saved === "submitted" ? "Reference awaiting Finance verification." : "Finance verified this reference.");
                     } catch (error) {
                       toast.error(
                         error instanceof Error
@@ -281,14 +277,15 @@ function TrackPage() {
                       );
                     } finally {
                       setTillSubmitting(false);
+                      void order.refetch();
                     }
                   }}
                 >
                   {tillSubmitting
                     ? "Submitting reference..."
-                    : tillSubmitted
-                      ? "Awaiting Finance verification"
-                      : "Submit transaction code"}
+                    : tillStatus === "merchant_verified"
+                      ? "Verified by Finance"
+                      : tillStatus === "submitted" ? "Awaiting Finance verification" : "Submit transaction code"}
                 </BrandButton>
 
                 <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
@@ -298,8 +295,8 @@ function TrackPage() {
               </div>
             ) : null}
           </section>
-          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} />
-          <DeliveryPinCard orderId={String(order.data["id"] ?? "")} />
+          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} orderId={orderId} userId={userId} />
+          <DeliveryPinCard orderId={orderId} userId={userId} />
         </div>
       )}
     </PublicAppShell>
@@ -312,9 +309,9 @@ function TrackPage() {
  * provider here: a position is shown as a place and an age, with a link the
  * guest's own phone can open.
  */
-function LiveDeliveryCard({ organizationId, reference }: { organizationId: string; reference: string }) {
-  const live = useDeliveryLive(organizationId, reference);
-  const data = live.data;
+function LiveDeliveryCard({ organizationId, reference, orderId, userId }: { organizationId: string; reference: string; orderId: string; userId: string }) {
+  const live = useDeliveryLive(organizationId, reference, orderId, userId);
+  const data = live.isError ? null : live.data;
   if (!data) return live.isError ? (
     <section className="neo-commerce-surface p-5 text-sm text-slate-700">
       <p>Live location couldn’t refresh. Follow the order progress above.</p>
@@ -419,8 +416,14 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
  * Staff and riders cannot read it anywhere â€” the rider types it in and the
  * database checks it against a stored fingerprint.
  */
-function DeliveryPinCard({ orderId }: { orderId: string }) {
-  const pin = useMyOrderPin(orderId || undefined);
+function DeliveryPinCard({ orderId, userId }: { orderId: string; userId: string }) {
+  const pin = useMyOrderPin(orderId, userId);
+  if (pin.isError) {
+    return <section className="neo-commerce-surface p-5 text-sm text-slate-700">
+      <p>The collection PIN couldn’t load.</p>
+      <button type="button" className="mt-2 min-h-11 font-semibold underline" onClick={() => void pin.refetch()}>Retry PIN</button>
+    </section>;
+  }
   const data = pin.data;
   if (!data?.ok) return null;
 

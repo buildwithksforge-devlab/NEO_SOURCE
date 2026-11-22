@@ -92,6 +92,27 @@ beforeEach(() => {
 });
 
 describe("M-Pesa handler dispatch boundaries", () => {
+  it("stops a delivery retry before dispatch when the owner check fails or an attempt is pending", async () => {
+    const input = { data: { orderId: "order", msisdn: "0712345678" }, context };
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { message: "That order does not belong to you" } });
+    await expect(delivery(input)).resolves.toMatchObject({ ok: false, status: "rejected" });
+    mock.rpc.mockResolvedValueOnce({ data: { pending: true }, error: null });
+    await expect(delivery(input)).resolves.toMatchObject({ ok: false, status: "pending" });
+    expect(mock.claim).not.toHaveBeenCalled();
+    expect(mock.push).not.toHaveBeenCalled();
+  });
+
+  it("requires evidence of a saved delivery collection failure before reporting its outcome", async () => {
+    const input = { data: { orderId: "order", msisdn: "0712345678" }, context };
+    mock.load.mockResolvedValue(null);
+    mock.claim.mockResolvedValueOnce({ data: { ok: false }, error: null });
+    await expect(delivery(input)).resolves.toMatchObject({ ok: false, status: "apply-failed", transactionId: "txn" });
+    mock.claim.mockResolvedValueOnce({ data: { status: "failed", applied: true }, error: null });
+    await expect(delivery(input)).resolves.toMatchObject({ ok: false, status: "not-configured", transactionId: "txn" });
+    expect(mock.claim).toHaveBeenLastCalledWith("neo_mpesa_apply_result", expect.objectContaining({ _transaction: "txn", _result_code: -1 }));
+    expect(mock.push).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["folio", guest, guestData],
     ["deposit", deposit, { organizationId: "org", reference: "RES-TEST", msisdn: "0712345678" }],

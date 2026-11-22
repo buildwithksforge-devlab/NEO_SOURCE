@@ -730,7 +730,7 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
     const transactionId = String(started["transaction_id"]);
 
     const fail = async (status: string, detail: string): Promise<DeliveryChargeResult> => {
-      await supabaseAdmin.rpc("neo_mpesa_apply_result", {
+      const { data: applied, error: applyError } = await supabaseAdmin.rpc("neo_mpesa_apply_result", {
         _transaction: transactionId,
         _result_code: -1,
         _result_desc: detail,
@@ -739,6 +739,9 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
         _payload: { error: detail, status },
         _source: "push-error",
       });
+      if (applyError || !mpesaResultApplied(applied, -1)) {
+        return { ok: false, status: "apply-failed", detail: "We could not confirm the outcome of this payment request. Check the order status or contact the property before sending another request.", transactionId };
+      }
       return { ok: false, status, detail, transactionId };
     };
 

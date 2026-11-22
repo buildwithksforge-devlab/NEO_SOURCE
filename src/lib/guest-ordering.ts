@@ -419,10 +419,10 @@ export type GuestTracking = {
 };
 
 /** Own order only. The routine refuses a reference belonging to anyone else. */
-export function useGuestOrderTracking(organizationId: string, reference?: string) {
+export function useGuestOrderTracking(organizationId: string, reference: string, orderId?: string, userId?: string) {
   return useQuery({
-    queryKey: ["guest-tracking", organizationId, reference ?? "none"],
-    enabled: Boolean(reference),
+    queryKey: ["guest-tracking", organizationId, reference, orderId, userId],
+    enabled: Boolean(organizationId && reference && orderId && userId),
     refetchInterval: 30_000,
     queryFn: async () => {
       const { data, error } = await guardedRpc(sb, "neo_guest_order_tracking", {
@@ -430,7 +430,8 @@ export function useGuestOrderTracking(organizationId: string, reference?: string
         _reference: reference,
       });
       if (error) throw new Error(error.message);
-      return (data as GuestTracking | null) ?? null;
+      const tracked = data as GuestTracking | null;
+      return tracked?.id === orderId ? tracked : null;
     },
   });
 }
@@ -450,8 +451,8 @@ export function useCancelGuestOrder(organizationId: string, reference?: string) 
         _reason: input.reason ?? null,
       });
       if (error) throw new Error(error.message);
-      const result = (data ?? {}) as { ok?: boolean; reason?: string };
-      if (!result.ok) {
+      const result = (data ?? {}) as { ok?: boolean; reason?: string; order_number?: string; already_cancelled?: boolean };
+      if (result.ok !== true || (result.order_number !== reference && result.already_cancelled !== true)) {
         throw new Error(
           result.reason === "already_started"
             ? "This order has already been started or paid for — please contact the property."
@@ -462,12 +463,17 @@ export function useCancelGuestOrder(organizationId: string, reference?: string) 
       }
       return result;
     },
-    onSuccess: () => {
-      toast.success("Order cancelled");
-      void qc.invalidateQueries({ queryKey: ["guest-tracking"] });
-      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+    onSuccess: (result) => {
+      toast.success(result.already_cancelled ? "This order was already cancelled" : "Order cancelled");
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["guest-tracking", organizationId, reference] }),
+        qc.invalidateQueries({ queryKey: ["public-delivery", organizationId, "track", reference] }),
+        qc.invalidateQueries({ queryKey: ["public-delivery", organizationId, "orders"] }),
+      ]);
+    },
   });
 }
 

@@ -68,10 +68,10 @@ export function locationAgeSeconds(location?: CourierLocation | null): number | 
 }
 
 /** The customer's own delivery. The routine refuses anyone else's reference. */
-export function useDeliveryLive(organizationId: string, reference?: string) {
+export function useDeliveryLive(organizationId: string, reference: string, orderId: string, userId: string) {
   return useQuery({
-    queryKey: ["delivery-live", organizationId, reference ?? "none"],
-    enabled: Boolean(organizationId && reference),
+    queryKey: ["delivery-live", organizationId, reference, orderId, userId],
+    enabled: Boolean(organizationId && reference && orderId && userId),
     refetchInterval: (query) => {
       const data = query.state.data as DeliveryLive | null | undefined;
       if (!data?.live) return false;

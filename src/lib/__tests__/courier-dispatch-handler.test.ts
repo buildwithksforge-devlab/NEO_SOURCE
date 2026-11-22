@@ -23,14 +23,17 @@ const handle = dispatchCourierJob as unknown as (input: {
   context: { supabase: ReturnType<typeof dispatchFixture>["supabase"] };
 }) => Promise<{ ok: boolean; reason?: string; state?: string }>;
 
-function dispatchFixture(options: {
-  branch?: string | null;
-  environment?: string;
-  saved?: boolean;
-  claimError?: boolean;
-  canDispatch?: boolean;
-  branchInScope?: boolean;
-} = {}) {
+function dispatchFixture(
+  options: {
+    branch?: string | null;
+    environment?: string;
+    saved?: boolean;
+    savedRow?: boolean;
+    claimError?: boolean;
+    canDispatch?: boolean;
+    branchInScope?: boolean;
+  } = {},
+) {
   const job = {
     id: "dispatch",
     organization_id: "hotel",
@@ -60,12 +63,16 @@ function dispatchFixture(options: {
   };
   let claimed = false;
   const supabase = {
-    from: (table: string) => table === "integration_connections" ? query : {
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: job }) }) }),
-    },
+    from: (table: string) =>
+      table === "integration_connections"
+        ? query
+        : {
+            select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: job }) }) }),
+          },
     rpc: vi.fn(async (name: string) => {
       if (name === "has_permission") return { data: options.canDispatch ?? true, error: null };
-      if (name === "neo_branch_in_scope") return { data: options.branchInScope ?? true, error: null };
+      if (name === "neo_branch_in_scope")
+        return { data: options.branchInScope ?? true, error: null };
       if (name === "neo_delivery_dispatch_claim") {
         if (options.claimError) return { data: null, error: { code: "PGRST202" } };
         if (claimed) return { data: false, error: null };
@@ -78,13 +85,21 @@ function dispatchFixture(options: {
   adminFrom.mockReset().mockImplementation(() => ({
     update: () => ({
       eq: vi.fn().mockReturnThis(),
-      then: (resolve: (result: unknown) => void) =>
-        resolve({ error: options.saved === false ? new Error("Database unavailable") : null }),
+      select: vi.fn().mockReturnThis(),
+      maybeSingle: async () => ({
+        data: options.savedRow === false ? null : { id: job.id },
+        error: options.saved === false ? new Error("Database unavailable") : null,
+      }),
     }),
   }));
   const fetch = vi.fn().mockResolvedValue(new Response('{"status":"pending"}'));
   vi.stubGlobal("fetch", fetch);
-  return { supabase, query, fetch, dispatch: () => handle({ data: { jobId: job.id }, context: { supabase } }) };
+  return {
+    supabase,
+    query,
+    fetch,
+    dispatch: () => handle({ data: { jobId: job.id }, context: { supabase } }),
+  };
 }
 
 describe("courier dispatch connection and saved state", () => {
@@ -97,7 +112,10 @@ describe("courier dispatch connection and saved state", () => {
     expect(query.eq).toHaveBeenCalledWith("provider_code", "courier_gateway");
     expect(query.or).toHaveBeenCalledWith("branch_id.eq.nairobi,branch_id.is.null");
     expect(query.order).toHaveBeenCalledWith("branch_id", { ascending: true, nullsFirst: false });
-    expect(fetch).toHaveBeenCalledWith("https://courier.example/dispatch", expect.objectContaining({ redirect: "error" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "https://courier.example/dispatch",
+      expect.objectContaining({ redirect: "error" }),
+    );
     expect(fetch.mock.calls[0]?.[1].headers).toMatchObject({ "idempotency-key": "dispatch" });
   });
 
@@ -110,7 +128,10 @@ describe("courier dispatch connection and saved state", () => {
 
   it("keeps a sandbox dispatch away from a connection switched to production", async () => {
     const { dispatch, fetch } = dispatchFixture({ environment: "production" });
-    await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "provider_environment_changed" });
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "provider_environment_changed",
+    });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -118,23 +139,39 @@ describe("courier dispatch connection and saved state", () => {
     "blocks the external handoff without dispatch authority and property access",
     async (options) => {
       const { dispatch, fetch } = dispatchFixture(options);
-      await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "dispatch_access_denied" });
+      await expect(dispatch()).resolves.toMatchObject({
+        ok: false,
+        reason: "dispatch_access_denied",
+      });
       expect(fetch).not.toHaveBeenCalled();
     },
   );
 
   it("requires the saved status before reporting that the dispatch was sent", async () => {
     const { dispatch } = dispatchFixture({ saved: false });
-    await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "courier_state_unconfirmed" });
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "courier_state_unconfirmed",
+    });
+  });
+
+  it("does not report sent when a concurrent callback leaves no pending row to update", async () => {
+    const { dispatch } = dispatchFixture({ savedRow: false });
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "courier_state_unconfirmed",
+    });
   });
 
   it("sends once when operators claim the same job concurrently", async () => {
     const { dispatch, fetch } = dispatchFixture();
     const results = await Promise.all([dispatch(), dispatch()]);
-    expect(results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ok: true, state: "sent" }),
-      expect.objectContaining({ ok: false, reason: "dispatch_already_claimed" }),
-    ]));
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ok: true, state: "sent" }),
+        expect.objectContaining({ ok: false, reason: "dispatch_already_claimed" }),
+      ]),
+    );
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -147,8 +184,25 @@ describe("courier dispatch connection and saved state", () => {
   it("keeps the original handoff open after a timeout and prevents a duplicate send", async () => {
     const { dispatch, fetch } = dispatchFixture();
     fetch.mockRejectedValueOnce(new Error("timed out"));
-    await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "courier_confirmation_pending", state: "sent" });
-    await expect(dispatch()).resolves.toMatchObject({ ok: false, reason: "dispatch_already_claimed" });
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "courier_confirmation_pending",
+      state: "sent",
+    });
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "dispatch_already_claimed",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report a persisted waiting state when the timeout detail write fails", async () => {
+    const { dispatch, fetch } = dispatchFixture({ saved: false });
+    fetch.mockRejectedValueOnce(new Error("timed out"));
+    await expect(dispatch()).resolves.toMatchObject({
+      ok: false,
+      reason: "courier_state_unconfirmed",
+    });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

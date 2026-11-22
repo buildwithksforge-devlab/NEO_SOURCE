@@ -41,8 +41,9 @@ function TrackingPage() {
   const { hotelSlug, orderReference } = Route.useParams();
   const ordersSearch = Route.useSearch();
   const { user, loading } = useCustomerSession();
-  const orderAtProperty = usePublicOrderByReference(ws.organization_id, user ? orderReference : undefined, ws.branch_id);
-  const tracking = useGuestOrderTracking(ws.organization_id, orderAtProperty.data ? orderReference : undefined);
+  const orderAtProperty = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id, user?.id);
+  const orderId = typeof orderAtProperty.data?.["id"] === "string" ? orderAtProperty.data["id"] : undefined;
+  const tracking = useGuestOrderTracking(ws.organization_id, orderReference, orderId, user?.id);
   const cancel = useCancelGuestOrder(ws.organization_id, orderReference);
   useGuestScreenView(ws.organization_id, "order-tracking", Boolean(user));
 
@@ -170,7 +171,7 @@ function TrackingPage() {
           {order.can_cancel ? (
             <GuestSection
               title="Need to cancel?"
-              description="You can cancel while the kitchen has not started your order."
+              description="You can cancel an unpaid order before the kitchen starts preparing it."
             >
               <button
                 type="button"

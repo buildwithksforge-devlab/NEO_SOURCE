@@ -335,10 +335,14 @@ export function useMyPublicOrders(organizationId: string, customerId?: string | 
 }
 
 /** Tracking by order reference — RLS still decides what the caller may read. */
-export function usePublicOrderByReference(organizationId: string, reference?: string, branchId?: string | null) {
+export function usePublicOrderByReference(organizationId: string, reference: string, branchId: string | null, userId?: string) {
   return useQuery({
-    queryKey: [...keys(organizationId), "track", reference ?? "none", branchId ?? "all"],
-    enabled: Boolean(reference),
+    queryKey: [...keys(organizationId), "track", reference, branchId, userId],
+    enabled: Boolean(organizationId && reference && userId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.["order_status"];
+      return typeof status === "string" && !["cancelled", "rejected", "completed", "delivered"].includes(status) ? 30_000 : false;
+    },
     queryFn: async () => {
       let query = sb
         .from("delivery_orders")

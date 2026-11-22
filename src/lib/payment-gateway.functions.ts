@@ -64,31 +64,58 @@ type ConnectionRow = {
   secret_names: unknown;
 };
 
-const TERMINAL_OUTCOMES = new Set(["approved", "declined", "cancelled", "timeout", "reversed", "refunded"]);
+const TERMINAL_OUTCOMES = new Set([
+  "approved",
+  "declined",
+  "cancelled",
+  "timeout",
+  "reversed",
+  "refunded",
+]);
 
 function callbackBase(): string | null {
   const configured = process.env["PUBLIC_SITE_URL"];
   if (configured) return configured.replace(/\/$/, "");
-  const origin = getRequest()?.headers.get("origin") ?? getRequest()?.headers.get("host");
-  if (!origin) return null;
-  return origin.startsWith("http") ? origin.replace(/\/$/, "") : `https://${origin}`;
+  const request = getRequest();
+  return request ? new URL(request.url).origin : null;
 }
 
-type RpcClient = { rpc: (fn: string, args?: Record<string, unknown>) => Promise<unknown> };
+type RpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{
+    data: { ok?: boolean; state?: string; attempt_id?: string } | null;
+    error: unknown;
+  }>;
+};
 
 /** Records "sent to the processor" or "could not be sent", never an outcome. */
 async function markSent(
   client: unknown,
   intentId: string,
   opts: { reference?: string | undefined; detail?: string | undefined; failed: boolean },
-) {
-  await (client as RpcClient).rpc("neo_payment_intent_mark_sent", {
-    _intent: intentId,
-    ...(opts.reference ? { _provider_reference: opts.reference } : {}),
-    ...(opts.detail ? { _detail: opts.detail } : {}),
-    _failed: opts.failed,
-  });
+): Promise<boolean> {
+  try {
+    const { data, error } = await (client as RpcClient).rpc("neo_payment_intent_mark_sent", {
+      _intent: intentId,
+      ...(opts.reference ? { _provider_reference: opts.reference } : {}),
+      ...(opts.detail ? { _detail: opts.detail } : {}),
+      _failed: opts.failed,
+    });
+    return !error && data?.ok === true && data.state === (opts.failed ? "failed" : "pending");
+  } catch {
+    return false;
+  }
 }
+
+const unrecordedDispatch: GatewayDispatch = {
+  ok: false,
+  reason: "dispatch_state_unrecorded",
+  detail:
+    "The processor was contacted, but NEØ could not save its response. Check this payment before starting another request.",
+  state: "pending",
+};
 
 export const dispatchPaymentIntent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -119,7 +146,7 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       .from("integration_connections")
       .select("enabled, status, environment, configuration, secret_names")
       .eq("organization_id", row.organization_id)
-      .eq("provider_code", row.provider_code)
+      .eq("provider_code", row.provider_code);
     const scopedConnections = row.branch_id
       ? providerConnections.or(`branch_id.eq.${row.branch_id},branch_id.is.null`)
       : providerConnections.is("branch_id", null);
@@ -129,7 +156,12 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       .maybeSingle();
 
     const connection = conn as ConnectionRow | null;
-    if (connectionError) return { ok: false, reason: "provider_lookup_failed", detail: "The payment connection could not be verified for this property." };
+    if (connectionError)
+      return {
+        ok: false,
+        reason: "provider_lookup_failed",
+        detail: "The payment connection could not be verified for this property.",
+      };
     if (!connection || !connection.enabled || connection.status !== "connected") {
       return {
         ok: false,
@@ -138,7 +170,11 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
       };
     }
     if (row.environment !== (connection.environment ?? "sandbox")) {
-      return { ok: false, reason: "provider_environment_changed", detail: "The processor environment changed after this request was opened." };
+      return {
+        ok: false,
+        reason: "provider_environment_changed",
+        detail: "The processor environment changed after this request was opened.",
+      };
     }
 
     const config = (connection.configuration ?? {}) as Record<string, unknown>;
@@ -252,11 +288,12 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
         answer = {};
       }
       if (!res.ok) {
-        await markSent(supabase, data.intentId, {
+        const recorded = await markSent(supabase, data.intentId, {
           reference: answer.reference,
           detail: `The processor refused the request (${res.status}).`,
           failed: true,
         });
+        if (!recorded) return unrecordedDispatch;
         return {
           ok: false,
           reason: "provider_rejected",
@@ -265,8 +302,11 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
         };
       }
     } catch {
-      const detail = "The processor did not confirm receipt of this request. Check its status before starting another payment.";
-      await markSent(supabase, data.intentId, { detail, failed: false });
+      const detail =
+        "The processor did not confirm receipt of this request. Check its status before starting another payment.";
+      if (!(await markSent(supabase, data.intentId, { detail, failed: false }))) {
+        return unrecordedDispatch;
+      }
       return { ok: false, reason: "provider_outcome_unknown", detail, state: "pending" };
     }
 
@@ -307,18 +347,22 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
         return {
           ok: false,
           reason: "provider_outcome_unrecorded",
-          detail: "NEØ could not record the processor's answer. Check the existing payment before retrying.",
+          detail:
+            "NEØ could not record the processor's answer. Check the existing payment before retrying.",
           state: "pending",
         };
       }
       return { ok: true, state: status, providerReference: answer.reference ?? null };
     }
 
-    await markSent(supabase, data.intentId, {
-      reference: answer.reference,
-      detail: answer.message,
-      failed: false,
-    });
+    if (
+      !(await markSent(supabase, data.intentId, {
+        reference: answer.reference,
+        detail: answer.message,
+        failed: false,
+      }))
+    )
+      return unrecordedDispatch;
 
     // A QR provider answers with the code the guest scans. It is kept on the
     // attempt so the till can show it again after a refresh, and it is never
@@ -326,14 +370,35 @@ export const dispatchPaymentIntent = createServerFn({ method: "POST" })
     const qrPayload = answer.qr_payload ?? answer.qr_string ?? null;
     const qrImageUrl = answer.qr_image_url ?? null;
     if (qrPayload || qrImageUrl) {
-      await supabase.rpc("neo_payment_intent_set_provider_payload", {
-        _intent: data.intentId,
-        _payload: {
-          qr_payload: qrPayload,
-          qr_image_url: qrImageUrl,
-          reference: answer.reference ?? null,
-        },
-      });
+      try {
+        const { data: saved, error } = await (supabase as unknown as RpcClient).rpc(
+          "neo_payment_intent_set_provider_payload",
+          {
+            _intent: data.intentId,
+            _payload: {
+              qr_payload: qrPayload,
+              qr_image_url: qrImageUrl,
+              reference: answer.reference ?? null,
+            },
+          },
+        );
+        if (error || saved?.ok !== true || typeof saved.attempt_id !== "string")
+          return {
+            ok: false,
+            reason: "qr_payload_unrecorded",
+            detail:
+              "The processor returned a QR code, but NEØ could not save it. Check this payment before retrying.",
+            state: "pending",
+          };
+      } catch {
+        return {
+          ok: false,
+          reason: "qr_payload_unrecorded",
+          detail:
+            "The processor returned a QR code, but NEØ could not save it. Check this payment before retrying.",
+          state: "pending",
+        };
+      }
     }
 
     return {
