@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useBranchScope } from "@/lib/branches";
 import { useScopedStations } from "@/lib/kitchen-tickets";
 import { stationDepartment } from "@/lib/production-displays";
-import { guardedRpc } from "@/lib/rpc-guard";
+import { guardedRpc, type GuardedRpcError } from "@/lib/rpc-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { SectionCard } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export function StationAccountSetup() {
 }
 
 function PropertyStationAccounts({ branchId }: { branchId: string }) {
-  const scope = useScopedStations();
+  const scope = useScopedStations(branchId);
   const [stationId, setStationId] = useState("");
   const stations = scope.stations.filter((station) => stationDepartment(station));
   const selected = stations.some((station) => station.id === stationId);
@@ -83,7 +83,7 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
     queryKey: ["station-entry-accounts", organizationId, user?.id, branchId, stationId],
     queryFn: async () => {
       const { data, error } = await guardedRpc<StationAccount[]>(supabase, "neo_station_display_pin_admin", args);
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       return data;
     },
   });
@@ -107,7 +107,18 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
   });
 
   if (accounts.isPending) return <p role="status">Loading assigned staff…</p>;
-  if (accounts.isError) return <Button variant="outline" onClick={() => void accounts.refetch()}>Could not load assigned staff. Retry</Button>;
+  if (accounts.isError) {
+    const error = accounts.error as GuardedRpcError;
+    const message = error.code === "PGRST202" || error.code === "42883"
+      ? "The assigned-staff service is unavailable. Ask your system administrator to check the display setup database update."
+      : error.code === "42501" || error.code === "no_session"
+        ? error.message
+        : "Could not load assigned staff for this station.";
+    return <div role="alert" className="space-y-2">
+      <p className="text-sm text-destructive">{message}</p>
+      <Button variant="outline" onClick={() => void accounts.refetch()}>Retry loading assigned staff</Button>
+    </div>;
+  }
   if (!accounts.data?.length) return <p className="text-sm">Assign staff to this station in <Link className="underline" to="/users">Users</Link> to configure their display login.</p>;
   return (
     <div className="space-y-3">
@@ -118,7 +129,7 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
         {accounts.data.map((staff) => <option key={staff.id} value={staff.id}>{staff.name ?? staff.email ?? "Staff account"}{staff.name && staff.email ? ` · ${staff.email}` : ""}</option>)}
       </select>
       {account ? <>
-        <p className="text-sm text-muted-foreground">The display PIN opens this station on a paired screen. Staff use My Personal PIN for their work and supervisor approval.</p>
+        <p className="text-sm text-muted-foreground">Direct display entry chooses where this account lands after signing in. The display PIN unlocks a paired screen. Staff use their personal PIN to authorize work or approve as a supervisor when permitted.</p>
         <Button type="button" variant={account.opens_station ? "outline" : "default"} disabled={save.isPending}
           onClick={() => save.mutate(account.opens_station ? "remove" : "route")}>
           {account.opens_station ? "Remove direct display entry" : "Open this station after sign-in"}

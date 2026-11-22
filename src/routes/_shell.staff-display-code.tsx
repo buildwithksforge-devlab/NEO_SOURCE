@@ -34,8 +34,8 @@ function StaffDisplayCode() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
-      toast.success("Display PIN updated.");
+    onSuccess: (_result, disable) => {
+      toast.success(disable ? "Personal PIN disabled." : "Personal PIN saved.");
       void state.refetch();
     },
     onError: (e: Error) => toast.error(e.message),

@@ -614,9 +614,10 @@ export type ScopedStations = {
   error: Error | null;
 };
 
-export function useScopedStations(): ScopedStations {
+export function useScopedStations(propertyId?: string): ScopedStations {
   const { organizationId, user } = useAuth();
-  const { branchId } = useActivePropertyFilter();
+  const propertyFilter = useActivePropertyFilter();
+  const branchId = propertyId ?? propertyFilter.branchId;
 
   const scope = useQuery({
     queryKey: ["kitchen", "access-scope", organizationId, user?.id],
