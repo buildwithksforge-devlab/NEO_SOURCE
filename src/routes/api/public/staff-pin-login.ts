@@ -8,6 +8,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type EdgeResponse = {
   token_hash?: string;
   branch_id?: string;
+  kind?: string;
+  display_token?: string;
+  expires_at?: string;
   error?: string;
   message?: string;
 };
@@ -94,7 +97,7 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
           return response(
             {
               error: "credentials",
-              message: "Enter your six-digit personal PIN.",
+              message: "Enter your six-digit PIN.",
             },
             400,
           );
@@ -177,7 +180,18 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
 
         const branchId = String(payload.branch_id ?? "");
 
-        if (loginToken.length === 0 || !UUID.test(branchId)) {
+        if (payload.kind === "display" && UUID.test(branchId) &&
+            /^[0-9a-f]{64}$/.test(payload.display_token ?? "") &&
+            Date.parse(payload.expires_at ?? "") > Date.now()) {
+          return response({
+            kind: "display",
+            branch_id: branchId,
+            display_token: payload.display_token,
+            expires_at: payload.expires_at,
+          });
+        }
+
+        if (payload.kind === "display" || loginToken.length === 0 || !UUID.test(branchId)) {
           console.error("[staff-pin-login] edge_contract_incomplete");
 
           return response(

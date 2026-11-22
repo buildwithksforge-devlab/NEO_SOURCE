@@ -8,6 +8,9 @@ type ResolveResult = {
   message?: string;
   user_id?: string;
   branch_id?: string;
+  kind?: string;
+  display_token?: string;
+  expires_at?: string;
 };
 
 const DEVICE_TOKEN = /^neowd_[0-9a-f]{64}$/;
@@ -141,7 +144,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!/^[0-9]{6}$/.test(pin)) {
     return json(400, {
       error: "credentials",
-      message: "Enter your six-digit personal PIN.",
+      message: "Enter your six-digit PIN.",
     });
   }
 
@@ -161,7 +164,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     data,
     error,
   } = await admin.rpc(
-    "neo_staff_login_device_resolve",
+    "neo_staff_pin_sign_in",
     {
       _token_hash: tokenHash,
       _pin: pin,
@@ -210,7 +213,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const branchId =
     String(resolved.branch_id ?? "");
 
-  if (!UUID.test(userId) || !UUID.test(branchId)) {
+  if (resolved.kind === "display" && UUID.test(branchId) &&
+      /^[0-9a-f]{64}$/.test(resolved.display_token ?? "") &&
+      Date.parse(resolved.expires_at ?? "") > Date.now()) {
+    return json(200, {
+      kind: "display",
+      branch_id: branchId,
+      display_token: resolved.display_token,
+      expires_at: resolved.expires_at,
+    });
+  }
+
+  if (resolved.kind === "display" || !UUID.test(userId) || !UUID.test(branchId)) {
     console.error(
       "[neo-staff-pin-login] resolver_identity_incomplete",
     );

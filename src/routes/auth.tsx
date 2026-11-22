@@ -97,7 +97,7 @@ function AuthPage() {
     tab === "signin"
       ? "Sign in to your NEØ workspace."
       : tab === "pin"
-        ? "Use your personal PIN on an authorised property device."
+        ? "Use a personal or display PIN on an authorised property device."
         : "For a new hotel, restaurant, lodge, resort or hospitality business joining NEØ.";
 
   return (

@@ -2,6 +2,14 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RPC_MANIFEST } from "@/lib/rpc-manifest";
 import { Route } from "@/routes/api/public/staff-pin-login";
+import { signInWithStaffPin, STAFF_DEVICE_TOKEN_KEY, STAFF_PIN_SESSION_KEY } from "@/lib/staff-pin-login";
+import { DISPLAY_TOKEN_STORAGE_KEY } from "@/lib/shared-production-display";
+
+const auth = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  verifyOtp: vi.fn(),
+}));
+vi.mock("@/integrations/supabase/client", () => ({ supabase: { auth } }));
 
 const api = readFileSync("src/routes/api/public/staff-pin-login.ts", "utf8");
 const client = readFileSync("src/lib/staff-pin-login.ts", "utf8");
@@ -10,7 +18,7 @@ describe("trusted-device staff PIN login contract", () => {
   it("declares the correct caller for every new RPC", () => {
     expect(RPC_MANIFEST["neo_staff_login_device_pair"]).toBe("authenticated");
     expect(RPC_MANIFEST["neo_staff_login_device_revoke"]).toBe("authenticated");
-    expect(RPC_MANIFEST["neo_staff_login_device_resolve"]).toBe("service_role");
+    expect(RPC_MANIFEST["neo_staff_pin_sign_in"]).toBe("service_role");
   });
 
   it("sends the device token as a bearer secret and never sends a staff code", () => {
@@ -107,6 +115,21 @@ describe("staff PIN broker request/response behavior", () => {
     expect(response.status).toBe(401);
     expect((await response.json()).error).toBe("credentials");
   });
+  it("returns only a restricted display proof for a display PIN", async () => {
+    const display = {
+      kind: "display",
+      branch_id: branch,
+      display_token: "c".repeat(64),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      ...display,
+      token_hash: "unexpected-staff-proof",
+    })));
+    const response = await handler({ request: request() });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(display);
+  });
   it("rejects redirects without forwarding the device token or PIN to another host", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, {
       status: 302, headers: { Location: "https://foreign.invalid" },
@@ -126,4 +149,35 @@ describe("staff PIN broker request/response behavior", () => {
     expect((await handler({ request: request() })).status).toBe(502);
     expect(fetch).toHaveBeenCalledOnce();
   });
+});
+
+it("keeps a display credential out of the personal account sign-in flow", async () => {
+  const branch = "00000000-0000-4000-8000-000000000001";
+  const displayToken = "c".repeat(64);
+  const storage = (entries: [string, string][]) => {
+    const values = new Map(entries);
+    return {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    };
+  };
+  const localStorage = storage([[STAFF_DEVICE_TOKEN_KEY, `neowd_${"a".repeat(64)}`]]);
+  const sessionStorage = storage([[STAFF_PIN_SESSION_KEY, "1"]]);
+  vi.stubGlobal("window", { localStorage, sessionStorage });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+    kind: "display",
+    branch_id: branch,
+    display_token: displayToken,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  })));
+  auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  try {
+    await expect(signInWithStaffPin("135790", branch)).resolves.toEqual({ kind: "display", branchId: branch });
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY)).toBe(displayToken);
+    expect(sessionStorage.getItem(STAFF_PIN_SESSION_KEY)).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

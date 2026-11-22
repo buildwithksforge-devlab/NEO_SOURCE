@@ -129,7 +129,7 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
         {accounts.data.map((staff) => <option key={staff.id} value={staff.id}>{staff.name ?? staff.email ?? "Staff account"}{staff.name && staff.email ? ` · ${staff.email}` : ""}</option>)}
       </select>
       {account ? <>
-        <p className="text-sm text-muted-foreground">Direct display entry chooses where this account lands after signing in. The display PIN unlocks a paired screen. Staff use their personal PIN to authorize work or approve as a supervisor when permitted.</p>
+        <p className="text-sm text-muted-foreground">Direct display entry chooses where this account lands after signing in. The display PIN opens this station from Staff PIN Login on an authorised device or unlocks a paired screen. Staff use their personal PIN to authorize work or approve as a supervisor when permitted.</p>
         <Button type="button" variant={account.opens_station ? "outline" : "default"} disabled={save.isPending}
           onClick={() => save.mutate(account.opens_station ? "remove" : "route")}>
           {account.opens_station ? "Remove direct display entry" : "Open this station after sign-in"}

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { ensureSharedScreenSignedOut, retainSharedDisplaySession } from "@/lib/shared-production-display";
 
 export const STAFF_DEVICE_TOKEN_KEY =
   "neo.staffPinDevice.token";
@@ -31,6 +32,9 @@ type PairResult = {
 type PinLoginResponse = {
   token_hash?: string;
   branch_id?: string;
+  kind?: string;
+  display_token?: string;
+  expires_at?: string;
   error?: string;
   message?: string;
 };
@@ -182,9 +186,9 @@ export async function revokeTrustedStaffDevice() {
 export async function signInWithStaffPin(
   pin: string,
   expectedBranchId?: string,
-): Promise<{ branchId: string }> {
+): Promise<{ kind: "staff" | "display"; branchId: string }> {
   if (!/^[0-9]{6}$/.test(pin)) {
-    throw new Error("Enter your six-digit personal PIN.");
+    throw new Error("Enter your six-digit PIN.");
   }
 
   if (!storageAvailable()) {
@@ -226,7 +230,7 @@ export async function signInWithStaffPin(
     );
   }
 
-  if (!payload.token_hash || !payload.branch_id) {
+  if (!payload.branch_id) {
     throw new Error(
       "Staff PIN sign-in returned an incomplete response.",
     );
@@ -234,6 +238,21 @@ export async function signInWithStaffPin(
 
   if (expectedBranchId && payload.branch_id !== expectedBranchId) {
     throw new Error("This PIN was verified at a different property. Use the station link for this device's property.");
+  }
+
+  if (payload.kind === "display") {
+    if (!payload.display_token || !/^[0-9a-f]{64}$/.test(payload.display_token) ||
+      !payload.expires_at || !(Date.parse(payload.expires_at) > Date.now())) {
+      throw new Error("The station display session could not be confirmed.");
+    }
+    await ensureSharedScreenSignedOut();
+    clearStaffPinSession();
+    retainSharedDisplaySession(payload.display_token, payload.expires_at);
+    return { kind: "display", branchId: payload.branch_id };
+  }
+
+  if (!payload.token_hash) {
+    throw new Error("Staff PIN sign-in returned an incomplete response.");
   }
 
   const verified = await supabase.auth.verifyOtp({
@@ -249,5 +268,5 @@ export async function signInWithStaffPin(
 
   markStaffPinSession();
 
-  return { branchId: payload.branch_id };
+  return { kind: "staff", branchId: payload.branch_id };
 }

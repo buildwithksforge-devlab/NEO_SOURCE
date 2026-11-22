@@ -247,17 +247,21 @@ export async function activateSharedDisplay(code: string) {
     !(Date.parse(data.expires_at) > Date.now())) {
     throw new Error("The station display session could not be confirmed.");
   }
+  retainSharedDisplaySession(data.token, data.expires_at);
+  window.location.replace("/station-screen");
+}
+
+export function retainSharedDisplaySession(token: string, expiresAt: string) {
   try {
-    window.localStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, data.token);
-    window.localStorage.setItem(DISPLAY_EXPIRY_STORAGE_KEY, data.expires_at);
-    if (window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== data.token) {
+    window.localStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, token);
+    window.localStorage.setItem(DISPLAY_EXPIRY_STORAGE_KEY, expiresAt);
+    if (window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== token) {
       throw new Error("This browser could not retain the display session.");
     }
   } catch (error) {
     clearSharedDisplayToken();
     throw error;
   }
-  window.location.replace("/station-screen");
 }
 
 /** Shared screens never retain an authenticated operator browser session. */

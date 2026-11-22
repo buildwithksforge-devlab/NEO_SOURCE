@@ -28,11 +28,13 @@ describe("staff PIN login user interface", () => {
 
   it("uses a PIN-only keypad and never requests a staff code", () => {
     expect(pinForm).toContain('aria-label="PIN keypad"');
-    expect(pinForm).toContain("Personal six-digit PIN");
+    expect(pinForm).toContain("Six-digit PIN");
+    expect(pinForm).toContain("Enter your personal PIN to sign in or your display PIN to open its station.");
     expect(pinForm).not.toMatch(/staff[_ ]code/i);
   });
 
   it("opens a linked station directly and preserves ordinary PIN sign-in", () => {
+    expect(pinForm).toMatch(/kind === "display"[\s\S]*?window\.location\.replace\("\/station-screen"\)/);
     expect(pinForm).toContain("const destination = station?.href");
     expect(pinForm).toContain(
       "/workspace?home=1&property=",

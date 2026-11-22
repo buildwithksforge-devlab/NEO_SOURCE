@@ -59,14 +59,18 @@ export function StaffPinSignIn({ redirect }: { redirect?: string | undefined }) 
     }
 
     if (pin.length !== 6) {
-      setFormError("Enter your six-digit personal PIN.");
+      setFormError("Enter your six-digit PIN.");
       return;
     }
 
     setBusy(true);
 
     try {
-      const { branchId } = await signInWithStaffPin(pin, station?.property);
+      const { kind, branchId } = await signInWithStaffPin(pin, station?.property);
+      if (kind === "display") {
+        window.location.replace("/station-screen");
+        return;
+      }
       const destination = station?.href;
 
       setPin("");
@@ -184,7 +188,7 @@ export function StaffPinSignIn({ redirect }: { redirect?: string | undefined }) 
           htmlFor="staff-pin"
           className="text-sm font-medium text-neo-midnight"
         >
-          Personal six-digit PIN
+          Six-digit PIN
         </label>
 
         <Input
@@ -209,8 +213,7 @@ export function StaffPinSignIn({ redirect }: { redirect?: string | undefined }) 
           id="staff-pin-help"
           className="text-center text-xs text-neo-steel"
         >
-          Your identity, property access and role permissions are
-          checked by NEØ before the session opens.
+          Enter your personal PIN to sign in or your display PIN to open its station.
         </p>
       </div>
 

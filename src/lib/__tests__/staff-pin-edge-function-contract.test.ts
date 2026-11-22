@@ -48,7 +48,7 @@ describe("Staff PIN authentication broker bridge", () => {
     );
 
     expect(edgeFunction).toContain(
-      '"neo_staff_login_device_resolve"',
+      '"neo_staff_pin_sign_in"',
     );
   });
 

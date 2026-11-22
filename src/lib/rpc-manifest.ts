@@ -57,7 +57,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // Trusted-property staff PIN sign-in.
   neo_staff_login_device_pair: "authenticated",
   neo_staff_login_device_revoke: "authenticated",
-  neo_staff_login_device_resolve: "service_role",
+  neo_staff_pin_sign_in: "service_role",
 
   // Bearer-token restricted displays work after the supervisor signs out.
   neo_production_display_read: "anon",
