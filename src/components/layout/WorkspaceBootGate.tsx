@@ -54,6 +54,7 @@ export function WorkspaceBootGate({ children }: { children: ReactNode }) {
     recoverWorkspace,
     signOut,
     organizationId,
+    user,
   } = useAuth();
   const queryClient = useQueryClient();
   const [recovering, setRecovering] = useState(false);
@@ -65,11 +66,12 @@ export function WorkspaceBootGate({ children }: { children: ReactNode }) {
    */
   const ready = phase === "ready" && access.accountType === "staff";
   const branchId = access.branchIds.length === 1 ? (access.branchIds[0] ?? null) : null;
+  const userId = user?.id ?? null;
   useEffect(() => {
     if (!ready) return;
     perfMark("workspace-ready");
-    return prefetchWorkspaceData(queryClient, { organizationId, branchId });
-  }, [ready, queryClient, organizationId, branchId]);
+    return prefetchWorkspaceData(queryClient, { organizationId, branchId, userId });
+  }, [ready, queryClient, organizationId, branchId, userId]);
 
   /**
    * Stage 1 — staff / customer separation. A guest (customer) account never

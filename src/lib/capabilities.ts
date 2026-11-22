@@ -31,6 +31,8 @@ export const UNIVERSAL_ROUTES = new Set([
   "/my-engagement",
   "/hr/me",
   "/dashboards",
+  "/workspace",
+  "/profile",
   "/unauthorized",
   "/staff-display-code",
   "/session-expired",
@@ -571,11 +573,20 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/ai-insights", module: "ai", feature: "insights" },
 ];
 
-/** Resolves a path to the capability it demands, or null for universal pages. */
+function routePath(path: string): string {
+  return (path.split(/[?#]/, 1)[0]?.replace(/\/+$/, "") || "/").toLowerCase();
+}
+
+export function isUniversalRoute(path: string): boolean {
+  const clean = routePath(path);
+  // The role dashboard checks its key against the server-provided list.
+  return UNIVERSAL_ROUTES.has(clean) || /^\/dashboards\/[^/]+$/.test(clean);
+}
+
+/** Resolves a path to its registered capability. */
 export function capabilityForPath(path: string): Capability | null {
-  const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
-  if (UNIVERSAL_ROUTES.has(clean)) return null;
-  if (clean.startsWith("/dashboards")) return null;
+  const clean = routePath(path);
+  if (isUniversalRoute(clean)) return null;
   let best: Entry | null = null;
   for (const entry of ROUTE_CAPABILITIES) {
     if (clean === entry.prefix || clean.startsWith(`${entry.prefix}/`)) {
@@ -646,7 +657,7 @@ export const ROUTE_CAPABILITY_ALTERNATIVES: Record<string, Capability[]> = {
 export function capabilitiesForPath(path: string): Capability[] {
   const primary = capabilityForPath(path);
   if (!primary) return [];
-  const clean = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const clean = routePath(path);
   return [primary, ...(ROUTE_CAPABILITY_ALTERNATIVES[clean] ?? [])];
 }
 
@@ -663,7 +674,7 @@ export function pathPermitted(
   path: string,
 ): boolean {
   const caps = capabilitiesForPath(path);
-  if (caps.length === 0) return true;
+  if (caps.length === 0) return isUniversalRoute(path);
   return caps.some((c) => can(c.module, c.feature, c.action));
 }
 

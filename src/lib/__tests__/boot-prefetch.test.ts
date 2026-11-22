@@ -5,14 +5,15 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 import { bootPrefetchJobs } from "../boot-prefetch";
+import { myDashboardsQuery } from "../dashboard-data";
 import { BRAND_BOOT_SCRIPT, BRAND_CACHE_KEY } from "../brand-cache";
 
 describe("boot-gate prefetch", () => {
   it("warms the same cache entries the dashboard hooks read", () => {
-    const keys = bootPrefetchJobs({ organizationId: "org-1", branchId: "branch-1" }).map((j) =>
+    const keys = bootPrefetchJobs({ organizationId: "org-1", branchId: "branch-1", userId: "staff-1" }).map((j) =>
       JSON.stringify(j.queryKey),
     );
-    expect(keys).toContain(JSON.stringify(["my-dashboards"]));
+    expect(keys).toContain(JSON.stringify(myDashboardsQuery("org-1", "staff-1").queryKey));
     expect(keys).toContain(JSON.stringify(["dashboard-alerts", "branch-1"]));
     expect(keys).toContain(JSON.stringify(["dashboard-approvals", "branch-1", null]));
     expect(keys).toContain(JSON.stringify(["department-workload"]));
@@ -23,10 +24,19 @@ describe("boot-gate prefetch", () => {
   });
 
   it("never prefetches tenant branches without a resolved organisation", () => {
-    const keys = bootPrefetchJobs({ organizationId: null, branchId: null }).map((j) =>
+    const keys = bootPrefetchJobs({ organizationId: null, branchId: null, userId: "staff-1" }).map((j) =>
       JSON.stringify(j.queryKey),
     );
     expect(keys.some((k) => k.includes("branches"))).toBe(false);
+    expect(keys.some((k) => k.includes("my-dashboards"))).toBe(false);
+  });
+
+  it("keeps dashboard access cache entries distinct across staff and organisations", () => {
+    const key = myDashboardsQuery("org-1", "staff-1").queryKey;
+    expect(myDashboardsQuery("org-1", "staff-2").queryKey).not.toEqual(key);
+    expect(myDashboardsQuery("org-2", "staff-1").queryKey).not.toEqual(key);
+    expect(bootPrefetchJobs({ organizationId: "org-1", branchId: null, userId: null })
+      .some((job) => job.queryKey[0] === "my-dashboards")).toBe(false);
   });
 });
 

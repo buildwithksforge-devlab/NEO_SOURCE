@@ -21,11 +21,12 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   dashboardAlertsQuery,
   dashboardApprovalsQuery,
-  dashboardNotificationsQuery,
+  myDashboardsQuery,
 } from "@/lib/dashboard-data";
 
 export type BootPrefetchScope = {
   organizationId: string | null;
+  userId: string | null;
   branchId: string | null;
 };
 
@@ -37,17 +38,9 @@ type Job = {
 
 /** The query entries every workspace opens with, whatever the dashboard. */
 export function bootPrefetchJobs(scope: BootPrefetchScope): Job[] {
-  const { organizationId, branchId } = scope;
+  const { organizationId, branchId, userId } = scope;
   const jobs: Job[] = [
-    {
-      queryKey: ["my-dashboards"],
-      staleTime: 5 * 60_000,
-      queryFn: async () => {
-        const { data, error } = await guardedRpc(supabase, "my_dashboards");
-        if (error) throw error;
-        return data ?? [];
-      },
-    },
+    ...(organizationId && userId ? [myDashboardsQuery(organizationId, userId)] : []),
     // These reuse the exact query descriptors the dashboard panels use, so a
     // warmed entry is the same cache entry with the same row shape. A near-copy
     // here caused a second network round trip on every boot and a first render

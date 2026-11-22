@@ -214,7 +214,7 @@
       "title": "Trace every sidebar destination and reachable role-specific route",
       "status": "IN_PROGRESS",
       "source_routes": ["src/lib/navigation.ts", "src/lib/nav-permissions.ts", "src/routeTree.gen.ts", "src/routes"],
-      "local_evidence": ["The reproducible static inventory lists 191 sidebar destinations and 406 generated route entries. Every sidebar destination has a generated route after normalising index slashes. It identifies 198 additional direct or hidden route entries requiring role, action and downstream review. This proves only route presence, not permissions or workflow success."],
+      "local_evidence": ["The current static inventory lists 191 sidebar destinations, 408 generated routes and 200 direct or hidden paths. Every generated staff route resolves to a capability or an explicitly permitted staff surface. Mixed-case paths use the canonical capability, unknown staff paths are denied and protected content waits for effective grants. The role-dashboard list and boot prefetch use the same per-staff, per-workspace cache key. A failed dashboard access check offers retry."],
       "next_action": "Check hidden routes, tabs, drawers, dialogs, controls and deep links in the source against the user's sidebar list. For each consequential action, record server authorization, saved effects, downstream queue or ledger, retry and failure evidence before changing its status.",
       "live_acceptance": "OPEN"
     },

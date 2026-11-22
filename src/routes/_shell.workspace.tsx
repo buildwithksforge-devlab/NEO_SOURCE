@@ -271,7 +271,7 @@ function Dashboard() {
 
 function OperationsDashboard() {
   const { organizationId, user, profile } = useAuth();
-  const dashboards = useMyDashboards(Boolean(organizationId));
+  const dashboards = useMyDashboards(organizationId, user?.id ?? null);
   useDashboardRealtime(Boolean(organizationId));
 
   const [scope, setScope] = useState<DashboardScope>(() => ({

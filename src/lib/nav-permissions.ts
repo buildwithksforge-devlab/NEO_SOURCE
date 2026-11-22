@@ -1,5 +1,5 @@
 import { navigation, type NavGroup } from "./navigation";
-import { capabilityForPath, pathPermitted, type Capability } from "./capabilities";
+import { capabilityForPath, isUniversalRoute, pathPermitted, type Capability } from "./capabilities";
 
 /**
  * Navigation authorization.
@@ -170,7 +170,7 @@ export function navigationForAccess(
     return staffGroups(navigation)
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => capabilityForPath(item.to) === null),
+        items: group.items.filter((item) => isUniversalRoute(item.to)),
       }))
       .filter((group) => group.items.length > 0);
   }
