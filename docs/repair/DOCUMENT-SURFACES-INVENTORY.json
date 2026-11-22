@@ -3,7 +3,7 @@
   "regenerate": "node scripts/inventory-document-surfaces.mjs",
   "components": {
     "DocumentPreview": 2,
-    "DocumentPrintButton": 18,
+    "DocumentPrintButton": 19,
     "FactExportButton": 3,
     "FactSection": 3,
     "FolioStatementDialog": 1,
@@ -21,11 +21,11 @@
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/components/dashboard/DashboardFrame.tsx:388",
+      "key": "src/components/dashboard/DashboardFrame.tsx:393",
       "file": "src/components/dashboard/DashboardFrame.tsx",
-      "line": 388,
+      "line": 393,
       "component": "FactExportButton",
-      "sourceHash": "9ade5b10ab1eb9594dd54e48ca8b1de9d507147f80ea8b05147051aa8faccbc2",
+      "sourceHash": "86dda6a2f35a28833ad9a40cfc03468012057bf1e9f57af842dc35afdc1d985f",
       "excerpt": "<FactExportButton\n              scope={factScope}\n              scopeLabel={spec.scopeHint}\n              enabled={Boolean(organizationId)}\n            />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
@@ -48,12 +48,21 @@
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/components/inventory/ApprovedReceivingPosting.tsx:113",
+      "key": "src/components/inventory/ApprovedReceivingPosting.tsx:120",
       "file": "src/components/inventory/ApprovedReceivingPosting.tsx",
-      "line": 113,
+      "line": 120,
       "component": "DocumentPrintButton",
-      "sourceHash": "51c3fbab92e8c332a07690888548a5788ae3b7466917de9e4ab562b90d7a64d5",
+      "sourceHash": "5d3aa7accae3d0fa188fd280e209986e0aef753ecccb4bf8eb63436660bd3a00",
       "excerpt": "<DocumentPrintButton type=\"goods_receipt\" id={posted.grnId} label=\"Print GRN\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/inventory/ReceivingDocumentHistory.tsx:21",
+      "file": "src/components/inventory/ReceivingDocumentHistory.tsx",
+      "line": 21,
+      "component": "DocumentPrintButton",
+      "sourceHash": "1761dc491f7793f39d8c535f78ca42df1e9471b75d5cfb552d4ac65f83938f20",
+      "excerpt": "<DocumentPrintButton type=\"goods_receipt\" id={String(receipt['id'])} label=\"Open / reprint GRN\" />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
@@ -106,7 +115,7 @@
       "file": "src/routes/_shell.events.bookings.$id.tsx",
       "line": 156,
       "component": "DocumentPrintButton",
-      "sourceHash": "90bafa147cda03a8b0fe3154f174ba62ac3c549e82e0c81f26e02414a056d630",
+      "sourceHash": "ce7a3b65c23a1b1fa3bd9ed46e7af952e702130ee0ef8d9b82ac328a972f26cf",
       "excerpt": "<DocumentPrintButton\n              type=\"beo\"\n              id={latestBeo ? String(latestBeo[\"id\"]) : null}\n              label=\"Print BEO\"\n              size=\"default\"\n            />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
@@ -115,7 +124,7 @@
       "file": "src/routes/_shell.events.bookings.$id.tsx",
       "line": 834,
       "component": "DocumentPrintButton",
-      "sourceHash": "90bafa147cda03a8b0fe3154f174ba62ac3c549e82e0c81f26e02414a056d630",
+      "sourceHash": "ce7a3b65c23a1b1fa3bd9ed46e7af952e702130ee0ef8d9b82ac328a972f26cf",
       "excerpt": "<DocumentPrintButton\n                    type=\"invoice\"\n                    id={eventInvoice.data.id}\n                    label=\"View / Print Invoice\"\n                  />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
@@ -133,16 +142,25 @@
       "file": "src/routes/_shell.finance.receivables.tsx",
       "line": 289,
       "component": "DocumentPrintButton",
-      "sourceHash": "6c599c00c5def466abc38b3ebe7b8fe8481c60c694a595b2a7df8d2406c1bf45",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
       "excerpt": "<DocumentPrintButton\n                            type=\"invoice\"\n                            id={String(i[\"id\"])}\n                            label={fiscalAccepted ? \"Fiscal PDF\" : \"Invoice PDF\"}\n                          />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/routes/_shell.finance.receivables.tsx:481",
+      "key": "src/routes/_shell.finance.receivables.tsx:338",
       "file": "src/routes/_shell.finance.receivables.tsx",
-      "line": 481,
+      "line": 338,
       "component": "DocumentPrintButton",
-      "sourceHash": "6c599c00c5def466abc38b3ebe7b8fe8481c60c694a595b2a7df8d2406c1bf45",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
+      "excerpt": "<DocumentPrintButton type=\"credit_note\" id={String(c[\"id\"])} label=\"Note PDF\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.finance.receivables.tsx:486",
+      "file": "src/routes/_shell.finance.receivables.tsx",
+      "line": 486,
+      "component": "DocumentPrintButton",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
       "excerpt": "<DocumentPrintButton\n              type=\"invoice\"\n              id={String(inspected[\"id\"])}\n              label=\"Print invoice\"\n            />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
@@ -205,7 +223,7 @@
       "file": "src/routes/_shell.pms.folios.$id.tsx",
       "line": 192,
       "component": "DocumentPrintButton",
-      "sourceHash": "8c8c7e32ec282cbe710baf2007dfdc9c02d0b70af3ab445260870f164a9220fe",
+      "sourceHash": "f6db6fa6db301e7c2edcf358a84d61a8f87175e536959538e72b724dd4b1579c",
       "excerpt": "<DocumentPrintButton\n              type=\"folio_statement\"\n              id={f ? String(f[\"id\"]) : null}\n              label=\"Print statement\"\n              size=\"default\"\n            />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
@@ -219,47 +237,38 @@
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/routes/_shell.pos.orders.$id.tsx:251",
+      "key": "src/routes/_shell.pos.orders.$id.tsx:273",
       "file": "src/routes/_shell.pos.orders.$id.tsx",
-      "line": 251,
+      "line": 273,
       "component": "DocumentPrintButton",
-      "sourceHash": "3f8ec4dc3d68f9b1d1c44a09d9d9bbf9233c4bdbeae04ca7f973c1b513301f70",
-      "excerpt": "<DocumentPrintButton\r\n                type=\"pos_receipt\"\r\n                id={data.id}\r\n                label=\"Receipt PDF\"\r\n                size=\"default\"\r\n              />",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<DocumentPrintButton\n                type=\"pos_receipt\"\n                id={data.id}\n                label={fiscalAccepted ? \"Fiscal Receipt PDF\" : \"Receipt PDF\"}\n                size=\"default\"\n              />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/routes/_shell.pos.orders.$id.tsx:267",
+      "key": "src/routes/_shell.pos.orders.$id.tsx:307",
       "file": "src/routes/_shell.pos.orders.$id.tsx",
-      "line": 267,
-      "component": "DocumentPrintButton",
-      "sourceHash": "3f8ec4dc3d68f9b1d1c44a09d9d9bbf9233c4bdbeae04ca7f973c1b513301f70",
-      "excerpt": "<DocumentPrintButton\r\n                    type=\"pos_receipt\"\r\n                    id={data.id}\r\n                    label=\"Fiscal Receipt PDF\"\r\n                    size=\"default\"\r\n                  />",
-      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
-    },
-    {
-      "key": "src/routes/_shell.pos.orders.$id.tsx:287",
-      "file": "src/routes/_shell.pos.orders.$id.tsx",
-      "line": 287,
+      "line": 307,
       "component": "SendToPrinterButton",
-      "sourceHash": "3f8ec4dc3d68f9b1d1c44a09d9d9bbf9233c4bdbeae04ca7f973c1b513301f70",
-      "excerpt": "<SendToPrinterButton\r\n                  type=\"pos_receipt\"\r\n                  id={data.id}\r\n                  documentNumber={data.order_number}\r\n                  role=\"restaurant\"\r\n                  branchId={data.branch_id}\r\n                  label=\"Send to receipt printer\"\r\n                />",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<SendToPrinterButton\n                  type=\"pos_receipt\"\n                  id={data.id}\n                  documentNumber={data.order_number}\n                  role=\"restaurant\"\n                  branchId={data.branch_id}\n                  existingJobId={receiptPrintState.data.inProgressId}\n                  label={receiptPrintState.data.inProgressId ? \"Track receipt print\" : \"Send to receipt printer\"}\n                />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/routes/_shell.pos.orders.$id.tsx:298",
+      "key": "src/routes/_shell.pos.orders.$id.tsx:319",
       "file": "src/routes/_shell.pos.orders.$id.tsx",
-      "line": 298,
+      "line": 319,
       "component": "SendToPrinterButton",
-      "sourceHash": "3f8ec4dc3d68f9b1d1c44a09d9d9bbf9233c4bdbeae04ca7f973c1b513301f70",
-      "excerpt": "<SendToPrinterButton\r\n                  type=\"pos_receipt\"\r\n                  id={data.id}\r\n                  documentNumber={data.order_number}\r\n                  role=\"restaurant\"\r\n                  branchId={data.branch_id}\r\n                  label=\"Reprint receipt\"\r\n                />",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<SendToPrinterButton\n                  type=\"pos_receipt\"\n                  id={data.id}\n                  documentNumber={data.order_number}\n                  role=\"restaurant\"\n                  branchId={data.branch_id}\n                  existingJobId={receiptPrintState.data?.inProgressId ?? null}\n                  label={receiptPrintState.data?.inProgressId ? \"Track receipt print\" : \"Reprint receipt\"}\n                />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },
     {
-      "key": "src/routes/_shell.procurement.reconciliation.tsx:438",
+      "key": "src/routes/_shell.procurement.reconciliation.tsx:477",
       "file": "src/routes/_shell.procurement.reconciliation.tsx",
-      "line": 438,
+      "line": 477,
       "component": "DocumentPrintButton",
-      "sourceHash": "bf1abc550cb6b42c3c2f6b201ed07698dff6d410a728a281d65c99ea2a46400e",
+      "sourceHash": "c3d5f99e72479025d34bdbdf7ef67aff3551a9ea73222a007eb50e2fc3c9777a",
       "excerpt": "<DocumentPrintButton\n            type=\"goods_receipt\"\n            id={recentlyPosted.grnId}\n            label={`Download GRN - ${recentlyPosted.orderNumber}`}\n            variant=\"secondary\"\n          />",
       "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
     },

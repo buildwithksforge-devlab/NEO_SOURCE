@@ -314,11 +314,12 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
       CREATE ROLE authenticated; CREATE ROLE anon; CREATE ROLE service_role; CREATE SCHEMA auth;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '${reviewer}'::uuid $$;
       CREATE FUNCTION current_org_id() RETURNS uuid LANGUAGE sql AS $$ SELECT '${org}'::uuid $$;
+      CREATE FUNCTION current_access_scope() RETURNS text LANGUAGE sql AS $$ SELECT 'staff'::text $$;
       CREATE FUNCTION is_org_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
       CREATE FUNCTION has_permission(text,text) RETURNS boolean LANGUAGE sql AS $$ SELECT coalesce(current_setting('test.receive_permission',true),'yes')='yes' $$;
       CREATE FUNCTION neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT $1='${branch}'::uuid $$;
       CREATE FUNCTION next_document_number(text,text,uuid) RETURNS text LANGUAGE sql AS $$ SELECT 'GRN-'||gen_random_uuid()::text $$;
-      CREATE TABLE purchase_orders(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,status text,supplier_id uuid,order_number text);
+      CREATE TABLE purchase_orders(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,status text,supplier_id uuid,order_number text,currency text DEFAULT 'KES');
       CREATE TABLE purchase_order_lines(id uuid PRIMARY KEY,order_id uuid,stock_item_id uuid,quantity numeric,cancelled_quantity numeric DEFAULT 0,
         received_quantity numeric DEFAULT 0,accepted_quantity numeric DEFAULT 0,rejected_quantity numeric DEFAULT 0,returned_quantity numeric DEFAULT 0,unit text,unit_price numeric,description text);
       CREATE TABLE stock_locations(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,active boolean);
@@ -341,6 +342,11 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
       CREATE TABLE movement_evidence(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),item uuid,location uuid,quantity numeric,receipt uuid,attempt text UNIQUE);
       CREATE TABLE journal_evidence(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),receipt uuid UNIQUE,debit numeric,credit numeric);
       CREATE TABLE failed_finance_evidence(receipt uuid,detail text);
+      CREATE FUNCTION neo_fact_currency(uuid,uuid) RETURNS text LANGUAGE sql AS $$ SELECT 'KES'::text $$;
+      CREATE FUNCTION neo_connection_journal_matches(uuid,uuid,uuid,text,numeric,text,uuid) RETURNS boolean LANGUAGE sql AS $$
+        SELECT $4='KES' AND $6='goods_receipt:accrual'
+          AND EXISTS(SELECT 1 FROM journal_evidence WHERE id=$1 AND receipt=$7 AND debit=$5 AND credit=$5)
+      $$;
       CREATE FUNCTION inventory_convert(numeric,text,text) RETURNS numeric LANGUAGE sql AS $$ SELECT $1 $$;
       CREATE FUNCTION inventory_apply_movement(uuid,uuid,numeric,text,text,numeric,text,uuid,text,text,text,date) RETURNS uuid LANGUAGE plpgsql AS $$
       DECLARE movement uuid;
@@ -369,7 +375,7 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     await db.exec(`TRUNCATE purchase_orders,purchase_order_lines,stock_locations,stock_items,procurement_attempts,goods_receipts,goods_receipt_lines,
       neo_blind_receiving_counts,neo_blind_receiving_count_lines,movement_evidence,journal_evidence,failed_finance_evidence;
       SELECT set_config('test.receive_permission','yes',false),set_config('test.stock_failure','no',false),set_config('test.finance_failure','no',false);
-      INSERT INTO purchase_orders VALUES('${order}','${org}','${branch}','approved','${id(305)}','LPO-REAL-ENGINE');
+      INSERT INTO purchase_orders(id,organization_id,branch_id,status,supplier_id,order_number) VALUES('${order}','${org}','${branch}','approved','${id(305)}','LPO-REAL-ENGINE');
       INSERT INTO purchase_order_lines(id,order_id,stock_item_id,quantity,unit,unit_price,description) VALUES('${line}','${order}','${item}',10,'kg',50,'Rice');
       INSERT INTO stock_locations VALUES('${store}','${org}','${branch}',true);
       INSERT INTO stock_items VALUES('${item}','${org}','kg','Rice');`);
@@ -692,6 +698,7 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     expect(clerkBaselines.filter((row) => row.rollout_status !== "supported baseline")).toEqual([]);
     await db.exec(clerkWorkflow);
     await db.exec(clerkWorkflow);
+    await db.exec(readFileSync("supabase/migrations/20261122161500_clerk_grn_posting_evidence.sql", "utf8"));
     const installed = (await db.query<ClerkRolloutRow>(clerkPreflight)).rows;
     expect(installed.every((row) => row.rollout_status === "installed" && !row.anonymous_execute)).toBe(true);
     expect(installed.filter((row) => row.authenticated_execute)).toHaveLength(4);

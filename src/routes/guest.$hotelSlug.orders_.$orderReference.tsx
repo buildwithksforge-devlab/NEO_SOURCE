@@ -1,4 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Bike, Loader2 } from "lucide-react";
 import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { guestOrderSearch } from "@/lib/guest-presentation";
@@ -8,7 +11,9 @@ import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel, usePublicOrderByReference, usePublishedDeliveryForGuest } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
-import { useCancelGuestOrder, useGuestOrderTracking } from "@/lib/guest-ordering";
+import { useCancelGuestOrder, useGuestBill, useGuestOrderTracking } from "@/lib/guest-ordering";
+import { exportGuestBillDocument } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf } from "@/lib/browser-document";
 
 /** One money row in the guest's receipt. */
 function Amount({ label, value }: { label: string; value: string }) {
@@ -44,6 +49,9 @@ function TrackingPage() {
   const orderAtProperty = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id, user?.id);
   const orderId = typeof orderAtProperty.data?.["id"] === "string" ? orderAtProperty.data["id"] : undefined;
   const tracking = useGuestOrderTracking(ws.organization_id, orderReference, orderId, user?.id);
+  const bill = useGuestBill(ws.organization_id, ws.branch_id, user?.id);
+  const exportDocument = useServerFn(exportGuestBillDocument);
+  const [downloading, setDownloading] = useState(false);
   const cancel = useCancelGuestOrder(ws.organization_id, orderReference);
   useGuestScreenView(ws.organization_id, "order-tracking", Boolean(user));
 
@@ -51,6 +59,25 @@ function TrackingPage() {
   const isDeliveryOrder = order?.fulfilment_type === "delivery" || order?.fulfilment_type === "pickup";
   const delivery = usePublishedDeliveryForGuest(ws.organization_id, ws.branch_id, hotelSlug, isDeliveryOrder);
   const currency = order?.currency ?? "KES";
+  const receipt = order?.receipt_number
+    ? bill.data?.payments.find((payment) => payment.receipt_number === order.receipt_number &&
+        payment.branch_id === ws.branch_id &&
+        ["confirmed", "completed", "paid", "succeeded", "captured"].includes(payment.status ?? ""))
+    : undefined;
+
+  async function downloadReceipt() {
+    if (!receipt || downloading) return;
+    setDownloading(true);
+    try {
+      const result = await exportDocument({ data: { slug: hotelSlug, id: receipt.id, kind: "receipt" } });
+      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      downloadDocumentPdf(new Blob([bytes], { type: "application/pdf" }), result.filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The receipt could not be downloaded.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="orders">
@@ -166,6 +193,17 @@ function TrackingPage() {
               {statusLabel(order.payment_status)}
               {order.payment_method ? ` · ${statusLabel(order.payment_method)}` : ""}
             </p>
+            {receipt ? (
+              <div className="mt-3 border-t border-black/5 pt-3">
+                <p className="text-sm">Amount received: {money(receipt.amount, receipt.currency ?? currency)}</p>
+                <button type="button" className="neo-guest-outline-action mt-2" disabled={downloading}
+                  onClick={() => void downloadReceipt()}>
+                  {downloading ? "Preparing receipt…" : "Download receipt PDF"}
+                </button>
+              </div>
+            ) : order.receipt_number && bill.isError ? (
+              <button type="button" className="neo-guest-outline-action mt-2" onClick={() => void bill.refetch()}>Retry receipt</button>
+            ) : null}
           </GuestSection>
 
           {order.can_cancel ? (

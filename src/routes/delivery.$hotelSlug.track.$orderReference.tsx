@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { useCustomerSession } from "@/lib/public-session";
+import { useGuestOrderTracking } from "@/lib/guest-ordering";
 import { useMyOrderPin } from "@/lib/delivery-data";
 import { submitDeliveryMpesaReference } from "@/lib/delivery-mpesa-reference";
 import { STALE_LOCATION_SECONDS, locationAgeSeconds, useDeliveryLive } from "@/lib/delivery-live";
@@ -34,6 +35,7 @@ const DELIVERY_STEPS = [
   { key: "in-preparation", label: "Being prepared" },
   { key: "ready-for-pickup", label: "Ready for the rider" },
   { key: "rider-assigned", label: "Rider assigned" },
+  { key: "collected", label: "Picked up by rider" },
   { key: "out-for-delivery", label: "On the way" },
   { key: "delivered", label: "Delivered" },
 ];
@@ -83,7 +85,7 @@ function CustomerTracking({ userId }: { userId: string }) {
   const status = String(order.data?.["order_status"] ?? "");
   const isPickup = order.data?.["fulfilment_type"] === "pickup";
   const steps = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
-  const milestone = status === "collected" ? (isPickup ? "completed" : "out-for-delivery")
+  const milestone = status === "collected" ? (isPickup ? "completed" : "collected")
     : status === "completed" || status === "delivered" ? (isPickup ? "completed" : "delivered")
     : commonMilestones[status] ?? status;
   const activeIndex = steps.findIndex((s) => s.key === milestone);
@@ -95,12 +97,13 @@ function CustomerTracking({ userId }: { userId: string }) {
   const [tillStatus, setTillStatus] = useState<"submitted" | "merchant_verified" | null>(null);
   const paymentMethod = String(order.data?.["payment_method"] ?? "");
   const paymentStatus = String(order.data?.["payment_status"] ?? "");
-  // An M-Pesa request that failed, was declined or never completed leaves the
-  // bill outstanding â€” the guest must be able to send the request again.
-  const canRetryPayment =
-    paymentMethod === "mpesa" &&
-    !["paid", "refunded", "voided"].includes(paymentStatus) &&
-    !["cancelled", "rejected", "delivered", "completed"].includes(status);
+  const paymentSettled = ["paid", "settled", "completed"].includes(paymentStatus);
+  const canSubmitPayment = paymentMethod === "mpesa" && !paymentSettled &&
+    !["refunded", "voided"].includes(paymentStatus) &&
+    !["cancelled", "rejected", "failed"].includes(status);
+  const receipt = useGuestOrderTracking(ws.organization_id, orderReference, paymentSettled ? orderId : undefined, userId);
+  const guestReceiptSlug = receipt.data?.receipt_number ? ws.guest_slug : undefined;
+  const canRetryPayment = canSubmitPayment && !["delivered", "completed"].includes(status);
 
   return (
     <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
@@ -109,8 +112,9 @@ function CustomerTracking({ userId }: { userId: string }) {
       </div>
 
       {order.isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+        <div className="flex justify-center py-10" role="status">
+          <Loader2 className="size-5 motion-safe:animate-spin" style={{ color: brandFallback.steel }} aria-hidden />
+          <span className="sr-only">Loading order tracking</span>
         </div>
       ) : order.isError ? (
         <div className="mt-4"><PublicEmptyState title="Tracking couldn’t refresh" description="Use the same order reference when you retry."
@@ -176,11 +180,20 @@ function CustomerTracking({ userId }: { userId: string }) {
               </span>
             </div>
 
-            {paymentStatus === "paid" ? (
+            {paymentSettled ? (
               <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-emerald-950" role="status">
                 <p className="font-semibold">Payment confirmed</p>
-                <p className="mt-1">Use order {orderReference} when requesting your receipt.</p>
-                {ws.contact_email ? (
+                {guestReceiptSlug ? (
+                  <>
+                    <p className="mt-1 break-words">Receipt {receipt.data?.receipt_number}</p>
+                    <Link to="/guest/$hotelSlug/orders/$orderReference"
+                      params={{ hotelSlug: guestReceiptSlug, orderReference }} search={{}}
+                      className="mt-1 inline-flex min-h-11 items-center font-semibold underline">View receipt details</Link>
+                  </>
+                ) : (
+                  <p className="mt-1">Use order {orderReference} when requesting your receipt.</p>
+                )}
+                {guestReceiptSlug ? null : ws.contact_email ? (
                   <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`mailto:${ws.contact_email}?subject=${encodeURIComponent(`Receipt for ${orderReference}`)}`}>Request receipt from the property</a>
                 ) : ws.contact_phone ? (
                   <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`tel:${ws.contact_phone}`}>Call the property for a receipt</a>
@@ -227,14 +240,12 @@ function CustomerTracking({ userId }: { userId: string }) {
                     void order.refetch();
                   }}
                 >
-                  {charge.isPending ? "Sending payment requestâ€¦" : "Send payment request"}
+                  {charge.isPending ? "Sending payment request…" : "Send payment request"}
                 </BrandButton>
               </div>
             ) : null}
 
-            {paymentMethod === "mpesa" &&
-             !["paid", "settled", "completed", "refunded", "voided"].includes(paymentStatus) &&
-             !["cancelled", "rejected", "failed"].includes(status) ? (
+            {canSubmitPayment ? (
               <div className="mt-5 border-t border-black/10 pt-4">
                 <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
                   Already paid to our M-PESA Till?

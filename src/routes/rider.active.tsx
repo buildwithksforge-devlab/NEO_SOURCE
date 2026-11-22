@@ -157,8 +157,13 @@ function RiderActiveJob() {
                       onClick={() => advance.mutate({ orderId: String(job["id"]), to: next.to })}
                       className="neo-commerce-primary w-full"
                     >
-                      {advance.isPending ? "Saving…" : next.label}
+                      {advance.isPending && advance.variables?.orderId === String(job["id"]) ? "Saving…" : next.label}
                     </button>
+                  ) : null}
+                  {advance.isError && advance.variables?.orderId === String(job["id"]) ? (
+                    <p role="alert" className="w-full rounded-xl bg-red-50 px-3 py-2 text-sm text-red-950">
+                      {advance.error.message}
+                    </p>
                   ) : null}
                   {!readyForPickup ? <p className="w-full rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">Waiting for the kitchen to mark this order ready.</p> : null}
                 </div>

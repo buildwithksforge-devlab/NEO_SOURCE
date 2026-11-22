@@ -805,6 +805,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   // the guest cart and favourites, and Partner billing and messaging.
   neo_folio_payment_trace: "authenticated",
   neo_folio_projection: "authenticated",
+  neo_folio_document_tax_rows: "authenticated",
   neo_guest_cart_set_quantity: "authenticated",
   neo_guest_cart_update: "authenticated",
   neo_guest_my_hotels: "authenticated",

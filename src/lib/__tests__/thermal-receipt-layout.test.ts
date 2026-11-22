@@ -85,6 +85,14 @@ describe('thermal receipt actual PDF layout',()=>{
    document:{...baseline.document,title:type.replace("_"," ")},
    lines:Array.from({length:70},(_,index)=>({description:`Sample line ${index+1} with enough detail for the print layout`,
     quantity:2,unit:"pc",unit_price:10,total:20,note:"Count and confirm the stock on this row."}))};
+  const drawText = vi.spyOn(PDFPage.prototype, "drawText");
+  if (type === "invoice") {
+   payload.totals = [
+    { label: "VAT 16%", amount: 192, emphasis: false },
+    { label: "Catering levy 2%", amount: 24, emphasis: false },
+    { label: "Total", amount: 1400, emphasis: true },
+   ];
+  }
   const result=await buildBusinessDocumentPdf({rpc:vi.fn().mockResolvedValue({data:payload,error:null}),
    from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{}})})})})} as any,{type,id:"sample"});
   const bytes=Buffer.from(result.base64,"base64");
@@ -95,6 +103,11 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(page.getHeight()).toBeCloseTo(841.89);
   }
   expect(pdf.catalog.getViewerPreferences()?.getPrintScaling()).toBe(PrintScaling.None);
+  if (type === "invoice") {
+   const labels = drawText.mock.calls.map(([label]) => label);
+   expect(labels).toEqual(expect.arrayContaining(["TAX BREAKDOWN", "VAT 16%", "Catering levy 2%", "Total tax", "216.00", "1,400.00"]));
+   expect(labels.indexOf("Total tax")).toBeLessThan(labels.indexOf("Total"));
+  }
   if(process.env['RECEIPT_EVIDENCE_DIR']){mkdirSync(process.env['RECEIPT_EVIDENCE_DIR'],{recursive:true});writeFileSync(process.env['RECEIPT_EVIDENCE_DIR']+'/'+type+'.pdf',bytes);}
  });
 });

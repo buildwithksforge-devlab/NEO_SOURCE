@@ -97,6 +97,8 @@ export type GuestFolio = {
 
 export type GuestReceipt = {
   id: string;
+  branch_id?: string | null;
+  status?: string | null;
   receipt_number: string | null;
   amount: number | null;
   currency: string | null;
@@ -241,6 +243,7 @@ export function useGuestCart(organizationId: string, customerId?: string | null)
       const { data, error } = await sb
         .from("carts")
         .select("*, cart_items(id, menu_item_id, quantity, special_instructions, allergy_note)")
+        .eq("organization_id", organizationId)
         .eq("customer_id", customerId)
         .eq("status", "active")
         .maybeSingle();
@@ -360,7 +363,7 @@ export function usePlaceRoomServiceOrder() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["guest-cart"] });
       void qc.invalidateQueries({ queryKey: ["public-delivery"] });
-      void qc.invalidateQueries({ queryKey: ["guest-folios"] });
+      void qc.invalidateQueries({ queryKey: ["guest-bill"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -579,6 +582,7 @@ export function useRequestTransport(organizationId: string, branchId: string | n
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
+      requestKey: string;
       productId: string | null;
       pickupAt: string;
       pickupPoint: string;
@@ -601,13 +605,14 @@ export function useRequestTransport(organizationId: string, branchId: string | n
         _luggage: input.luggage,
         _travel_reference: input.travelReference ?? null,
         _notes: input.notes ?? null,
+        _request_key: input.requestKey,
       });
       if (error) throw new Error(error.message);
       const saved = data as { id?: string; request_number?: string; status: string; quoted_amount: number | null } | null;
       if (!saved?.id || !saved.request_number) throw new Error("The property did not return a saved transfer reference.");
       return { ...saved, request_number: saved.request_number };
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["transport-requests"] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["transport-requests", organizationId, branchId] }),
   });
 }
 

@@ -17,6 +17,7 @@ import { documentTraceCode } from "./document-trace";
 import { documentLayout } from "./document-layouts";
 import { readFolioChargeComponents } from "./folio-charge-components";
 import { embedDocumentLogo } from "./document-logo.server";
+import { documentTaxTotals } from "./document-tax-totals";
 
 
 export const DOCUMENT_TYPES = [
@@ -49,7 +50,7 @@ type Line = {
   note?: string | null;
 };
 
-type Total = { label: string; amount: number | string | null; emphasis?: boolean };
+type Total = { label: string; amount: number | string | null; emphasis?: boolean; section?: "tax" };
 
 type Payload = {
   type: string;
@@ -126,6 +127,29 @@ const wrap = (value: string, font: PDFFont, size: number, width: number) => {
   return lines;
 };
 
+export async function readSavedFolioTaxRows(
+  client: SupabaseClient<Database>, folioId: string, branchId: string | null, savedTax: number,
+): Promise<Total[]> {
+  const fallback = [{ label: "Recorded tax", amount: savedTax }];
+  const { data, error } = await client.rpc("neo_folio_document_tax_rows" as never, {
+    _folio: folioId, _property: branchId,
+  } as never);
+  if (error?.code === "PGRST202") return fallback;
+  if (error) throw new Error(error.message);
+  const payload = data as unknown;
+  if (!Array.isArray(payload) || !payload.length) return fallback;
+
+  const rows: Total[] = [];
+  for (const value of payload as unknown[]) {
+    if (!value || typeof value !== "object") return fallback;
+    const { label, amount } = value as { label?: unknown; amount?: unknown };
+    if (typeof label !== "string" || !label.trim() || typeof amount !== "number" || !Number.isFinite(amount)) return fallback;
+    rows.push({ label, amount, section: "tax" });
+  }
+  const taxCents = rows.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0);
+  return taxCents === Math.round(savedTax * 100) ? rows : fallback;
+}
+
 export async function buildBusinessDocumentPdf(
   supabase: SupabaseClient<Database>,
   input: { type: BusinessDocumentType; id: string },
@@ -183,7 +207,7 @@ export async function buildBusinessDocumentPdf(
     }
     payload.totals = [
       { label: "Net charges", amount: amount("net_revenue") },
-      { label: "Taxes", amount: amount("tax") },
+      ...await readSavedFolioTaxRows(supabase, input.id, typeof projection["branch_id"] === "string" ? projection["branch_id"] : null, amount("tax")),
       { label: "Service charge", amount: amount("service_charge") },
       ...charges.chargeComponents.map((charge) => ({ label: charge.label, amount: charge.amount })),
       { label: "Gross billed", amount: amount("gross_obligation") },
@@ -422,7 +446,7 @@ export async function renderBusinessDocumentPdf(payload: Payload, type: Business
   });
   const panelWidth = 240;
   const boxX = pageWidth - margin - panelWidth;
-  const totalRows = totals.map((total) => {
+  const totalRows = documentTaxTotals(totals).map(({ row: total, tax }) => {
     const value = money(total.amount, currency);
     const size = total.emphasis ? 11 : 9;
     const font = total.emphasis ? bold : regular;
@@ -430,7 +454,7 @@ export async function renderBusinessDocumentPdf(payload: Payload, type: Business
     const valueWidth = font.widthOfTextAtSize(value, size);
     const labels = wrap(total.label, font, size, panelWidth - valueWidth - 2 * padding - 10);
     const lineHeight = size + 4;
-    return { total, value, size, font, padding, valueWidth, labels, lineHeight,
+    return { total, tax, value, size, font, padding, valueWidth, labels, lineHeight,
       height: Math.max(1, labels.length) * lineHeight + (total.emphasis ? 19 : 6) };
   });
   const summaryReserve = Math.min(220, totalRows.reduce((height, row) => height + row.height, 0));
@@ -503,13 +527,24 @@ export async function renderBusinessDocumentPdf(payload: Payload, type: Business
   // merely restates the emphasised balance, is dropped so the band below is
   // the only place the amount owed is stated.
   if (totalRows.length) {
-    ensure(summaryReserve);
-    for (const { total, value, size, font, padding, valueWidth, labels, lineHeight, height } of totalRows) {
+    ensure(summaryReserve + 18);
+    draw("SUMMARY", boxX + 4, 8, bold, muted);
+    y -= 16;
+    let shownTaxHeading = false;
+    for (const { total, tax, value, size, font, padding, valueWidth, labels, lineHeight, height } of totalRows) {
+      if (tax && !shownTaxHeading) {
+        ensure(height + 18);
+        draw("TAX BREAKDOWN", boxX + 4, 8, bold, muted);
+        y -= 17;
+        shownTaxHeading = true;
+      }
       ensure(height);
       const top = y - (total.emphasis ? 8 : 0);
       const colour = total.emphasis ? rgb(1, 1, 1) : inkBlack;
       if (total.emphasis) {
         page.drawRectangle({ x: boxX, y: y - height + 14, width: panelWidth, height: height - 10, color: brown });
+      } else {
+        page.drawRectangle({ x: boxX, y: y - height + 5, width: panelWidth, height, color: rgb(0.96, 0.97, 0.98) });
       }
       labels.forEach((label, index) => page.drawText(label, {
         x: boxX + padding, y: top - index * lineHeight, size, font, color: colour,

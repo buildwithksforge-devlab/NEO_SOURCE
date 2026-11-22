@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Banknote, Loader2, Minus, Plus, Smartphone, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,6 +68,10 @@ function CheckoutPage() {
   const updateCart = usePublicUpdateCart();
   const saveAddress = useSavePublicAddress(ws.organization_id, customerId);
   const placeOrder = usePublicPlaceOrder();
+  const placingOrder = useRef<string | null>(null);
+  const checkoutScope = JSON.stringify([ws.organization_id, ws.branch_id, user?.id, hotelSlug]);
+  const [savedOrder, setSavedOrder] = useState<{ scope: string; reference: string } | null>(null);
+  const savedOrderReference = savedOrder?.scope === checkoutScope ? savedOrder.reference : null;
 
   const enabledModes = (["delivery", "pickup"] as const).filter(
     (mode) => settings.isSuccess && settings.data?.[mode === "pickup" ? "pickup_enabled" : "delivery_enabled"] === true,
@@ -142,7 +146,15 @@ function CheckoutPage() {
         </div>
       </div>
 
-      {loading || customer.isLoading || cart.isLoading ? (
+      {savedOrderReference ? (
+        <div role="status">
+          <PublicEmptyState title={charge.isPending ? "Sending M-Pesa request" : "Order saved"}
+            description={`Order ${savedOrderReference}. Track your order to check its payment and fulfilment status.`}
+            action={<Link to="/delivery/$hotelSlug/track/$orderReference"
+              params={{ hotelSlug, orderReference: savedOrderReference }}
+              className="neo-commerce-primary">Track order</Link>} />
+        </div>
+      ) : loading || customer.isLoading || cart.isLoading ? (
         <div className="flex justify-center py-10 text-white" role="status">
           <Loader2 className="size-5 animate-spin" aria-hidden /><span className="sr-only">Loading checkout</span>
         </div>
@@ -549,13 +561,16 @@ function CheckoutPage() {
                     (activeMethod === "mpesa" && (!mpesaAmountReady || mpesaPhone.replace(/\D/g, "").length < 9))
                   }
                   onClick={async () => {
-                    if (!cartId || !activeMethod || hasSoldOut) return;
+                    if (placingOrder.current === checkoutScope || !cartId || !activeMethod || hasSoldOut) return;
+                    placingOrder.current = checkoutScope;
                     let res;
                     try {
                       res = await placeOrder.mutateAsync({ cartId, paymentMethod: activeMethod });
                     } catch {
+                      if (placingOrder.current === checkoutScope) placingOrder.current = null;
                       return; // The mutation reports the saved-order error.
                     }
+                    setSavedOrder({ scope: checkoutScope, reference: res.order_number });
                     if (activeMethod === "mpesa") {
                       // The order already exists, so a failed or broken payment
                       // request must still land the guest on the order page —

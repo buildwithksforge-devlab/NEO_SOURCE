@@ -340,8 +340,11 @@ export function usePublicOrderByReference(organizationId: string, reference: str
     queryKey: [...keys(organizationId), "track", reference, branchId, userId],
     enabled: Boolean(organizationId && reference && userId),
     refetchInterval: (query) => {
-      const status = query.state.data?.["order_status"];
-      return typeof status === "string" && !["cancelled", "rejected", "completed", "delivered"].includes(status) ? 30_000 : false;
+      const order = query.state.data;
+      if (!order || ["cancelled", "rejected", "failed", "delivered", "completed"].includes(String(order["order_status"]))) {
+        return false;
+      }
+      return 5_000;
     },
     queryFn: async () => {
       let query = sb

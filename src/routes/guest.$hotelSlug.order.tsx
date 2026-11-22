@@ -69,6 +69,8 @@ function OrderPage() {
   const inHouse = Boolean(stay.data?.reservation_id);
 
   const cart = useGuestCart(ws.organization_id, customerId);
+  const basketLoading = loading || Boolean(user && profile.isLoading) || cart.isLoading;
+  const basketError = profile.isError || cart.isError;
   const cartId = cart.data?.["id"] as string | undefined;
   const savedBranch = cart.data?.["branch_id"];
   const cartAtAnotherProperty = Boolean(ws.branch_id && savedBranch && savedBranch !== ws.branch_id);
@@ -177,6 +179,7 @@ function OrderPage() {
 
   async function checkout() {
     if (
+      !canPlaceOrder ||
       !cartId ||
       cartAtAnotherProperty ||
       updateCart.isPending ||
@@ -242,7 +245,7 @@ function OrderPage() {
     Boolean(cartId) &&
     cart.data?.["fulfilment_type"] === activeFulfilment &&
     (activeFulfilment !== "room-service" && matchingDelivery ||
-      quote.data?.fulfilment_type === activeFulfilment && quote.data?.can_checkout === true &&
+      !quote.isError && quote.data?.fulfilment_type === activeFulfilment && quote.data?.can_checkout === true &&
       (activeFulfilment === "room-service" || (deliveryWorkspace.isSuccess && (activeFulfilment === "pickup" || cashEnabled))));
 
   return (
@@ -251,7 +254,15 @@ function OrderPage() {
         <h1 className="neo-public-title">{matchingDelivery ? "Room service" : "Order food"}</h1>
       </section>
 
-      {matchingDelivery && activeFulfilment !== "room-service" ? (
+      {basketLoading ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-[var(--guest-text)]" role="status">
+          <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> Loading your basket…
+        </p>
+      ) : basketError ? (
+        <PublicEmptyState title="Your basket couldn’t load" description="Try again to retrieve your saved items."
+          action={<button type="button" className="neo-guest-outline-action"
+            onClick={() => void (profile.isError ? profile.refetch() : cart.refetch())}>Retry basket</button>} />
+      ) : matchingDelivery && activeFulfilment !== "room-service" ? (
         <div className="mt-4">
           <PublicEmptyState
             title="Delivery & collection"
@@ -580,7 +591,16 @@ function OrderPage() {
                   })}
                 </ul>
 
-                {quote.data ? (
+                {quote.isError ? (
+                  <div className="mt-4 text-sm text-[var(--guest-text)]">
+                    <p role="status">Your order total couldn’t load.</p>
+                    <button type="button" className="neo-guest-outline-action mt-2" onClick={() => void quote.refetch()}>
+                      Retry order total
+                    </button>
+                  </div>
+                ) : quote.isLoading ? (
+                  <p className="mt-4 text-sm text-[var(--guest-text)]" role="status">Calculating your order total…</p>
+                ) : quote.data ? (
                   <dl className="mt-4 space-y-1.5 text-sm">
                     <Line
                       label="Subtotal"

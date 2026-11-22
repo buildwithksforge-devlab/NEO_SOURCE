@@ -43,7 +43,7 @@ export const exportGuestBillDocument = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { fetchPublicProperty } = await import("@/lib/front-door");
     const { readFolioChargeComponents } = await import("@/lib/folio-charge-components");
-    const { renderBusinessDocumentPdf } = await import("@/lib/document-pdf.server");
+    const { readSavedFolioTaxRows, renderBusinessDocumentPdf } = await import("@/lib/document-pdf.server");
     const hotel = await fetchPublicProperty(data.slug);
     if (!hotel?.publicly_listed || hotel.doors?.stay_dine === false) throw new Error("This property is unavailable.");
     const { data: bill, error } = await context.supabase.rpc("neo_guest_folio_projection" as never, {
@@ -71,6 +71,12 @@ export const exportGuestBillDocument = createServerFn({ method: "POST" })
       if (!receipt?.receipt_number || receipt.amount == null || !Number.isFinite(Number(receipt.amount))) {
         throw new Error("This issued receipt is unavailable for your account.");
       }
+      // The authenticated customer projection carries saved payment evidence;
+      // require its property and confirmed status before using hotel branding.
+      if (!hotel.branch_id || receipt.branch_id !== hotel.branch_id ||
+          !["confirmed", "completed", "paid", "succeeded", "captured"].includes(receipt.status ?? "")) {
+        throw new Error("This issued receipt is unavailable at this property.");
+      }
       return renderBusinessDocumentPdf({
         ...shared, property: { ...property, currency: receipt.currency || property.currency },
         document: { title: "Payment receipt", number: receipt.receipt_number, date: receipt.paid_at },
@@ -91,7 +97,7 @@ export const exportGuestBillDocument = createServerFn({ method: "POST" })
       })),
       totals: [
         { label: "Net charges", amount: folio.net_revenue },
-        { label: "Tax", amount: folio.tax },
+        ...await readSavedFolioTaxRows(context.supabase, data.id, hotel.branch_id, Number(folio.tax)),
         { label: "Service charge", amount: folio.service_charge },
         ...chargeComponents.map(({ label, amount }) => ({ label, amount })),
         { label: "Gross billed", amount: folio.gross_obligation },

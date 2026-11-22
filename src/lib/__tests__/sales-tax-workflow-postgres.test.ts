@@ -60,7 +60,9 @@ describe("sales tax profiles, documents and ledger", () => {
         accounting_date date DEFAULT '2026-11-20',source_document_type text,source_document_id uuid);
       CREATE TABLE journal_entry_lines(journal_id uuid,account_id uuid,credit numeric,debit numeric,
         organization_id uuid,branch_id uuid);
-      CREATE TABLE folio_lines (id uuid,organization_id uuid,source_record_uuid uuid,source_module text,category text);
+      CREATE TABLE folios (id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,currency text,customer_id uuid);
+      CREATE TABLE folio_lines (id uuid,organization_id uuid,source_record_uuid uuid,source_module text,category text,
+        folio_id uuid,tax_amount numeric,status text,line_type text);
       CREATE TABLE delivery_orders (id uuid,organization_id uuid,pos_order_id uuid);
       CREATE TABLE invoice_lines (invoice_id uuid,organization_id uuid,source_module text,source_record_id uuid);
       CREATE TABLE pos_payments (id uuid,organization_id uuid,order_id uuid);
@@ -96,6 +98,9 @@ describe("sales tax profiles, documents and ledger", () => {
       CREATE FUNCTION has_permission(text,text) RETURNS boolean LANGUAGE sql AS 'SELECT true';
       CREATE FUNCTION has_permission(text,text,text) RETURNS boolean LANGUAGE sql AS 'SELECT true';
       CREATE FUNCTION neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql AS 'SELECT true';
+      CREATE FUNCTION can_read_guest_ledger() RETURNS boolean LANGUAGE sql AS 'SELECT false';
+      CREATE FUNCTION in_my_branch_scope(uuid,uuid) RETURNS boolean LANGUAGE sql AS 'SELECT true';
+      CREATE FUNCTION is_org_admin_for(uuid) RETURNS boolean LANGUAGE sql AS 'SELECT false';
       CREATE FUNCTION neo_fact_timezone(uuid,uuid) RETURNS text LANGUAGE sql AS 'SELECT ''Africa/Nairobi''::text';
       SET check_function_bodies=off;
     `);
@@ -113,6 +118,7 @@ describe("sales tax profiles, documents and ledger", () => {
     await db.exec(migration("20261120173100_sales_tax_pos_documents_and_posting"));
     await db.exec(migration("20261120173200_sales_tax_finance_summary"));
     await db.exec(migration("20261121123300_pos_receipt_saved_tax_rates"));
+    await db.exec(migration("20261122162000_folio_document_saved_tax_rows"));
     await db.exec(`
       INSERT INTO organizations VALUES ('${org}');
       INSERT INTO chart_of_accounts(id,organization_id,code,category,name) VALUES
@@ -185,6 +191,27 @@ describe("sales tax profiles, documents and ledger", () => {
       const vatRows = rows[0]?.result.filter((row) => row.label.includes(" VAT ")) ?? [];
       expect(vatRows.map((row) => row.label)).toEqual(["8% VAT · Included","16% VAT · Included"]);
       expect(vatRows.reduce((sum,row) => sum+row.amount,0)).toBeCloseTo(Number(rows[0]?.vat),2);
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  });
+
+  it("separates proven folio tax components and keeps the remaining tax as recorded", async () => {
+    const folio = "82f10000-0000-4000-8000-000000000016";
+    await db.exec("BEGIN");
+    try {
+      await db.query("INSERT INTO folios VALUES ($1,$2,$3,'KES',$4)", [folio,org,branch,actor]);
+      await db.query(`INSERT INTO folio_lines (id,organization_id,source_record_uuid,source_module,folio_id,tax_amount,status,line_type)
+        VALUES (gen_random_uuid(),$2,$3,'pos',$1,18.30,'posted','charge'),
+          (gen_random_uuid(),$2,NULL,'room',$1,5,'posted','charge'),
+          (gen_random_uuid(),$2,NULL,'room',$1,100,'voided','charge')`, [folio,org,order]);
+      const load = (property: string) => db.query("SELECT neo_folio_document_tax_rows($1,$2) AS tax", [folio,property]);
+      expect((await load(branch)).rows).toEqual([{ tax: [
+        { label: "16% VAT · Included", amount: 16.27 },
+        { label: "2% Catering levy (LEVY) · Included", amount: 2.03 },
+        { label: "Other recorded tax", amount: 5 },
+      ] }]);
+      await expect(load(vat)).rejects.toThrow(/outside your scope/);
     } finally {
       await db.exec("ROLLBACK");
     }

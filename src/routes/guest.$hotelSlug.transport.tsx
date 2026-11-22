@@ -62,6 +62,7 @@ function TransportPage() {
   const [submittedReference, setSubmittedReference] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const submitting = useRef(false);
+  const retryIdentity = useRef<{ fingerprint: string; key: string } | null>(null);
 
   function chooseProduct(id: string) {
     if (submitting.current) return;
@@ -91,18 +92,24 @@ function TransportPage() {
       setFormError("Enter a whole number of bags.");
       return;
     }
+    const details = {
+      productId: productId || null,
+      pickupAt: pickup.toISOString(),
+      pickupPoint: pickupPoint.trim(),
+      destination: destination.trim(),
+      passengers,
+      luggage,
+      travelReference: travelReference.trim() || null,
+      notes: notes.trim() || null,
+    };
+    const fingerprint = JSON.stringify([ws.organization_id, ws.branch_id, customerId, details]);
     submitting.current = true;
     try {
-      const result = await request.mutateAsync({
-        productId: productId || null,
-        pickupAt: pickup.toISOString(),
-        pickupPoint: pickupPoint.trim(),
-        destination: destination.trim(),
-        passengers,
-        luggage,
-        travelReference: travelReference.trim() || null,
-        notes: notes.trim() || null,
-      });
+      if (retryIdentity.current?.fingerprint !== fingerprint) {
+        retryIdentity.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      const result = await request.mutateAsync({ ...details, requestKey: retryIdentity.current.key });
+      retryIdentity.current = null;
       setSubmittedReference(result.request_number);
       setPickupAt("");
       setPickupPoint("");

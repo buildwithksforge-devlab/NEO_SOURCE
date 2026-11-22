@@ -21,6 +21,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { documentTraceCode } from "./document-trace";
 import { receiptQrConfig } from "./receipt-qr";
 import { embedDocumentLogo } from "./document-logo.server";
+import { documentTaxTotals } from "./document-tax-totals";
 
 type ReceiptLine = {
   description?: string | null;
@@ -652,37 +653,24 @@ export async function buildThermalReceiptPdf(
   let paymentHeading = false;
   let totalShown = false;
   let taxHeading = false;
-  let taxCents = 0;
-  let taxRows = 0;
-  const drawTaxTotal = () => {
-    if (taxRows > 1) {
-      continueRoll(26);
-      drawPair("Total tax", money(taxCents / 100, currency), bold, bold, 8, 8);
-    }
-    taxRows = 0;
-    taxCents = 0;
-  };
-  for (const total of totals) {
-    const label = clean(total.label).replace(/^Tax(?=\s*·|$)/i, "Recorded tax");
+  for (const { row: total, tax: isTax } of documentTaxTotals(totals)) {
+    const label = clean(total.label);
     const value = money(total.amount, currency);
 
     if (!label || !value) continue;
 
-    const isTax = !totalShown && (/^Recorded tax$/i.test(label) || /·\s*(Included|Added)$/i.test(label));
-    if (!isTax && taxRows) drawTaxTotal();
     const emphasised =
       Boolean(total.emphasis) ||
       /^(total|amount due|balance due|grand total)$/i.test(label);
 
-    continueRoll(pairHeight(label, value, bold, bold, 10, 10) + 45);
+    const height = pairHeight(emphasised ? label.toUpperCase() : label, value, bold, bold, 10, 10);
+    continueRoll(height + 45);
     if (isTax) {
       if (!taxHeading) {
         drawLeft("TAX BREAKDOWN", margin, 7.5, bold);
         y -= 13;
         taxHeading = true;
       }
-      taxRows += 1;
-      taxCents += Math.round(Number(total.amount) * 100);
     }
     if (totalShown && !paymentHeading) {
       drawLeft("PAYMENTS & BALANCE", margin, 7.5, bold);
@@ -691,19 +679,17 @@ export async function buildThermalReceiptPdf(
     }
 
     if (emphasised) {
-      // Reserve a separate band above and below the entire wrapped total row.
-      y -= 2;
-      page.drawLine({start: {x: margin, y: y + 3}, end: {x: paperWidth - margin, y: y + 3}, thickness: 1.2, color: black});
-      y -= 10;
+      // A light panel remains legible on monochrome thermal stock.
+      page.drawRectangle({ x: margin, y: y - height - 9, width: contentWidth, height: height + 15,
+        color: rgb(0.94, 0.94, 0.94), borderColor: black, borderWidth: 0.6 });
+      y -= 6;
       totalShown ||= /^(total|grand total)$/i.test(label);
       drawPair(label.toUpperCase(), value, bold, bold, 10, 10);
-      page.drawLine({start: {x: margin, y: y + 1}, end: {x: paperWidth - margin, y: y + 1}, thickness: 1.2, color: black});
-      y -= 10;
+      y -= 12;
     } else {
       drawPair(label, value, regular, bold, 8, 8);
     }
   }
-  if (taxRows) drawTaxTotal();
 
   if (paymentMeta.length) {
     continueRoll(18 + estimateMetaHeight(paymentMeta));

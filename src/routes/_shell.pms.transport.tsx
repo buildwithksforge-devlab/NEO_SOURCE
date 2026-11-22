@@ -77,6 +77,7 @@ function useTransferRequests(filter: string) {
   const { applyTo, filterKey } = useActivePropertyFilter();
   return useQuery({
     queryKey: ["staff-transport", filter, filterKey],
+    refetchInterval: 30_000,
     queryFn: async () => {
       let query = applyTo(
         sb
@@ -107,11 +108,11 @@ function useTransferRequests(filter: string) {
 }
 
 function TransportPage() {
-  const { can } = useAuth();
+  const { can, isAdmin } = useAuth();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<string>("open");
   const requests = useTransferRequests(filter);
-  const mayManage = can("front-office", "requests.edit");
+  const mayManage = isAdmin || can("front-office", "requests.edit") || can("front-office", "requests.manage");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
   const setStatus = useMutation({
@@ -122,7 +123,14 @@ function TransportPage() {
       note?: string | null;
       riderId?: string | null;
     }) => {
-      const { data, error } = await guardedRpc(sb, "neo_transport_set_status", {
+      const { data, error } = await guardedRpc<{
+        ok?: boolean;
+        id?: string;
+        status?: string;
+        quoted_amount?: number;
+        assigned_rider_id?: string;
+        already_saved?: boolean;
+      }>(sb, "neo_transport_set_status", {
         _request: input.id,
         _status: input.status,
         _rider: input.riderId ?? null,
@@ -130,13 +138,23 @@ function TransportPage() {
         _note: input.note ?? null,
       });
       if (error) throw new Error(error.message);
+      if (data?.ok !== true || data.id !== input.id || data.status !== input.status ||
+        (input.riderId != null && data.assigned_rider_id !== input.riderId) ||
+        (input.amount != null && (data.quoted_amount == null || Number(data.quoted_amount) !== input.amount))) {
+        throw new Error("Could not confirm the saved transfer update. Check the request before retrying.");
+      }
       return data;
     },
-    onSuccess: () => {
-      toast.success("Transfer updated");
-      void qc.invalidateQueries({ queryKey: ["staff-transport"] });
+    onSuccess: (saved) => {
+      toast.success(saved.already_saved ? "This transfer update was already saved" : "Transfer updated");
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["staff-transport"] }),
+        qc.invalidateQueries({ queryKey: ["transport-requests"] }),
+      ]);
+    },
   });
 
   const rows = requests.data ?? [];
@@ -168,6 +186,7 @@ function TransportPage() {
         <QueryState
           isLoading={requests.isLoading}
           error={requests.error}
+          onRetry={() => void requests.refetch()}
           isEmpty={rows.length === 0}
           empty={
             <EmptyState
@@ -237,7 +256,7 @@ function TransportPage() {
                               />
                               <Button
                                 size="sm"
-                                disabled={setStatus.isPending}
+                                disabled={setStatus.isPending || !amounts[id]?.trim() || !Number.isFinite(Number(amounts[id])) || Number(amounts[id]) < 0}
                                 onClick={() =>
                                   setStatus.mutate({
                                     id,
@@ -312,16 +331,17 @@ function AssignDriver({
   onAssign: (riderId: string) => void;
 }) {
   const candidates = useTransportRiderCandidates(requestId);
-  const rows = candidates.data ?? [];
+  const rows = (candidates.data ?? []).filter((r) => r.eligible);
+  if (candidates.isError) {
+    return <Button type="button" size="sm" variant="outline" onClick={() => void candidates.refetch()}>Retry drivers</Button>;
+  }
   return (
-    <Select value={assigned ?? ""} onValueChange={onAssign} disabled={disabled}>
+    <Select value={assigned ?? ""} onValueChange={onAssign} disabled={disabled || candidates.isLoading || !rows.length}>
       <SelectTrigger className="w-48">
-        <SelectValue placeholder={rows.length ? "Assign driver" : "No eligible drivers"} />
+        <SelectValue placeholder={candidates.isLoading ? "Loading drivers…" : rows.length ? "Assign driver" : "No eligible drivers"} />
       </SelectTrigger>
       <SelectContent>
-        {rows
-          .filter((r) => r.eligible)
-          .map((r) => (
+        {rows.map((r) => (
             <SelectItem key={r.rider_id} value={r.rider_id}>
               {r.display_name ?? r.rider_code ?? "Driver"} · {r.active_load} active
             </SelectItem>

@@ -13,6 +13,10 @@ const setup = `
   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT '${user}'::uuid $$;
   CREATE FUNCTION current_org_id() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT '${org}'::uuid $$;
   CREATE FUNCTION neo_branch_in_scope(uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT $1 IN ('${west}'::uuid,'${east}'::uuid) $$;
+  CREATE FUNCTION in_my_branch_scope(uuid,uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT $2 = '${west}'::uuid $$;
+  CREATE FUNCTION is_org_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
+  CREATE FUNCTION has_permission(VARIADIC text[]) RETURNS boolean LANGUAGE sql AS
+    $$ SELECT coalesce(current_setting('test.transport_staff',true) = 'on',false) AND $1 = ARRAY['front-office','requests','edit'] $$;
   CREATE FUNCTION neo_department_catalogue_key(text) RETURNS text LANGUAGE sql STABLE AS $$ SELECT lower($1) $$;
   CREATE TABLE branches(id uuid PRIMARY KEY,organization_id uuid,active boolean,currency text,name text);
   CREATE TABLE neo_public_experience(organization_id uuid,branch_id uuid,discoverable boolean,doors jsonb);
@@ -35,7 +39,11 @@ const setup = `
   CREATE TABLE transport_products(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,active boolean,category text,max_passengers int,base_price numeric,currency text);
   CREATE TABLE transport_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,branch_id uuid,customer_id uuid,reservation_id uuid,
     product_id uuid,request_number text,category text,pickup_at timestamptz,pickup_point text,destination text,passengers int,luggage_count int,
-    travel_reference text,notes text,quoted_amount numeric,currency text,status text,created_by uuid);
+    travel_reference text,notes text,quoted_amount numeric,currency text,status text,created_by uuid,
+    assigned_rider_id uuid,assignment_note text,handled_by uuid,updated_at timestamptz);
+  CREATE TABLE rider_profiles(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,active boolean,availability_status text,
+    rider_code text,display_name text,vehicle_type text);
+  CREATE TABLE audit_logs(organization_id uuid,user_id uuid,user_name text,action text,module text,record_id text,previous_value jsonb,new_value jsonb);
   CREATE TABLE carts(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,customer_id uuid,status text,fulfilment_type text,notes text);
   CREATE TABLE pos_orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,branch_id uuid,order_number text,order_type text,
     order_source text,customer_id uuid,stay_id uuid,room_id uuid,folio_id uuid,guest_count int,guest_name text,contact_phone text,status text,
@@ -47,7 +55,8 @@ const setup = `
   CREATE TABLE delivery_orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),source_cart_id uuid UNIQUE,currency text,organization_id uuid,branch_id uuid,
     pos_order_id uuid,customer_id uuid,auth_user_id uuid,order_number text,fulfilment_type text,contact_name text,contact_phone text,subtotal numeric,
     tax_total numeric,discount_total numeric,service_charge_total numeric,delivery_fee numeric,tip_amount numeric,grand_total numeric,payment_method text,
-    payment_status text,estimated_prep_minutes int,estimated_delivery_at timestamptz,order_status text,kitchen_status text,notes text,created_at timestamptz DEFAULT now());
+    payment_status text,estimated_prep_minutes int,estimated_delivery_at timestamptz,order_status text,kitchen_status text,notes text,
+    created_at timestamptz DEFAULT now(),rider_id uuid,dispatch_status text);
   CREATE TABLE delivery_order_status_history(organization_id uuid,delivery_order_id uuid,status_kind text,new_status text,source text);
   CREATE TABLE production_routes(order_id uuid, organization_id uuid);
   CREATE TABLE departments(id uuid PRIMARY KEY,organization_id uuid,branch_id uuid,name text,catalogue_key text,active boolean,department_status text);
@@ -102,6 +111,8 @@ describe("guest operations and worker choices follow the selected property", () 
     db = new PGlite();
     await db.exec(setup);
     await db.exec(readFileSync("supabase/migrations/20261120080000_scope_guest_operations_property.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/20261122160000_guest_transport_request_retry.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/20261122161000_transport_staff_action_evidence.sql", "utf8"));
   }, 90_000);
   afterAll(async () => { await db?.close(); });
 
@@ -134,6 +145,58 @@ describe("guest operations and worker choices follow the selected property", () 
       [org, west, shuttle])).rejects.toThrow("Transfer option is not available");
     await expect(db.query("SELECT neo_guest_create_request($1,$2,'concierge','Please bring towels','normal')", [org, id(999)]))
       .rejects.toThrow("Select an active property");
+  });
+
+  it("recovers a saved transfer after a lost reply and keeps the same request key scoped by property", async () => {
+    const requestKey = id(998);
+    const grants = await db.query(`
+      SELECT has_function_privilege('anon', signature, 'EXECUTE') AS anon_allowed,
+             has_function_privilege('authenticated', signature, 'EXECUTE') AS guest_allowed
+      FROM (VALUES ('neo_guest_request_transport(uuid,uuid,uuid,timestamptz,text,text,integer,integer,text,text,uuid)')) AS rpc(signature)
+    `);
+    expect(grants.rows).toEqual([{ anon_allowed: false, guest_allowed: true }]);
+    const submit = (branch: string, product: string) => db.query(`
+      SELECT neo_guest_request_transport($1,$2,$3,now()+interval '2 hours','Lobby','Airport',2,1,NULL,NULL,$4) AS saved
+    `, [org, branch, product, requestKey]);
+    await expect(submit(west, shuttle)).rejects.toThrow("Transfer option is not available");
+    const first = await submit(west, sharedProduct);
+    expect(first.rows).toEqual([{ saved: expect.objectContaining({ status: "quoted", quoted_amount: 3000 }) }]);
+    expect((await submit(west, sharedProduct)).rows).toEqual(first.rows);
+    expect((await submit(east, shuttle)).rows).toEqual([{ saved: expect.objectContaining({ status: "quoted", quoted_amount: 25 }) }]);
+    const saved = await db.query("SELECT branch_id, count(*)::int AS requests FROM transport_requests WHERE guest_request_key=$1 GROUP BY branch_id", [requestKey]);
+    expect(saved.rows).toHaveLength(2);
+    expect(saved.rows).toEqual(expect.arrayContaining([{ branch_id: west, requests: 1 }, { branch_id: east, requests: 1 }]));
+  });
+
+  it("saves authorized transfer changes once and refuses an out-of-scope driver or re-opening a closed transfer", async () => {
+    const request = id(991), otherPropertyRequest = id(992), westRider = id(993), eastRider = id(994);
+    await db.query(`INSERT INTO transport_requests (id,organization_id,branch_id,status) VALUES
+      ($1,$3,$4,'requested'),($2,$3,$5,'requested')`, [request, otherPropertyRequest, org, west, east]);
+    await db.query(`INSERT INTO rider_profiles (id,organization_id,branch_id,active,availability_status) VALUES
+      ($1,$3,$4,true,'available'),($2,$3,$5,true,'available')`,
+      [westRider, eastRider, org, west, east]);
+    const update = (requestId: string, status: string, rider: string | null = null, amount: number | null = null) =>
+      db.query("SELECT neo_transport_set_status($1,$2,$3,$4,NULL) AS saved", [requestId, status, rider, amount]);
+    await expect(update(request, "quoted", null, 2500)).rejects.toThrow(/Not permitted/);
+    await expect(db.query("SELECT * FROM neo_transport_rider_candidates($1)", [request])).rejects.toThrow(/Not permitted/);
+    await db.exec("SET test.transport_staff='on'");
+    expect((await db.query("SELECT rider_id,eligible FROM neo_transport_rider_candidates($1)", [request])).rows)
+      .toEqual([{ rider_id: westRider, eligible: true }]);
+    await expect(update(otherPropertyRequest, "quoted", null, 2500)).rejects.toThrow(/outside your property/);
+    await expect(update(request, "quoted")).rejects.toThrow(/quote amount/);
+    expect((await update(request, "quoted", null, 2500)).rows).toMatchObject([{ saved: { id: request, status: "quoted", quoted_amount: 2500 } }]);
+    await update(request, "confirmed");
+    await expect(update(request, "quoted", null, 2500)).rejects.toThrow(/transfer has moved on/);
+    await expect(update(request, "driver-assigned", eastRider)).rejects.toThrow(/eligible driver/);
+    expect((await update(request, "driver-assigned", westRider)).rows).toMatchObject([{ saved: { assigned_rider_id: westRider } }]);
+    expect((await update(request, "driver-assigned", westRider)).rows).toMatchObject([{ saved: { already_saved: true } }]);
+    await update(request, "completed");
+    await expect(update(request, "confirmed")).rejects.toThrow(/already closed/);
+    expect((await db.query("SELECT count(*)::int AS changes FROM audit_logs WHERE record_id=$1", [request])).rows)
+      .toEqual([{ changes: 4 }]);
+    expect((await db.query("SELECT status, assigned_rider_id FROM transport_requests WHERE id=$1", [request])).rows)
+      .toEqual([{ status: "completed", assigned_rider_id: westRider }]);
+    await db.exec("RESET test.transport_staff");
   });
 
   it("keeps folios, receipts and booking links on their own property", async () => {

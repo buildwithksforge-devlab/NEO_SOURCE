@@ -1334,8 +1334,12 @@ export function useRiderAdvance() {
   return useMutation({
     mutationFn: async (input: { orderId: string; to: string }) => {
       guardPreview();
-      const { error } = await guardedRpc(sb, "delivery_rider_advance", { _order: input.orderId, _to: input.to });
+      const { data, error } = await guardedRpc(sb, "delivery_rider_advance", { _order: input.orderId, _to: input.to });
       if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error(typeof result["detail"] === "string" ? result["detail"] : "The delivery update could not be confirmed.");
+      }
     },
     onSuccess: () => {
       toast.success("Delivery updated");
