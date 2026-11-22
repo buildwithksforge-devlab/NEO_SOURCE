@@ -22,6 +22,7 @@ const DEFAULT_BASE: Record<string, string> = {
 };
 
 export const DEFAULT_MODEL = "google/gemini-3-flash-preview";
+const PROVIDER_TIMEOUT_MS = 20_000;
 
 /** Resolves the provider for an organisation, falling back to the platform gateway. */
 export async function resolveAiProvider(organizationId: string | null): Promise<AiProviderConfig> {
@@ -92,11 +93,19 @@ export async function callProvider(
     return { ok: false, text: null, status: "not_configured", detail: "No AI provider key is configured." };
   }
 
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, PROVIDER_TIMEOUT_MS);
+
   try {
     const res = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
       body: JSON.stringify({ model: config.model, temperature: 0.2, max_tokens: maxTokens, messages }),
+      signal: controller.signal,
     });
 
     if (res.ok) {
@@ -127,6 +136,13 @@ export async function callProvider(
     }
     return { ok: false, text: null, status: "unavailable", httpStatus: res.status, detail: "AI temporarily unavailable." };
   } catch {
-    return { ok: false, text: null, status: "unavailable", detail: "The AI provider could not be reached." };
+    return {
+      ok: false,
+      text: null,
+      status: "unavailable",
+      detail: timedOut ? "The AI provider timed out. Try again shortly." : "The AI provider could not be reached.",
+    };
+  } finally {
+    clearTimeout(timeout);
   }
 }

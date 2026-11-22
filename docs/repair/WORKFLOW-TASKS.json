@@ -60,10 +60,10 @@
       "id": "WF17-T02",
       "chains": ["WF17", "WF18", "WF23"],
       "title": "Protect whole-charge group master transfers and company invoice receipt settlement",
-      "status": "AWAITING_INSTALLATION",
+      "status": "AWAITING_LIVE_RESULTS",
       "local_evidence": ["A whole posted charge moves once to its verified group master and preserves the original reversal and tax amount. A company invoice receipt retry returns the saved receipt and journal, including after full settlement."],
-      "live_evidence": ["The 07:18:07 export confirms the receipt function matches the reviewed LF definition and the folio transfer is still on its supported baseline. Both have authenticated execution and no anonymous execution. The finance preflight now recognises LF and CRLF."],
-      "next_action": "Apply the guarded folio transfer migration, then rerun receivables-and-folio-transfer-preflight.sql and compare controlled property receipts, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
+      "live_evidence": ["The 07:28:52 export confirms both routines are installed and match the reviewed fingerprints. Both grant execution to authenticated callers and deny anonymous execution."],
+      "next_action": "Compare controlled property receipts, folio transfers, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
       "live_acceptance": "OPEN"
     },
     {
@@ -122,11 +122,10 @@
     {
       "id": "WF05-T01",
       "chains": ["WF04", "WF05", "WF06", "WF33"],
-      "title": "Validate receiving custody and requested recount rollout",
+      "title": "Align GRN creation with Receiving Clerk ownership",
       "status": "AWAITING_INSTALLATION",
-      "source_commit": "b7b4244",
-      "local_evidence": ["71 focused tests passed across receiving, stores, GRN documents and supplier payables. The production client retains the current Storekeeper count when the server omits recount flags. The migration fixture verified independent recount, retry, approval, one stock posting, GRN data and audit. The Preview database returned PGRST202 for neo_request_receiving_recount."],
-      "next_action": "Run receiving-custody-preflight.sql and confirm all six baseline definitions before applying 20261120173000_receiving_custody_on_request.sql. Run receiving-custody-postflight.sql after installation. Then verify independent review, requested recount, durable GRN retrieval and the linked payable with controlled property records.",
+      "local_evidence": ["A separate reviewer approves the clerk's recorded quantities. The clerk can then post their own approved count once, with only accepted quantities affecting stock and accrual. Excess accepted quantities and unresolved discrepancies require correction before approval or posting."],
+      "next_action": "Run clerk-owned-grn-preflight.sql and apply 20261122082000_clerk_owned_grn.sql to supported definitions. Confirm each routine is installed, then check a controlled delivery from independent review through clerk-created GRN, accepted stock and Finance accrual. Requested recount is outside this workflow.",
       "live_acceptance": "OPEN"
     },
     {
@@ -193,6 +192,44 @@
       "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history.", "Rider Active Job and Home share the same handover form. Active Job completes the selected order in place, with PIN, recipient, cash for cash orders and visible server rejection."],
       "live_evidence": ["Preview build 1de6c43a2f96143c serves the Guest Transfers, Orders and Services routes and the new Transfer and Orders assets."],
       "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T03",
+      "chains": ["WF01", "WF34"],
+      "title": "Keep AI property access and displayed answer scope consistent",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/lib/ai-assistant.functions.ts", "src/lib/intelligence-ask.functions.ts", "src/routes/_shell.ai-insights.tsx"],
+      "roles": ["organisation-wide staff", "technical staff", "branch-scoped staff"],
+      "owning_rpc": ["current_access_scope", "current_branch_ids", "bi_kpis", "neo_intelligence", "neo_assert_reporting_scope"],
+      "downstream_effects": ["scoped KPI read", "local or configured AI narrative", "AI query and usage logs"],
+      "confirmed_problem": "The legacy assistant compared database scope values with UI labels. Organisation and technical staff without assigned properties were refused or reduced to one property. The live Ask NEØ route accepted a browser-supplied property label for its answer, so a valid scoped result could be mislabelled as another hotel.",
+      "local_evidence": ["Thirty-three focused assistant, intelligence and automation checks passed. Four more request-level checks prove a browser label cannot rename the scoped property, an unavailable property name stays neutral, and refused current or prior periods are not used as comparison evidence. Four isolated PostgreSQL checks execute the production reporting guard with synthetic tenants, staff and properties. Typecheck, migration version validation, device catalogue, production build and public-route smoke passed with a synthetic Supabase configuration."],
+      "next_action": "Rebase onto the owner's latest pushed repair branch, rerun typecheck and focused checks, verify the installed reporting guard rejects direct out-of-scope RPC reads, then hand signed-in Ask NEØ acceptance to the owner. The legacy askAssistant server function has no current UI caller.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T04",
+      "chains": ["WF01", "WF12", "WF16", "WF30", "WF34"],
+      "title": "Trace every sidebar destination and reachable role-specific route",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/lib/navigation.ts", "src/lib/nav-permissions.ts", "src/routeTree.gen.ts", "src/routes"],
+      "local_evidence": ["The reproducible static inventory lists 191 sidebar destinations and 406 generated route entries. Every sidebar destination has a generated route after normalising index slashes. It identifies 198 additional direct or hidden route entries requiring role, action and downstream review. This proves only route presence, not permissions or workflow success."],
+      "next_action": "Check hidden routes, tabs, drawers, dialogs, controls and deep links in the source against the user's sidebar list. For each consequential action, record server authorization, saved effects, downstream queue or ledger, retry and failure evidence before changing its status.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T05",
+      "chains": ["WF34"],
+      "title": "Bound AI provider response time",
+      "status": "LOCAL_VERIFIED",
+      "source_routes": ["src/lib/ai-provider.server.ts", "src/lib/ai-provider.functions.ts", "src/routes/_shell.ai-insights.tsx"],
+      "roles": ["workspace AI administrator", "staff with AI access"],
+      "owning_function": ["callProvider", "generateNarrative", "testAiProvider"],
+      "downstream_effects": ["provider request", "recoverable unavailable status", "AI usage record or connection check"],
+      "confirmed_problem": "The server waited indefinitely for a stalled external provider, leaving the assistant or connection check pending.",
+      "local_evidence": ["A mocked provider that never responds is aborted after 20 seconds and returns an unavailable timeout detail. A successful response clears the deadline. Seven focused tests and typecheck passed without any live provider call."],
+      "next_action": "Integrate this batch into the owner's latest source, rerun checks, and verify the installed and deployed version separately. Signed-in provider acceptance belongs to the owner; no real provider request was made by the local tests.",
       "live_acceptance": "OPEN"
     }
   ]

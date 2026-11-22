@@ -32,7 +32,7 @@ const ROOT = process.cwd();
 const DIST = path.join(ROOT, ".output");
 const SKIP_BUILD = process.argv.includes("--no-build");
 const PORT = Number(process.env.SMOKE_PORT ?? 4173);
-const ROUTES = ["/", "/auth"];
+const ROUTES = ["/", "/auth", "/privacy", "/terms"];
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -116,12 +116,27 @@ async function smokeRoutes() {
     globalThis.fetch = originalFetch;
   }
 
+  const secureEntry = await handler.fetch(
+    new Request("http://neo-preview.neo-hospitality.workers.dev/auth?redirect=%2Fmy-work"),
+    process.env,
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  if (secureEntry.status !== 308 ||
+      secureEntry.headers.get("location") !== "https://neo-preview.neo-hospitality.workers.dev/auth?redirect=%2Fmy-work") {
+    throw new Error("Preview did not redirect HTTP to the same HTTPS path and query");
+  }
+  console.log("  ✓ Preview HTTP redirects to HTTPS");
+
   for (const route of ROUTES) {
     const res = await handler.fetch(new Request(`http://localhost:${PORT}${route}`), process.env, {
       waitUntil() {},
       passThroughOnException() {},
     });
     const body = await res.text();
+    if ((route === "/privacy" || route === "/terms") &&
+        (res.status !== 200 || !body.includes("NEO Group Africa Technologies Ltd"))) {
+      throw new Error(`${route} did not render the legal document (HTTP ${res.status})`);
+    }
     if (res.status >= 500) throw new Error(`${route} → HTTP ${res.status}: ${body.slice(0, 300)}`);
     if (/"unhandled"\s*:\s*true/.test(body)) throw new Error(`${route} returned a swallowed SSR error`);
     if (/Cannot destructure property/.test(body)) {

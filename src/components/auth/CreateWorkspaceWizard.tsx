@@ -400,14 +400,19 @@ export function CreateWorkspaceWizard() {
                 />
               </Field>
             </div>
-            <label className="flex items-start gap-3 text-sm text-neo-steel">
+            <div className="flex items-start gap-3 text-sm text-neo-steel">
               <Checkbox
                 checked={terms}
                 onCheckedChange={(v) => setTerms(Boolean(v))}
                 aria-label="Accept terms and privacy policy"
               />
-              I accept the NEØ terms of service and privacy policy.
-            </label>
+              <span>
+                I accept the NEØ{" "}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline">Terms and Conditions</a>
+                {" "}and{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>.
+              </span>
+            </div>
           </>
         ) : null}
 

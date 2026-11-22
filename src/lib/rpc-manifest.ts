@@ -697,7 +697,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_bank_mark_line_reconciled: "authenticated",
   neo_payment_intent_set_provider_payload: "authenticated",
   neo_delivery_dispatch_open: "authenticated",
-  neo_delivery_dispatch_mark_sent: "authenticated",
   neo_delivery_dispatch_claim: "authenticated",
   neo_station_login_admin: "authenticated",
   neo_station_login_destination: "authenticated",

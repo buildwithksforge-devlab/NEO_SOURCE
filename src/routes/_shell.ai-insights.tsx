@@ -325,7 +325,6 @@ function IntelligencePage() {
           branchId: scope.branchId,
           from: scope.from,
           to: scope.to,
-          propertyLabel,
         },
       });
       setTurns((prev) =>

@@ -193,6 +193,11 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const url = new URL(request.url);
+    if (url.origin === "http://neo-preview.neo-hospitality.workers.dev") {
+      url.protocol = "https:";
+      return Response.redirect(url, 308);
+    }
     try {
       const managedService = await forwardManagedServiceRequest(request, env && typeof env === "object" ? (env as Record<string, unknown>) : {});
       if (managedService) return managedService;

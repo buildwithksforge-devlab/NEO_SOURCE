@@ -16,9 +16,11 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContinueRouteImport } from './routes/continue'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PlatformConsoleRouteImport } from './routes/platform-console'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SessionExpiredRouteImport } from './routes/session-expired'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StationScreenRouteImport } from './routes/station-screen'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as ShellAiInsightsRouteImport } from './routes/_shell.ai-insights'
 import { Route as ShellAnalyticsRouteImport } from './routes/_shell.analytics'
@@ -451,6 +453,11 @@ const PlatformConsoleRoute = PlatformConsoleRouteImport.update({
   path: '/platform-console',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SessionExpiredRoute = SessionExpiredRouteImport.update({
   id: '/session-expired',
   path: '/session-expired',
@@ -464,6 +471,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const StationScreenRoute = StationScreenRouteImport.update({
   id: '/station-screen',
   path: '/station-screen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnauthorizedRoute = UnauthorizedRouteImport.update({
@@ -2518,9 +2530,11 @@ export interface FileRoutesByFullPath {
   '/continue': typeof ContinueRoute
   '/onboarding': typeof OnboardingRoute
   '/platform-console': typeof PlatformConsoleRoute
+  '/privacy': typeof PrivacyRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/station-screen': typeof StationScreenRoute
+  '/terms': typeof TermsRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/ai-insights': typeof ShellAiInsightsRoute
   '/analytics': typeof ShellAnalyticsRouteWithChildren
@@ -2926,9 +2940,11 @@ export interface FileRoutesByTo {
   '/continue': typeof ContinueRoute
   '/onboarding': typeof OnboardingRoute
   '/platform-console': typeof PlatformConsoleRoute
+  '/privacy': typeof PrivacyRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/station-screen': typeof StationScreenRoute
+  '/terms': typeof TermsRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/ai-insights': typeof ShellAiInsightsRoute
   '/approvals': typeof ShellApprovalsRoute
@@ -3317,9 +3333,11 @@ export interface FileRoutesById {
   '/continue': typeof ContinueRoute
   '/onboarding': typeof OnboardingRoute
   '/platform-console': typeof PlatformConsoleRoute
+  '/privacy': typeof PrivacyRoute
   '/session-expired': typeof SessionExpiredRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/station-screen': typeof StationScreenRoute
+  '/terms': typeof TermsRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/_shell/ai-insights': typeof ShellAiInsightsRoute
   '/_shell/analytics': typeof ShellAnalyticsRouteWithChildren
@@ -3727,9 +3745,11 @@ export interface FileRouteTypes {
     | '/continue'
     | '/onboarding'
     | '/platform-console'
+    | '/privacy'
     | '/session-expired'
     | '/sitemap.xml'
     | '/station-screen'
+    | '/terms'
     | '/unauthorized'
     | '/ai-insights'
     | '/analytics'
@@ -4135,9 +4155,11 @@ export interface FileRouteTypes {
     | '/continue'
     | '/onboarding'
     | '/platform-console'
+    | '/privacy'
     | '/session-expired'
     | '/sitemap.xml'
     | '/station-screen'
+    | '/terms'
     | '/unauthorized'
     | '/ai-insights'
     | '/approvals'
@@ -4525,9 +4547,11 @@ export interface FileRouteTypes {
     | '/continue'
     | '/onboarding'
     | '/platform-console'
+    | '/privacy'
     | '/session-expired'
     | '/sitemap.xml'
     | '/station-screen'
+    | '/terms'
     | '/unauthorized'
     | '/_shell/ai-insights'
     | '/_shell/analytics'
@@ -4935,9 +4959,11 @@ export interface RootRouteChildren {
   ContinueRoute: typeof ContinueRoute
   OnboardingRoute: typeof OnboardingRoute
   PlatformConsoleRoute: typeof PlatformConsoleRoute
+  PrivacyRoute: typeof PrivacyRoute
   SessionExpiredRoute: typeof SessionExpiredRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StationScreenRoute: typeof StationScreenRoute
+  TermsRoute: typeof TermsRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
   DeliveryHotelSlugRoute: typeof DeliveryHotelSlugRouteWithChildren
   GuestHotelSlugRoute: typeof GuestHotelSlugRouteWithChildren
@@ -5011,6 +5037,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformConsoleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/session-expired': {
       id: '/session-expired'
       path: '/session-expired'
@@ -5030,6 +5063,13 @@ declare module '@tanstack/react-router' {
       path: '/station-screen'
       fullPath: '/station-screen'
       preLoaderRoute: typeof StationScreenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/unauthorized': {
@@ -8788,9 +8828,11 @@ const rootRouteChildren: RootRouteChildren = {
   ContinueRoute: ContinueRoute,
   OnboardingRoute: OnboardingRoute,
   PlatformConsoleRoute: PlatformConsoleRoute,
+  PrivacyRoute: PrivacyRoute,
   SessionExpiredRoute: SessionExpiredRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StationScreenRoute: StationScreenRoute,
+  TermsRoute: TermsRoute,
   UnauthorizedRoute: UnauthorizedRoute,
   DeliveryHotelSlugRoute: DeliveryHotelSlugRouteWithChildren,
   GuestHotelSlugRoute: GuestHotelSlugRouteWithChildren,

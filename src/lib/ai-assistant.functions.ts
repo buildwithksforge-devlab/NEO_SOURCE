@@ -111,7 +111,9 @@ export const askAssistant = createServerFn({ method: "POST" })
     const scope = String(scopeRes.data ?? "personal");
     const branchRes = await client.rpc("current_branch_ids");
     const myBranches = Array.isArray(branchRes.data) ? (branchRes.data as string[]) : [];
-    const orgWide = isAdmin.data === true || scope === "organization" || scope === "all";
+    // Match the values returned by current_access_scope() in the database.
+    // 'organization' and 'all' are UI labels, not database access levels.
+    const orgWide = isAdmin.data === true || scope === "organisation" || scope === "technical";
 
     let branchScope = data.branchId;
     if (!orgWide) {

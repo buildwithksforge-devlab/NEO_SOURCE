@@ -13,6 +13,7 @@ import { publishedNightlyRate } from '@/lib/guest-presentation';
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { BrowserStorageNotice } from "./BrowserStorageNotice";
 import { useQuery } from "@tanstack/react-query";
 import { PoweredByNeo, PublicCreatorCredit } from "@/components/public/PublicAppShell";
 import {
@@ -687,6 +688,9 @@ export function FrontDoorScreen() {
             >
               Put your hotel on NEØ
             </Link>
+            <Link to="/privacy" className="text-white/75 hover:underline">Privacy Policy</Link>
+            <Link to="/terms" className="text-white/75 hover:underline">Terms and Conditions</Link>
+            <BrowserStorageNotice />
           </nav>
         </div>
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 pb-10 text-xs text-white/70 sm:flex-row sm:items-center sm:justify-between">
