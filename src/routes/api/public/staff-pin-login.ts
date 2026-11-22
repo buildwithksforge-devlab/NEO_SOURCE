@@ -103,6 +103,14 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
           );
         }
 
+        try {
+          const { resolveStaffPin } = await import("@/lib/staff-pin-resolver.server");
+          const resolved = await resolveStaffPin(request, deviceToken, pin);
+          if (resolved) return response(resolved.body, resolved.status);
+        } catch {
+          return response({ error: "server_error", message: "Staff PIN sign-in is temporarily unavailable." }, 502);
+        }
+
         const controller = new AbortController();
 
         const timeout = setTimeout(() => controller.abort(), 15_000);
