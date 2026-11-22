@@ -55,6 +55,7 @@ type ReviewCount = {
   submitted_by_current_user?: boolean;
   custody_status: "pending" | "acknowledged" | "matched" | "discrepancy" | "recount-required" | "own-recount" | "own-custody";
   recount_requested?: boolean;
+  clerk_grn_workflow?: boolean;
   recount_reason?: string | null;
   custody_lines: StorekeeperLine[] | null;
   prior_custody_lines?: StorekeeperLine[] | null;
@@ -142,7 +143,7 @@ function Page() {
             toast.warning("GRN created and stock received. Finance accrual needs attention.");
           else toast.success("Receiving approved, stock updated, and GRN generated.");
         } else {
-          toast.info("Count approved. A receiving manager must now select Post Approved GRN below; stock has not moved yet.");
+          toast.info("Count approved. The Receiving Clerk can now create the GRN from Post GRNs.");
         }
       } else {
         toast.success("Receiving review decision recorded.");
@@ -156,33 +157,8 @@ function Page() {
     },
   });
 
-  const recount = useMutation({
-    mutationFn: async ({ countId, reason }: { countId: string; reason: string }) => {
-      const { data, error } = await guardedRpc<boolean>(db, "neo_request_receiving_recount", {
-        _count_id: countId,
-        _reason: reason,
-      });
-      if (error || data !== true) throw new Error(error?.message ?? "The recount was not requested.");
-    },
-    onSuccess: async () => {
-      toast.success("Recount requested from Stores.");
-      await invalidateSupplyViews(queryClient);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  function requestRecount(count: ReviewCount) {
-    if (count.recount_requested !== false || decide.isPending || recount.isPending) return;
-    const reason = notes[count.count_id]?.trim();
-    if (!reason) {
-      toast.error("Enter a reason for the recount.");
-      return;
-    }
-    recount.mutate({ countId: count.count_id, reason });
-  }
-
   function submitDecision(count: ReviewCount, decision: "approved" | "rejected") {
-    if (decide.isPending || recount.isPending) return;
+    if (decide.isPending) return;
     const reason = notes[count.count_id]?.trim() ?? "";
 
     if (!reason) {
@@ -330,7 +306,7 @@ function Page() {
                       <tr className="border-b text-muted-foreground">
                         <th className="p-3">PO item</th>
                         <th className="p-3 text-right">Ordered</th>
-                        <th className="p-3 text-right">Previously received</th>
+                        <th className="p-3 text-right">{count.clerk_grn_workflow ? "Previously accepted" : "Previously received"}</th>
                         <th className="p-3 text-right">Outstanding</th>
                         <th className="p-3 text-right">Delivered</th>
                         <th className="p-3 text-right">Rejected</th>
@@ -417,14 +393,15 @@ function Page() {
                 </div>
 
                 <p className="text-sm" role="status">
-                  {count.custody_status === "pending" && (typeof count.recount_requested === "boolean"
-                    ? "Custody confirmation is pending." : "Awaiting independent Storekeeper count.")}
+                  {count.custody_status === "pending" && (count.clerk_grn_workflow
+                    ? "Review the clerk’s quantities against the purchase order."
+                    : "Awaiting the receiving workflow database update or an existing custody check.")}
                   {count.custody_status === "acknowledged" && "Stores confirmed custody."}
                   {count.custody_status === "matched" && "The independent Storekeeper count matched."}
                   {count.custody_status === "recount-required" && "Awaiting the requested Storekeeper recount."}
                   {count.custody_status === "own-recount" && "A different reviewer must approve this recount."}
                   {count.custody_status === "own-custody" && "Another reviewer must approve this delivery."}
-                  {count.custody_status === "discrepancy" && "The independent Storekeeper count differs. Resolve the discrepancy before approval."}
+                  {count.custody_status === "discrepancy" && "A discrepancy is on record. Reject with a reason so the clerk can correct the submission."}
                 </p>
                 {count.recount_reason && <p className="text-sm">Recount reason: {count.recount_reason}</p>}
                 {[
@@ -456,23 +433,19 @@ function Page() {
                     />
 
                     <div className="flex flex-wrap justify-end gap-3">
-                      {count.recount_requested === false && (
-                        <Button variant="outline" disabled={decide.isPending || recount.isPending} onClick={() => requestRecount(count)}>
-                          Request recount
-                        </Button>
-                      )}
                       <Button
                         variant="destructive"
-                        disabled={decide.isPending || recount.isPending}
+                        disabled={decide.isPending}
                         onClick={() => submitDecision(count, "rejected")}
                       >
                         Reject Count
                       </Button>
 
                       <Button
-                        disabled={decide.isPending || recount.isPending || hasExcess ||
-                          !(count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
-                            ["pending", "acknowledged"].includes(count.custody_status)))}
+                        disabled={decide.isPending || hasExcess ||
+                          !(count.clerk_grn_workflow ? count.custody_status !== "discrepancy" :
+                            count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
+                              ["pending", "acknowledged"].includes(count.custody_status)))}
                         onClick={() => submitDecision(count, "approved")}
                       >
                         Approve Count
@@ -481,8 +454,7 @@ function Page() {
 
                     {hasExcess && (
                       <p className="text-xs text-destructive">
-                        Approval is blocked because this delivery exceeds the outstanding
-                        purchase-order quantity.
+                        The accepted quantity exceeds the outstanding purchase order. Correct the count or purchase order before approving.
                       </p>
                     )}
 

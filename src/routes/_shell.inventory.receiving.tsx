@@ -1,4 +1,3 @@
-import { ReceivingCustody } from "@/components/inventory/ReceivingCustody";
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
 import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
 import { useEffect, useRef, useState } from "react";
@@ -60,8 +59,7 @@ export const Route = createFileRoute("/_shell/inventory/receiving")({
 
 function Page() {
   const { can, permissionsLoaded } = useAuth();
-  const canTakeCustody = permissionsLoaded && can("stores", "issues", "create");
-  const canPost = permissionsLoaded && can("procurement", "receiving.manage");
+  const canPost = permissionsLoaded && (can("procurement", "receiving", "create") || can("procurement", "receiving.manage"));
   const [view, setView] = useState("count");
   const orders = useReceivableOrders();
   const queryClient = useQueryClient();
@@ -242,25 +240,19 @@ function Page() {
       <PageHeader
         title="Blind Goods Receiving"
         icon={PackageCheck}
-        description="Record deliveries, accept custody, and find saved goods received notes."
+        description="Submit delivery quantities for review, then create the GRN from the approved count."
       />
 
       <Tabs
-        value={view === "custody" && !canTakeCustody || view === "posting" && !canPost ? "count" : view}
+        value={view === "posting" && !canPost ? "count" : view}
         onValueChange={setView}
         className="space-y-4"
       >
         <TabsList variant="pill" aria-label="Receiving workflow" className="max-w-full p-1">
           <TabsTrigger className="min-h-11 gap-2" value="count"><ClipboardList className="size-4" aria-hidden /> Deliveries</TabsTrigger>
-          {canTakeCustody ? <TabsTrigger className="min-h-11 gap-2" value="custody"><PackageCheck className="size-4" aria-hidden /> Custody</TabsTrigger> : null}
           {canPost ? <TabsTrigger className="min-h-11 gap-2" value="posting"><FileCheck2 className="size-4" aria-hidden /> Post GRNs</TabsTrigger> : null}
           <TabsTrigger className="min-h-11 gap-2" value="history"><History className="size-4" aria-hidden /> Saved GRNs</TabsTrigger>
         </TabsList>
-        {canTakeCustody ? (
-          <TabsContent value="custody" forceMount className="data-[state=inactive]:hidden">
-            <ReceivingCustody />
-          </TabsContent>
-        ) : null}
         {canPost ? (
           <TabsContent value="posting" forceMount className="data-[state=inactive]:hidden">
             <ApprovedReceivingPosting />
@@ -474,7 +466,7 @@ function Page() {
             </div>
 
             <div className="rounded-lg border border-warning/40 bg-tint-warning p-4 text-sm text-on-tint-warning">
-              Stock updates when an approved Goods Received Note is posted.
+              After approval, open Post GRNs to create the Goods Received Note and admit the accepted quantities into stock.
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">

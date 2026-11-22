@@ -572,6 +572,10 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
         ('${countLine}','${count}','${line}',8,2,'Damaged','B-1','2027-01-01'),
         ('${discrepancyLine}','${discrepancy}','${line}',8,2,'Damaged','B-1','2027-01-01');
     `);
+    const batchCost = readFileSync("supabase/migrations/20261116235900_inventory_batch_cost_integrity.sql", "utf8");
+    await db.exec("CREATE FUNCTION inventory_convert_strict(numeric,text,text) RETURNS numeric LANGUAGE sql AS $$ SELECT $1 $$;");
+    const receiptFunction = batchCost.indexOf("CREATE OR REPLACE FUNCTION public.inventory_post_receipt(");
+    await db.exec(batchCost.slice(receiptFunction, batchCost.indexOf("$function$;", receiptFunction) + "$function$;".length));
     await db.exec(readFileSync("supabase/migrations/20261119200000_receiving_custody_gate.sql", "utf8"));
     const actor = async (user: string) => {
       await db.exec("RESET ROLE");
@@ -680,5 +684,53 @@ describe("reviewed receiving engine with actual inventory receipt posting", () =
     await expect(db.exec(readFileSync("supabase/migrations/20261120173000_receiving_custody_on_request.sql", "utf8")))
       .rejects.toThrow(/Receiving custody prerequisite differs/);
     await db.exec("ROLLBACK");
-  }, 30000);
+
+    const clerkWorkflow = readFileSync("supabase/migrations/20261122082000_clerk_owned_grn.sql", "utf8");
+    const clerkPreflight = readFileSync("supabase/repair/2026-11-22/clerk-owned-grn-preflight.sql", "utf8");
+    type ClerkRolloutRow = { rollout_status: string; anonymous_execute: boolean; authenticated_execute: boolean };
+    const clerkBaselines = (await db.query<ClerkRolloutRow>(clerkPreflight)).rows;
+    expect(clerkBaselines.filter((row) => row.rollout_status !== "supported baseline")).toEqual([]);
+    await db.exec(clerkWorkflow);
+    await db.exec(clerkWorkflow);
+    const installed = (await db.query<ClerkRolloutRow>(clerkPreflight)).rows;
+    expect(installed.every((row) => row.rollout_status === "installed" && !row.anonymous_execute)).toBe(true);
+    expect(installed.filter((row) => row.authenticated_execute)).toHaveLength(4);
+    const clerkCount = id(906);
+    const excessCount = id(907);
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION has_permission(text,text) RETURNS boolean LANGUAGE sql AS $$
+        SELECT $1 = 'procurement' AND (($2 = 'receiving.manage' AND auth.uid()='${reviewer}'::uuid)
+          OR ($2 = 'receiving.create' AND auth.uid()='${submitter}'::uuid))
+      $$;
+      INSERT INTO neo_blind_receiving_counts(id,organization_id,branch_id,purchase_order_id,
+        receiving_location_id,supplier_delivery_note,status,submitted_by) VALUES
+        ('${clerkCount}','${org}','${branch}','${order}','${store}','DN-CLERK','submitted','${submitter}'),
+        ('${excessCount}','${org}','${branch}','${order}','${store}','DN-EXCESS','submitted','${submitter}');
+      INSERT INTO neo_blind_receiving_count_lines(id,count_id,purchase_order_line_id,quantity_delivered,
+        quantity_rejected,rejection_reason,batch_number,expiry_date) VALUES
+        ('${id(908)}','${clerkCount}','${line}',5,1,'Damaged','B-CLERK','2027-01-01'),
+        ('${id(909)}','${excessCount}','${line}',9,0,NULL,'B-EXCESS','2027-01-01');
+    `);
+    const clerkPost = () => db.query<{ result: Record<string, unknown> }>(
+      "SELECT neo_post_approved_blind_receiving($1) result", [clerkCount],
+    );
+    await actor(submitter);
+    await expect(clerkPost()).rejects.toThrow(/Only independently approved counts/);
+    await expect(decide(clerkCount, "approved")).rejects.toThrow(/Independent review authorization/);
+    await actor(reviewer);
+    await expect(decide(excessCount, "approved")).rejects.toThrow(/excess accepted quantities/i);
+    await expect(decide(clerkCount, "approved")).resolves.toMatchObject({ rows: [{ result: { status: "approved", stock_posted: false } }] });
+    await actor(keeper);
+    await expect(clerkPost()).rejects.toThrow(/Authorized inventory posting required/);
+    await actor(submitter);
+    const clerkQueue = await db.query<{ rows: Record<string, unknown>[] }>("SELECT neo_blind_receiving_approved_queue() rows");
+    expect(clerkQueue.rows[0]?.rows.map((row) => row["count_id"])).toContain(clerkCount);
+    const clerkGrn = (await clerkPost()).rows[0]?.result?.["grn_id"];
+    expect(clerkGrn).toEqual(expect.any(String));
+    expect((await clerkPost()).rows[0]?.result).toMatchObject({ replayed: true, grn_id: clerkGrn });
+    await db.exec("RESET ROLE");
+    expect((await db.query("SELECT received_by FROM goods_receipts WHERE id=$1", [clerkGrn])).rows).toEqual([{ received_by: submitter }]);
+    expect((await db.query("SELECT quantity FROM movement_evidence WHERE receipt=$1", [clerkGrn])).rows).toEqual([{ quantity: "4" }]);
+    expect((await db.query("SELECT debit,credit FROM journal_evidence WHERE receipt=$1", [clerkGrn])).rows).toEqual([{ debit: "200", credit: "200" }]);
+  }, 60000);
 });

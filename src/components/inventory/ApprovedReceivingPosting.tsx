@@ -25,7 +25,7 @@ export function ApprovedReceivingPosting() {
     orderNumber: string;
     propertyId: string;
   } | null>(null);
-  const canPost = permissionsLoaded && can("procurement", "receiving.manage");
+  const canPost = permissionsLoaded && (can("procurement", "receiving", "create") || can("procurement", "receiving.manage"));
   const approvedQueue = useQuery({
     queryKey: ["procurement", "approved-blind-receiving", organizationId, user?.id, filterKey],
     enabled: canPost,
