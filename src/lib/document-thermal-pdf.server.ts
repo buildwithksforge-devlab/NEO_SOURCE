@@ -22,6 +22,7 @@ import { documentTraceCode } from "./document-trace";
 import { receiptQrConfig } from "./receipt-qr";
 import { embedDocumentLogo } from "./document-logo.server";
 import { documentTaxTotals } from "./document-tax-totals";
+import { NEO_SYMBOL_BASE64 } from "./document-symbol";
 
 type ReceiptLine = {
   description?: string | null;
@@ -269,6 +270,10 @@ export async function buildThermalReceiptPdf(
     ["M-Pesa Paybill", clean(brand["receiptPaybill"])],
     ["Paybill account", clean(brand["receiptPaybillAccount"])],
     ["M-Pesa Till", clean(brand["receiptTill"])],
+    ["Bank", clean(brand["receiptBankName"])],
+    ["Account name", clean(brand["receiptBankAccountName"])],
+    ["Bank account", clean(brand["receiptBankAccountNumber"])],
+    ["Bank reference", clean(brand["receiptBankReference"])],
     ["Payment instructions", clean(brand["receiptPaymentInstructions"])],
   ] as const).filter(([, value]) => Boolean(value));
   const staffLabels: Record<string, string> = {
@@ -277,6 +282,9 @@ export async function buildThermalReceiptPdf(
   };
   const paymentKeys = new Set(["payment method", "payment status", "payment references", "payment reference", "external reference", "cash tendered", "change due"]);
   const metaKey = (key: string) => key.toLowerCase().replace(/_/g, " ");
+  const tableKeys = new Set(["table", "table name", "table number"]);
+  const table = Object.entries(metaSource).find(([key, value]) =>
+    tableKeys.has(metaKey(key)) && isScalar(value) && scalarText(value));
   const staff = new Map<string, string>();
   for (const [key, value] of Object.entries(metaSource)) {
     const label = staffLabels[metaKey(key)];
@@ -293,6 +301,7 @@ export async function buildThermalReceiptPdf(
         key !== "qr_payload" &&
         !staffLabels[metaKey(key)] &&
         !paymentKeys.has(metaKey(key)) &&
+        !tableKeys.has(metaKey(key)) &&
         !fiscalKey(key) &&
         isScalar(value) &&
         scalarText(value),
@@ -538,7 +547,9 @@ export async function buildThermalReceiptPdf(
     page.drawImage(logo, { x: (paperWidth - scaled.width) / 2, y: y - scaled.height, ...scaled });
     y -= scaled.height + 12;
   }
-  drawWrappedCentered(propertyName.toUpperCase(), 11.5, bold, 13);
+  drawWrappedCentered(propertyName, 13, bold, 16);
+  const headerNote = clean(brand["receiptHeaderNote"]).slice(0, 160);
+  if (headerNote) drawWrappedCentered(headerNote, 8, regular, 11, muted);
 
   if (propertyAddress) {
     drawWrappedCentered(propertyAddress, 7.5, regular, 9, muted);
@@ -577,6 +588,8 @@ export async function buildThermalReceiptPdf(
   if (receiptDate) {
     drawPair("Date:", receiptDate, bold, regular, 7.5, 7.5, muted);
   }
+
+  if (table) drawPair("Table:", scalarText(table[1]), bold, bold, 8.5, 8.5);
 
   if (partyName) {
     drawPair(clean(payload.party?.label) || "Guest:", partyName, bold, regular, 7.5, 7.5, muted);
@@ -815,8 +828,21 @@ export async function buildThermalReceiptPdf(
     y -= 8;
   }
 
+  const footerNote = clean(brand["receiptFooterNote"]).slice(0, 160);
+  if (footerNote) {
+    continueRoll(wrap(footerNote, regular, 8, contentWidth).length * 11 + 16);
+    y -= 4;
+    drawWrappedCentered(footerNote, 8, regular, 11, muted);
+  }
+  continueRoll(32);
+  const stamp = await pdf.embedPng(Buffer.from(NEO_SYMBOL_BASE64, "base64"));
+  const stampSize = stamp.scaleToFit(10, 10);
+  const poweredBy = "Powered by NEØ";
+  const creditWidth = regular.widthOfTextAtSize(poweredBy, 6.2);
+  const creditX = (paperWidth - stampSize.width - 4 - creditWidth) / 2;
   y -= 2;
-  drawCentered("Powered by NEØ", 6.8, regular, muted);
+  page.drawImage(stamp, { x: creditX, y: y - 2, ...stampSize });
+  drawLeft(poweredBy, creditX + stampSize.width + 4, 6.2, regular, muted);
   y -= 8;
   drawCentered(
     "Built by AI, Data & Marketing by Wambui",

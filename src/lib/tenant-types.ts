@@ -76,6 +76,12 @@ export type BrandSettings = Timestamps & {
   receiptPaybill?: string;
   receiptPaybillAccount?: string;
   receiptTill?: string;
+  receiptBankName?: string;
+  receiptBankAccountName?: string;
+  receiptBankAccountNumber?: string;
+  receiptBankReference?: string;
+  receiptHeaderNote?: string;
+  receiptFooterNote?: string;
   receiptPaymentInstructions?: string;
 };
 

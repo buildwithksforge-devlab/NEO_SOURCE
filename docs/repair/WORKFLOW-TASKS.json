@@ -110,6 +110,16 @@
       "live_acceptance": "OPEN"
     },
     {
+      "id": "WF24-T02",
+      "chains": ["WF02", "WF03", "WF24", "WF25"],
+      "title": "Separate shared station entry from personal staff authorization",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["Owner-scoped display setup saves a separate hashed staff/station credential. The paired display checks it before returning ticket data and refuses an account whose station assignment was removed. Shared display tools and logout require an in-scope supervisor's personal PIN. Verified logout revokes that paired session. The staff password sign-in, PIN broker and Edge proof exchange were unchanged."],
+      "live_evidence": ["The public Preview staff sign-in page returned HTTP 200 on build c17f2e1718dec9e0. The public Preview and Horizon PIN endpoints both rejected an empty, credential-free request with HTTP 401. A normal PIN verification from an authorized device was not exercised."],
+      "next_action": "Install both new display PIN migrations. Verify account password login, personal PIN login on an authorized device, display PIN entry, supervisor approval and logout in the matching deployed build.",
+      "live_acceptance": "OPEN"
+    },
+    {
       "id": "WF30-T01",
       "chains": ["WF01", "WF26", "WF30", "WF34"],
       "title": "Verify release readiness, saved defect counts and local Simulation",
@@ -123,9 +133,10 @@
       "id": "WF05-T01",
       "chains": ["WF04", "WF05", "WF06", "WF33"],
       "title": "Align GRN creation with Receiving Clerk ownership",
-      "status": "AWAITING_INSTALLATION",
+      "status": "AWAITING_LIVE_RESULTS",
       "local_evidence": ["A separate reviewer approves the clerk's recorded quantities. The clerk can then post their own approved count once, with only accepted quantities affecting stock and accrual. The corrected rollout recognizes the reviewed receipt-posting variants and checks property/store, the approved accepted quantity, and matching journal evidence. An upgrade migration covers databases that recorded the original version."],
-      "next_action": "Run clerk-owned-grn-preflight.sql. In the SQL editor apply the corrected 20261122082000_clerk_owned_grn.sql only when all five routines are supported or installed. Rerun the read-only check and require installed and permissions_match for each routine. Confirm a controlled clerk-created GRN, accepted stock and Finance accrual.",
+      "live_evidence": ["The 2026-11-22 14:49:30 SQL export showed all five routines installed with matching permissions. The private posting routine matched digest 8e517246600878edf6b2e93114153283."],
+      "next_action": "Confirm a controlled clerk-created GRN, accepted stock and Finance accrual with the installed routines.",
       "live_acceptance": "OPEN"
     },
     {
@@ -232,7 +243,7 @@
       "confirmed_problem": "The existing guest projection only read legacy POS payment states. It missed confirmed POS payments and receipts posted against an order by Delivery Finance.",
       "local_evidence": ["The guarded migration verifies the existing receipt lookup and guest ownership condition before changing the function. It selects the confirmed Delivery Finance receipt for the same order and guest, or falls back to confirmed POS evidence scoped to the property. It preserves the existing function grants.", "34 focused tests passed across the receipt projection, payment dispatch, tracking, Rider and thermal PDF. The isolated PostgreSQL check applies the migration twice and verifies Finance receipt selection, POS fallback, unpaid orders, wrong property and guest ownership."],
       "live_evidence": ["The user's Cloud SQL Editor verification showed the routine and receipt projection installed, the customer check present, authenticated execution enabled, and anonymous execution denied."],
-      "next_action": "Verify app deployment and signed-in acceptance for one provider-paid and one pay-at-property order from saved payment through Guest and Delivery receipt details. PDF download and supplier-side quotation access remain open.",
+      "next_action": "Install the property-scoped receipt evidence migration verified against the same signature used by the Guest PDF endpoint. Then verify one provider-paid and one pay-at-property order through Guest and Delivery receipt details and PDF download. Supplier-side quotation access remains open.",
       "live_acceptance": "OPEN"
     },
     {

@@ -103,6 +103,12 @@ function DocumentsPage() {
                   ["receiptPaybill", "M-Pesa Paybill"],
                   ["receiptPaybillAccount", "Paybill account"],
                   ["receiptTill", "M-Pesa Till"],
+                  ["receiptBankName", "Bank name"],
+                  ["receiptBankAccountName", "Bank account name"],
+                  ["receiptBankAccountNumber", "Bank account number"],
+                  ["receiptBankReference", "Bank payment reference"],
+                  ["receiptHeaderNote", "Receipt header note"],
+                  ["receiptFooterNote", "Receipt footer note"],
                   ["receiptPaymentInstructions", "Other payment instructions"],
                 ] as const).map(([key, label]) => (
                   <div key={key} className="space-y-1">

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SharedDisplayTools } from "@/components/kitchen/SharedDisplayTools";
 import { isWorkspaceEntrance } from "@/lib/workspace-entrance";
 vi.mock("@tanstack/react-router", () => ({
@@ -34,8 +34,14 @@ describe("property work entrance layout", () => {
 describe("restricted display tools", () => {
   const station = vi.fn(),
     compact = vi.fn(),
-    logout = vi.fn();
-  beforeEach(() => vi.clearAllMocks());
+    logout = vi.fn(),
+    approve = vi.fn();
+  beforeEach(() => { vi.clearAllMocks(); approve.mockResolvedValue(undefined); });
+  async function unlock(button: string) {
+    fireEvent.click(screen.getByRole("button", { name: button }));
+    fireEvent.change(screen.getByLabelText("Personal PIN"), { target: { value: "246810" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  }
   function show() {
     return render(
       <SharedDisplayTools
@@ -47,23 +53,24 @@ describe("restricted display tools", () => {
         onStationChange={station}
         compact={false}
         onCompactChange={compact}
+        onApprove={approve}
         onLogout={logout}
       />,
     );
   }
-  it("opens and returns from tools without logging out or changing pairing", () => {
+  it("opens and returns from tools without logging out or changing pairing", async () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Supervisor tools" }));
+    await unlock("Supervisor tools");
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(logout).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Return to display" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Return to display" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(logout).not.toHaveBeenCalled();
   });
-  it("filters only the already paired station choices and exposes real spacing control", () => {
+  it("filters only the already paired station choices and exposes real spacing control", async () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Supervisor tools" }));
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+    await unlock("Supervisor tools");
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
       "All paired stations",
       "Hot Kitchen",
       "Pastry",
@@ -74,17 +81,23 @@ describe("restricted display tools", () => {
     expect(compact).toHaveBeenCalledWith(true);
     expect(logout).not.toHaveBeenCalled();
   });
-  it("requires an explicit sign-in link to change paired scope", () => {
+  it("requires an explicit sign-in link to change paired scope", async () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Supervisor tools" }));
+    await unlock("Supervisor tools");
     expect(
-      screen.getByRole("link", { name: "Change paired display / access" }).getAttribute("href"),
+      (await screen.findByRole("link", { name: "Change paired display / access" })).getAttribute("href"),
     ).toContain("/auth?redirect=%2Fproduction-displays");
     expect(logout).not.toHaveBeenCalled();
   });
-  it("reserves the logout callback for the separate logout button", () => {
+  it("keeps the display open on a rejected personal PIN and logs out after approval", async () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Log out of display" }));
-    expect(logout).toHaveBeenCalledOnce();
+    approve.mockRejectedValueOnce(new Error("Supervisor approval was refused"));
+    await unlock("Log out of display");
+    expect((await screen.findByRole("alert")).textContent).toContain("Supervisor approval was refused");
+    expect(logout).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Personal PIN"), { target: { value: "135790" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(logout).toHaveBeenCalledOnce());
+    expect(approve).toHaveBeenLastCalledWith("135790", "logout");
   });
 });

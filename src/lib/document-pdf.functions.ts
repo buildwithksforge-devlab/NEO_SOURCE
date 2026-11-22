@@ -74,7 +74,7 @@ export const exportGuestBillDocument = createServerFn({ method: "POST" })
       // The authenticated customer projection carries saved payment evidence;
       // require its property and confirmed status before using hotel branding.
       if (!hotel.branch_id || receipt.branch_id !== hotel.branch_id ||
-          !["confirmed", "completed", "paid", "succeeded", "captured"].includes(receipt.status ?? "")) {
+          !["confirmed", "posted", "completed", "paid", "succeeded", "captured"].includes(receipt.status ?? "")) {
         throw new Error("This issued receipt is unavailable at this property.");
       }
       return renderBusinessDocumentPdf({

@@ -1,7 +1,7 @@
 /** Display authoritative report facts without inventing zeroes or currencies. */
 export function formatReportFact(value: unknown, kind: string, currency: string): string {
   if (value === null || value === undefined || value === "") return "Awaiting data";
-  if (kind !== "money" && kind !== "percent" && kind !== "count") return String(value);
+  if (!["money", "percent", "count", "ratio", "days", "minutes", "nights", "rating"].includes(kind)) return String(value);
   if ((typeof value !== "number" && typeof value !== "string")
     || (typeof value === "string" && value.trim() === "")
     || !Number.isFinite(Number(value))) return "Invalid data — review source";
@@ -13,5 +13,10 @@ export function formatReportFact(value: unknown, kind: string, currency: string)
     }).format(numeric)}`;
   }
   if (kind === "percent") return `${numeric.toFixed(1)}%`;
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(numeric);
+  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(numeric);
+  if (kind === "ratio") return `${formatted}×`;
+  if (kind === "days") return `${formatted} ${numeric === 1 ? "day" : "days"}`;
+  if (kind === "minutes") return `${formatted} min`;
+  if (kind === "nights") return `${formatted} ${numeric === 1 ? "night" : "nights"}`;
+  return formatted;
 }

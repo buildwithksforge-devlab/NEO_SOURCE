@@ -21,6 +21,8 @@ import {
   readSharedDisplayToken,
   readSharedDisplay,
   actOnSharedDisplay,
+  approveSharedDisplayControl,
+  sharedDisplayEntry,
   productionActions,
   type SharedDisplayAction,
 } from "@/lib/shared-production-display";
@@ -60,11 +62,24 @@ function SharedScreen() {
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [station, setStation] = useState("all");
+  const [entryPin, setEntryPin] = useState("");
   const panel = useRef<HTMLDivElement>(null);
+  const entry = useQuery({
+    queryKey: ["shared-production-entry"], queryFn: () => sharedDisplayEntry(token),
+    enabled: Boolean(token), retry: false, gcTime: 0, refetchInterval: 5000,
+  });
+  const enter = useMutation({
+    mutationFn: async () => {
+      const result = await sharedDisplayEntry(token, entryPin);
+      if (result?.ready !== true) throw new Error(result?.message ?? "Display PIN not accepted.");
+    },
+    onSuccess: () => entry.refetch(),
+    onSettled: () => setEntryPin(""),
+  });
   const snapshot = useQuery({
     queryKey: ["shared-production-display"],
     queryFn: () => readSharedDisplay(token),
-    enabled: Boolean(token),
+    enabled: entry.data?.ready === true && !entry.isError,
     retry: false,
     gcTime: 0,
     // Keep retrying after transient network/server failures. Stopping polling on
@@ -75,7 +90,7 @@ function SharedScreen() {
   useEffect(() => {
     const update = () => {
       setOnline(navigator.onLine);
-      if (navigator.onLine) void snapshot.refetch();
+      if (navigator.onLine && token) void entry.refetch();
     };
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
@@ -83,7 +98,7 @@ function SharedScreen() {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
     };
-  }, [snapshot.refetch]);
+  }, [entry.refetch, token]);
   const close = () => {
     setSelected(null);
     setPin("");
@@ -136,6 +151,30 @@ function SharedScreen() {
         </Link>
       </main>
     );
+  if (entry.isError || (entry.isPending && !entry.data)) return (
+    <main className="mx-auto max-w-lg space-y-4 p-8">
+      <h1 className="text-2xl font-semibold">Station display</h1>
+      {entry.isError ? <><p role="alert">The paired display could not be checked.</p>
+        <Button onClick={() => void entry.refetch()}>Retry display access</Button>
+        <Button asChild variant="outline"><Link to="/auth" search={{ redirect: "/production-displays" }}>Supervisor sign in</Link></Button>
+      </> : <p role="status">Checking the paired screen…</p>}
+    </main>
+  );
+  if (entry.data?.ready !== true) return (
+    <main className="mx-auto max-w-lg space-y-4 p-8">
+      <h1 className="text-2xl font-semibold">Open station display</h1>
+      <form className="space-y-3" onSubmit={(event) => {
+        event.preventDefault();
+        if (entryPin.length === 6 && !enter.isPending && online) enter.mutate();
+      }}>
+        <Label htmlFor="station-display-entry-pin">Display PIN</Label>
+        <Input id="station-display-entry-pin" type="password" inputMode="numeric" autoComplete="off"
+          value={entryPin} maxLength={6} disabled={enter.isPending} onChange={(event) => setEntryPin(event.target.value.replace(/\D/g, ""))} />
+        {enter.isError ? <p role="alert">{enter.error.message}</p> : null}
+        <Button type="submit" disabled={enter.isPending || !online || entryPin.length !== 6}>Open display</Button>
+      </form>
+    </main>
+  );
   return (
     <main
       ref={panel}
@@ -183,6 +222,7 @@ function SharedScreen() {
             }}
             compact={compact}
             onCompactChange={changeCompact}
+            onApprove={(pin, mode) => approveSharedDisplayControl(token, pin, mode)}
             onLogout={logoutDisplay}
             busy={action.isPending}
           />

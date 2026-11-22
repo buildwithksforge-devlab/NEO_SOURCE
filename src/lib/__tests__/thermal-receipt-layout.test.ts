@@ -25,8 +25,10 @@ describe('thermal receipt actual PDF layout',()=>{
   if(variant==='branded-long') {
    Object.assign(payload.identity,{brand:{logoLight:'data:image/png;base64,'+NEO_SYMBOL_BASE64,
     receiptFeedbackUrl:'https://property.example/feedback', receiptPaybill:'123456',receiptPaybillAccount:'ORDER',
-    receiptTill:'654321',receiptPaymentInstructions:'Use the amount shown on this receipt.'}});
-   Object.assign(payload.meta,{Waiter:'Sample waiter','Collected by':'Sample cashier','Checked by':'Sample manager'});
+    receiptTill:'654321',receiptBankName:'Sample Bank',receiptBankAccountNumber:'0000200000',
+    receiptHeaderNote:'Terrace Restaurant',receiptFooterNote:'Thanks for visiting the terrace.',
+    receiptPaymentInstructions:'Use the amount shown on this receipt.'}});
+   Object.assign(payload.meta,{Table:'Terrace 7',Waiter:'Sample waiter','Collected by':'Sample cashier','Checked by':'Sample manager'});
    payload.lines=Array.from({length:42},(_,index)=>({description:`Lunch item ${index+1} with a wrapping description`,quantity:1,unit_price:45,total:45}));
    payload.totals=[
     {label:"Net before tax",amount:1601.70},{label:"16% VAT · Included",amount:256.27},
@@ -59,6 +61,13 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered).toContain('SCAN TO LEAVE FEEDBACK');
    expect(rendered).toContain('M-Pesa Paybill:');
    expect(rendered).toContain('M-Pesa Till:');
+   expect(rendered).toContain('Bank account:');
+   expect(rendered).toContain('0000200000');
+   expect(rendered).toContain('Terrace Restaurant');
+   expect(rendered).toContain('Thanks for visiting the terrace.');
+   expect(rendered).toContain('Table:');
+   expect(rendered).toContain('Terrace 7');
+   expect(rendered.indexOf('Table:')).toBeLessThan(rendered.indexOf('TAX BREAKDOWN'));
    expect(rendered).toContain('TAX BREAKDOWN');
    expect(rendered.join(' ')).toContain('16% VAT · Included');
    expect(rendered).toContain('Total tax');

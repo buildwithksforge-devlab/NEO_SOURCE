@@ -63,6 +63,8 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_production_display_read: "anon",
 
   neo_production_display_act_pin_only: "anon",
+  neo_production_display_supervisor: "anon",
+  neo_production_display_entry: "anon",
   neo_production_staff_pin: "authenticated",
   neo_production_display_pair: "authenticated",
   neo_marketing_need_to_requisition: "authenticated",
@@ -699,6 +701,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_delivery_dispatch_open: "authenticated",
   neo_delivery_dispatch_claim: "authenticated",
   neo_station_login_admin: "authenticated",
+  neo_station_display_pin_admin: "authenticated",
   neo_station_login_destination: "authenticated",
   neo_device_admin_allowed: "authenticated",
   neo_delivery_dispatch_apply: "service_role",

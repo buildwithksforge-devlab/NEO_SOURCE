@@ -107,12 +107,15 @@ const setup = `
 
 describe("guest operations and worker choices follow the selected property", () => {
   let db: PGlite;
+  const receiptEvidence = readFileSync("supabase/migrations/20261122163000_guest_receipt_scoped_property_evidence.sql", "utf8");
   beforeAll(async () => {
     db = new PGlite();
     await db.exec(setup);
     await db.exec(readFileSync("supabase/migrations/20261120080000_scope_guest_operations_property.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/20261122160000_guest_transport_request_retry.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/20261122161000_transport_staff_action_evidence.sql", "utf8"));
+    await db.exec(receiptEvidence);
+    await db.exec(receiptEvidence);
   }, 90_000);
   afterAll(async () => { await db?.close(); });
 
@@ -199,9 +202,42 @@ describe("guest operations and worker choices follow the selected property", () 
     await db.exec("RESET test.transport_staff");
   });
 
+  it("patches the earlier direct-payment rollout without exposing unpaid or cross-property receipts", async () => {
+    await db.exec("BEGIN");
+    try {
+      const canonical = (await db.query<{ definition: string }>("SELECT pg_get_functiondef('public.neo_guest_folio_projection(uuid,uuid)'::regprocedure) AS definition")).rows[0]?.definition;
+      if (!canonical) throw new Error("Missing scoped folio projection fixture");
+      const start = canonical.indexOf("    'payments', (");
+      const end = canonical.indexOf("\nEND;", start);
+      const previousRollout = `    'payments', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object(
+               'id', p.id,
+               'receipt_number', p.receipt_number,
+               'amount', p.amount) ORDER BY p.paid_at DESC), '[]'::jsonb)
+      FROM public.payments p
+      WHERE p.organization_id = _org AND p.customer_id = _cust
+        AND ((p.folio_id IS NULL AND p.branch_id = _branch) OR EXISTS (
+          SELECT 1 FROM public.folios fo WHERE fo.id = p.folio_id AND fo.organization_id = _org
+            AND fo.customer_id = _cust AND fo.branch_id = _branch
+            AND (p.branch_id IS NULL OR p.branch_id = _branch)
+        ))
+        AND coalesce(p.status,'completed') NOT IN ('void','voided','failed')
+      LIMIT 50));`;
+      await db.exec(canonical.slice(0, start) + previousRollout + canonical.slice(end));
+      await db.exec(receiptEvidence);
+      await db.exec(receiptEvidence);
+      expect((await db.query("SELECT neo_guest_folio_projection($1,$2)->'payments' AS receipts", [org, west])).rows)
+        .toEqual([{ receipts: [expect.objectContaining({ receipt_number: "WEST-LEGACY", branch_id: west, status: "completed", amount: 200 })] }]);
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  });
+
   it("keeps folios, receipts and booking links on their own property", async () => {
     const bill = await db.query("SELECT neo_guest_folio_projection($1,$2) AS bill", [org, west]);
-    expect(bill.rows).toEqual([{ bill: { folios: [expect.objectContaining({ id: westFolio })], payments: [expect.objectContaining({ receipt_number: "WEST-LEGACY" })] } }]);
+    expect(bill.rows).toEqual([{ bill: { folios: [expect.objectContaining({ id: westFolio })], payments: [expect.objectContaining({ receipt_number: "WEST-LEGACY", branch_id: west, status: "completed", amount: 200 })] } }]);
+    const eastBill = await db.query("SELECT neo_guest_folio_projection($1,$2) AS bill", [org, east]);
+    expect(eastBill.rows).toEqual([{ bill: { folios: [expect.objectContaining({ id: eastFolio })], payments: [expect.objectContaining({ receipt_number: "EAST-RECEIPT", branch_id: east, status: "completed", amount: 25 })] } }]);
     const stays = await db.query("SELECT neo_guest_my_stays($1,$2) AS stays", [org, west]);
     expect(stays.rows).toEqual([{ stays: [expect.objectContaining({ id: westStay })] }]);
     const link = await db.query("SELECT neo_guest_verify_stay($1,$2,'EAST-BOOKING','Example') AS result", [org, west]);

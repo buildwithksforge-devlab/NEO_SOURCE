@@ -50,9 +50,9 @@ namespace NeoPrintAgent {
     using(var graphics=Graphics.FromImage(testLogo)) graphics.Clear(Color.Black);
     testLogo.Save(logoStream,System.Drawing.Imaging.ImageFormat.Png);
     payload["identity"]=new Dictionary<string,object>{{"brand", new Dictionary<string,object>{
-     {"logoLight","data:image/png;base64,"+Convert.ToBase64String(logoStream.ToArray())},{"receiptPaybill","123456"},{"receiptTill","654321"}}}};
+     {"logoLight","data:image/png;base64,"+Convert.ToBase64String(logoStream.ToArray())},{"receiptPaybill","123456"},{"receiptTill","654321"},{"receiptBankAccountNumber","0000200000"}}}};
    }
-   payload["meta"]=new Dictionary<string,object>{{"Waiter","Sample server"},{"Collected by","Sample receiver"}};
+   payload["meta"]=new Dictionary<string,object>{{"Waiter","Sample server"},{"Collected by","Sample receiver"},{"Table","Terrace 7"}};
    payload["totals"]=new object[]{
     new Dictionary<string,object>{{"label","Catering levy \u00b7 Included"},{"amount",2.03m}},
     new Dictionary<string,object>{{"label","VAT \u00b7 Included"},{"amount",16.27m}},
@@ -66,6 +66,7 @@ namespace NeoPrintAgent {
    check(bytes[5]==29&&bytes[6]==118&&bytes[7]==48,"Logo raster precedes receipt text");
    var brandedText=Encoding.ASCII.GetString(bytes);
    check(brandedText.Contains("M-Pesa Paybill: 123456")&&brandedText.Contains("M-Pesa Till: 654321"),"Payment details kept in separate lines");
+   check(taxReceipt.Contains("Bank account: 0000200000")&&taxReceipt.Count(x=>x=="Table: Terrace 7")==1&&System.Array.IndexOf(taxReceipt,"Table: Terrace 7")<System.Array.IndexOf(taxReceipt,"Sample meal"),"Bank details and one table header");
    check(brandedText.Contains("Served by: Sample server")&&brandedText.Contains("Received by: Sample receiver"),"Staff footer");
    check(brandedText.Contains("Scan to leave feedback\n"+(char)27+"a"),"Feedback raster precedes cut");
    var production=new Dictionary<string,object>{{"title","Kitchen ticket"},{"payload",new Dictionary<string,object>{{"lines",new object[]{"2 x Sample meal",null,"ALLERGY: peanuts"}}}}};var ticket=ReceiptRenderer.Render(production);check(ticket.Contains("2 x Sample meal")&&ticket.Contains("ALLERGY: peanuts")&&!ticket.Contains(""),"Production quantity and allergy preserved");
@@ -120,12 +121,23 @@ namespace NeoPrintAgent {
    return null;
   }
   private static string Money(object amount,string currency) {decimal n;return decimal.TryParse(Program.Text(amount),System.Globalization.NumberStyles.Any,System.Globalization.CultureInfo.InvariantCulture,out n)?currency+" "+n.ToString("N2",System.Globalization.CultureInfo.InvariantCulture):Program.Clean(amount);}
+  private static bool IsTableKey(string key) {
+   var normalized=key.Replace('_',' ').Trim();
+   return normalized.Equals("table",StringComparison.OrdinalIgnoreCase)||
+    normalized.Equals("table name",StringComparison.OrdinalIgnoreCase)||normalized.Equals("table number",StringComparison.OrdinalIgnoreCase);
+  }
   public static string[] Render(Dictionary<string,object> job) {
    var payload=Payload(job);var doc=Program.Obj(Program.Get(payload,"document"));var property=Program.Obj(Program.Get(payload,"property"));var identity=Program.Obj(Program.Get(payload,"identity"));var result=new List<string>();
    Action<object> add=value=>{foreach(var line in Program.Clean(value).Split('\n'))result.Add(line);};
    if(doc.Count==0) {add(Program.Get(job,"title"));foreach(var line in Program.Array(Program.Get(payload,"lines")))if(line!=null)add(line is Dictionary<string,object>?Program.Json.Serialize(line):line);return result.ToArray();}
    var currency=Program.Text(Program.Get(property,"currency"));if(currency=="")currency=Program.Text(Program.Get(identity,"currency"));
-   add(Program.Get(property,"name"));add(Program.Get(doc,"title"));add(Program.Get(doc,"number"));add(Program.Get(doc,"date"));add(new string('-',32));
+   var meta=Program.Obj(Program.Get(payload,"meta"));var brand=Program.Obj(Program.Get(identity,"brand"));
+   var table=meta.FirstOrDefault(item=>IsTableKey(item.Key) && !string.IsNullOrWhiteSpace(Program.Text(item.Value)));
+   add(Program.Get(property,"name"));
+   var headerNote=Program.Clean(Program.Get(brand,"receiptHeaderNote"));if(headerNote!="")add(headerNote.Substring(0,Math.Min(headerNote.Length,160)));
+   add(Program.Get(doc,"title"));add(Program.Get(doc,"number"));add(Program.Get(doc,"date"));
+   if(table.Key!=null)add("Table: "+Program.Clean(table.Value));
+   add(new string('-',32));
    foreach(var line in Program.Array(Program.Get(payload,"lines"))) {var row=Program.Obj(line);add(Program.Get(row,"description"));add("  "+Program.Text(Program.Get(row,"quantity"))+" x "+Money(Program.Get(row,"unit_price"),currency));add("  "+Money(Program.Get(row,"total"),currency));var note=Program.Get(row,"note");if(note!=null)add(note);}
    add(new string('-',32));
    bool hasTotal=false, hasPaymentHeading=false, hasTaxHeading=false;
@@ -153,22 +165,22 @@ namespace NeoPrintAgent {
     if(label.Equals("Total",StringComparison.OrdinalIgnoreCase)||label.Equals("Grand total",StringComparison.OrdinalIgnoreCase)) hasTotal=true;
    }
    if(taxRows>0)addTaxTotal();
-   var brand=Program.Obj(Program.Get(identity,"brand"));
-   var instructions=new Dictionary<string,string>{{"receiptPaybill","M-Pesa Paybill"},{"receiptPaybillAccount","Paybill account"},{"receiptTill","M-Pesa Till"},{"receiptPaymentInstructions","Payment instructions"}};
+   var instructions=new Dictionary<string,string>{{"receiptPaybill","M-Pesa Paybill"},{"receiptPaybillAccount","Paybill account"},{"receiptTill","M-Pesa Till"},{"receiptBankName","Bank"},{"receiptBankAccountName","Account name"},{"receiptBankAccountNumber","Bank account"},{"receiptBankReference","Bank reference"},{"receiptPaymentInstructions","Payment instructions"}};
    if(instructions.Keys.Any(key=>!string.IsNullOrWhiteSpace(Program.Text(Program.Get(brand,key))))) {
     add(new string('-',32));add("HOW TO PAY");
     foreach(var item in instructions) {var value=Program.Clean(Program.Get(brand,item.Key));if(value!="")add(item.Value+": "+value);}
    }
-   add(new string('-',32));var meta=Program.Obj(Program.Get(payload,"meta"));
+   add(new string('-',32));
    var staff=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"waiter","Served by"},{"served by","Served by"},{"cashier","Received by"},{"collected by","Received by"},{"received by","Received by"},{"checked by","Checked by"}};
    var footer=new Dictionary<string,string>();
    foreach(var item in meta) {
     if(!(item.Value is string || item.Value is decimal || item.Value is int || item.Value is double)) continue;
     var key=item.Key.Replace('_',' ');string label;
     if(staff.TryGetValue(key,out label)) footer[label]=Program.Clean(item.Value);
-    else if(!key.Equals("qr payload",StringComparison.OrdinalIgnoreCase)) add(item.Key+": "+Program.Clean(item.Value));
+    else if(!key.Equals("qr payload",StringComparison.OrdinalIgnoreCase)&&!IsTableKey(key)) add(item.Key+": "+Program.Clean(item.Value));
    }
    foreach(var entry in footer) add(entry.Key+": "+entry.Value);
+   var footerNote=Program.Clean(Program.Get(brand,"receiptFooterNote"));if(footerNote!="")add(footerNote.Substring(0,Math.Min(footerNote.Length,160)));
    add("Thank you.");return result.ToArray();
   }
  }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogBody,
@@ -19,6 +20,7 @@ export function SharedDisplayTools({
   onStationChange,
   compact,
   onCompactChange,
+  onApprove,
   onLogout,
   busy = false,
 }: {
@@ -27,28 +29,38 @@ export function SharedDisplayTools({
   onStationChange: (id: string) => void;
   compact: boolean;
   onCompactChange: (compact: boolean) => void;
+  onApprove: (pin: string, mode: "tools" | "logout") => Promise<void>;
   onLogout: () => void;
   busy?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"tools" | "logout" | null>(null);
+  const [approved, setApproved] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const close = () => {
+    setMode(null);
+    setApproved(false);
+    setPin("");
+    setMessage("");
+  };
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button variant="outline" disabled={busy || pending} onClick={() => setMode("tools")}>
         Supervisor tools
       </Button>
-      <Button variant="outline" disabled={busy} onClick={onLogout}>
+      <Button variant="outline" disabled={busy || pending} onClick={() => setMode("logout")}>
         Log out of display
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={mode !== null} onOpenChange={(open) => { if (!open && !pending) close(); }}>
         <DialogContent className="max-h-[90dvh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Display tools</DialogTitle>
+            <DialogTitle>{approved ? "Display tools" : mode === "logout" ? "Log out of display" : "Supervisor approval"}</DialogTitle>
             <DialogDescription>
-              Adjust this screen without leaving it. Production actions still require the employee’s
-              PIN.
+              {approved ? "Adjust this screen without leaving it." : "Enter the personal PIN of a supervisor assigned to this screen."}
             </DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-5">
+          {approved ? <DialogBody className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="display-station-filter">Stations shown</Label>
               <select
@@ -83,10 +95,33 @@ export function SharedDisplayTools({
                 </Link>
               </Button>
             </div>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={close}>
               Return to display
             </Button>
-          </DialogBody>
+          </DialogBody> : <DialogBody>
+            <form className="space-y-3" onSubmit={async (event) => {
+              event.preventDefault();
+              if (!mode || pin.length !== 6 || pending) return;
+              setPending(true);
+              setMessage("");
+              try {
+                await onApprove(pin, mode);
+                if (mode === "logout") { close(); onLogout(); }
+                else setApproved(true);
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "Supervisor approval failed.");
+              } finally {
+                setPending(false);
+                setPin("");
+              }
+            }}>
+              <Label htmlFor="display-supervisor-pin">Personal PIN</Label>
+              <Input id="display-supervisor-pin" type="password" inputMode="numeric" autoComplete="off"
+                value={pin} maxLength={6} disabled={pending} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} />
+              {message ? <p role="alert">{message}</p> : null}
+              <Button type="submit" disabled={pending || pin.length !== 6}>{pending ? "Checking…" : "Approve"}</Button>
+            </form>
+          </DialogBody>}
         </DialogContent>
       </Dialog>
     </>

@@ -121,6 +121,11 @@ function canPrintDocument(
   return can(permission.module, permission.action) || can(permission.module, "view");
 }
 
+function decodeDocumentPdf(value: string): Uint8Array<ArrayBuffer> {
+  const encoded = value.replace(/^data:application\/pdf;base64,/i, "").replace(/\s/g, "");
+  return Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+}
+
 export function DocumentPrintButton({
   type,
   id,
@@ -150,16 +155,37 @@ export function DocumentPrintButton({
     setBusy(true);
 
     let preview: ReturnType<typeof openDocumentPrintWindow> | undefined;
+    let previewBlocked = false;
     try {
-      if (action === "print") preview = openDocumentPrintWindow();
-      const result = await run({
+      if (action === "print") {
+        try {
+          preview = openDocumentPrintWindow();
+        } catch {
+          // Some devices block a new tab even for a direct button click.
+          // Still fetch the authorised PDF and let the operator print it locally.
+          previewBlocked = true;
+        }
+      }
+      const input = {
         data: {
           type,
           id,
         },
-      });
-
-      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      };
+      let result = await run(input);
+      let bytes: Uint8Array<ArrayBuffer>;
+      try {
+        bytes = decodeDocumentPdf(result.base64);
+      } catch {
+        // Export is read-only. A single retry handles an incomplete response
+        // without queuing another print job or changing the sale.
+        result = await run(input);
+        try {
+          bytes = decodeDocumentPdf(result.base64);
+        } catch {
+          throw new Error("The PDF response could not be decoded on this device. Refresh the page and try again.");
+        }
+      }
 
       const blob = new Blob([bytes], {
         type: "application/pdf",
@@ -168,7 +194,9 @@ export function DocumentPrintButton({
       if (preview) preview.show(blob, result.filename);
       else downloadDocumentPdf(blob, result.filename);
 
-      toast.success(`${result.documentNumber} ready`);
+      toast.success(previewBlocked
+        ? `${result.documentNumber} downloaded. Open the PDF and use its Print control.`
+        : `${result.documentNumber} ready`);
     } catch (error) {
       preview?.close();
       const message =

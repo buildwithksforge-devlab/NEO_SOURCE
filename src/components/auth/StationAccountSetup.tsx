@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type StationAccount = { id: string; name: string | null; email: string | null; pin_set: boolean; opens_station: boolean };
+type StationAccount = { id: string; name: string | null; email: string | null; display_pin_set: boolean; opens_station: boolean };
 
 export function StationAccountSetup() {
   const { user, organizationId } = useAuth();
@@ -82,24 +82,24 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
   const accounts = useQuery({
     queryKey: ["station-entry-accounts", organizationId, user?.id, branchId, stationId],
     queryFn: async () => {
-      const { data, error } = await guardedRpc<StationAccount[]>(supabase, "neo_station_login_admin", args);
+      const { data, error } = await guardedRpc<StationAccount[]>(supabase, "neo_station_display_pin_admin", args);
       if (error) throw new Error(error.message);
       return data;
     },
   });
   const account = accounts.data?.find((entry) => entry.id === accountId);
   const save = useMutation({
-    mutationFn: async (action: "route" | "remove" | "pin") => {
+    mutationFn: async (action: "route" | "remove" | "pin" | "disable-pin") => {
       if (!account) throw new Error("Choose a staff account assigned to this station.");
       if (action === "pin" && (pin.length !== 6 || pin !== confirmPin)) throw new Error("Enter and confirm the same six-digit PIN.");
-      const { data, error } = action === "pin"
-        ? await guardedRpc<{ ok: boolean }>(supabase, "neo_staff_pin_admin", { _user: account.id, _pin: pin })
+      const { data, error } = action === "pin" || action === "disable-pin"
+        ? await guardedRpc<{ ok: boolean }>(supabase, "neo_station_display_pin_admin", { ...args, _user: account.id, _pin: action === "pin" ? pin : null })
         : await guardedRpc<{ ok: boolean }>(supabase, "neo_station_login_admin", { ...args, _user: account.id, _remove: action === "remove" });
       if (error || !data?.ok) throw new Error(error?.message ?? "The setting could not be saved.");
       return action;
     },
     onSuccess: (action) => {
-      toast.success(action === "pin" ? "Staff PIN saved." : action === "remove" ? "Direct display entry removed." : "Direct display entry saved.");
+      toast.success(action === "pin" ? "Display PIN saved." : action === "disable-pin" ? "Display PIN disabled." : action === "remove" ? "Direct display entry removed." : "Direct display entry saved.");
       void accounts.refetch();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -118,18 +118,19 @@ function StationAccounts({ branchId, stationId }: { branchId: string; stationId:
         {accounts.data.map((staff) => <option key={staff.id} value={staff.id}>{staff.name ?? staff.email ?? "Staff account"}{staff.name && staff.email ? ` · ${staff.email}` : ""}</option>)}
       </select>
       {account ? <>
-        <p className="text-sm text-muted-foreground">This uses the staff account’s existing email and password. Staff can use their personal PIN on an authorised property device.</p>
+        <p className="text-sm text-muted-foreground">The display PIN opens this station on a paired screen. Staff use My Personal PIN for their work and supervisor approval.</p>
         <Button type="button" variant={account.opens_station ? "outline" : "default"} disabled={save.isPending}
           onClick={() => save.mutate(account.opens_station ? "remove" : "route")}>
           {account.opens_station ? "Remove direct display entry" : "Open this station after sign-in"}
         </Button>
         <form className="space-y-3 border-t pt-3" onSubmit={(event) => { event.preventDefault(); save.mutate("pin"); }}>
-          <p className="text-sm font-medium">{account.pin_set ? "Personal PIN active" : "Personal PIN not set"}</p>
+          <p className="text-sm font-medium">{account.display_pin_set ? "Display PIN active" : "Display PIN not set"}</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label htmlFor="station-entry-pin">Staff PIN</Label><Input id="station-entry-pin" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} /></div>
-            <div><Label htmlFor="station-entry-confirm">Confirm staff PIN</Label><Input id="station-entry-confirm" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, ""))} /></div>
+            <div><Label htmlFor="station-entry-pin">Display PIN</Label><Input id="station-entry-pin" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} /></div>
+            <div><Label htmlFor="station-entry-confirm">Confirm display PIN</Label><Input id="station-entry-confirm" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, ""))} /></div>
           </div>
-          <Button type="submit" variant="outline" disabled={save.isPending || pin.length !== 6 || pin !== confirmPin}>Save staff PIN</Button>
+          <Button type="submit" variant="outline" disabled={save.isPending || pin.length !== 6 || pin !== confirmPin}>Save display PIN</Button>
+          {account.display_pin_set ? <Button type="button" variant="ghost" disabled={save.isPending} onClick={() => save.mutate("disable-pin")}>Disable display PIN</Button> : null}
         </form>
       </> : null}
     </div>

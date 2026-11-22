@@ -3,43 +3,43 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { openDocumentPrintWindow } from "../browser-document";
 
 afterEach(() => {
+  document.querySelector('[aria-label="Document print preview"]')?.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe("canonical PDF print preview", () => {
-  it("reports a blocked popup without printing the application", () => {
-    vi.spyOn(window, "open").mockReturnValue(null);
-    const print = vi.spyOn(window, "print").mockImplementation(() => {});
-    expect(openDocumentPrintWindow).toThrow(/Allow pop-ups/);
-    expect(print).not.toHaveBeenCalled();
+  it("shows the PDF in the app without requiring a popup before the export", () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:receipt"), revokeObjectURL: vi.fn() });
+    const handle = openDocumentPrintWindow();
+    expect(open).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Preparing your document");
+    handle.show(new Blob(["%PDF"], { type: "application/pdf" }), "receipt-pos-123.pdf");
+    expect(document.querySelector("iframe")?.src).toBe("blob:receipt");
+    expect(document.querySelector("a")?.download).toBe("receipt-pos-123.pdf");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Receipt preview");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Print receipt");
+    handle.close();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:receipt");
   });
 
-  it("prints only the PDF frame and retains its URL through cancelled/repeated dialogs", () => {
+  it("opens the native PDF viewer from a fresh print click and retains its URL", () => {
     vi.useFakeTimers();
-    const page = document.implementation.createHTMLDocument();
-    const preview = { document: page, closed: false, close: vi.fn(), opener: window };
-    vi.spyOn(window, "open").mockReturnValue(preview as unknown as Window);
-    const create = vi.fn(() => "blob:canonical-pdf");
-    const revoke = vi.fn();
-    vi.stubGlobal("URL", { createObjectURL: create, revokeObjectURL: revoke });
+    const viewer = { opener: window, closed: false };
+    const open = vi.spyOn(window, "open").mockReturnValue(viewer as unknown as Window);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:receipt"), revokeObjectURL: vi.fn() });
     const handle = openDocumentPrintWindow();
-    const blob = new Blob(["%PDF"], { type: "application/pdf" });
-    handle.show(blob, "FOL-123.pdf");
-    const frame = page.querySelector("iframe")!;
-    const print = vi.fn();
-    Object.defineProperty(frame, "contentWindow", { value: { focus: vi.fn(), print } });
-    frame.dispatchEvent(new Event("load"));
-    expect(frame.src).toBe("blob:canonical-pdf");
-    expect(print).toHaveBeenCalledTimes(1);
-    page.querySelector("button")!.click();
-    expect(print).toHaveBeenCalledTimes(2);
-    expect(page.querySelector("a")!.download).toBe("FOL-123.pdf");
-    expect(preview.opener).toBeNull();
-    expect(revoke).not.toHaveBeenCalled();
-    preview.closed = true;
+    handle.show(new Blob(["%PDF"], { type: "application/pdf" }), "receipt-pos-123.pdf");
+    const print = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Print receipt")!;
+    print.click();
+    expect(open).toHaveBeenCalledWith("blob:receipt", "_blank");
+    expect(viewer.opener).toBeNull();
+    handle.close();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    viewer.closed = true;
     vi.advanceTimersByTime(1000);
-    expect(revoke).toHaveBeenCalledWith("blob:canonical-pdf");
-    vi.unstubAllGlobals();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:receipt");
   });
 });

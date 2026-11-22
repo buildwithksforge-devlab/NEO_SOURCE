@@ -2,6 +2,8 @@ import { PDFDocument, PrintScaling, rgb, type PDFFont, type PDFPage } from "pdf-
 import { embedDocumentFonts } from "./document-fonts.server";
 import { embedDocumentLogo } from "./document-logo.server";
 import { formatReportFact } from "./report-fact-format";
+import { FACTS } from "./facts";
+import { DOCUMENT_BROWN } from "./document-artwork";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -37,19 +39,8 @@ const FACT_DEFINITIONS: Record<string, FactDefinition> = {
   "events.invoiced": { label: "Event invoiced", kind: "money", eligibility: "Event value represented by issued invoices." },
 };
 
-const MONEY_PATHS = new Set([
-  "operational.room_folio_revenue", "operational.pos_finalised_sales", "operational.delivery_sales",
-  "operational.other_folio_revenue", "accounting.net_recognised_revenue", "collections.total",
-  "receivables.total", "ops.restaurant.sales_today", "ops.restaurant.open_value",
-  "ops.finance.payments_today", "events.confirmed_forecast", "events.invoiced",
-  "ops.events.deposits_received", "ops.events.outstanding_balance", "ops.inventory.valuation",
-]);
-
-const definitionFor = (path: string): FactDefinition => FACT_DEFINITIONS[path] ?? {
-  label: path.split(".").at(-1)?.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase()) ?? path,
-  kind: MONEY_PATHS.has(path) ? "money" : "count",
-  eligibility: "Value returned by the authoritative scoped operational fact service.",
-};
+const definitionFor = (path: string): FactDefinition | undefined =>
+  Object.hasOwn(FACTS, path) ? FACTS[path] : Object.hasOwn(FACT_DEFINITIONS, path) ? FACT_DEFINITIONS[path] : undefined;
 
 const valueAt = (payload: Record<string, unknown>, path: string): unknown =>
   path.split(".").reduce<unknown>((value, key) =>
@@ -126,7 +117,7 @@ export async function buildManagementReportPdf(
   const branchBrand = (branch?.branding ?? {}) as Record<string, unknown>;
   const organisationName = organization?.name || organization?.legal_name || "Organisation not configured";
   const propertyName = branch?.name ?? "All authorised properties";
-  const primaryHex = safeHex(branchBrand["primaryColor"] ?? brand["primaryColor"], "#18C4C8");
+  const primaryHex = safeHex(branchBrand["primaryColor"] ?? brand["primaryColor"], DOCUMENT_BROWN);
   const darkHex = safeHex(branchBrand["secondaryColor"] ?? brand["secondaryColor"], "#020A1C");
   const logoSources = [branch?.logo_url, brand["logoLight"], brand["logoDark"]]
     .filter((value): value is string => typeof value === "string" && value !== "");
@@ -149,15 +140,15 @@ export async function buildManagementReportPdf(
     page = pdf.addPage(pageSize);
     pageNumber += 1;
     const [width, height] = pageSize;
-    page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: dark });
-    page.drawRectangle({ x: 0, y: height - 22, width, height: 4, color: primary });
+    page.drawRectangle({ x: margin, y: height - 74, width: width - 2 * margin, height: 0.8, color: primary });
     page.drawText(String(organisationName), { x: margin, y: height - 52, size: 10, font: bold, color: dark });
     page.drawText(`Page ${pageNumber}`, { x: width - margin - 36, y: 28, size: 8, font: regular, color: rgb(0.38, 0.4, 0.44) });
+    page.drawText("Powered by NEØ", { x: margin, y: 28, size: 7, font: regular, color: rgb(0.38, 0.4, 0.44) });
     if (embeddedLogo) {
       const scaled = embeddedLogo.scaleToFit(110, 32);
       page.drawImage(embeddedLogo, { x: width - margin - scaled.width, y: height - 67, ...scaled });
     }
-    y = height - 90;
+    y = height - 105;
   };
   const ensure = (height: number) => { if (y - height < 54) addPage(); };
   const drawLines = (text: string, x: number, size: number, font: PDFFont, width: number, shade = dark) => {
@@ -181,13 +172,13 @@ export async function buildManagementReportPdf(
 
   for (const row of rows) {
     ensure(68);
-    page.drawLine({ start: { x: margin, y: y + 8 }, end: { x: pageSize[0] - margin, y: y + 8 }, thickness: 0.5, color: rgb(0.82, 0.84, 0.87) });
+    page.drawLine({ start: { x: margin, y: y + 13 }, end: { x: pageSize[0] - margin, y: y + 13 }, thickness: 0.5, color: rgb(0.82, 0.84, 0.87) });
     const rowTop = y;
     drawLines(row.definition.label, margin, 10, bold, 300);
     const value = formatReportFact(row.value, row.definition.kind, currency);
     const valueLines = wrap(value, bold, 10, pageSize[0] - margin - 390);
     valueLines.forEach((part, index) => page.drawText(part, {
-      x: 390, y: rowTop - index * 14, size: 10, font: bold, color: primary,
+      x: pageSize[0] - margin - bold.widthOfTextAtSize(part, 10), y: rowTop - index * 14, size: 10, font: bold, color: dark,
     }));
     y = Math.min(y, rowTop - valueLines.length * 14);
     drawLines(row.definition.eligibility, margin, 8, regular, 470, rgb(0.38, 0.4, 0.44));

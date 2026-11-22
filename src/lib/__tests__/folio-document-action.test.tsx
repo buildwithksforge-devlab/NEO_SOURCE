@@ -247,6 +247,28 @@ describe("folio statement document action", () => {
     expect(openPreview).not.toHaveBeenCalled();
   });
 
+  it("downloads the authorised PDF when this device blocks the print preview", async () => {
+    openPreview.mockImplementationOnce(() => { throw new Error("Allow pop-ups"); });
+    exportSpy.mockResolvedValue({
+      base64: btoa("%PDF"), filename: "FS-000412.pdf", documentNumber: "FS-000412",
+    });
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: /print statement/i }));
+    await waitFor(() => expect(clicks).toEqual(["FS-000412.pdf"]));
+    expect(exportSpy).toHaveBeenCalledWith({ data: { type: "folio_statement", id: FOLIO.id } });
+    expect(previewShow).not.toHaveBeenCalled();
+  });
+
+  it("retries one malformed read-only PDF response before opening browser print", async () => {
+    exportSpy.mockResolvedValueOnce({ base64: "not-base64!", filename: "FS-000412.pdf", documentNumber: "FS-000412" });
+    exportSpy.mockResolvedValueOnce({ base64: btoa("%PDF"), filename: "FS-000412.pdf", documentNumber: "FS-000412" });
+    render(<Page />);
+    fireEvent.click(screen.getByRole("button", { name: /print statement/i }));
+    await waitFor(() => expect(previewShow).toHaveBeenCalledWith(expect.any(Blob), "FS-000412.pdf"));
+    expect(exportSpy).toHaveBeenCalledTimes(2);
+    expect(clicks).toEqual([]);
+  });
+
   it("closes the preparing window on a denied/failed export", async () => {
     exportSpy.mockRejectedValue(new Error("Not permitted"));
     render(<Page />);

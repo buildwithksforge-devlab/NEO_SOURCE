@@ -133,6 +133,22 @@ export async function actOnSharedDisplay(
   return data;
 }
 
+export async function sharedDisplayEntry(token: string, pin?: string) {
+  const { data, error } = await guardedRpc<{ ready: boolean; message?: string }>(
+    supabase, "neo_production_display_entry", { _token: token, _pin: pin ?? null },
+  );
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function approveSharedDisplayControl(token: string, pin: string, action: "tools" | "logout") {
+  const { data, error } = await guardedRpc<{ ok: boolean; action?: string; message?: string }>(
+    supabase, "neo_production_display_supervisor", { _token: token, _pin: pin, _action: action },
+  );
+  if (error) throw new Error("Supervisor verification is unavailable. Try again or check the display connection.");
+  if (data?.ok !== true || data.action !== action) throw new Error(data?.message ?? "Supervisor approval was refused.");
+}
+
 export async function pairSharedDisplay(
   branchId: string,
   stationIds: string[],

@@ -33,7 +33,7 @@ describe("staff PIN login user interface", () => {
   });
 
   it("opens a linked station directly and preserves ordinary PIN sign-in", () => {
-    expect(pinForm).toContain("station?.href ?? await resolveStationAccountEntry(branchId)");
+    expect(pinForm).toContain("const destination = station?.href");
     expect(pinForm).toContain(
       "/workspace?home=1&property=",
     );
