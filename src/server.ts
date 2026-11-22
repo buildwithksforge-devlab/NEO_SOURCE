@@ -216,6 +216,10 @@ export default {
         env && typeof env === "object" ? (env as Record<string, unknown>) : {},
       );
       if (forwarded) return forwarded;
+      if (url.pathname === "/api/public/staff-pin-login" && request.method === "POST") {
+        const { handleStaffPinPost } = await import("./routes/api/public/staff-pin-login");
+        return protectDynamicResponse(await handleStaffPinPost(request, env && typeof env === "object" ? (env as Record<string, unknown>) : {}));
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return protectDynamicResponse(await normalizeCatastrophicSsrResponse(response));

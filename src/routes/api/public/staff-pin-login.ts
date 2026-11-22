@@ -35,10 +35,7 @@ function safeText(value: unknown, fallback: string, maximum = 250) {
   return cleaned.length > 0 ? cleaned.slice(0, maximum) : fallback;
 }
 
-export const Route = createFileRoute("/api/public/staff-pin-login")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
+export async function handleStaffPinPost(request: Request, runtime: Record<string, unknown> = {}) {
         const authorization = request.headers.get("authorization") ?? "";
 
         const deviceToken = authorization.startsWith("Bearer ")
@@ -105,9 +102,10 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
 
         try {
           const { resolveStaffPin } = await import("@/lib/staff-pin-resolver.server");
-          const resolved = await resolveStaffPin(request, deviceToken, pin);
+          const resolved = await resolveStaffPin(request, deviceToken, pin, runtime);
           if (resolved) return response(resolved.body, resolved.status);
-        } catch {
+        } catch (error) {
+          console.error("[staff-pin-login] direct_exception", { name: error instanceof Error ? error.name.slice(0, 60) : "unknown" });
           return response({ error: "server_error", message: "Staff PIN sign-in is temporarily unavailable." }, 502);
         }
 
@@ -215,7 +213,12 @@ export const Route = createFileRoute("/api/public/staff-pin-login")({
           token_hash: loginToken,
           branch_id: branchId,
         });
-      },
+}
+
+export const Route = createFileRoute("/api/public/staff-pin-login")({
+  server: {
+    handlers: {
+      POST: ({ request }) => handleStaffPinPost(request),
     },
   },
 });

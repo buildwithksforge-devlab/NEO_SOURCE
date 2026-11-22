@@ -15,12 +15,12 @@ type Resolution = {
   message?: string;
 };
 
-export async function resolveStaffPin(request: Request, deviceToken: string, pin: string) {
+export async function resolveStaffPin(request: Request, deviceToken: string, pin: string, bindings: Record<string, unknown> = {}) {
   const runtime = (request as Request & {
     runtime?: { cloudflare?: { env?: Record<string, unknown> } };
   }).runtime?.cloudflare?.env;
-  const url = runtime?.["SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
-  const key = runtime?.["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const url = bindings["SUPABASE_URL"] ?? runtime?.["SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const key = bindings["SUPABASE_SERVICE_ROLE_KEY"] ?? runtime?.["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"];
   // An installation without Worker credentials can continue using its broker.
   if (typeof url !== "string" || !url || typeof key !== "string" || !key) return null;
 
@@ -46,7 +46,7 @@ export async function resolveStaffPin(request: Request, deviceToken: string, pin
   });
   // These errors occur before the database can consume an attempt.
   if (error?.code === "PGRST202" || error?.message === "Invalid API key") return null;
-  if (error || !data) return { status: 502, body: unavailable };
+  if (error || !data) { console.error("[staff-pin-login] rpc_failed", { code: /^[A-Za-z0-9_]{1,24}$/.test(error?.code ?? "") ? error?.code : "empty_response" }); return { status: 502, body: unavailable }; }
 
   if (!data.ok) {
     const reason = data.reason ?? "credentials";
