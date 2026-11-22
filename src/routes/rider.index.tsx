@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RiderHandoverForm } from "@/components/public/RiderHandoverForm";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CarTaxiFront, LifeBuoy, Loader2, LogOut, Phone, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,6 @@ import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel } from "@/lib/public-delivery";
 import {
   useClaimWaitingOrder,
-  useConfirmDelivery,
   useMyDeliveries,
   useMyOutstandingCash,
   useMyRiderProfile,
@@ -62,7 +62,6 @@ function RiderHome() {
   const deliveries = useMyDeliveries(riderId);
   const advance = useRiderAdvance();
   const claim = useClaimWaitingOrder();
-  const confirm = useConfirmDelivery();
   const setAvailability = useSetRiderAvailability();
   const transportJobs = useMyTransportJobs();
   const waiting = useZoneWaitingQueue((rider.data?.["branch_id"] as string | null) ?? null);
@@ -193,16 +192,8 @@ function RiderHome() {
             <DeliveryCard
               key={String(order["id"])}
               order={order}
-              busy={advance.isPending || confirm.isPending}
+              busy={advance.isPending}
               onAdvance={(to) => advance.mutate({ orderId: String(order["id"]), to })}
-              onConfirm={(pin, recipient, cash) =>
-                confirm.mutate({
-                  orderId: String(order["id"]),
-                  pin,
-                  recipient,
-                  ...(cash === undefined ? {} : { cash }),
-                })
-              }
             />
           ))
         )}
@@ -459,12 +450,10 @@ function DeliveryCard({
   order,
   busy,
   onAdvance,
-  onConfirm,
 }: {
   order: Row;
   busy: boolean;
   onAdvance: (to: string) => void;
-  onConfirm: (pin: string, recipient: string, cash?: number) => void;
 }) {
   const status = String(order["order_status"]);
   const next = NEXT_STEP[status];
@@ -473,9 +462,6 @@ function DeliveryCard({
   const destination = [snapshot["address_line"] ?? snapshot["line1"] ?? order["delivery_address"], snapshot["city"]].filter(Boolean).join(", ");
   // Older orders were saved as "cash-on-delivery"; they still count as cash.
   const isCash = normalisePaymentMethod(String(order["payment_method"] ?? "")) === "cash";
-  const [pin, setPin] = useState("");
-  const [recipient, setRecipient] = useState("");
-  const [cash, setCash] = useState("");
 
   return (
     <article id={`job-${String(order["id"])}`} className="neo-rider-card scroll-mt-24 p-4">
@@ -513,49 +499,7 @@ function DeliveryCard({
       ) : null}
 
       {status === "out-for-delivery" ? (
-        <div className="mt-4 space-y-2 border-t border-black/5 pt-4">
-          <Label htmlFor={`pod-pin-${String(order["id"])}`}>Customer PIN</Label>
-          <Input
-            id={`pod-pin-${String(order["id"])}`}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="Ask the customer for their PIN"
-          />
-          <p className="text-xs" style={{ color: brandFallback.steel }}>
-            Ask the customer to read it from their order screen. After five wrong tries the
-            handover locks and dispatch has to authorise it.
-          </p>
-          <Label htmlFor={`pod-recipient-${String(order["id"])}`}>Received by</Label>
-          <Input
-            id={`pod-recipient-${String(order["id"])}`}
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-          />
-          {isCash ? (
-            <>
-              <Label htmlFor={`pod-cash-${String(order["id"])}`}>Cash collected</Label>
-              <Input
-                id={`pod-cash-${String(order["id"])}`}
-                value={cash}
-                onChange={(e) => setCash(e.target.value)}
-                inputMode="decimal"
-              />
-            </>
-          ) : null}
-          <button
-            onClick={() => onConfirm(pin, recipient, cash ? Number(cash) : undefined)}
-            disabled={busy || !recipient.trim() || (pin.length > 0 && pin.length < 4)}
-            className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ background: brandFallback.secondary }}
-          >
-            Confirm delivery
-          </button>
-          <p className="text-xs" style={{ color: brandFallback.steel }}>
-            Leave the PIN blank only if dispatch has authorised this handover without it.
-          </p>
-        </div>
+        <RiderHandoverForm orderId={String(order["id"])} paymentMethod={String(order["payment_method"] ?? "")} />
       ) : null}
     </article>
   );

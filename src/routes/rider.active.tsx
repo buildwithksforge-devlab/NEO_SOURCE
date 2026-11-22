@@ -8,6 +8,7 @@ import { useMyDeliveries, useMyRiderProfile, useRiderAdvance } from "@/lib/deliv
 import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
+import { RiderHandoverForm } from "@/components/public/RiderHandoverForm";
 
 export const Route = createFileRoute("/rider/active")({
   head: () => ({
@@ -57,7 +58,7 @@ function RiderActiveJob() {
         <div className="mx-auto w-full max-w-md">
           <p className="text-sm font-semibold text-white">Active job</p>
           <p className="text-xs text-white/60">
-            {jobs.length === 0 ? "Nothing on the road" : `${jobs.length} on the road`}
+            {jobs.length === 0 ? "No active deliveries" : `${jobs.length} on the road`}
           </p>
         </div>
       </header>
@@ -160,14 +161,10 @@ function RiderActiveJob() {
                     </button>
                   ) : null}
                   {!readyForPickup ? <p className="w-full rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">Waiting for the kitchen to mark this order ready.</p> : null}
-                  {status === "out-for-delivery" ? <Link
-                    to="/rider"
-                    hash={`job-${String(job["id"])}`}
-                    className="neo-commerce-primary w-full"
-                  >
-                    Confirm delivery
-                  </Link> : null}
                 </div>
+                {status === "out-for-delivery" ? (
+                  <RiderHandoverForm orderId={String(job["id"])} paymentMethod={String(job["payment_method"] ?? "")} />
+                ) : null}
               </section>
             );
           })

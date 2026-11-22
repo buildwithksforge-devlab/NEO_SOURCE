@@ -52,6 +52,19 @@ export function useGroupBooking(id: string) {
   });
 }
 
+export function useGroupMasterFolio(groupId: string, masterId: string | null | undefined, branchId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pms", "group-master-folio", groupId, masterId, branchId],
+    enabled: Boolean(groupId && masterId && branchId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("folios").select("id, folio_number, currency, status, balance")
+        .eq("id", masterId!).eq("group_booking_id", groupId).eq("branch_id", branchId!).eq("folio_type", "master").maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  });
+}
+
 export function useGroupBlocks(groupId: string) {
   return useQuery({
     queryKey: ["pms", "group-blocks", groupId],
@@ -228,13 +241,16 @@ export function useConvertRoomingRow() {
 export function useRecordGroupDeposit() {
   const invalidate = useInvalidate(["pms"]);
   return useMutation({
-    mutationFn: (input: { group: string; amount: number; method: string; reference: string }) =>
-      callRpc<{ duplicate?: boolean }>("pms_group_record_deposit", {
+    mutationFn: async (input: { group: string; amount: number; method: string; reference: string }) => {
+      const result = await callRpc<{ duplicate?: boolean; payment_id?: string; folio_id?: string; currency?: string } | null>("pms_group_record_deposit", {
         _group: input.group,
         _amount: input.amount,
         _method: input.method,
         _reference: input.reference,
-      }),
+      });
+      if (!result?.payment_id || !result.folio_id) throw new Error("The database did not return a saved deposit and master folio. Review the payment before retrying.");
+      return { ...result, payment_id: result.payment_id, folio_id: result.folio_id };
+    },
     onSuccess: (r) => {
       toast.success(r.duplicate ? "That deposit reference was already recorded" : "Deposit posted to the group master folio");
       invalidate();

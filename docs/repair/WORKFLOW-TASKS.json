@@ -47,6 +47,15 @@
       "live_acceptance": "OPEN"
     },
     {
+      "id": "WF17-T01",
+      "chains": ["WF17", "WF18", "WF23"],
+      "title": "Link group deposits to the verified master folio and protect reference retries",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["The guarded migration serializes master creation and deposit retries for the same group. Retries compare the saved payment, method, amount, currency and folio. The billing screen opens the verified folio and shows its balance and currency."],
+      "next_action": "Run group-master-deposit-preflight.sql, install the matching migration, then verify the two installed definitions. Check a controlled group deposit and its Finance entries. Shared charge allocation and corporate credit settlement remain separate workflow work.",
+      "live_acceptance": "OPEN"
+    },
+    {
       "id": "WF34-T01",
       "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
       "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
@@ -170,7 +179,7 @@
         "interaction": "Framer: immediate, visible loading, success and recovery states",
         "mobile_reference": "The supplied Medora image guides the layout: an image-led welcome, an overview with a strong first action, a compact icon dock, and details that retain the same palette and type. Use NEØ's own imagery, labels and data."
       },
-      "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history."],
+      "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history.", "Rider Active Job and Home share the same handover form. Active Job completes the selected order in place, with PIN, recipient, cash for cash orders and visible server rejection."],
       "live_evidence": ["Preview build 1de6c43a2f96143c serves the Guest Transfers, Orders and Services routes and the new Transfer and Orders assets."],
       "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
       "live_acceptance": "OPEN"
