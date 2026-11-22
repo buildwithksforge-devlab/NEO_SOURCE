@@ -71,10 +71,11 @@
       "id": "WF11-T02",
       "chains": ["WF03", "WF11", "WF12", "WF23"],
       "title": "Verify configurable payment methods by channel, property and processor",
-      "status": "LOCAL_VERIFIED",
+      "status": "AWAITING_INSTALLATION",
       "source_commit": "ffc50d0",
       "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending."],
-      "next_action": "Use provider-refund-preflight.sql to verify the installed callback definition and grants before applying the refund guard. Connect and prove each intended processor in a sandbox, including callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout needs its own end-to-end implementation and acceptance.",
+      "live_evidence": ["The 2026-11-22 refund preflight export digest affdacd43bd2b9f451158084f8c826da exactly matches the September provider callback in the repository. The export confirms only the service role can execute it. The November dispatch and refund callback definitions are absent."],
+      "next_action": "Run provider-dispatch-baseline.sql to verify the open, mark-sent, claim and apply definitions, then apply the guarded NEO_PROVIDER_PAYMENT_ROLLOUT.sql from build-provider-payment-rollout.mjs. Connect and prove each processor in a sandbox, including callback, receipt, refund and clearing accounts. Public checkout currently supports its configured M-Pesa, cash or pay-on-collection flows. Integrated card or QR in public checkout still requires implementation and acceptance.",
       "live_acceptance": "OPEN"
     },
     {

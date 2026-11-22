@@ -25,6 +25,7 @@ for(const [name,body] of [
  ["neo_platform_public_app_targets",{_branch:uuid}],
  ["neo_branch_in_scope",{_branch:uuid}],
  ["neo_delivery_dispatch_claim",{_job:uuid}],
+ ["neo_payment_intent_claim_dispatch",{_intent:uuid,_token:""}],
  ["neo_station_login_admin",{_branch:uuid,_station:uuid}],
  ["neo_station_login_destination",{_branch:uuid}],
  ["neo_pos_department_menu_availability",{_branch:uuid,_channel:"delivery"}],
