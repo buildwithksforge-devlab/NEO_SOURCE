@@ -59,6 +59,21 @@ export function ShiftReconciliationCard({ shiftId }: { shiftId: string | null })
             />
           </dl>
 
+          {d.deposit_receipts?.length ? (
+            <Lines title="Reservation deposit receipts">
+              {d.deposit_receipts.map((receipt) => (
+                <Row
+                  key={receipt.id}
+                  amount={receipt.amount}
+                  primary={receipt.reference ?? receipt.id.slice(0, 8)}
+                  secondary={new Date(receipt.received_at).toLocaleString()}
+                  journal={receipt.journal_number}
+                  posting={receipt.posting_status}
+                />
+              ))}
+            </Lines>
+          ) : null}
+
           <Lines title="Folio and room receipts">
             {d.folio_receipts.length === 0 ? (
               <FinanceEmpty

@@ -170,7 +170,7 @@ function SharedScreen() {
         <Label htmlFor="station-display-entry-pin">Display PIN</Label>
         <Input id="station-display-entry-pin" type="password" inputMode="numeric" autoComplete="off"
           value={entryPin} maxLength={6} disabled={enter.isPending} onChange={(event) => setEntryPin(event.target.value.replace(/\D/g, ""))} />
-        {enter.isError ? <p role="alert">{enter.error.message}</p> : null}
+        {enter.isError ? <p role="alert">Display sign-in could not be completed. Check the PIN and try again.</p> : null}
         <Button type="submit" disabled={enter.isPending || !online || entryPin.length !== 6}>Open display</Button>
       </form>
     </main>

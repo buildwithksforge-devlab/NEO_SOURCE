@@ -25,6 +25,7 @@ const OUT_OF_SCOPE = [
   /^delivery\.\$/,
   /^rider\./,
   /^auth\./,
+  /^(privacy|terms)\.tsx$/,
   // A hotel's own branded staff sign-in entrance: a public sign-in surface
   // like /auth, not a staff application page.
   /^h\.\$propertySlug/,

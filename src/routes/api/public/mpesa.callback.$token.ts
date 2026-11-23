@@ -59,7 +59,7 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
 
         const txn = await admin
           .from("mpesa_transactions")
-          .select("id, applied_at, amount, merchant_request_id")
+          .select("id, status, applied_at, amount, merchant_request_id")
           .eq("organization_id", organizationId)
           .eq("checkout_request_id", parsed.checkoutRequestId)
           .maybeSingle();
@@ -81,7 +81,8 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
           return new Response("Transaction tracking is not ready", { status: 503 });
         }
 
-        if (txn.data.applied_at) return ACK();
+        // A verified late success can supersede an applied cancellation or timeout.
+        if (txn.data.applied_at && (txn.data.status === "success" || parsed.resultCode !== 0)) return ACK();
 
         const { loadMpesaCredentials, stkQuery, darajaResultCode } =
           await import("@/lib/mpesa.server");

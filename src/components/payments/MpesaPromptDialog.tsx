@@ -2,7 +2,7 @@
  * "Charge to M-Pesa" — sends an STK prompt for a restaurant bill or guest folio
  * and then tracks the provider outcome. Nothing is marked paid here: the pending
  * payment is confirmed only when Safaricom's own result arrives, either through
- * the callback or through an explicit status check.
+ * the callback or through a Safaricom status check.
  */
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -80,6 +80,7 @@ export function MpesaPromptDialog({
   const [lookupPending, setLookupPending] = useState(true);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const sendLock = useRef(false);
+  const automaticChecks = useRef<{ transactionId: string; count: number } | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -124,7 +125,7 @@ export function MpesaPromptDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mpesa_transactions")
-        .select("id, status, result_desc, mpesa_receipt_number, amount, failure_detail")
+        .select("id, status, result_desc, mpesa_receipt_number, amount, failure_detail, checkout_request_id")
         .eq("id", transactionId!)
         .maybeSingle();
       if (error) throw error;
@@ -194,6 +195,27 @@ export function MpesaPromptDialog({
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  const { mutate: checkProvider, isPending: checkingProvider } = check;
+  const checkoutRequestId = status.data?.checkout_request_id;
+  useEffect(() => {
+    if (!open || !transactionId || !checkoutRequestId || !currentStatus ||
+        TERMINAL.has(currentStatus) || checkingProvider) return;
+
+    if (automaticChecks.current?.transactionId !== transactionId) {
+      automaticChecks.current = { transactionId, count: 0 };
+    }
+    const attempt = automaticChecks.current;
+    if (attempt.count >= 3) return;
+
+    // Give the callback time to arrive. A status check only reconciles the
+    // existing attempt and cannot send another prompt.
+    const timer = window.setTimeout(() => {
+      attempt.count++;
+      checkProvider(transactionId);
+    }, 45_000);
+    return () => window.clearTimeout(timer);
+  }, [open, transactionId, checkoutRequestId, currentStatus, checkingProvider, checkProvider]);
 
   const amountValue = Number(amount);
   const setup = useMpesaCollectionStatus();

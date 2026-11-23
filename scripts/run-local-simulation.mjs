@@ -15,6 +15,9 @@ const fixtures = [
   "inventory-batch-cost-postgres", "blind-receiving-review-workflow", "receiving-document-postgres", "supplier-payable-integration-postgres",
   "housekeeping-execution-chain", "events-property-contract", "payroll-posting-release-guard",
   "automatic-platform-checks-postgres", "platform-public-app-health", "simulation-release",
+  "reservation-cash-deposit-till-postgres", "pms-checkout-execution-postgres", "room-readiness-contract",
+  "mpesa-callback-integration", "mpesa-callback-relay", "pos-mpesa-entry-flow",
+  "supplier-matching-postgres", "receiving-grn-handoff", "pos-department-menu-availability",
 ];
 
 function run(...args) {
@@ -27,6 +30,6 @@ mkdirSync(new URL("../.output/", import.meta.url), { recursive: true });
 console.log("Running isolated PostgreSQL fixtures and workflow contracts.");
 run("node_modules/vitest/vitest.mjs", "run", "--maxWorkers", "2",
   "--reporter=default", "--reporter=json", `--outputFile=${report}`,
-  ...fixtures.map((name) => `src/lib/__tests__/${name}.test.ts`));
+  ...fixtures.map((name) => `src/lib/__tests__/${name}.test.`));
 run("scripts/test-readiness-queue-boundaries.mjs");
 console.log(`Local workflow checks passed. Test report: ${report}`);

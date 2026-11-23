@@ -68,7 +68,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       const query: any = { select: () => query, eq: () => query, in: () => query, is: () => query,
         order: () => { lookup = true; return query; }, limit: () => query,
         maybeSingle: async () => lookup ? { data: mock.existingAttempt, error: mock.lookupError }
-          : { data: { id: "txn", status: "pending" }, error: null } };
+          : { data: { id: "txn", status: "pending", checkout_request_id: "checkout-ref" }, error: null } };
       return query;
     },
   },
@@ -472,6 +472,22 @@ describe("POS payment entry dispatch and readiness", () => {
     mount(<MpesaPromptDialog open recoveryOnly paymentId="payment-1" sourceModule="pos_order" sourceRecordId="order-1" balance={51} />);
     expect(await screen.findByText(/No STK collection is linked/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull(); expect(mock.charge).not.toHaveBeenCalled();
+  });
+  it("automatically checks an existing pending attempt without sending another prompt", async () => {
+    const schedule = vi.spyOn(window, "setTimeout");
+    try {
+      mock.existingAttempt = { id: "existing-txn", amount: 51 };
+      mount(<MpesaPromptDialog open sourceModule="pos_order" sourceRecordId="order-1" balance={51} />);
+      await waitFor(() => expect(schedule.mock.calls.some(([, delay]) => delay === 45_000)).toBe(true));
+      const callback = schedule.mock.calls.find(([, delay]) => delay === 45_000)?.[0];
+      expect(typeof callback).toBe("function");
+      expect(mock.reconcile).not.toHaveBeenCalled();
+      await act(async () => { if (typeof callback === "function") callback(); });
+      await waitFor(() => expect(mock.reconcile).toHaveBeenCalledWith({ data: { transactionId: "existing-txn" } }));
+      expect(mock.charge).not.toHaveBeenCalled();
+    } finally {
+      schedule.mockRestore();
+    }
   });
   it("does not enable a new prompt if the existing-attempt lookup fails", async () => {
     mock.lookupError = { message: "private database failure" };

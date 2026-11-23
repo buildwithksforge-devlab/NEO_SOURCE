@@ -496,6 +496,14 @@ export type ShiftReconciliation = {
   counted_cash: number | null;
   variance: number | null;
   variance_reason: string | null;
+  deposit_receipts?: {
+    id: string;
+    reference: string | null;
+    amount: number;
+    received_at: string;
+    journal_number: string | null;
+    posting_status: string | null;
+  }[];
   folio_receipts: {
     payment_id: string;
     receipt_number: string | null;

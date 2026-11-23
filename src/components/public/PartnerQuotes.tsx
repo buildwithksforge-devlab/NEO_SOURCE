@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { NeoDatePicker } from "@/components/common/DatePicker";
 
 type RequestForQuote = {
   id: string;
@@ -64,7 +65,7 @@ function QuoteForm({ request, args, refresh }: {
   return (
     <form className="neo-partner-hero flex-col space-y-2" onSubmit={(event) => {
       event.preventDefault();
-      if (!submit.isPending) submit.mutate();
+      if (!submit.isPending && validUntil) submit.mutate();
     }}>
       <div>
         <h2 className="font-semibold">{request.title || request.number}</h2>
@@ -81,17 +82,18 @@ function QuoteForm({ request, args, refresh }: {
           : line.price != null ? <span> · {format(line.price)} per {line.unit}</span> : null}
       </label>)}
       {request.can_quote && lines.length ? <>
-        <label className="block">Valid until
-          <input className="block min-h-11 rounded border bg-background px-3 text-foreground" type="date"
-            required value={validUntil} disabled={submit.isPending} onChange={(event) => setValidUntil(event.target.value)} />
-        </label>
+        <div>
+          <p>Valid until</p>
+          <NeoDatePicker ariaLabel="Valid until" value={validUntil}
+            disabled={submit.isPending} onChange={setValidUntil} />
+        </div>
         <label className="block">Delivery and payment terms
           <textarea className="block w-full rounded border bg-background p-3 text-foreground" maxLength={2000}
             value={notes} disabled={submit.isPending} onChange={(event) => setNotes(event.target.value)} />
         </label>
         <p>Quote total {format(lines.reduce((sum, line) =>
           sum + Math.round(line.quantity * Number(prices[line.id] || 0) * 100) / 100, 0))}</p>
-        <button className="neo-commerce-primary" disabled={submit.isPending}>
+        <button className="neo-commerce-primary" disabled={submit.isPending || !validUntil}>
           {request.quote_id ? "Submit revised quotation" : "Submit quotation"}
         </button>
       </> : <p>Quotation changes are closed for this request.</p>}

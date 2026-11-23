@@ -14,6 +14,7 @@ import { Route } from "@/routes/api/public/mpesa.callback.$token";
 const queryState = vi.hoisted(() => ({
   resultCode: "0",
   unavailable: false,
+  appliedStatus: null as string | null,
 }));
 
 type Insert = Record<string, unknown>;
@@ -51,7 +52,8 @@ function makeAdmin() {
             ? {
                 data: {
                   id: "txn-1",
-                  applied_at: null,
+                  status: queryState.appliedStatus ?? "pending",
+                  applied_at: queryState.appliedStatus ? "2026-11-23T00:00:00Z" : null,
                   amount: 2500,
                   merchant_request_id: "mr-1",
                 },
@@ -142,6 +144,7 @@ describe("M-Pesa STK callback", () => {
     transactionOwnerOrg = "org-1";
     queryState.resultCode = "0";
     queryState.unavailable = false;
+    queryState.appliedStatus = null;
     applyResult = { data: { applied: true, status: "success" }, error: null };
   });
 
@@ -149,6 +152,12 @@ describe("M-Pesa STK callback", () => {
     const res = await post("not-a-real-token-xx", payload(0));
     expect(res.status).toBe(401);
     expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("verifies and applies a late success after a cancellation was recorded", async () => {
+    queryState.appliedStatus = "cancelled";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(200);
+    expect(rpcCalls[0]?.args).toMatchObject({ _result_code: 0, _source: "callback" });
   });
 
   it("does not resolve another tenant's transaction through a valid callback token", async () => {

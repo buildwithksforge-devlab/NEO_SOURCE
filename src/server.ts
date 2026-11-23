@@ -24,7 +24,7 @@ const LOVABLE_MPESA_FUNCTIONS = new Map([
   ["a298d96ac388c4c939b606b376547f88b23dbf95f9c193d59a8926c1baf2f8c0", "settings"],
   ["ad043ee140ba978f053a297c76e78345643b42f3bfd28eee8ad60f618cde9855", "connection"],
   ["9da0afc433195f41243eb2d86b167de79fb5b2707cfbb1bda8088afd3d76f3fd", "payment"],
-  ["e9409f285f66cf784b5c66c6197de83b3e7845953b5d207a0bea88432d90af1a", "payment"],
+  ["e9409f285f66cf784b5c66c6197de83b3e7845953b5d207a0bea88432d90af1a", "reconciliation"],
   ["8f1dadac4fa9729e857403dafc8ef4d24a22bce0247595af2eebe91e4b203fc1", "payment"],
 ]);
 
@@ -70,7 +70,8 @@ export async function forwardLovableMpesaRequest(
       503,
     );
   }
-  if (operation === "payment" && setting("NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED") !== "true") {
+  if ((operation === "payment" || operation === "reconciliation") &&
+      setting("NEO_LOVABLE_BRIDGE_CALLBACKS_ENABLED") !== "true") {
     return fail("Payment callbacks must be routed to the managed backend before forwarding collections.", 503);
   }
   const contentType = request.headers.get("content-type");

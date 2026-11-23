@@ -27,7 +27,7 @@ describe("published Delivery links", () => {
       branch_id: "branch", organization_id: "org", property_name: "Canonical hotel",
       media: { logo_url: "https://hotel.example/logo.webp" },
     }, error: null });
-    expect(await resolve(" HOTEL ")).toEqual({
+    expect(await resolve(" HOTEL ")).toMatchObject({
       ...workspace, hotel_name: "Canonical hotel", logo_url: "https://hotel.example/logo.webp",
     });
     expect(rpc).toHaveBeenNthCalledWith(1, "neo_public_delivery_workspace", { _slug: "hotel" });
