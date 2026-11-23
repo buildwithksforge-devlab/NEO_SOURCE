@@ -135,7 +135,7 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
         initialAmount={amountValue}
         open={open}
         availabilityBlocked={!providerReady || balanceChanged}
-        availabilityBlockReason={balanceChanged ? balanceChangeMessage : undefined}
+        {...(balanceChanged ? { availabilityBlockReason: balanceChangeMessage } : {})}
         onOpenChange={(next) => {
           if (!next) setMethod("cash");
           onOpenChange(next);
