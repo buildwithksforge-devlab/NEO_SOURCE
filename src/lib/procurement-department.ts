@@ -71,6 +71,7 @@ export function useSupplierQuotations(requestId: string | null) {
         .select(
           "*, suppliers:supplier_id(id, name, payment_terms, credit_terms_days, rating, on_time_deliveries, late_deliveries)",
         )
+        .neq("status", "superseded")
         .order("created_at", { ascending: false })
         .limit(200);
       if (requestId) q = q.eq("request_id", requestId);
@@ -154,7 +155,7 @@ export function useSelectQuotation() {
           .eq("request_id", input.requestId);
         if (clearError) throw new Error(clearError.message);
       }
-      const { error } = await db
+      const { data, error } = await db
         .from("supplier_quotations")
         .update({
           selected: true,
@@ -164,8 +165,12 @@ export function useSelectQuotation() {
           selection_reason: input.reason.trim(),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", input.quotationId);
+        .eq("id", input.quotationId)
+        .neq("status", "superseded")
+        .select("id")
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (!data) throw new Error("This quotation was revised. Refresh before selecting it.");
     },
     onSuccess: () => {
       const refresh = invalidate();

@@ -551,12 +551,20 @@ function RfqPanel({ requestId, mayManage }: { requestId: string; mayManage: bool
                           <TableRow key={String(invite["id"])}>
                             <TableCell>{str(supplier["name"])}</TableCell>
                             <TableCell>
-                              <StatusPill>{RFQ_DISPATCH_STATES[state] ?? state}</StatusPill>
+                              <StatusPill>{state === "sent" && invite["dispatch_channel"] === "portal"
+                                ? "Published to supplier portal" : RFQ_DISPATCH_STATES[state] ?? state}</StatusPill>
                             </TableCell>
                             <TableCell>{invite["responded_at"] ? "Received" : "Awaiting"}</TableCell>
                             <TableCell className="text-right">
                               {mayManage ? (
                                 <div className="flex justify-end gap-2">
+                                  <Button size="sm" variant="outline"
+                                    disabled={recordDispatch.isPending || state === "sent" || state === "marked-sent"}
+                                    onClick={() => recordDispatch.mutate({
+                                      inviteId: String(invite["id"]), state: "sent", channel: "portal",
+                                    })}>
+                                    Publish to supplier portal
+                                  </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"

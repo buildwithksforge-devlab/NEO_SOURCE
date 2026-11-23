@@ -130,6 +130,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
 
   // Partner portal and the administration screen that grants access to it.
   neo_partner_context: "authenticated",
+  neo_partner_rfq_quotes: "authenticated",
   neo_partner_records: "authenticated",
   neo_partner_invite: "authenticated",
   neo_partner_access_list: "authenticated",

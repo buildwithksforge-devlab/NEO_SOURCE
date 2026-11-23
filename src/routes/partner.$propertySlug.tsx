@@ -25,6 +25,7 @@ import { useTrackEntry } from "@/lib/traffic";
 import { useCustomerSession } from "@/lib/public-session";
 import { exportPartnerPurchaseOrder } from "@/lib/document-pdf.functions";
 import { downloadDocumentPdf } from "@/lib/browser-document";
+import { PartnerQuotes } from "@/components/public/PartnerQuotes";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
@@ -77,10 +78,11 @@ type PartnerRecords = {
   corporate_account?: Record<string, unknown> | null;
 };
 
-type PartnerSection = "overview" | "orders" | "deliveries" | "invoices" | "messages";
+type PartnerSection = "overview" | "quotes" | "orders" | "deliveries" | "invoices" | "messages";
 
 const SECTIONS: { key: PartnerSection; label: string; icon: typeof Handshake }[] = [
   { key: "overview", label: "Overview", icon: Handshake },
+  { key: "quotes", label: "Quotes", icon: FileText },
   { key: "orders", label: "Orders", icon: ShoppingBag },
   { key: "deliveries", label: "Deliveries", icon: PackageCheck },
   { key: "invoices", label: "Invoices", icon: FileText },
@@ -231,7 +233,8 @@ function PartnerPortal() {
   };
 
   return (
-    <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}>
+    <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}
+      supplier={relationships.some((rel) => rel.id === active && rel.relationship_type === "supplier")}>
       {section === "overview" ? (
         <section className="neo-partner-hero mt-4">
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" aria-hidden /></span>
@@ -306,6 +309,8 @@ function PartnerPortal() {
         </>
       ) : null}
 
+      {section === "quotes" && branchId && active && relationships.some((rel) => rel.id === active && rel.relationship_type === "supplier")
+        ? <PartnerQuotes key={active} branch={branchId} relationship={active} /> : null}
       {data && section === "orders" ? (
         <PartnerRecordsList key={active} kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
           onDownload={(number) => void downloadOrder(number)} downloading={downloadingOrder} />
@@ -639,12 +644,14 @@ function Shell({
   property,
   section,
   onSection,
+  supplier = false,
 }: {
   title: string;
   children: React.ReactNode;
   property?: PublicProperty | null | undefined;
   section?: PartnerSection;
   onSection?: (next: PartnerSection) => void;
+  supplier?: boolean;
 }) {
   const primary = normalizedHex(property?.brand?.primary || brandFallback.primary);
   const secondary = normalizedHex(property?.brand?.accent || brandFallback.secondary, brandFallback.secondary);
@@ -669,9 +676,9 @@ function Shell({
         {section && onSection ? (
           <nav
             aria-label="Partner sections"
-            className="neo-partner-tabs mt-6 grid grid-cols-5 gap-1"
+            className={`neo-partner-tabs mt-6 grid gap-1 ${supplier ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-5"}`}
           >
-            {SECTIONS.map(({ key, label, icon: Icon }) => (
+            {SECTIONS.filter(({ key }) => key !== "quotes" || supplier).map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 type="button"
