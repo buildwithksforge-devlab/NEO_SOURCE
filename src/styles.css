@@ -2242,6 +2242,17 @@ body {
   background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.035));
   box-shadow:0 26px 70px -48px rgba(0,0,0,.95);
 }
+.neo-partner-branded {
+  font-family: var(--pb-body, "Plus Jakarta Sans", sans-serif);
+  background:
+    radial-gradient(95% 70% at 10% -10%, color-mix(in srgb, var(--pb-primary, #18c4c8) 26%, transparent), transparent 65%),
+    radial-gradient(65% 55% at 100% 0%, color-mix(in srgb, var(--pb-accent, #d5af63) 18%, transparent), transparent 60%),
+    linear-gradient(180deg, #051129, #020a1c 65%, #010712);
+}
+.neo-partner-branded .neo-pub-display { font-family: var(--pb-display, Georgia, serif); }
+.neo-partner-branded .neo-partner-hero { border-color: color-mix(in srgb, var(--pb-accent, #d5af63) 38%, transparent); border-radius: var(--pb-radius, 18px); }
+.neo-partner-branded .neo-pub-card { border-radius: var(--pb-radius, 18px); }
+.neo-partner-branded .neo-partner-tabs { border-color: color-mix(in srgb, var(--pb-primary, #18c4c8) 35%, transparent); }
 .neo-partner-tabs { position:sticky; top:.5rem; z-index:8; border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:.35rem; background:rgba(2,10,28,.82); backdrop-filter:blur(18px); }
 
 /* Guest companion: retain hotel colours with readable semantic surfaces in both appearances. */

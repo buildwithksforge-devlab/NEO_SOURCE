@@ -309,7 +309,7 @@ export function useSuppliers() {
           .from("suppliers")
           .select(
             sel(
-              "id, name, contact_person, phone, email, categories, credit_terms_days, outstanding_balance, rating, on_time_deliveries, late_deliveries, active, branch_id",
+              "id, name, contact_person, phone, email, categories, credit_terms_days, outstanding_balance, rating, on_time_deliveries, late_deliveries, active, branch_id, currency",
             ),
           ),
         "suppliers",

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { NeoDatePicker } from "@/components/common/DatePicker";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
 import { ClipboardList } from "lucide-react";
 import { PageHeader, StatusPill } from "@/components/common/DataDisplay";
@@ -35,7 +35,9 @@ import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { formatMoney, statusTone, titleCase, type Row } from "@/lib/inventory";
 import { describeRequestOrigin } from "@/lib/procurement";
-import { usePurchaseRequests, useStockLocations, useSuppliers } from "@/lib/inventory-data";
+import { usePurchaseRequests, useStockLocations } from "@/lib/inventory-data";
+import { useSelectedSupplierQuote } from "@/lib/procurement-department";
+import { useActiveTimezone } from "@/lib/branches";
 import {
   newAttemptKey,
   useCreateOrderFromRequest,
@@ -78,9 +80,9 @@ const GROUP_LABEL: Record<string, string> = {
 
 function Page() {
   const { tenant } = useTenant();
+  const timezone = useActiveTimezone();
   const symbol = tenant.regional.currencySymbol;
   const requests = usePurchaseRequests();
-  const suppliers = useSuppliers();
   const locations = useStockLocations();
 
   const { can } = useAuth();
@@ -96,7 +98,6 @@ function Page() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [convertFor, setConvertFor] = useState<Row | null>(null);
-  const [supplierId, setSupplierId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [expected, setExpected] = useState("");
   const [attemptKey, setAttemptKey] = useState(newAttemptKey);
@@ -105,8 +106,14 @@ function Page() {
   const [rejectReason, setRejectReason] = useState("");
 
   const rows = (requests.data ?? []) as Row[];
-  const supplierRows = (suppliers.data ?? []) as Row[];
   const locationRows = (locations.data ?? []) as Row[];
+  const selectedQuote = useSelectedSupplierQuote(convertFor ? String(convertFor["id"]) : null);
+  const quote = selectedQuote.data;
+  const quoteLines = (quote?.["supplier_quotation_lines"] ?? []) as Row[];
+  const localToday = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const quoteReady = Boolean(quote && quoteLines.length > 0 &&
+    (!quote["valid_until"] || String(quote["valid_until"]) >= localToday) &&
+    String(quote["currency"]) === tenant.regional.currency);
 
   const grouped = useMemo(
     () => ({
@@ -121,7 +128,6 @@ function Page() {
 
   function openConvert(request: Row) {
     setConvertFor(request);
-    setSupplierId("");
     setLocationId("");
     setExpected("");
     setAttemptKey(newAttemptKey());
@@ -390,24 +396,20 @@ function Page() {
           <DialogHeader>
             <DialogTitle>Raise purchase order</DialogTitle>
             <DialogDescription>
-              {`Requisition ${String(convertFor?.["request_number"] ?? "")} becomes a draft purchase order with the same lines.`}
+              {`Requisition ${String(convertFor?.["request_number"] ?? "")} becomes a draft purchase order using the selected supplier quotation.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Supplier</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an approved supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {supplierRows.map((s) => (
-                    <SelectItem key={String(s["id"])} value={String(s["id"])}>
-                      {String(s["name"])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Selected supplier quotation</Label>
+              {selectedQuote.isLoading ? <p className="text-sm text-muted-foreground">Checking quotation…</p> :
+                selectedQuote.error ? <p role="alert" className="text-sm text-destructive">Could not check the selected quotation. Refresh and try again.</p> :
+                quoteReady ? <p className="text-sm">
+                  {String((quote?.["suppliers"] as Row | null)?.["name"] ?? "Supplier")} · {String(quote?.["quotation_number"] ?? "")} · {Number(quote?.["total_amount"]).toLocaleString()} {String(quote?.["currency"] ?? "")}
+                </p> : <p className="text-sm text-destructive">
+                  Select an itemized, current supplier quotation before raising the order.{" "}
+                  <Link to="/procurement/quotations" className="underline" onClick={() => setConvertFor(null)}>Open quotations</Link>
+                </p>}
             </div>
             <div className="space-y-2">
               <Label>Deliver to store</Label>
@@ -434,12 +436,12 @@ function Page() {
               Cancel
             </Button>
             <Button
-              disabled={!supplierId || convert.isPending}
+              disabled={!quoteReady || convert.isPending}
               onClick={() =>
                 convert.mutate(
                   {
                     requestId: String(convertFor?.["id"]),
-                    supplierId,
+                    supplierId: String(quote?.["supplier_id"] ?? ""),
                     expectedDate: expected || null,
                     locationId: locationId || null,
                     attemptKey,

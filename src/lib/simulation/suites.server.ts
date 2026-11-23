@@ -459,6 +459,30 @@ export async function suiteShortageProcurement(ctx: SuiteContext) {
     }
     t.note("approval_refusals", approvals);
     t.must("the requisition is approved", Boolean(approvedBy), "approved", approvals.join(" | "));
+    const { data: requestLines, error: linesError } = await procurement
+      .from("purchase_request_lines")
+      .select("id, estimated_unit_price")
+      .eq("request_id", ctx.state["purchaseRequestId"]!);
+    if (linesError) throw new Error(`Could not read requested items: ${linesError.message}`);
+    const pricedLines = (requestLines ?? []) as { id: string; estimated_unit_price: number }[];
+    t.must("requested items can be quoted", pricedLines.length > 0);
+    const quote = (await expectOk(procurement, "neo_procurement_record_supplier_quote", {
+      _request: ctx.state["purchaseRequestId"],
+      _supplier: ctx.a.seed["supplierId"],
+      _lines: pricedLines.map((line) => ({
+        request_line_id: line.id,
+        unit_price: line.estimated_unit_price,
+        tax_rate: 0,
+      })),
+      _notes: "System test supplier price",
+    })) as { quotation_id: string };
+    t.must("supplier quotation recorded", Boolean(quote.quotation_id));
+    await expectOk(procurement, "neo_procurement_recommend_supplier_quote", {
+      _request: ctx.state["purchaseRequestId"],
+      _quotation: quote.quotation_id,
+      _reason: "System test single source supplier",
+      _single_source: true,
+    });
     const created = (await expectOk(procurement, "neo_procurement_order_from_request", {
       _request: ctx.state["purchaseRequestId"],
       _supplier: ctx.a.seed["supplierId"],
@@ -483,8 +507,10 @@ export async function suiteShortageProcurement(ctx: SuiteContext) {
     t.note("order_approval_refusals", orderRefusals);
     if (!orderApprovedBy) throw new Error(`No role could approve the order — ${orderRefusals.join(" | ")}`);
     t.note("order_approved_by", orderApprovedBy);
-    const { data: po } = await procurement.from("purchase_orders").select("status").eq("id", orderId!).maybeSingle();
+    const { data: po } = await procurement.from("purchase_orders").select("status, quotation_id").eq("id", orderId!).maybeSingle();
     t.check("order is approved", /approv|pending-delivery|sent|issued/i.test((po as { status: string } | null)?.status ?? ""), "approved", (po as { status: string } | null)?.status);
+    t.check("order uses selected quote", (po as { quotation_id: string | null } | null)?.quotation_id === quote.quotation_id,
+      quote.quotation_id, (po as { quotation_id: string | null } | null)?.quotation_id);
   });
 
   await rec.run("Shortage → Procurement", 3, "grn.received", "Goods are received and stock rises", async (t) => {
