@@ -32,10 +32,8 @@ DECLARE
   staff text := replace(pg_get_functiondef('public.neo_document_payload(text,uuid)'::regprocedure),chr(13)||chr(10),chr(10));
   partner text := replace(pg_get_functiondef('public.neo_partner_lpo_payload(uuid,uuid,text)'::regprocedure),chr(13)||chr(10),chr(10));
   staff_hook text := $hook$ELSE coalesce(_totals,'[]'::jsonb) END,$hook$;
-  partner_begin text := $hook$'totals',jsonb_build_array($hook$;
-  partner_end text := $hook$
-    ),
-    'meta',jsonb_strip_nulls$hook$;
+  partner_begin text := $hook$'totals'[[:space:]]*,[[:space:]]*jsonb_build_array[[:space:]]*\($hook$;
+  partner_end text := $hook$\)[[:space:]]*,[[:space:]]*'meta'[[:space:]]*,[[:space:]]*jsonb_strip_nulls$hook$;
 BEGIN
   IF strpos(staff,'neo_lpo_document_tax_totals')=0 THEN
     IF strpos(staff,'neo_pos_sales_tax_receipt')=0 OR (length(staff)-length(replace(staff,staff_hook,'')))<>length(staff_hook) THEN
@@ -45,13 +43,13 @@ BEGIN
       $hook$WHEN _type='purchase_order' THEN public.neo_lpo_document_tax_totals(_id,_org,coalesce(_totals,'[]'::jsonb)) ELSE coalesce(_totals,'[]'::jsonb) END,$hook$);
   END IF;
   IF strpos(partner,'neo_lpo_document_tax_totals')=0 THEN
-    IF (length(partner)-length(replace(partner,partner_begin,'')))<>length(partner_begin)
-      OR (length(partner)-length(replace(partner,partner_end,'')))<>length(partner_end) THEN
+    IF (SELECT count(*) FROM regexp_matches(partner, partner_begin, 'g'))<>1
+      OR (SELECT count(*) FROM regexp_matches(partner, partner_end, 'g'))<>1 THEN
       RAISE EXCEPTION 'Partner LPO payload needs review before adding saved tax rows';
     END IF;
-    EXECUTE replace(replace(partner,partner_begin,
+    EXECUTE regexp_replace(regexp_replace(partner,partner_begin,
       $hook$'totals',public.neo_lpo_document_tax_totals(p.id,p.organization_id,jsonb_build_array($hook$),
-      partner_end,replace(partner_end,'),',')),') );
+      partner_end,$hook$)), 'meta',jsonb_strip_nulls$hook$);
   END IF;
 END;
 $documents$;

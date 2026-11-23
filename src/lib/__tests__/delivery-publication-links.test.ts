@@ -29,6 +29,8 @@ describe("published Delivery links", () => {
     }, error: null });
     expect(await resolve(" HOTEL ")).toEqual({
       ...workspace, hotel_name: "Canonical hotel", logo_url: "https://hotel.example/logo.webp",
+      primary_color: undefined, secondary_color: undefined,
+      background_color: undefined, experience_brand: null,
     });
     expect(rpc).toHaveBeenNthCalledWith(1, "neo_public_delivery_workspace", { _slug: "hotel" });
     expect(rpc).toHaveBeenNthCalledWith(2, "neo_public_property", { _slug: "hotel" });

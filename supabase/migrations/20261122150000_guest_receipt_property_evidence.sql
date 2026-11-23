@@ -3,10 +3,7 @@
 DO $migration$
 DECLARE
   definition text := pg_get_functiondef('public.neo_guest_folio_projection(uuid)'::regprocedure);
-  old_fragment constant text := $old$
-               'id', p.id,
-               'receipt_number', p.receipt_number,
-$old$;
+  old_pattern constant text := $old$'id'[[:space:]]*,[[:space:]]*p[.]id[[:space:]]*,[[:space:]]*'receipt_number'[[:space:]]*,[[:space:]]*p[.]receipt_number[[:space:]]*,$old$;
   new_fragment constant text := $new$
                'id', p.id,
                'branch_id', p.branch_id,
@@ -15,10 +12,9 @@ $old$;
 $new$;
 BEGIN
   IF strpos(definition, new_fragment) > 0 THEN RETURN; END IF;
-  IF strpos(definition, old_fragment) = 0
-     OR (length(definition) - length(replace(definition, old_fragment, ''))) <> length(old_fragment) THEN
+  IF (SELECT count(*) FROM regexp_matches(definition, old_pattern, 'g')) <> 1 THEN
     RAISE EXCEPTION 'Review installed guest folio projection before adding receipt property evidence';
   END IF;
-  EXECUTE replace(definition, old_fragment, new_fragment);
+  EXECUTE regexp_replace(definition, old_pattern, new_fragment);
 END
 $migration$;

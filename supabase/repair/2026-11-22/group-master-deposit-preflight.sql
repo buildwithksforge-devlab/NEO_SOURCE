@@ -10,7 +10,7 @@ WITH expected(signature, supported_baselines, installed_definition) AS (
   SELECT *, to_regprocedure(signature) AS routine
   FROM expected
 ), definitions AS (
-  SELECT *, md5(pg_get_functiondef(routine)) AS definition
+  SELECT *, md5(replace(pg_get_functiondef(routine), chr(13)||chr(10), chr(10))) AS definition
   FROM resolved
 )
 SELECT signature, definition,

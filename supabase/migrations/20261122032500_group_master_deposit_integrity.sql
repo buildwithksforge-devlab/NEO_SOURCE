@@ -2,9 +2,9 @@ BEGIN;
 
 DO $group_billing_baseline$
 BEGIN
-  IF coalesce(md5(pg_get_functiondef(to_regprocedure('public.pms_group_master_folio(uuid)'))), '') NOT IN (
+  IF coalesce(md5(replace(pg_get_functiondef(to_regprocedure('public.pms_group_master_folio(uuid)')), chr(13)||chr(10), chr(10))), '') NOT IN (
       '7b012d1fc093d3e8797371df1517de7e', 'd92dbf19d47aceff79afbe1a2ab5f8d8')
-    OR coalesce(md5(pg_get_functiondef(to_regprocedure('public.pms_group_record_deposit(uuid,numeric,text,text)'))), '') NOT IN (
+    OR coalesce(md5(replace(pg_get_functiondef(to_regprocedure('public.pms_group_record_deposit(uuid,numeric,text,text)')), chr(13)||chr(10), chr(10))), '') NOT IN (
       'bec92f98f5f1fb8d771a3c9fbdbd54af', '53fe19416b12ce7e96ea71f379cb339b',
       'cd19a123f24e3120508451c6f38e47f0', 'fdd61dfbb695ca573e4d194cc8bf246b') THEN
     RAISE EXCEPTION 'Installed group billing definitions differ from the reviewed versions.';

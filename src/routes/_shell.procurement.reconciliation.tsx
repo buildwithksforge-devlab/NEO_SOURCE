@@ -157,6 +157,33 @@ function Page() {
     },
   });
 
+  const requestRecount = useMutation({
+    mutationFn: async ({ countId, reason }: { countId: string; reason: string }) => {
+      const { data, error } = await guardedRpc<boolean>(db, "neo_request_receiving_recount", {
+        _count_id: countId,
+        _reason: reason,
+      });
+      if (error) throw new Error(error.message);
+      if (data !== true) throw new Error("The recount request was not confirmed. Refresh before retrying.");
+    },
+    onSuccess: async () => {
+      toast.success("Storekeeper recount requested. Approval waits for the independent count.");
+      await invalidateSupplyViews(queryClient);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  function submitRecount(count: ReviewCount) {
+    if (requestRecount.isPending || decide.isPending) return;
+    const reason = notes[count.count_id]?.trim() ?? "";
+    if (!reason) {
+      toast.error("Enter the reason for requesting a recount.");
+      return;
+    }
+    if (!window.confirm("Request an independent Storekeeper recount for this delivery?")) return;
+    requestRecount.mutate({ countId: count.count_id, reason });
+  }
+
   function submitDecision(count: ReviewCount, decision: "approved" | "rejected") {
     if (decide.isPending) return;
     const reason = notes[count.count_id]?.trim() ?? "";
@@ -433,16 +460,25 @@ function Page() {
                     />
 
                     <div className="flex flex-wrap justify-end gap-3">
+                      {count.custody_status === "discrepancy" && !count.recount_requested ? (
+                        <Button
+                          variant="outline"
+                          disabled={decide.isPending || requestRecount.isPending}
+                          onClick={() => submitRecount(count)}
+                        >
+                          Request recount
+                        </Button>
+                      ) : null}
                       <Button
                         variant="destructive"
-                        disabled={decide.isPending}
+                        disabled={decide.isPending || requestRecount.isPending}
                         onClick={() => submitDecision(count, "rejected")}
                       >
                         Reject Count
                       </Button>
 
                       <Button
-                        disabled={decide.isPending || hasExcess ||
+                        disabled={decide.isPending || requestRecount.isPending || hasExcess ||
                           !(count.clerk_grn_workflow ? count.custody_status !== "discrepancy" :
                             count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
                               ["pending", "acknowledged"].includes(count.custody_status)))}

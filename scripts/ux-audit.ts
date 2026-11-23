@@ -33,6 +33,8 @@ const OUT_OF_SCOPE = [
   /^unauthorized/,
   /^index\./,
   /^public\./,
+  /^privacy\.tsx$/,
+  /^terms\.tsx$/,
   // NEØ public front door and partner portal: customer/business surfaces.
   /^start\./,
   /^partner\./,
