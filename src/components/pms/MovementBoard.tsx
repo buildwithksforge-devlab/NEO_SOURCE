@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { formatDate, money, titleCase, today } from "@/lib/pms";
 import { useReservations } from "@/lib/pms-data";
 import { reservationFolioIndex } from "@/lib/reservation-folio-index";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 import { EmptyState, QueryState, ReservationStatusBadge } from "@/components/pms/PmsShared";
 import { RevertCheckInDialog } from "@/components/pms/RevertCheckInDialog";
 import {
@@ -33,6 +34,7 @@ function useOpenFolioIndex() {
   return useQuery({
     queryKey: ["pms", "folio-index", organizationId, filterKey],
     enabled: Boolean(organizationId),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       const { data, error } = await applyTo(supabase.from("folios").select("id, reservation_id, folio_type, currency, balance, status"), "folios")
         .in("status", ["open", "under-review", "reopened"]);

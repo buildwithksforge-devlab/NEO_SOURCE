@@ -75,11 +75,13 @@ describe("departmental POS menu stock", () => {
     const routing = readFileSync("supabase/migrations/20261105180000_workspace_station_store_integrity.sql", "utf8");
     await db.exec(routing.match(/CREATE OR REPLACE FUNCTION public\.neo_station_consumption_location[\s\S]*?\$function\$;/)![0]);
     await db.exec(readFileSync("supabase/migrations/20261119172000_pos_department_menu_availability.sql", "utf8"));
-    const production = readFileSync("supabase/migrations/20261005123000_batch_operational_consumption.sql", "utf8");
+    // Later migrations compare fragments of the installed function bodies.
+    // Match the committed SQL on Windows checkouts that convert it to CRLF.
+    const production = readFileSync("supabase/migrations/20261005123000_batch_operational_consumption.sql", "utf8").replace(/\r\n/g, "\n");
     for (const name of ["neo_production_batch_post", "neo_consume_prepared_batch"]) {
       await db.exec(production.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}[\\s\\S]*?\\n\\$\\$;`))![0]);
     }
-    const sale = readFileSync("supabase/migrations/20261114013000_shared_workspace_workflows.sql", "utf8");
+    const sale = readFileSync("supabase/migrations/20261114013000_shared_workspace_workflows.sql", "utf8").replace(/\r\n/g, "\n");
     await db.exec(sale.match(/CREATE OR REPLACE FUNCTION public\.inventory_consume_order_item_core[\s\S]*?\$function\$;/)![0]);
     await db.exec(readFileSync("supabase/migrations/20261120170000_department_batch_inventory_alignment.sql", "utf8"));
     await db.exec(`

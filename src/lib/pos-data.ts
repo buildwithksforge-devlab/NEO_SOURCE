@@ -713,12 +713,11 @@ export function useRemoveDraftItem() {
  * These are trading rules the property configures, never values invented at
  * the till: an empty list means no discount may be applied here yet.
  */
-export function usePosDiscountPolicies() {
+export function usePosDiscountPolicies(orderBranchId: string | null | undefined, orderType: string | undefined) {
   const { organizationId } = useAuth();
-  const { branchId, filterKey } = useActivePropertyFilter();
   return useQuery({
-    queryKey: ["pos", "discount-policies", organizationId, filterKey],
-    enabled: Boolean(organizationId),
+    queryKey: ["pos", "discount-policies", organizationId, orderBranchId, orderType],
+    enabled: Boolean(organizationId && orderType),
     queryFn: async () => {
       let q = supabase
         .from("pos_discounts")
@@ -726,10 +725,14 @@ export function usePosDiscountPolicies() {
         .eq("organization_id", organizationId!)
         .eq("active", true)
         .order("name");
-      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      q = orderBranchId
+        ? q.or(`branch_id.eq.${orderBranchId},branch_id.is.null`)
+        : q.is("branch_id", null);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).filter(
+        (policy) => !policy.order_types?.length || policy.order_types.some((type) => type === orderType),
+      );
     },
   });
 }

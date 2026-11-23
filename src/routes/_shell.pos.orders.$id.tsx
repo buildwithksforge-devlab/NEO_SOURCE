@@ -155,7 +155,7 @@ function OrderTerminal() {
     || can("finance", "till", "confirm_cash") || can("finance", "approve");
   const submitReceipt = useSubmitMpesaReceiptReview();
   const receiptReviews = useMpesaReceiptReviewQueue(order.data?.branch_id ?? null);
-  const discountPolicies = usePosDiscountPolicies();
+  const discountPolicies = usePosDiscountPolicies(order.data?.branch_id, order.data?.order_type);
   const applyDiscount = useApplyPosDiscount();
   const receiptPrintState = usePosReceiptPrintState(id);
   const pendingCash = usePendingPosCashRequests(id);
@@ -629,12 +629,11 @@ function OrderTerminal() {
                             )?.trim();
                             if (!reason) return;
                           }
-                          setDiscountChoice(v);
                           applyDiscount.mutate({
                             orderId: data.id,
                             discountId: v === "none" ? null : v,
                             ...(reason ? { reason } : {}),
-                          });
+                          }, { onSuccess: () => setDiscountChoice(v) });
                         }}
                         disabled={applyDiscount.isPending || !(discountPolicies.data?.length ?? 0)}
                       >

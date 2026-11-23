@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { DEFAULT_PMS_SETTINGS, type PmsSettings, today } from "@/lib/pms";
 import { stableIdempotencyKey } from "@/lib/transaction-scope";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 
 /* ------------------------------------------------------------------ *
  * Reference data
@@ -115,8 +116,12 @@ export function useReservations(filters: {
   return useQuery({
     queryKey: ["pms", "reservations", organizationId, filters, filterKey],
     enabled: Boolean(organizationId),
+    ...(filters.scope && filters.scope !== "all" ? VISIBLE_VIEW_REFRESH : {}),
     queryFn: async () => {
-      let q = applyTo(supabase.from("reservations").select(RESERVATION_SELECT), "reservations");
+      let q = applyTo(
+        supabase.from("reservations").select(RESERVATION_SELECT).eq("organization_id", organizationId!),
+        "reservations",
+      );
       const on = filters.date ?? today();
       if (filters.scope === "arrivals") q = q.eq("arrival_date", on).in("status", ["confirmed", "guaranteed", "tentative", "pending-deposit"]);
       if (filters.scope === "departures") q = q.eq("departure_date", on).eq("status", "checked-in");
