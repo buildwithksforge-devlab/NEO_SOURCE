@@ -48,3 +48,4 @@ dist-ssr
 /neo-local-deposit-repair-source.txt
 /neo-pms-money-audit-local.txt
 /src/lib/__tests__/*.before-*.bak
+supabase/repair/2026-11-22/staff-pin.server.lovable.ts
