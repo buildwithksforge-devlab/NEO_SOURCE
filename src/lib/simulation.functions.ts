@@ -41,6 +41,22 @@ async function admin() {
   return supabaseAdmin;
 }
 
+async function registryIssue(client: Awaited<ReturnType<typeof admin>>) {
+  try {
+    const { error, status } = await client.from("neo_test_environments").select("id", { head: true }).limit(0);
+    return error ? simulationRegistryIssue(status, error.code) : null;
+  } catch {
+    return "unreachable" as const;
+  }
+}
+
+async function requireSimulationAdmin() {
+  const client = await admin();
+  const issue = await registryIssue(client);
+  if (issue) throw new Error(simulationConnectionActions[issue]);
+  return client;
+}
+
 export const checkSimulationService = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -48,13 +64,9 @@ export const checkSimulationService = createServerFn({ method: "GET" })
     const checkedAt = new Date().toISOString();
     const configurationIssue = simulationConfigurationIssue(process.env);
     if (configurationIssue) return { available: false, issue: configurationIssue, checkedAt };
-    try {
-      const { error, status } = await (await admin()).from("neo_test_environments").select("id", { head: true }).limit(0);
-      if (!error) setResponseHeader(SIMULATION_BRIDGE_HEADER, SIMULATION_BRIDGE_CONTRACT);
-      return { available: !error, issue: error ? simulationRegistryIssue(status, error.code) : null, checkedAt };
-    } catch {
-      return { available: false, issue: "unreachable" as const, checkedAt };
-    }
+    const issue = await registryIssue(await admin());
+    if (!issue) setResponseHeader(SIMULATION_BRIDGE_HEADER, SIMULATION_BRIDGE_CONTRACT);
+    return { available: !issue, issue, checkedAt };
   });
 
 /** Creates the two isolated QA workspaces with their temporary staff accounts. */
@@ -63,7 +75,7 @@ export const createTestEnvironment = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const org = await adminTenant(context as unknown as Ctx);
     const runner = await import("./simulation/runner.server");
-    const created = await runner.createEnvironment(await admin(), org, (context as unknown as Ctx).userId);
+    const created = await runner.createEnvironment(await requireSimulationAdmin(), org, (context as unknown as Ctx).userId);
     return {
       primary: { id: created.primary.id, label: created.primary.label, accounts: created.primary.accounts.length },
       secondary: { id: created.secondary.id, label: created.secondary.label, accounts: created.secondary.accounts.length },
@@ -75,7 +87,7 @@ export const runSystemTest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const org = await adminTenant(context as unknown as Ctx);
-    const supabaseAdmin = await admin();
+    const supabaseAdmin = await requireSimulationAdmin();
     const runner = await import("./simulation/runner.server");
 
     const { data, error } = await supabaseAdmin
@@ -107,7 +119,7 @@ export const cleanTestEnvironment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const org = await adminTenant(context as unknown as Ctx);
-    const supabaseAdmin = await admin();
+    const supabaseAdmin = await requireSimulationAdmin();
     const runner = await import("./simulation/runner.server");
     const { data, error } = await supabaseAdmin
       .from("neo_test_environments")

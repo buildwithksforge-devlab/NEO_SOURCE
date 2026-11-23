@@ -38,6 +38,7 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   initialAmount?: number;
   availabilityBlocked?: boolean;
+  availabilityBlockReason?: string;
   paymentId?: string;
   recoveryOnly?: boolean;
   triggerLabel?: string;
@@ -58,6 +59,7 @@ export function MpesaPromptDialog({
   onOpenChange,
   initialAmount,
   availabilityBlocked = false,
+  availabilityBlockReason,
   paymentId,
   recoveryOnly = false,
   triggerLabel = "M-Pesa prompt",
@@ -234,11 +236,11 @@ export function MpesaPromptDialog({
   // The workspace configuration is the single source of truth: when M-Pesa is
   // not switched on, the action says so up front instead of failing on send,
   // and points at the one place it is set up.
-  const setupMessage = setup.isPending
+  const setupMessage = availabilityBlockReason ?? (setup.isPending
     ? "Checking M-Pesa availability…"
     : setup.isError
       ? "M-Pesa availability could not be verified. Retry before sending a prompt."
-      : (setup.data?.reason ?? "M-Pesa is not available for this workspace.");
+      : (setup.data?.reason ?? "M-Pesa is not available for this workspace."));
   if (!setupReady && controlledOpen === undefined) {
     return (
       <div className="inline-flex flex-col gap-1">

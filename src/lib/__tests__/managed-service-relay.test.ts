@@ -3,6 +3,7 @@ import { forwardManagedServiceRequest, MANAGED_SERVICE_OPERATIONS } from "../man
 const summary = "e98b312a6ceb488a8c655879fd1294414c8ca3f5371063378ad309e1c8c1f433";
 const send = "32bd4c986b8e1dfc7931b605cc9ae4d0de993a9310f3f16d5d5d7e4a976714f2";
 const reset = "e20a8cc2029e48b65ffca78a63d8472ccb9ff62eb7116120637621a56ed95c3f";
+const requireChange = "b6ebab684d537948ca21b93e8e2e13fe897e2ece52683e5f75d6dad375ade8ae";
 const read = { NEO_MANAGED_COMMS_ENABLED: "true" };
 const req = (id = summary, init: RequestInit = {}) =>
   new Request(`https://neo.test/_serverFn/${id}`, {
@@ -60,12 +61,12 @@ describe("conditional existing managed communications and account routes", () =>
     const f = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ masked: true }));
     expect((await forwardManagedServiceRequest(r, {}, f))?.status).toBe(200);
   });
-  it("allows only explicitly activated operations and keeps their user authority upstream", async () => {
+  it.each([reset, requireChange])("allows explicitly activated account operation %s and keeps authority upstream", async (id) => {
     const f = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
     expect(
       (
         await forwardManagedServiceRequest(
-          req(reset),
+          req(id),
           { NEO_MANAGED_USERS_ENABLED: "true", NEO_MANAGED_USERS_ACTIONS_ENABLED: "true" },
           f,
         )

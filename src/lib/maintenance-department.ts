@@ -1,4 +1,5 @@
 import { requireSavedRecord } from "@/lib/durable-command-result";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 /**
  * Maintenance & Landscaping department layer.
  *
@@ -335,6 +336,7 @@ export function useMyGroundsTasks() {
   return useQuery({
     queryKey: ["maintenance-dept", "my-grounds", organizationId, userId],
     enabled: Boolean(organizationId && userId),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       const { data, error } = await db
         .from("grounds_tasks")
@@ -435,6 +437,7 @@ export function useMyMaintenanceJobs() {
   return useQuery({
     queryKey: ["maintenance-dept", "my-jobs", organizationId, userId],
     enabled: Boolean(organizationId && userId),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       const { data, error } = await db
         .from("maintenance_work_orders")

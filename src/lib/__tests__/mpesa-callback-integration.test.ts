@@ -205,16 +205,21 @@ describe("M-Pesa STK callback", () => {
     });
   });
 
-  it("does not apply an unverified callback result", async () => {
+  it("preserves a matching success callback for retry when Daraja still reports cancellation", async () => {
     queryState.resultCode = "1032";
     const res = await post("tenant-token-1234567890", payload(0));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     expect(rpcCalls).toHaveLength(0);
     expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
       accepted: false,
-      retryable: false,
+      retryable: true,
     });
+
+    queryState.resultCode = "0";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(200);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]?.args).toMatchObject({ _result_code: 0, _receipt: "SFG1A2B3C4" });
   });
 
   it("requests a provider retry when Daraja status verification is unavailable", async () => {

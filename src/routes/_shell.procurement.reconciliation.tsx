@@ -166,10 +166,6 @@ function Page() {
       return;
     }
 
-    if (!window.confirm(`Confirm ${decision} decision?`)) {
-      return;
-    }
-
     decide.mutate({
       countId: count.count_id,
       decision,
@@ -421,7 +417,11 @@ function Page() {
                       Independent review decision
                     </p>
 
+                    <label className="block text-sm" htmlFor={`receiving-review-${count.count_id}`}>
+                      Review reason (required)
+                    </label>
                     <Textarea
+                      id={`receiving-review-${count.count_id}`}
                       value={notes[count.count_id] ?? ""}
                       onChange={(event) =>
                         setNotes((previous) => ({
@@ -435,14 +435,14 @@ function Page() {
                     <div className="flex flex-wrap justify-end gap-3">
                       <Button
                         variant="destructive"
-                        disabled={decide.isPending}
+                        disabled={decide.isPending || !notes[count.count_id]?.trim()}
                         onClick={() => submitDecision(count, "rejected")}
                       >
                         Reject Count
                       </Button>
 
                       <Button
-                        disabled={decide.isPending || hasExcess ||
+                        disabled={decide.isPending || !notes[count.count_id]?.trim() || hasExcess ||
                           !(count.clerk_grn_workflow ? count.custody_status !== "discrepancy" :
                             count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
                               ["pending", "acknowledged"].includes(count.custody_status)))}
@@ -459,7 +459,7 @@ function Page() {
                     )}
 
                     <p className="text-xs text-muted-foreground">
-                      Approval makes the delivery eligible for GRN posting.
+                      Approval sends the count to Post GRNs. Stock updates when the GRN is posted.
                     </p>
                   </div>
                 ) : null}

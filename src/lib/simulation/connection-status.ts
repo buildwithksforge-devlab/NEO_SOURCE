@@ -4,7 +4,8 @@ export const SIMULATION_BRIDGE_HEADER = "x-neo-simulation-contract";
 export const simulationConnectionActions = {
   missing_configuration: "The Simulation backend connection is missing. Check that the managed Horizon route is enabled for this deployment.",
   wrong_project: "Use the same Supabase project for browser sign-in and the Simulation server.",
-  invalid_credential: "The Simulation backend's Supabase credential was rejected. Check whether this request is reaching the authorized backend.",
+  unsupported_credential: "Set a Supabase secret or legacy service-role JWT in the Simulation backend's server environment. A browser key or placeholder cannot create QA workspaces.",
+  invalid_credential: "Supabase rejected the Simulation server credential. Check the server-side secret against the connected project.",
   registry_missing: "Apply the Simulation registry migrations to the configured Supabase project.",
   registry_denied: "The server key cannot read the Simulation registry. Check the project's server-role grants.",
   unreachable: "The server could not reach the Simulation registry. Check network access and retry.",
@@ -26,14 +27,14 @@ export function simulationConfigurationIssue(env: Record<string, string | undefi
 
   if (/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return null;
   const [header, payload, signature, extra] = key.split(".");
-  if (!header || !payload || !signature || extra !== undefined) return "invalid_credential";
+  if (!header || !payload || !signature || extra !== undefined) return "unsupported_credential";
   try {
     const claims: unknown = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
     if (claims && typeof claims === "object" && "role" in claims && claims.role === "service_role") return null;
   } catch {
-    return "invalid_credential";
+    return "unsupported_credential";
   }
-  return "invalid_credential";
+  return "unsupported_credential";
 }
 
 export function simulationRegistryIssue(status: number, code?: string | null): SimulationConnectionIssue {

@@ -90,6 +90,16 @@ describe("sidebar navigation matches granted permissions exactly", () => {
 });
 
 describe("route guards agree with the sidebar", () => {
+  it("registers every sidebar destination in the generated router", () => {
+    const tree = readFileSync("src/routeTree.gen.ts", "utf8");
+    const registered = new Set(
+      [...tree.matchAll(/fullPath: '([^']+)'/g)]
+        .map((match) => match[1]!.replace(/\/$/, "") || "/"),
+    );
+    const missing = allNavPaths.filter((path) => !registered.has(path.replace(/\/$/, "") || "/"));
+    expect(missing).toEqual([]);
+  });
+
   it("guards every navigable path with the same module check the sidebar uses", () => {
     const can = canFor(grantSet(OPERATIONS_MANAGER));
     const shown = new Set(

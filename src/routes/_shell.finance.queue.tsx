@@ -278,6 +278,7 @@ function MpesaReceiptReviews({ branchId }: { branchId: string | null }) {
   const queue = useMpesaReceiptReviewQueue(branchId);
   const decide = useDecideMpesaReceiptReview();
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [matched, setMatched] = useState<Record<string, boolean>>({});
   const rows = (queue.data ?? []).filter((r) =>
     ["pending_approval", "execution_failed"].includes(r.status));
 
@@ -322,10 +323,17 @@ function MpesaReceiptReviews({ branchId }: { branchId: string | null }) {
               <Label htmlFor={`receipt-note-${row.request_id}`}>Your decision evidence</Label>
               <Textarea id={`receipt-note-${row.request_id}`}
                 value={notes[row.request_id] ?? ""} maxLength={1500}
-                placeholder="Record what you checked in the receiving account."
+                placeholder="Record the statement or merchant account evidence you checked."
                 onChange={(e) => setNotes((old) => ({
                   ...old, [row.request_id]: e.target.value,
                 }))} />
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={matched[row.request_id] === true}
+                  onChange={(event) => setMatched((previous) => ({
+                    ...previous, [row.request_id]: event.target.checked,
+                  }))} />
+                I matched the receipt and exact amount to the receiving M-Pesa account.
+              </label>
               <div className="flex flex-wrap gap-2">
                 {([
                   ["approved", row.status === "execution_failed" ? "Retry confirmation" : "Approve receipt"],
@@ -334,7 +342,8 @@ function MpesaReceiptReviews({ branchId }: { branchId: string | null }) {
                 ] as const).map(([action, label]) => (
                   <Button key={action} size="sm"
                     variant={action === "approved" ? "default" : "outline"}
-                    disabled={decide.isPending || (notes[row.request_id]?.trim().length ?? 0) < 10}
+                    disabled={decide.isPending || (notes[row.request_id]?.trim().length ?? 0) < 10 ||
+                      (action === "approved" && !matched[row.request_id])}
                     onClick={() => decide.mutate({
                       requestId: row.request_id, paymentId: row.payment_id,
                       action, note: notes[row.request_id] ?? "",

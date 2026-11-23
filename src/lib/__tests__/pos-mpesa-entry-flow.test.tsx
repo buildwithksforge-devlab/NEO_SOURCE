@@ -418,6 +418,23 @@ describe("POS payment entry dispatch and readiness", () => {
     expect((screen.getByLabelText("Cash tendered") as HTMLInputElement).value).toBe("");
   });
 
+  it("blocks a stale cash amount when the saved balance changes while payment is open", () => {
+    const dialog = (open: boolean, balance: number) => (
+      <PaymentDialog open={open} onOpenChange={vi.fn()} orderId="order-1"
+        branchId="property-1" balance={balance} shiftId="shift" />
+    );
+    const { client, rerender } = mount(dialog(true, 100));
+    const update = (open: boolean, balance: number) =>
+      rerender(<QueryClientProvider client={client}>{dialog(open, balance)}</QueryClientProvider>);
+    update(true, 120);
+    expect(screen.getByText(/balance changed/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cash received" }));
+    expect(mock.cash).not.toHaveBeenCalled();
+    update(false, 120);
+    update(true, 120);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("120.00");
+  });
+
   it("does not silently round a fractional amount into an STK request", () => {
     mount();
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "25.50" } });

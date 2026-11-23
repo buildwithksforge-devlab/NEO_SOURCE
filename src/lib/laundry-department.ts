@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
 import { applyStockNeedStatus } from "@/lib/stock-needs";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 
 // The laundry trail spans many generated table types; call sites narrow.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -159,6 +160,7 @@ export function useMyLaundryBatches(includeDone = false) {
   return useQuery({
     queryKey: ["laundry-department", "my-batches", organizationId, branchId, user?.id, includeDone],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("laundry_batches")
@@ -475,6 +477,7 @@ export function useMyLaundryTasks() {
   return useQuery({
     queryKey: ["laundry-department", "my-tasks", organizationId, branchId, user?.id],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("tasks")

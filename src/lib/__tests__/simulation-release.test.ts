@@ -20,7 +20,7 @@ describe("Simulation connection", () => {
 
   it("reports missing credentials, public keys, and a mismatched project", () => {
     expect(simulationConfigurationIssue({})).toBe("missing_configuration");
-    expect(simulationConfigurationIssue({ ...config, SUPABASE_SERVICE_ROLE_KEY: "sb_publishable_fixture" })).toBe("invalid_credential");
+    expect(simulationConfigurationIssue({ ...config, SUPABASE_SERVICE_ROLE_KEY: "sb_publishable_fixture" })).toBe("unsupported_credential");
     expect(simulationConfigurationIssue({ ...config, VITE_SUPABASE_URL: "https://other.example.com" })).toBe("wrong_project");
   });
 

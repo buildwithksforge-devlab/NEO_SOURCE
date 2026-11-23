@@ -73,10 +73,12 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
   const [intentProblem, setIntentProblem] = useState<string | null>(null);
   const providerAttemptLock = useRef(false);
   const wasOpen = useRef(open);
+  const [reviewedBalance, setReviewedBalance] = useState(balance);
   useEffect(() => {
     const reopened = open && !wasOpen.current;
     wasOpen.current = open;
     if (!reopened || providerAttemptLock.current) return;
+    setReviewedBalance(balance);
     setAmount(balance.toFixed(2));
     setTendered("");
     setReference("");
@@ -96,6 +98,8 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
   const external = Boolean(EXTERNAL_METHODS[method]);
   const canManualConfirm = can("pos", "payments", "manual-confirm");
   const amountValue = Number(amount);
+  const balanceChanged = open && balance.toFixed(2) !== reviewedBalance.toFixed(2);
+  const balanceChangeMessage = "The balance changed. Close and reopen payment to review the updated amount.";
   const overpaying = amountValue > balance + 0.005;
   const isCash = method === "cash";
   const cash = cashTender(amountValue, tendered);
@@ -103,6 +107,7 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
   const cardLast4Invalid = Boolean(cardLast4) && !/^[0-9]{4}$/.test(cardLast4);
   const selfService = Boolean(till.data?.self_service);
   const blocked =
+    balanceChanged ||
     providerAttemptStarted ||
     openIntent.isPending ||
     dispatchIntent.isPending ||
@@ -129,7 +134,8 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
         balance={balance}
         initialAmount={amountValue}
         open={open}
-        availabilityBlocked={!providerReady}
+        availabilityBlocked={!providerReady || balanceChanged}
+        availabilityBlockReason={balanceChanged ? balanceChangeMessage : undefined}
         onOpenChange={(next) => {
           if (!next) setMethod("cash");
           onOpenChange(next);
@@ -145,6 +151,7 @@ export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, 
           <DialogTitle>Take payment</DialogTitle>
           <DialogDescription>Outstanding balance {money(balance)}</DialogDescription>
         </DialogHeader>
+        {balanceChanged ? <p role="alert">{balanceChangeMessage}</p> : null}
         <div className="grid gap-3">
           <PaymentMethodPicker
             methods={methodsFor([

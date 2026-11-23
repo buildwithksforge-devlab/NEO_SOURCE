@@ -1,6 +1,9 @@
-param([string]$NodePath = 'node', [string]$WranglerPath, [switch]$PrepareOnly, [switch]$DeployPrepared, [switch]$ManagedReadRouting, [string]$VerifiedTypecheckRevision)
+param([string]$NodePath = 'node', [string]$WranglerPath, [switch]$PrepareOnly, [switch]$DeployPrepared, [switch]$ManagedReadRouting, [switch]$ManagedSimulation, [switch]$ManagedUserActions, [string]$VerifiedTypecheckRevision)
 $ErrorActionPreference = "Stop"
 if ($PrepareOnly -and $DeployPrepared) { throw 'Choose prepare or deploy, not both.' }
+if ($DeployPrepared -and ($ManagedSimulation -or $ManagedUserActions)) {
+    throw 'Set managed routing options when preparing the release.'
+}
 
 function Invoke-NeoNode {
     param([string]$Entry, [string[]]$Arguments)
@@ -124,6 +127,22 @@ if ($ManagedReadRouting) {
     }
     $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_COMMS_ENABLED' -NotePropertyValue 'true' -Force
     $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_PRINT_ENABLED' -NotePropertyValue 'true' -Force
+}
+if ($ManagedSimulation) {
+    if (!($config.PSObject.Properties.Name -contains 'vars')) {
+        $config | Add-Member -NotePropertyName 'vars' -NotePropertyValue ([pscustomobject]@{})
+    }
+    # Lovable checks administrator authority, and the relay checks upstream health.
+    # The database credential remains on the managed host.
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_SIMULATION_ENABLED' -NotePropertyValue 'true' -Force
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_SIMULATION_ACTIONS_ENABLED' -NotePropertyValue 'true' -Force
+}
+if ($ManagedUserActions) {
+    if (!($config.PSObject.Properties.Name -contains 'vars')) {
+        $config | Add-Member -NotePropertyName 'vars' -NotePropertyValue ([pscustomobject]@{})
+    }
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_USERS_ENABLED' -NotePropertyValue 'true' -Force
+    $config.vars | Add-Member -NotePropertyName 'NEO_MANAGED_USERS_ACTIONS_ENABLED' -NotePropertyValue 'true' -Force
 }
 
 # Set the account explicitly.

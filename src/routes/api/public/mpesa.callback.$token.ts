@@ -122,7 +122,6 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
         const storedMerchantId = txn.data.merchant_request_id as string | null;
         if (
           !Number.isInteger(verifiedCode) ||
-          verifiedCode !== parsed.resultCode ||
           (verifiedCheckoutId && verifiedCheckoutId !== parsed.checkoutRequestId) ||
           (verifiedMerchantId && storedMerchantId && verifiedMerchantId !== storedMerchantId) ||
           (verifiedMerchantId &&
@@ -131,7 +130,7 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
           (storedMerchantId &&
             parsed.merchantRequestId &&
             storedMerchantId !== parsed.merchantRequestId) ||
-          (verifiedCode === 0 &&
+          (parsed.resultCode === 0 &&
             (parsed.amount === null ||
               !Number.isFinite(parsed.amount) ||
               parsed.amount !== Number(txn.data.amount)))
@@ -145,6 +144,23 @@ export const Route = createFileRoute("/api/public/mpesa/callback/$token")({
             detail: "Callback did not match the Daraja status and transaction record.",
             retryable: false,
           });
+          return ACK();
+        }
+
+        if (verifiedCode !== parsed.resultCode) {
+          // Daraja status can lag a successful callback. Keep the matching
+          // receipt for a later verified check instead of discarding it.
+          const retryable = parsed.resultCode === 0 && Boolean(parsed.receipt?.trim());
+          const saved = await admin.from("mpesa_callback_events").insert({
+            organization_id: organizationId,
+            checkout_request_id: parsed.checkoutRequestId,
+            payload: payload as Record<string, unknown>,
+            accepted: false,
+            transaction_id: transactionId,
+            detail: "Callback result disagreed with the current Daraja status.",
+            retryable,
+          });
+          if (saved.error || retryable) return new Response("Payment verification is unresolved", { status: 503 });
           return ACK();
         }
 

@@ -488,6 +488,9 @@ function WorkspaceEntrance({
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Stations shown on this display</p>
+            <p className="text-sm text-muted-foreground">
+              Select the stations to combine on one screen, then pair this device or create an activation code for another device.
+            </p>
 
             <div className="grid gap-2 sm:grid-cols-2">
               {availableStations.map((station) => {
@@ -549,7 +552,7 @@ function WorkspaceEntrance({
               className="min-h-11 rounded-xl border border-border px-5 text-sm font-semibold disabled:opacity-50">
               Copy station sign-in link
             </button>
-            <p className="text-sm text-muted-foreground">Select one station. Staff can use their PIN on an authorised device or choose Account to sign in by email.</p>
+            <p className="text-sm text-muted-foreground">A station sign-in link opens a single station. Staff can use their PIN on an authorised device or choose Account to sign in by email.</p>
           </div>
           {displayActivation ? (
             <aside className="space-y-2 rounded-xl border p-4" role="status">
