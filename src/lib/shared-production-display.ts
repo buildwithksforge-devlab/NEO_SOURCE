@@ -145,6 +145,7 @@ export async function approveSharedDisplayControl(token: string, pin: string, ac
   const { data, error } = await guardedRpc<{ ok: boolean; action?: string; message?: string }>(
     supabase, "neo_production_display_supervisor", { _token: token, _pin: pin, _action: action },
   );
+  if (error?.code === "PGRST202") throw new Error("Supervisor approval has not been installed on this workspace yet.");
   if (error) throw new Error("Supervisor verification is unavailable. Try again or check the display connection.");
   if (data?.ok !== true || data.action !== action) throw new Error(data?.message ?? "Supervisor approval was refused.");
 }

@@ -57,7 +57,7 @@ export function SharedDisplayTools({
           <DialogHeader>
             <DialogTitle>{approved ? "Display tools" : mode === "logout" ? "Log out of display" : "Supervisor approval"}</DialogTitle>
             <DialogDescription>
-              {approved ? "Adjust this screen without leaving it." : "Enter the personal PIN of a supervisor assigned to this screen."}
+              {approved ? "Adjust this screen without leaving it." : "Use your personal staff PIN, the same PIN used for orders. Approval requires authority for this display."}
             </DialogDescription>
           </DialogHeader>
           {approved ? <DialogBody className="space-y-5">
