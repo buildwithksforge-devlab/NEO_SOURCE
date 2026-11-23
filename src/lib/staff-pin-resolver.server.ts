@@ -38,8 +38,12 @@ export async function resolveStaffPin(request: Request, deviceToken: string, pin
         if (key.startsWith("sb_secret_") && headers.get("authorization") === `Bearer ${key}`) {
           headers.delete("authorization");
         }
-        const response = await fetch(input, { ...init, headers, redirect: "error", signal });
+        // Workers supports manual redirects. Never forward credentials to a redirect target.
+        const response = await fetch(input, { ...init, headers, redirect: "manual", signal });
         rpcStatus = response.status;
+        if (response.status >= 300 && response.status < 400) {
+          throw new Error("Unexpected redirect from the PIN database endpoint");
+        }
         return response;
       },
     },

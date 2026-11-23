@@ -4,6 +4,7 @@ import { RPC_MANIFEST } from "@/lib/rpc-manifest";
 import { Route } from "@/routes/api/public/staff-pin-login";
 import { signInWithStaffPin, STAFF_DEVICE_TOKEN_KEY, STAFF_PIN_SESSION_KEY } from "@/lib/staff-pin-login";
 import { DISPLAY_TOKEN_STORAGE_KEY } from "@/lib/shared-production-display";
+import { createClient } from "@supabase/supabase-js";
 
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -14,7 +15,7 @@ const admin = vi.hoisted(() => ({
   rpc: vi.fn(),
   auth: { admin: { getUserById: vi.fn(), generateLink: vi.fn() } },
 }));
-vi.mock("@supabase/supabase-js", () => ({ createClient: () => admin }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn(() => admin) }));
 
 const api = readFileSync("src/routes/api/public/staff-pin-login.ts", "utf8");
 const client = readFileSync("src/lib/staff-pin-login.ts", "utf8");
@@ -100,6 +101,16 @@ describe("staff PIN broker request/response behavior", () => {
     });
     expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+    const requestFetch = vi.mocked(createClient).mock.calls[0]?.[2]?.global?.fetch;
+    expect(requestFetch).toBeDefined();
+    fetch.mockResolvedValue(new Response(null, {
+      status: 302,
+      headers: { location: "https://other.example.invalid" },
+    }));
+    await expect(requestFetch!("https://database.example.invalid/rest/v1/rpc/neo_staff_pin_sign_in"))
+      .rejects.toThrow("Unexpected redirect");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
   });
 
   it("keeps a rejected direct PIN attempt out of the broker", async () => {
