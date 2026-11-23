@@ -509,6 +509,36 @@ export function useFinanceUpdate(table: string, action: string) {
   });
 }
 
+export function useDeleteTaxConfiguration(table: "tax_codes" | "sales_tax_profiles") {
+  const ctx = useFinanceCtx();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!ctx.organizationId) throw new Error("Select a workspace before deleting tax setup.");
+      const { data, error } = await db.from(table).delete().eq("organization_id", ctx.organizationId)
+        .eq("id", id).eq("active", false).select().maybeSingle();
+      if (error?.code === "23503") throw new Error("This tax setup is still referenced. Keep it archived.");
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("This archived tax setup could not be deleted.");
+      return data as Row;
+    },
+    onSuccess: async (data) => {
+      await logAudit({
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        userName: ctx.userName,
+        action: table === "tax_codes" ? "finance.tax_code.deleted" : "finance.sales_tax_profile.deleted",
+        module: "finance",
+        recordId: data["id"] ?? null,
+        previousValue: data,
+      });
+      toast.success("Deleted");
+      return invalidate();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
 /** Seed the default chart of accounts, tax codes and periods for this organization. */
 export function useSeedFinanceDefaults() {
   const ctx = useFinanceCtx();

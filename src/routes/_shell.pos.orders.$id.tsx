@@ -43,6 +43,7 @@ import {
   QueryState,
 } from "@/components/pos/PosShared";
 import { useAuth } from "@/lib/auth";
+import { usePendingPosCashRequests } from "@/lib/cash-routing";
 import { SendToPrinterButton } from "@/components/common/SendToPrinterButton";
 import { COURSES, allowedTransitions, money, titleCase } from "@/lib/pos";
 import {
@@ -157,6 +158,7 @@ function OrderTerminal() {
   const discountPolicies = usePosDiscountPolicies();
   const applyDiscount = useApplyPosDiscount();
   const receiptPrintState = usePosReceiptPrintState(id);
+  const pendingCash = usePendingPosCashRequests(id);
   const hasCompletedReceiptPrint = receiptPrintState.data?.hasCompletedPrint ?? false;
   const canReprintReceipt = can("pos", "receipts.reprint");
   const loadPosFiscalStatus = useServerFn(getPosFiscalStatus);
@@ -752,8 +754,16 @@ function OrderTerminal() {
                     Receipt-review status could not be refreshed. Check the existing review before resubmitting.
                   </p>
                 ) : null}
+                {pendingCash.isError ? <p role="alert" className="mb-3 text-sm text-destructive">
+                  Cash requests could not be refreshed. Check with the cashier before sending another request.
+                </p> : null}
+                {(pendingCash.data ?? []).map((request) => (
+                  <p key={request.id} className="mb-3 rounded-xl border p-3 text-sm">
+                    Cash · {money(request.amount)} · Awaiting cashier confirmation
+                  </p>
+                ))}
                 {(data.pos_payments ?? []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+                  pendingCash.data?.length ? null : <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
                 ) : (
                   <ul className="space-y-3">
                     {data.pos_payments.map((p) => {

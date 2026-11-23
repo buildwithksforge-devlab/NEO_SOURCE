@@ -297,6 +297,12 @@ export function usePosOrder(orderId: string | undefined) {
   return useQuery({
     queryKey: ["pos", "order", organizationId, filterKey, orderId],
     enabled: Boolean(organizationId && orderId),
+    refetchInterval: ({ state }) => {
+      const order = state.data;
+      return order && ["unpaid", "partial", "partially_paid", "pending"].includes(order.payment_status) &&
+        !["draft", "held", "closed", "cancelled", "voided", "charged-to-room"].includes(order.status)
+        ? 10_000 : false;
+    },
     queryFn: async () => {
       const { data, error } = await applyTo(
         supabase
@@ -1142,7 +1148,7 @@ export function useRecordPayment() {
     },
     onSuccess: (r) => {
       settlementToast(r);
-      void qc.invalidateQueries({ queryKey: ["pos"] });
+      return Promise.all([invalidatePaymentViews(qc), qc.invalidateQueries({ queryKey: ["pos"] })]);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1178,7 +1184,7 @@ export function useConfirmManualPayment() {
 
     onSuccess: (r) => {
       settlementToast(r);
-      void qc.invalidateQueries({ queryKey: ["pos"] });
+      return Promise.all([invalidatePaymentViews(qc), qc.invalidateQueries({ queryKey: ["pos"] })]);
     },
 
     onError: (e: Error) => toast.error(e.message),

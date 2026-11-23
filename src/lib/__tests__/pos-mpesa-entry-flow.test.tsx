@@ -402,6 +402,22 @@ describe("POS payment entry dispatch and readiness", () => {
     expect(mock.charge).not.toHaveBeenCalled();
   });
 
+  it("routes the cash portion and tender, then defaults to the remaining balance on reopen", () => {
+    const renderDialog = (open: boolean, balance: number) => (
+      <PaymentDialog open={open} onOpenChange={vi.fn()} orderId="order-1"
+        branchId="property-1" balance={balance} shiftId="shift" />
+    );
+    const { rerender, client } = mount(renderDialog(true, 10_000));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Cash tendered"), { target: { value: "6000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cash received" }));
+    expect(mock.cash.mock.calls[0]?.[0]).toMatchObject({ amount: 5000, tendered: 6000 });
+    rerender(<QueryClientProvider client={client}>{renderDialog(false, 5000)}</QueryClientProvider>);
+    rerender(<QueryClientProvider client={client}>{renderDialog(true, 5000)}</QueryClientProvider>);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("5000.00");
+    expect((screen.getByLabelText("Cash tendered") as HTMLInputElement).value).toBe("");
+  });
+
   it("does not silently round a fractional amount into an STK request", () => {
     mount();
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "25.50" } });

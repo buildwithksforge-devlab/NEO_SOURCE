@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { cashTender } from "@/lib/pos-payment-display";
 import { useRequestPosCashPayment, useTillContext } from "@/lib/cash-routing";
@@ -34,21 +34,16 @@ import { ReceivingAccountSelect } from "@/components/payments/ReceivingAccountSe
 import { QrPaymentPanel } from "@/components/payments/QrPaymentPanel";
 import { MpesaPromptDialog } from "@/components/payments/MpesaPromptDialog";
 
-export function PaymentDialog({
-  open,
-  onOpenChange,
-  orderId,
-  branchId,
-  balance,
-  shiftId,
-}: {
+type PaymentDialogProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
   branchId: string | null;
   balance: number;
   shiftId: string | null;
-}) {
+};
+
+export function PaymentDialog({ open, onOpenChange, orderId, branchId, balance, shiftId }: PaymentDialogProps) {
   const record = useRecordPayment();
   // Cash never settles straight from the billing screen: it follows the same
   // request → cashier confirmation path as folio billing, so the notes are
@@ -77,6 +72,15 @@ export function PaymentDialog({
   const [intentId, setIntentId] = useState<string | null>(null);
   const [intentProblem, setIntentProblem] = useState<string | null>(null);
   const providerAttemptLock = useRef(false);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const reopened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!reopened || providerAttemptLock.current) return;
+    setAmount(balance.toFixed(2));
+    setTendered("");
+    setReference("");
+  }, [open, balance]);
   const [providerAttemptStarted, setProviderAttemptStarted] = useState(false);
   const [qr, setQr] = useState<{ payload: string | null; imageUrl: string | null } | null>(null);
   const intent = usePaymentIntentStatus(intentId);
@@ -374,6 +378,7 @@ export function PaymentDialog({
                   {
                     order: orderId,
                     amount: amountValue,
+                    ...(cash.tendered !== null ? { tendered: cash.tendered } : {}),
                     ...(reference ? { reference } : {}),
                     idempotencyKey: `pos-cash:${orderId}:${attemptKey}`,
                   },

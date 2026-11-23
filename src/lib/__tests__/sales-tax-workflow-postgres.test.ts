@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const migration = (name: string) => readFileSync(`supabase/migrations/${name}.sql`, "utf8");
+const migration = (name: string) => readFileSync(`supabase/migrations/${name}.sql`, "utf8").replaceAll("\r\n", "\n");
 const org = "82f10000-0000-4000-8000-000000000001";
 const branch = "82f10000-0000-4000-8000-000000000002";
 const vat = "82f10000-0000-4000-8000-000000000003";
@@ -119,6 +119,7 @@ describe("sales tax profiles, documents and ledger", () => {
     await db.exec(migration("20261120173200_sales_tax_finance_summary"));
     await db.exec(migration("20261121123300_pos_receipt_saved_tax_rates"));
     await db.exec(migration("20261122162000_folio_document_saved_tax_rows"));
+    await db.exec(migration("20261123100000_delete_unused_sales_tax_profiles"));
     await db.exec(`
       INSERT INTO organizations VALUES ('${org}');
       INSERT INTO chart_of_accounts(id,organization_id,code,category,name) VALUES
@@ -230,6 +231,24 @@ describe("sales tax profiles, documents and ledger", () => {
     expect(rows[0]).toMatchObject({ taxed: [{ amount: 16.27 }, { amount: 2.03 }] });
     await expect(db.exec(`UPDATE pos_order_items SET sales_tax_snapshot='{}' WHERE id='${item}'`)).rejects.toThrow(/cannot be supplied/i);
     await expect(db.exec("DELETE FROM tax_codes WHERE code='VAT'")).rejects.toThrow(/referenced/i);
+  });
+
+  it("allows deletion of unused archived profiles while retaining saved sale history", async () => {
+    await db.exec("BEGIN");
+    try {
+      await db.exec(`INSERT INTO sales_tax_profiles(organization_id,name,treatment,rules,active)
+        VALUES ('${org}','Unused tax setup','none','[]',false)`);
+      await db.exec("SET LOCAL ROLE authenticated");
+      expect((await db.query("DELETE FROM sales_tax_profiles WHERE name='Unused tax setup' RETURNING name")).rows)
+        .toEqual([{ name: "Unused tax setup" }]);
+      await db.exec("RESET ROLE");
+      await db.exec(`UPDATE menu_items SET sales_tax_profile_id=NULL WHERE id='${menu}';
+        UPDATE sales_tax_profiles SET active=false WHERE id='${group}';`);
+      await db.exec("SET LOCAL ROLE authenticated");
+      await expect(db.exec(`DELETE FROM sales_tax_profiles WHERE id='${group}'`)).rejects.toThrow(/saved sales/);
+    } finally {
+      await db.exec("ROLLBACK");
+    }
   });
 
   it("reverses the original tax liability accounts on a partial POS refund", async () => {

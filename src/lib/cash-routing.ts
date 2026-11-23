@@ -50,6 +50,8 @@ export type CashRequest = {
   branch_id: string | null;
   folio_id: string | null;
   amount: number;
+  tendered?: number | null;
+  change_due?: number | null;
   currency: string;
   method: string;
   reference: string | null;
@@ -200,6 +202,26 @@ export function useFolioCashRequests(folioId: string | null) {
         .limit(20);
       if (error) throw new Error(error.message as string);
       return (data ?? []) as CashRequest[];
+    },
+    refetchInterval: 10_000,
+  });
+}
+
+export function usePendingPosCashRequests(orderId: string) {
+  const { organizationId, user } = useAuth();
+  return useQuery({
+    queryKey: ["cash", "requests", "pos", organizationId, user?.id, orderId],
+    enabled: Boolean(organizationId && user?.id && orderId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cash_payment_requests")
+        .select("id, amount")
+        .eq("organization_id", organizationId as string)
+        .eq("source_module", "pos")
+        .eq("source_record_id", orderId)
+        .eq("status", "pending");
+      if (error) throw error;
+      return data ?? [];
     },
     refetchInterval: 10_000,
   });

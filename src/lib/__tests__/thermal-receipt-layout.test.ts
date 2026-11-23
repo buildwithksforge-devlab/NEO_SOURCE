@@ -43,8 +43,10 @@ describe('thermal receipt actual PDF layout',()=>{
    payload.totals=[{label:'Total',amount:1854,emphasis:true},{label:'Paid',amount:1000},{label:'Balance',amount:854}];
   }
   if (variant === "split-tender") {
-   payload.totals = [{label:"Total",amount:1854,emphasis:true},
-    {label:"Cash",amount:1000,emphasis:false},{label:"Cash",amount:854,emphasis:false}];
+   payload.totals = [{label:"Total",amount:10000,emphasis:true},
+    {label:"Cash",amount:3000},{label:"Cash",amount:2000},
+    {label:"M-Pesa (A1)",amount:1000},{label:"M-Pesa (B2)",amount:1500},
+    {label:"Card",amount:1000},{label:"Paid",amount:8500},{label:"Balance",amount:1500}];
   }
   if (variant === "menu-qr") {
    Object.assign(payload.identity, { brand: { receiptQrDestination: "menu", receiptFeedbackUrl: "https://property.example/menu" } });
@@ -81,7 +83,12 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered).toContain('Paid at POS');
    expect(rendered).toContain('Transferred to guest folio');
   }
-  if (variant === "split-tender") expect(texts.filter((entry) => entry.text === "Cash")).toHaveLength(2);
+  if (variant === "split-tender") {
+   expect(texts.filter((entry) => entry.text === "Cash")).toHaveLength(2);
+   expect(texts.map((entry) => entry.text)).toEqual(expect.arrayContaining([
+    "M-Pesa (A1)", "M-Pesa (B2)", "Card", "Paid", "Balance", "KES 8,500.00", "KES 1,500.00",
+   ]));
+  }
   if (variant === "menu-qr") expect(texts.map((entry) => entry.text)).toContain("SCAN TO VIEW THE MENU");
   if(variant==='branded-long'){
    const rendered=texts.map(t=>t.text);

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFinanceInsert, useFinanceUpdate, useSalesTaxProfiles, useTaxCodes } from "@/lib/finance-data";
 import { useMenuCategories, useSaveRecord } from "@/lib/pos-data";
+import { DeleteArchivedTaxConfiguration } from "@/components/finance/DeleteArchivedTaxConfiguration";
 
 export function SalesTaxProfiles() {
   const [editing, setEditing] = useState("");
@@ -71,6 +72,13 @@ export function SalesTaxProfiles() {
               <Button variant="outline" size="sm" disabled={update.isPending} onClick={() =>
                 update.mutate({ id: profile.id, values: { active: !profile.active, workspace_default: false } }, { onSuccess: () => void profiles.refetch() })
               }>{profile.active ? "Archive" : "Activate"}</Button>
+              {!profile.active ? <DeleteArchivedTaxConfiguration
+                table="sales_tax_profiles" id={profile.id} name={profile.name}
+                onDeleted={() => {
+                  if (editing === profile.id) reset();
+                  void profiles.refetch();
+                }}
+              /> : null}
             </div>
           </li>
         ))}

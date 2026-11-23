@@ -24,6 +24,7 @@ import {
 } from "@/lib/finance-data";
 import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
 import { SalesTaxProfiles } from "@/components/finance/SalesTaxProfiles";
+import { DeleteArchivedTaxConfiguration } from "@/components/finance/DeleteArchivedTaxConfiguration";
 import { SalesTaxReport } from "@/components/finance/SalesTaxReport";
 import { Button } from "@/components/ui/button";
 
@@ -207,6 +208,10 @@ function TaxPage() {
                     updateCode.mutate({ id: String(c["id"]), values: { active: !c["active"] } },
                       { onSuccess: () => void codes.refetch() })
                   }>{c["active"] ? "Archive" : "Activate"}</Button>
+                  {!c["active"] ? <DeleteArchivedTaxConfiguration
+                    table="tax_codes" id={String(c["id"])} name={String(c["code"])}
+                    onDeleted={() => void codes.refetch()}
+                  /> : null}
                 </td>
               </tr>
             ))}

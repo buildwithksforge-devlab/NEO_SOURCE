@@ -237,7 +237,8 @@ function PartnerPortal() {
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" aria-hidden /></span>
           <div className="min-w-0">
             <h2 className="text-2xl font-bold text-white">Partner workspace</h2>
-            <p className="mt-2 text-sm text-white/75">Follow your orders, deliveries, invoices and messages with {property.data.property_name}.</p>
+            <p className="mt-2 text-sm text-white/75">{property.data.content?.partner_note?.trim()
+              || `Follow your orders, deliveries, invoices and messages with ${property.data.property_name}.`}</p>
           </div>
         </section>
       ) : null}
