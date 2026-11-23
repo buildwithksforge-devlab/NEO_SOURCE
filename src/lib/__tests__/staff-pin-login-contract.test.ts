@@ -113,6 +113,18 @@ describe("staff PIN broker request/response behavior", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("uses the broker when the database gateway rejects the Worker credential", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
+    admin.rpc.mockResolvedValue({ data: null, error: { code: "PGRST301", message: "JWT rejected" } });
+    const fetch = vi.fn().mockResolvedValue(Response.json({ token_hash: "staff-proof", branch_id: branch }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await handler({ request: request() });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ token_hash: "staff-proof", branch_id: branch });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it("issues a personal account proof for the worker resolved by the device", async () => {
     vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");

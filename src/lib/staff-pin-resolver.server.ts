@@ -19,21 +19,28 @@ export async function resolveStaffPin(request: Request, deviceToken: string, pin
   const runtime = (request as Request & {
     runtime?: { cloudflare?: { env?: Record<string, unknown> } };
   }).runtime?.cloudflare?.env;
-  const url = bindings["SUPABASE_URL"] ?? runtime?.["SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
-  const key = bindings["SUPABASE_SERVICE_ROLE_KEY"] ?? runtime?.["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const urlBinding = bindings["SUPABASE_URL"] ?? runtime?.["SUPABASE_URL"] ?? process.env["SUPABASE_URL"];
+  const keyBinding = bindings["SUPABASE_SERVICE_ROLE_KEY"] ?? runtime?.["SUPABASE_SERVICE_ROLE_KEY"] ?? process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  const url = typeof urlBinding === "string" ? urlBinding.trim() : "";
+  const key = typeof keyBinding === "string" ? keyBinding.trim() : "";
   // An installation without Worker credentials can continue using its broker.
-  if (typeof url !== "string" || !url || typeof key !== "string" || !key) return null;
+  if (!url || !key) return null;
 
   const signal = AbortSignal.timeout(15_000);
+  let rpcStatus: number | undefined;
   const admin = createClient(url, key, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
     global: {
-      fetch(input, init) {
-        const headers = new Headers(init?.headers);
+      async fetch(input, init) {
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
+        headers.set("apikey", key);
         if (key.startsWith("sb_secret_") && headers.get("authorization") === `Bearer ${key}`) {
           headers.delete("authorization");
         }
-        return fetch(input, { ...init, headers, redirect: "error", signal });
+        const response = await fetch(input, { ...init, headers, redirect: "error", signal });
+        rpcStatus = response.status;
+        return response;
       },
     },
   });
@@ -44,9 +51,19 @@ export async function resolveStaffPin(request: Request, deviceToken: string, pin
     _token_hash: tokenHash,
     _pin: pin,
   });
-  // These errors occur before the database can consume an attempt.
-  if (error?.code === "PGRST202" || error?.message === "Invalid API key") return null;
-  if (error || !data) { console.error("[staff-pin-login] rpc_failed", { code: /^[A-Za-z0-9_]{1,24}$/.test(error?.code ?? "") ? error?.code : "empty_response" }); return { status: 502, body: unavailable }; }
+  if (error || !data) {
+    const code = error?.code;
+    const endpointRejected = rpcStatus === 401 || code === "PGRST202" || code === "PGRST301"
+      || error?.message === "Invalid API key";
+    console.error("[staff-pin-login] rpc_failed", {
+      status: rpcStatus ?? null,
+      code: code && /^[A-Za-z0-9_]{1,24}$/.test(code) ? code : null,
+      brokerFallback: endpointRejected,
+    });
+    // A rejected gateway request cannot consume a database PIN attempt.
+    if (endpointRejected) return null;
+    return { status: 502, body: unavailable };
+  }
 
   if (!data.ok) {
     const reason = data.reason ?? "credentials";
