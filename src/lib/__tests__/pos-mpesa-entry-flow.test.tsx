@@ -414,6 +414,16 @@ describe("POS payment entry dispatch and readiness", () => {
     expect(mock.charge).not.toHaveBeenCalled();
   });
 
+  it("shows the full POS bill's rounding and sends the whole shilling amount", async () => {
+    mount(<MpesaPromptDialog sourceModule="pos_order" sourceRecordId="order-1" balance={25.50} open onOpenChange={vi.fn()} />);
+    phone();
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("26");
+    expect(screen.getByText(/bill records \+0\.50 rounding/)).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send prompt" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Send prompt" }));
+    await waitFor(() => expect(mock.charge).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ amount: 26 }) })));
+  });
+
   it("withholds the standalone prompt action until its own readiness check succeeds", () => {
     mock.mpesa.isPending = true;
     mock.mpesa.data = { ready: false, configured: false, enabled: false };

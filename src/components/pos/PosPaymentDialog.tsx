@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { cashTender } from "@/lib/pos-payment-display";
 import { useRequestPosCashPayment, useTillContext } from "@/lib/cash-routing";
@@ -58,6 +58,9 @@ export function PaymentDialog({
   const { can } = useAuth();
   const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState(String(balance.toFixed(2)));
+  useEffect(() => {
+    if (!open) setAmount(String(balance.toFixed(2)));
+  }, [open, balance]);
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
   const [cardTerminal, setCardTerminal] = useState("");

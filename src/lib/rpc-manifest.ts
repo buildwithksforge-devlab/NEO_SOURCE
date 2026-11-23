@@ -307,6 +307,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_pos_kds_reconciliation: "authenticated",
   neo_pos_send_to_kitchen: "authenticated",
   neo_pos_order_diagnostics: "authenticated",
+  neo_pos_refresh_bill_totals: "authenticated",
   neo_pos_route_missing_tickets: "authenticated",
 
   // Stores and procurement lifecycle

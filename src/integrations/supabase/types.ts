@@ -10013,6 +10013,7 @@ export type Database = {
           rejection_reason: string | null
           requested_at: string
           rider_id: string | null
+          rounding_adjustment: number
           scheduled_for: string | null
           service_charge_total: number
           subtotal: number
@@ -10064,6 +10065,7 @@ export type Database = {
           rejection_reason?: string | null
           requested_at?: string
           rider_id?: string | null
+          rounding_adjustment?: number
           scheduled_for?: string | null
           service_charge_total?: number
           subtotal?: number
@@ -10115,6 +10117,7 @@ export type Database = {
           rejection_reason?: string | null
           requested_at?: string
           rider_id?: string | null
+          rounding_adjustment?: number
           scheduled_for?: string | null
           service_charge_total?: number
           subtotal?: number
@@ -25412,6 +25415,8 @@ export type Database = {
           reconciled_at: string | null
           result_code: number | null
           result_desc: string | null
+          rounding_adjustment: number | null
+          rounding_released: boolean
           short_code: string | null
           source_module: string
           source_record_id: string | null
@@ -25443,6 +25448,8 @@ export type Database = {
           reconciled_at?: string | null
           result_code?: number | null
           result_desc?: string | null
+          rounding_adjustment?: number | null
+          rounding_released?: boolean
           short_code?: string | null
           source_module: string
           source_record_id?: string | null
@@ -25474,6 +25481,8 @@ export type Database = {
           reconciled_at?: string | null
           result_code?: number | null
           result_desc?: string | null
+          rounding_adjustment?: number | null
+          rounding_released?: boolean
           short_code?: string | null
           source_module?: string
           source_record_id?: string | null
@@ -30800,6 +30809,7 @@ export type Database = {
           organization_id: string
           paid_total: number
           room_transfer_paid_total: number | null
+          rounding_adjustment: number
           payment_status: string
           room_id: string | null
           sent_at: string | null
@@ -30842,6 +30852,7 @@ export type Database = {
           paid_total?: number
           payment_status?: string
           room_id?: string | null
+          rounding_adjustment?: number
           sent_at?: string | null
           served_at?: string | null
           service_charge_total?: number
@@ -30882,6 +30893,7 @@ export type Database = {
           paid_total?: number
           payment_status?: string
           room_id?: string | null
+          rounding_adjustment?: number
           sent_at?: string | null
           served_at?: string | null
           service_charge_total?: number
@@ -52888,6 +52900,7 @@ export type Database = {
         }
         Returns: string
       }
+      neo_mpesa_whole_amount: { Args: { _due: number }; Returns: number }
       neo_my_approval_authority: {
         Args: never
         Returns: {
@@ -53627,6 +53640,7 @@ export type Database = {
         Args: { _order: string; _org: string }
         Returns: boolean
       }
+      neo_pos_refresh_bill_totals: { Args: { _order: string }; Returns: Json }
       neo_pos_refund_decide: {
         Args: { _approve: boolean; _note?: string; _request: string }
         Returns: Json

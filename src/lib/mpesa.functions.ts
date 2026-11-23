@@ -97,6 +97,12 @@ async function retainAmbiguousMpesaPrompt(
   if (error) throw new Error(`Could not retain the ambiguous M-Pesa prompt: ${error.message}`);
 }
 
+/** On a bridged copy (no managed server key) the live app runs this M-Pesa action. */
+async function viaBridge(name: string, data: unknown): Promise<{ result: unknown } | null> {
+  const { runMpesaViaBridge } = await import("@/lib/neo-bridge.server");
+  return runMpesaViaBridge(name, data);
+}
+
 export type MpesaSettings = {
   authorised: boolean;
   reason?: string;
@@ -175,6 +181,8 @@ async function organisationOf(client: Rpc, userId: string): Promise<string | nul
 export const getMpesaSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MpesaSettings> => {
+    const bridged = await viaBridge("getMpesaSettings", undefined);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     const { data, error } = await client.rpc("neo_mpesa_settings_get");
     if (error) throw new Error(error.message);
@@ -251,6 +259,8 @@ export const saveMpesaSettings = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }) => {
+    const bridged = await viaBridge("saveMpesaSettings", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
 
     // A typed address is checked before it is stored — a bad one would only
@@ -316,6 +326,8 @@ export const testMpesaConnection = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }) => {
+    const bridged = await viaBridge("testMpesaConnection", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     const { data: settings, error } = await client.rpc("neo_mpesa_settings_get");
     if (error) throw new Error(error.message);
@@ -408,6 +420,8 @@ export type StkChargeResult = {
   customerMessage?: string | undefined;
   reused?: boolean;
   amount?: number;
+  /** Whole-shilling rounding the bill recorded for this charge (0 when none). */
+  rounding?: number;
 };
 
 /**
@@ -425,6 +439,8 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
     description: input?.description ? String(input.description).trim().slice(0, 60) : null,
   }))
   .handler(async ({ data, context }): Promise<StkChargeResult> => {
+    const bridged = await viaBridge("chargeWithMpesa", data);
+    if (bridged) return bridged.result as StkChargeResult;
     const client = context.supabase as unknown as Rpc;
 
     // Never reinterpret an unsupported collection as a POS order.
@@ -580,6 +596,8 @@ export const chargeWithMpesa = createServerFn({ method: "POST" })
       transactionId: transactionId as string,
       checkoutRequestId: push.data.CheckoutRequestID ?? undefined,
       customerMessage: push.data.CustomerMessage ?? undefined,
+      amount: authorisedAmount,
+      rounding: Number(started["rounding"] ?? 0),
     };
   });
 
@@ -590,6 +608,8 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
     transactionId: String(input?.transactionId ?? "").trim(),
   }))
   .handler(async ({ data, context }) => {
+    const bridged = await viaBridge("reconcileMpesaTransaction", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     if (!data.transactionId)
       return { ok: false, status: "invalid", detail: "No transaction supplied." };
@@ -697,6 +717,8 @@ export const chargeDeliveryWithMpesa = createServerFn({ method: "POST" })
     msisdn: String(input?.msisdn ?? "").trim(),
   }))
   .handler(async ({ data, context }): Promise<DeliveryChargeResult> => {
+    const bridged = await viaBridge("chargeDeliveryWithMpesa", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     if (!data.orderId) return { ok: false, status: "invalid", detail: "No order supplied." };
 
@@ -804,6 +826,8 @@ export const chargeGuestFolioWithMpesa = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }): Promise<DeliveryChargeResult> => {
+    const bridged = await viaBridge("chargeGuestFolioWithMpesa", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
     const msisdn = normaliseMsisdn(data.msisdn);
@@ -892,6 +916,8 @@ export const chargeGuestDepositWithMpesa = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }): Promise<DeliveryChargeResult> => {
+    const bridged = await viaBridge("chargeGuestDepositWithMpesa", data);
+    if (bridged) return bridged.result as never;
     const client = context.supabase as unknown as Rpc;
     const { loadMpesaCredentials, normaliseMsisdn, stkPush } = await import("@/lib/mpesa.server");
     const msisdn = normaliseMsisdn(data.msisdn);

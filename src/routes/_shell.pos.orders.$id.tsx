@@ -54,6 +54,7 @@ import {
   useOpenFolioForStay,
   explainPosStatusError,
   usePosOrder,
+  useRefreshBillTotalsOnOpen,
   usePosStockAvailability,
   usePosOrderDiagnostics,
   usePostRoomCharge,
@@ -116,6 +117,7 @@ function OrderTerminal() {
   const { id } = Route.useParams();
   const { can } = useAuth();
   const order = usePosOrder(id);
+  useRefreshBillTotalsOnOpen(id);
   const stockOut = usePosStockAvailability(order.data?.branch_id, order.data?.order_type);
   const [stockIssue, setStockIssue] = useState<string | null>(null);
   const removeDraftOrder = useRemoveDraftOrder();

@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { chargeWithMpesa, reconcileMpesaTransaction } from "@/lib/mpesa.functions";
 import { useMpesaCollectionStatus } from "@/lib/payment-methods";
+import { mpesaChargePlan, mpesaMaxAmount } from "@/lib/mpesa-amount";
 import { mpesaObservationInterval } from "@/lib/mpesa-application-result";
 
 type Props = {
@@ -72,8 +73,16 @@ export function MpesaPromptDialog({
     onOpenChange?.(next);
   };
   const [phone, setPhone] = useState(defaultPhone ?? "");
+  const selected = initialAmount ?? balance;
+  const partialPos = sourceModule === "pos_order" && selected < balance - 0.005;
+  const plan = partialPos
+    ? { amount: Math.floor(selected), rounding: 0 }
+    : mpesaChargePlan(balance, sourceModule);
+  // Keep a fractional part-payment visible and blocked until staff explicitly
+  // enter a whole amount. Only the full bill has an agreed rounding rule.
+  const prefill = partialPos ? selected.toFixed(2) : plan.amount > 0 ? String(plan.amount) : "";
   const [amount, setAmount] = useState(
-    (initialAmount ?? balance) > 0 ? (initialAmount ?? balance).toFixed(2) : "",
+    prefill,
   );
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -85,10 +94,10 @@ export function MpesaPromptDialog({
     if (!open) {
       setTransactionId(null);
       setMessage(null);
-      setAmount(balance > 0 ? balance.toFixed(2) : "");
+      setAmount(prefill);
       setLookupPending(true);
     }
-  }, [open, balance]);
+  }, [open, prefill]);
 
   useEffect(() => {
     if (!open) return;
@@ -205,7 +214,7 @@ export function MpesaPromptDialog({
     !phone.trim() ||
     !Number.isSafeInteger(amountValue) ||
     !(amountValue > 0) ||
-    amountValue > balance + 0.005 ||
+    amountValue > (partialPos ? Math.floor(selected) : mpesaMaxAmount(balance, sourceModule)) + 0.005 ||
     Boolean(transactionId) ||
     send.isPending;
 
@@ -278,13 +287,22 @@ export function MpesaPromptDialog({
               id="mpesa-amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
+              inputMode="numeric"
               disabled={recoveryOnly || lookupPending || Boolean(transactionId) || send.isPending}
             />
             <p className="text-xs text-muted-foreground">
               Outstanding balance {balance.toFixed(2)}
               {" · M-Pesa requires a whole KES amount."}
             </p>
+            {sourceModule === "pos_order" && plan.rounding !== 0 && amountValue === plan.amount ? (
+              <p className="text-xs text-muted-foreground">The bill records {plan.rounding > 0 ? "+" : ""}{plan.rounding.toFixed(2)} rounding for this full M-Pesa payment.</p>
+            ) : null}
+            {sourceModule === "folio" && plan.amount > 0 && plan.amount !== balance && amountValue === plan.amount ? (
+              <p className="text-xs text-muted-foreground">The remaining {(balance - plan.amount).toFixed(2)} stays on the folio.</p>
+            ) : null}
+            {amount && amountValue > 0 && !Number.isSafeInteger(amountValue) ? (
+              <p className="text-xs text-destructive">Enter a whole shilling amount.</p>
+            ) : null}
           </div>
           {message ? (
             <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs">{message}</p>

@@ -316,6 +316,38 @@ export function usePosOrder(orderId: string | undefined) {
   });
 }
 
+/**
+ * Reopening a bill re-derives its stored totals from its live items, so every
+ * payment method (not only M-Pesa) reads the amount the items add up to. The
+ * database skips paid, finished and mid-M-Pesa bills and writes nothing when
+ * the total is already right. Runs once per bill per visit and never blocks
+ * the till: on failure the stored total stays as it was.
+ */
+export function useRefreshBillTotalsOnOpen(orderId: string | undefined) {
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  useEffect(() => {
+    if (!orderId || !organizationId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await guardedRpc(supabase, "neo_pos_refresh_bill_totals", {
+        _order: orderId,
+      } as never);
+      if (cancelled || error) return;
+      const r = (data ?? {}) as { refreshed?: boolean; previous_total?: number; grand_total?: number };
+      if (!r.refreshed) return;
+      void qc.invalidateQueries({ queryKey: ["pos", "order"] });
+      void qc.invalidateQueries({ queryKey: ["pos", "orders"] });
+      toast.info(
+        `Bill total updated from its items: ${Number(r.previous_total ?? 0).toFixed(2)} → ${Number(r.grand_total ?? 0).toFixed(2)}`,
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, organizationId, qc]);
+}
+
 export function useStationTickets(stationId: string | "all") {
   const { organizationId } = useAuth();
   const { applyTo, filterKey } = useActivePropertyFilter();

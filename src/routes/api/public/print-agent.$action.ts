@@ -25,6 +25,9 @@ export const Route = createFileRoute("/api/public/print-agent/$action")({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
+        const { bridgeTarget, forwardRaw } = await import("@/lib/neo-bridge.server");
+        const target = bridgeTarget(request);
+        if (target) return forwardRaw(target, `/api/public/bridge/print-agent/${encodeURIComponent(params.action)}`, request, ["authorization", "content-type"]);
         const authorization = request.headers.get("authorization") ?? "";
 
         const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";

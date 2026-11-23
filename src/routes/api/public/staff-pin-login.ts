@@ -36,6 +36,15 @@ function safeText(value: unknown, fallback: string, maximum = 250) {
 }
 
 export async function handleStaffPinPost(request: Request, runtime: Record<string, unknown> = {}) {
+        const { bridgeTarget, forwardRaw } = await import("@/lib/neo-bridge.server");
+        const target = bridgeTarget(request);
+        if (target) {
+          const token = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
+          if (!DEVICE_TOKEN.test(token)) return response({ error: "device", message: "This device is not authorised for staff PIN sign-in." }, 401);
+          const headers = new Headers(request.headers);
+          headers.set("x-neo-device-token", token);
+          return forwardRaw(target, "/api/public/bridge/staff-pin-login", new Request(request, { headers }), ["x-neo-device-token", "content-type"]);
+        }
         const authorization = request.headers.get("authorization") ?? "";
 
         const deviceToken = authorization.startsWith("Bearer ")
