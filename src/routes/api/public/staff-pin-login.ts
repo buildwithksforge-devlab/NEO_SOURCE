@@ -100,13 +100,16 @@ export async function handleStaffPinPost(request: Request, runtime: Record<strin
           );
         }
 
-        try {
-          const { resolveStaffPin } = await import("@/lib/staff-pin-resolver.server");
-          const resolved = await resolveStaffPin(request, deviceToken, pin, runtime);
-          if (resolved) return response(resolved.body, resolved.status);
-        } catch (error) {
-          console.error("[staff-pin-login] direct_exception", { name: error instanceof Error ? error.name.slice(0, 60) : "unknown" });
-          return response({ error: "server_error", message: "Staff PIN sign-in is temporarily unavailable." }, 502);
+        // The preview delegates to Lovable, which owns the database credentials.
+        if (new URL(request.url).origin !== CLOUDFLARE_APP_ORIGIN) {
+          try {
+            const { resolveStaffPin } = await import("@/lib/staff-pin-resolver.server");
+            const resolved = await resolveStaffPin(request, deviceToken, pin, runtime);
+            if (resolved) return response(resolved.body, resolved.status);
+          } catch (error) {
+            console.error("[staff-pin-login] direct_exception", { name: error instanceof Error ? error.name.slice(0, 60) : "unknown" });
+            return response({ error: "server_error", message: "Staff PIN sign-in is temporarily unavailable." }, 502);
+          }
         }
 
         const controller = new AbortController();

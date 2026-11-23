@@ -67,12 +67,14 @@ describe("staff PIN broker request/response behavior", () => {
   type Handler = (input: { request: Request }) => Promise<Response>;
   const handler = (Route.options as unknown as { server: { handlers: { POST: Handler } } }).server
     .handlers.POST;
-  const request = (pin = "123456", bearer = token) =>
-    new Request("https://neo-preview.neo-hospitality.workers.dev/api/public/staff-pin-login", {
+  const preview = "https://neo-preview.neo-hospitality.workers.dev";
+  const request = (pin = "123456", bearer = token, origin = preview) =>
+    new Request(`${origin}/api/public/staff-pin-login`, {
       method: "POST",
       headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
       body: JSON.stringify({ pin }),
     });
+  const direct = () => request("123456", token, "http://localhost:3000");
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -89,7 +91,7 @@ describe("staff PIN broker request/response behavior", () => {
     admin.rpc.mockResolvedValue({ data: { ok: true, ...display }, error: null });
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    const directRequest = Object.assign(request(), {
+    const directRequest = Object.assign(direct(), {
       runtime: { cloudflare: { env: { SUPABASE_URL: "https://database.example.invalid", SUPABASE_SERVICE_ROLE_KEY: "fixture" } } },
     });
     const response = await handler({ request: directRequest });
@@ -119,7 +121,7 @@ describe("staff PIN broker request/response behavior", () => {
     admin.rpc.mockResolvedValue({ data: { ok: false, reason: "locked" }, error: null });
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    const response = await handler({ request: request() });
+    const response = await handler({ request: direct() });
     expect(response.status).toBe(429);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -130,7 +132,7 @@ describe("staff PIN broker request/response behavior", () => {
     admin.rpc.mockResolvedValue({ data: null, error: { code: "PGRST301", message: "JWT rejected" } });
     const fetch = vi.fn().mockResolvedValue(Response.json({ token_hash: "staff-proof", branch_id: branch }));
     vi.stubGlobal("fetch", fetch);
-    const response = await handler({ request: request() });
+    const response = await handler({ request: direct() });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ token_hash: "staff-proof", branch_id: branch });
     expect(fetch).toHaveBeenCalledOnce();
@@ -143,10 +145,21 @@ describe("staff PIN broker request/response behavior", () => {
     admin.rpc.mockResolvedValue({ data: { ok: true, branch_id: branch, user_id: worker }, error: null });
     admin.auth.admin.getUserById.mockResolvedValue({ data: { user: { email: "worker@example.invalid" } }, error: null });
     admin.auth.admin.generateLink.mockResolvedValue({ data: { properties: { hashed_token: "staff-proof" } }, error: null });
-    const response = await handler({ request: request() });
+    const response = await handler({ request: direct() });
     expect(response.status).toBe(200);
     expect(admin.auth.admin.getUserById).toHaveBeenCalledWith(worker);
     expect(await response.json()).toEqual({ token_hash: "staff-proof", branch_id: branch });
+  });
+
+  it("uses Lovable on the preview even when Worker credentials are configured", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
+    const fetch = vi.fn().mockResolvedValue(Response.json({ token_hash: "staff-proof", branch_id: branch }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await handler({ request: request() });
+    expect(response.status).toBe(200);
+    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it("rejects missing device trust and malformed PINs before contacting a broker", async () => {

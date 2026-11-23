@@ -1,9 +1,9 @@
--- First installation only. Run in the existing NEØ project's Lovable SQL editor.
+-- Run in the existing NEØ project's Lovable SQL editor. Safe to rerun for this release.
 -- All four migrations succeed together or the transaction rolls back.
 BEGIN;
 
 -- 20261123100000_delete_unused_sales_tax_profiles
-CREATE FUNCTION public.neo_sales_tax_guard_profile_delete()
+CREATE OR REPLACE FUNCTION public.neo_sales_tax_guard_profile_delete()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
@@ -21,10 +21,12 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.neo_sales_tax_guard_profile_delete() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS sales_tax_profile_guard_delete ON public.sales_tax_profiles;
 CREATE TRIGGER sales_tax_profile_guard_delete BEFORE DELETE ON public.sales_tax_profiles
 FOR EACH ROW EXECUTE FUNCTION public.neo_sales_tax_guard_profile_delete();
 
 GRANT DELETE ON public.sales_tax_profiles TO authenticated;
+DROP POLICY IF EXISTS sales_tax_profile_delete ON public.sales_tax_profiles;
 CREATE POLICY sales_tax_profile_delete ON public.sales_tax_profiles FOR DELETE TO authenticated
 USING (organization_id=public.current_org_id() AND public.is_org_admin() AND NOT active);
 
@@ -33,7 +35,7 @@ CREATE INDEX IF NOT EXISTS cash_requests_pos_pending_order_idx
 ON public.cash_payment_requests (organization_id, source_record_id)
 WHERE source_module='pos' AND status='pending';
 
-CREATE FUNCTION public.neo_pos_guard_new_collection()
+CREATE OR REPLACE FUNCTION public.neo_pos_guard_new_collection()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
 AS $function$
@@ -106,8 +108,10 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.neo_pos_guard_new_collection() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS neo_pos_reserve_cash_request ON public.cash_payment_requests;
 CREATE TRIGGER neo_pos_reserve_cash_request BEFORE INSERT ON public.cash_payment_requests
 FOR EACH ROW EXECUTE FUNCTION public.neo_pos_guard_new_collection();
+DROP TRIGGER IF EXISTS neo_pos_reserve_payment ON public.pos_payments;
 CREATE TRIGGER neo_pos_reserve_payment BEFORE INSERT ON public.pos_payments
 FOR EACH ROW EXECUTE FUNCTION public.neo_pos_guard_new_collection();
 
@@ -246,7 +250,7 @@ BEGIN
 END;
 $rounding$;
 
-CREATE FUNCTION public.neo_partner_rfq_quotes(
+CREATE OR REPLACE FUNCTION public.neo_partner_rfq_quotes(
   _branch uuid, _relationship uuid, _rfq uuid DEFAULT NULL,
   _prices jsonb DEFAULT NULL, _valid_until date DEFAULT NULL, _notes text DEFAULT NULL,
   _previous uuid DEFAULT NULL

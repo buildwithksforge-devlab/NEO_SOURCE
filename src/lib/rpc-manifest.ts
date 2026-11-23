@@ -75,7 +75,6 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_blind_receiving_orders: "authenticated",
   neo_submit_blind_receiving_count: "authenticated",
   neo_receiving_custody_queue: "authenticated",
-  neo_request_receiving_recount: "authenticated",
   neo_accept_receiving_custody: "authenticated",
   neo_blind_receiving_review_queue: "authenticated",
   neo_blind_receiving_decide: "authenticated",
