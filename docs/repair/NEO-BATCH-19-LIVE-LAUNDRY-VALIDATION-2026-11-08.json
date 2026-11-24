@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "checks": 22,
+  "installed": [
+    {
+      "signature": "neo_laundry_completion_guard()",
+      "md5": "b4908b48fbbac89995f83fbb8f3421ed"
+    },
+    {
+      "signature": "neo_sync_guest_laundry_from_batch()",
+      "md5": "67145391e3e56200720f52276069373d"
+    }
+  ],
+  "scope": "Actual two live definitions, synthetic guest orders and batch triggers. No folio/stock/journal posting routines loaded; delivery and full laundry accounting remain open."
+}

@@ -20,6 +20,11 @@ export type AvailabilitySearch = {
 };
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+export function isCalendarDate(value: string): boolean {
+  if (!ISO_DATE.test(value) || Number(value.slice(0,4)) < 1) return false;
+  const stamp = Date.parse(value + "T00:00:00Z");
+  return Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0,10) === value;
+}
 
 /** Property-local calendar. Dates are what the front desk sees, not UTC. */
 export const PROPERTY_TIME_ZONE = "Africa/Nairobi";
@@ -50,35 +55,33 @@ export function propertyToday(timeZone: string = PROPERTY_TIME_ZONE, now: Date =
  * Handles month and year rollover, including leap days.
  */
 export function addCalendarDays(date: string, days: number): string {
-  if (!ISO_DATE.test(date)) return date;
-  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
-  const stamp = Date.UTC(y, m - 1, d) + days * 86_400_000;
-  const next = new Date(stamp);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+  if (!isCalendarDate(date) || !Number.isInteger(days)) return date;
+  const stamp = Date.parse(date + "T00:00:00Z") + days * 86_400_000;
+  if (!Number.isFinite(stamp) || Math.abs(stamp) > 8640000000000000) return date;
+  const result = new Date(stamp).toISOString().slice(0,10);
+  return isCalendarDate(result) ? result : date;
 }
 
-/** Whole nights between two ISO dates, timezone-free. */
+/** Whole nights between actual calendar dates; backward ranges remain negative. */
 export function calendarNights(arrival: string, departure: string): number {
-  if (!ISO_DATE.test(arrival) || !ISO_DATE.test(departure)) return 0;
-  const [ay, am, ad] = arrival.split("-").map(Number) as [number, number, number];
-  const [dy, dm, dd] = departure.split("-").map(Number) as [number, number, number];
-  return Math.round((Date.UTC(dy, dm - 1, dd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+  if (!isCalendarDate(arrival) || !isCalendarDate(departure)) return 0;
+  return Math.round((Date.parse(departure + "T00:00:00Z") - Date.parse(arrival + "T00:00:00Z")) / 86_400_000);
 }
 
 export function parseAvailabilitySearch(search: Record<string, unknown>): AvailabilitySearch {
-  const date = (v: unknown) => (typeof v === "string" && ISO_DATE.test(v) ? v : undefined);
-  const count = (v: unknown) => {
-    if (v === undefined || v === null || v === "") return undefined;
+  const date = (v: unknown) => (typeof v === "string" && isCalendarDate(v) ? v : undefined);
+  const count = (v: unknown, minimum: number) => {
+    if (v === undefined || v === null || (typeof v === "string" && !v.trim())) return undefined;
+    if (typeof v !== "number" && typeof v !== "string") return undefined;
     const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+    return Number.isInteger(n) && n >= minimum ? n : undefined;
   };
   return {
     arrival: date(search["arrival"]),
     departure: date(search["departure"]),
     roomType: typeof search["roomType"] === "string" ? search["roomType"] : undefined,
-    adults: count(search["adults"]),
-    children: count(search["children"]),
+    adults: count(search["adults"], 1),
+    children: count(search["children"], 0),
     roomId: typeof search["roomId"] === "string" ? search["roomId"] : undefined,
   };
 }
@@ -108,8 +111,8 @@ export function resolveAvailabilitySearch(
   search: AvailabilitySearch,
   options: { timeZone?: string; now?: Date } = {},
 ): ResolvedAvailabilitySearch {
-  const arrivalGiven = typeof search.arrival === "string" && ISO_DATE.test(search.arrival);
-  const departureGiven = typeof search.departure === "string" && ISO_DATE.test(search.departure);
+  const arrivalGiven = typeof search.arrival === "string" && isCalendarDate(search.arrival);
+  const departureGiven = typeof search.departure === "string" && isCalendarDate(search.departure);
 
   const arrival = arrivalGiven
     ? (search.arrival as string)
@@ -117,8 +120,8 @@ export function resolveAvailabilitySearch(
   const departure = departureGiven ? (search.departure as string) : addCalendarDays(arrival, 1);
 
   const roomTypeGiven = typeof search.roomType === "string" && search.roomType !== "";
-  const adultsGiven = typeof search.adults === "number";
-  const childrenGiven = typeof search.children === "number";
+  const adultsGiven = typeof search.adults === "number" && Number.isInteger(search.adults) && search.adults >= 1;
+  const childrenGiven = typeof search.children === "number" && Number.isInteger(search.children) && search.children >= 0;
 
   return {
     values: {

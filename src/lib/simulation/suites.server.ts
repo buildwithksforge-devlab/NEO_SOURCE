@@ -13,6 +13,7 @@ import type { TestEnvironment } from "./environment.server";
 import { EXTENDED_SUITES } from "./suites-extended.server";
 import { SECOND_PROPERTY_SUITES } from "./suites-second-property.server";
 import { auditWindowFrom } from "@/lib/audit-window";
+import type { PaymentTrace } from "@/lib/cash-routing";
 
 type Client = SupabaseClient;
 
@@ -495,21 +496,50 @@ export async function suiteShortageProcurement(ctx: SuiteContext) {
     const list = (lines ?? []) as { id: string; stock_item_id: string; quantity: number; unit_price: number }[];
     t.must("the order has lines", list.length > 0);
 
-    await expectOk(storekeeper, "neo_stores_receive_goods", {
+    const clerk = client(ctx, "receiving_clerk");
+    const manager = client(ctx, "owner");
+    const submitted = (await expectOk(clerk, "neo_submit_blind_receiving_count", {
       _order: ctx.state["purchaseOrderId"],
       _location: ctx.a.seed["storeLocationId"],
-      _lines: list.map((l) => ({
-        order_line_id: l.id,
-        stock_item_id: l.stock_item_id,
-        quantity_received: l.quantity,
-        quantity_accepted: l.quantity,
-        quantity_rejected: 0,
-        unit_price: l.unit_price ?? 550,
-      })),
-      _attempt: crypto.randomUUID(),
-      _notes: "System test receipt",
       _delivery_note: `TEST-${ctx.runRef}-DN`,
+      _lines: list.map((line) => ({
+        order_line_id: line.id,
+        quantity_delivered: line.quantity,
+        quantity_rejected: 0,
+      })),
+      _remarks: "System test receipt",
+    })) as { count_id: string };
+    const queue = (await expectOk(storekeeper, "neo_receiving_custody_queue", {})) as {
+      count_id: string;
+      recount_required?: boolean;
+      lines: { line_id: string; order_line_id: string }[];
+    }[];
+    const delivery = queue.find((row) => row.count_id === submitted.count_id);
+    if (!delivery) throw new Error("Storekeeper could not load the submitted delivery");
+    if (delivery.recount_required === true) throw new Error("A new routine count unexpectedly requires a recount");
+    if (delivery.recount_required === undefined) {
+      await expectOk(storekeeper, "neo_accept_receiving_custody", {
+        _count_id: submitted.count_id,
+        _lines: delivery.lines.map((line) => ({
+          line_id: line.line_id,
+          delivered: list.find((item) => item.id === line.order_line_id)?.quantity,
+          rejected: 0,
+        })),
+      });
+    }
+    await expectOk(manager, "neo_blind_receiving_decide", {
+      _count_id: submitted.count_id,
+      _decision: "approved",
+      _notes: "Clerk count reviewed against the purchase order",
     });
+    t.must("approval leaves stock unchanged", (await stockOnHand(ctx)) === before);
+    await expectOk(manager, "neo_post_approved_blind_receiving", { _count_id: submitted.count_id });
+    if (delivery.recount_required === false) {
+      await expectOk(storekeeper, "neo_accept_receiving_custody", {
+        _count_id: submitted.count_id,
+        _lines: [],
+      });
+    }
 
     const after = await stockOnHand(ctx);
     t.must("stock increased after receiving", after > before, `> ${before}`, after);
@@ -573,6 +603,96 @@ export async function suiteFinance(ctx: SuiteContext) {
     const { data } = await ctx.admin.from("folios").select("balance").eq("id", ctx.state["folioId"]!).maybeSingle();
     const balance = Number((data as { balance: number } | null)?.balance ?? 0);
     t.must("balance unchanged on repeat", Math.abs(balance - before) < 0.01, before, balance);
+  });
+
+  await rec.run("Finance", 4, "cash.routed.receipt.journal", "Routed cash reaches the assigned cashier, receipt and journal", async (t) => {
+    const folioId = ctx.state["folioId"];
+    if (!folioId) throw new Skipped("No test folio was opened.");
+    const cashier = client(ctx, "cashier");
+    const cashierId = ctx.a.accounts.find((account) => account.key === "cashier")?.userId;
+    if (!cashierId) throw new Skipped("The test cashier has no saved account.");
+    const { data: folio, error: folioError } = await ctx.admin.from("folios")
+      .select("id, balance, status")
+      .eq("id", folioId).eq("organization_id", ctx.a.orgId).eq("branch_id", ctx.a.branchId)
+      .maybeSingle();
+    if (folioError) throw new Error(`Could not read the test folio: ${folioError.message}`);
+    if (!folio || folio.status !== "open") throw new Skipped("No open folio in the test property.");
+    const amount = 100;
+    if (!Number.isFinite(Number(folio.balance)) || Number(folio.balance) <= amount)
+      throw new Skipped("The test folio needs a balance above the routed installment.");
+
+    const sourceTill = (await expectOk(reception, "neo_cash_till_context", {
+      _branch: ctx.a.branchId,
+    })) as { self_service?: boolean } | null;
+    if (sourceTill?.self_service !== false)
+      throw new NotConfigured("The test receptionist needs to route cash from outside an open till.");
+
+    const { data: openTill, error: tillError } = await ctx.admin.from("pos_shifts")
+      .select("id")
+      .eq("organization_id", ctx.a.orgId).eq("branch_id", ctx.a.branchId)
+      .eq("cashier_id", cashierId).eq("status", "open").maybeSingle();
+    if (tillError) throw new Error(`Could not read the test cashier's till: ${tillError.message}`);
+    if (!openTill) await expectOk(cashier, "cash_open_shift", {
+      _branch: ctx.a.branchId, _station: null, _float: 0,
+    });
+
+    const request = (await expectOk(reception, "neo_cash_request_payment", {
+      _folio: folioId,
+      _amount: amount,
+      _reference: `TEST-${ctx.runRef}-ROUTED-CASH`,
+      _notes: "Simulated routed collection in the isolated test workspace",
+      _idempotency_key: `${ctx.runRef}-routed-cash`,
+    })) as { status?: string; request_id?: string; assigned_cashier_id?: string } | null;
+    if (request?.status !== "pending" || !request.request_id)
+      throw new Error("The cash request did not reach the pending routing stage.");
+    const requestId = request.request_id;
+    t.note("cash_request", requestId);
+    t.must("the request is assigned to the test cashier", Boolean(cashierId) && request.assigned_cashier_id === cashierId);
+    const { data: pending, error: pendingError } = await ctx.admin.from("cash_payment_requests")
+      .select("status, payment_id, receipt_number")
+      .eq("id", requestId).eq("organization_id", ctx.a.orgId).eq("branch_id", ctx.a.branchId).maybeSingle();
+    if (pendingError) throw new Error(`Could not verify the pending cash request: ${pendingError.message}`);
+    t.must("pending request has no payment or receipt", pending?.status === "pending" && !pending.payment_id && !pending.receipt_number);
+
+    const confirm = async () => (await expectOk(cashier, "neo_cash_confirm_receipt", {
+      _request: requestId,
+    })) as { status?: string; request_id?: string; payment_id?: string; receipt_number?: string } | null;
+    const receipt = await confirm();
+    if (receipt?.status !== "confirmed" || receipt.request_id !== requestId || !receipt.payment_id || !receipt.receipt_number)
+      throw new Error("The assigned cashier did not receive a confirmed receipt for this request.");
+    const paymentId = receipt.payment_id;
+    t.note("receipt", receipt.receipt_number);
+    const replay = await confirm();
+    t.must("confirming again returns the same receipt", replay?.payment_id === paymentId && replay?.receipt_number === receipt.receipt_number);
+
+    const readTrace = async () => (await expectOk(cashier, "neo_cash_payment_trace", {
+      _payment: paymentId,
+    })) as PaymentTrace | null;
+    let trace = await readTrace();
+    const postedByConfirmation = trace?.journal?.status === "posted";
+    if (!postedByConfirmation) {
+      await expectOk(accountant, "neo_finance_post_txn", {
+        _source_type: "folio_payment",
+        _source_id: paymentId,
+        _silent: false,
+      });
+      trace = await readTrace();
+    }
+    t.note("posted_by_cash_confirmation", postedByConfirmation);
+    t.must("the trace links the same confirmed request, cashier and receipt",
+      trace?.request?.id === requestId && trace.request.status === "confirmed" &&
+      trace.request.assigned_cashier_id === cashierId &&
+      trace.payment?.id === receipt.payment_id && trace.payment.receipt_number === receipt.receipt_number &&
+      Number(trace.payment.amount) === amount);
+    const journal = trace?.journal;
+    t.note("journal", journal?.journal_number ?? null);
+    t.must("the linked journal is posted and balances at the receipted amount",
+      journal?.status === "posted" && Number(journal.total_debit) === amount && Number(journal.total_credit) === amount);
+    const { count, error: countError } = await ctx.admin.from("journal_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ctx.a.orgId).eq("source_document_id", paymentId);
+    if (countError) throw new Error(`Could not verify journal uniqueness: ${countError.message}`);
+    t.must("exactly one journal belongs to the routed receipt", count === 1, 1, count);
   });
 
   await rec.run("Finance", 4, "payment.recorded", "A simulated payment settles the folio", async (t) => {

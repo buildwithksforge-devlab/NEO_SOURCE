@@ -1,3 +1,5 @@
+import {invalidatePaymentViews} from "@/lib/payment-view-refresh";
+import {parseOutboxReplayBatch} from "@/lib/outbox-replay-result";
 /**
  * Finance posting workflow — the client half of the operational → Finance handoff.
  *
@@ -140,11 +142,10 @@ export function useReconciliationExport(scope: FactScope, enabled = true) {
 
 function useInvalidatePosting() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["finance-posting"] });
-    void qc.invalidateQueries({ queryKey: ["neo-facts"] });
-    void qc.invalidateQueries({ queryKey: ["finance"] });
-  };
+  return () => Promise.all([
+    invalidatePaymentViews(qc),
+    ...['neo-intelligence','neo-outbox-health','neo-outbox-failures','intelligence','automation'].map(key=>qc.invalidateQueries({queryKey:[key]})),
+  ]).then(()=>undefined);
 }
 
 /** Posts a single operational record. Re-running it never creates a second charge. */
@@ -544,7 +545,7 @@ export function useOutboxReplay() {
       else if (r["ok"]) toast.success("Handoff requeued.");
       else toast.warning(String(r["detail"] ?? r["reason"] ?? "Could not replay this handoff."));
       invalidate();
-      void qc.invalidateQueries({ queryKey: ["intelligence"] });
+      void qc.invalidateQueries({ queryKey: ["neo-intelligence"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -560,12 +561,13 @@ export function useOutboxReplayBatch() {
         _reason: input.reason ?? null,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, number | boolean>;
+      return parseOutboxReplayBatch(data);
     },
-    onSuccess: (r) =>
-      toast.success(
-        `Requeued ${r["requeued"] ?? 0} · already processed ${r["already_processed"] ?? 0} · failed ${r["failed"] ?? 0}`,
-      ),
+    onSuccess: async (r) => {
+      await invalidate();
+      const message = 'Requeued '+r.requeued+' · already processed '+r.alreadyProcessed+' · failed '+r.failed;
+      if (r.failed > 0) toast.warning(message); else toast.success(message);
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }

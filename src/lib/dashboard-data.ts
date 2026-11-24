@@ -218,16 +218,22 @@ export function useStationWorkload(enabled = true) {
 }
 
 /** Dashboards the signed-in user's roles grant access to, ordered by priority. */
-export function useMyDashboards(enabled = true) {
-  return useQuery({
-    queryKey: ["my-dashboards"],
-    enabled,
+export function myDashboardsQuery(organizationId: string | null, userId: string | null) {
+  return {
+    queryKey: ["my-dashboards", organizationId, userId] as const,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await guardedRpc<{ key: string; name: string }[]>(supabase, "my_dashboards");
       if (error) throw error;
       return data ?? [];
     },
+  };
+}
+
+export function useMyDashboards(organizationId: string | null, userId: string | null) {
+  return useQuery({
+    ...myDashboardsQuery(organizationId, userId),
+    enabled: Boolean(organizationId && userId),
   });
 }
 

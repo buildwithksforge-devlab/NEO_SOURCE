@@ -1,3 +1,4 @@
+import {readViewAccess, VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
 /**
  * The single authoritative financial lifecycle.
  *
@@ -92,18 +93,22 @@ export type LifecycleScope = {
 
 /** The register behind the finance dashboard, the day view and every drilldown. */
 export function useFinancialLifecycle(scope: LifecycleScope = {}, enabled = true) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   return useQuery({
+    ...VISIBLE_VIEW_REFRESH,
     queryKey: [
       "financial-lifecycle",
       organizationId,
+      identity,
       scope.branchId ?? "all",
       scope.from ?? null,
       scope.to ?? null,
       scope.family ?? "all",
       scope.status ?? "all",
     ],
-    enabled: enabled && Boolean(organizationId),
+    enabled: ready && (enabled && Boolean(organizationId)),
     queryFn: async (): Promise<LifecycleRow[]> => {
       const { data, error } = await rpc("neo_financial_lifecycle_register", {
         _branch: scope.branchId ?? null,

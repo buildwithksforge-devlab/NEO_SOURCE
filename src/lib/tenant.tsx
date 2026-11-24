@@ -19,6 +19,7 @@ import { loadTenant, resolveOrganizationId, saveTenant } from "./tenant-store";
 import { toast } from "sonner";
 import { clearBrandCache, preloadBrandImage, writeBrandCache } from "./brand-cache";
 import { pickThemedLogo } from "./brand-image";
+import { primaryInk } from "@/lib/public-palette";
 import {
   clearPropertySelection,
   readPropertySelection,
@@ -299,6 +300,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const b = tenant.brand;
     const font = fontOptions.find((f) => f.key === b.fontKey) ?? fontOptions[0]!;
+    const primaryForeground = primaryInk(b.primary);
+    const accentForeground = primaryInk(b.accent);
 
     const isDark = () =>
       b.theme === "dark" ||
@@ -310,8 +313,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const applyTheme = () => {
       const dark = isDark();
       root.classList.toggle("dark", dark);
+      root.dataset["appearance"] = dark ? "dark" : "light";
       root.style.setProperty("--brand", b.primary);
       root.style.setProperty("--brand-accent", b.accent);
+      root.style.setProperty("--brand-foreground", primaryForeground);
+      root.style.setProperty("--brand-accent-foreground", accentForeground);
       root.style.setProperty("--font-sans", font.stack);
       if (dark) {
         root.style.removeProperty("--secondary");
@@ -330,6 +336,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       writeBrandCache({
         primary: b.primary,
         accent: b.accent,
+        primaryForeground,
+        accentForeground,
         secondary: b.secondary,
         background: b.background,
         foreground: b.foreground,

@@ -31,8 +31,12 @@ export function TicketCard({
   onSelectedChange,
   onOpenAudit,
   stationAuthority = true,
+  readOnly = false,
+  allowedActions,
 }: {
   ticket: KitchenTicket;
+  readOnly?: boolean;
+  allowedActions?: readonly string[];
   onTransition: (to: string, needsReason: boolean) => void;
   onDelay: () => void;
   renderItemActions?: (item: KitchenTicketItem) => ReactNode;
@@ -50,8 +54,10 @@ export function TicketCard({
    */
   stationAuthority?: boolean;
 }) {
-  const actions = ticketActions(ticket.status).filter(
-    (a) => stationAuthority || a.to === "served" || a.to === "completed",
+  const actions = (readOnly ? [] : ticketActions(ticket.status)).filter(
+    (a) =>
+      (!allowedActions || allowedActions.includes(a.to)) &&
+      (stationAuthority || a.to === "served" || a.to === "completed"),
   );
   // While a move is in flight every action on the card is refused, so a second
   // tap cannot send the same ticket twice.
@@ -71,16 +77,16 @@ export function TicketCard({
               />
             ) : null}
             <div>
-            <CardTitle className="text-base">
-              {ticket.table_code ?? ticket.guest_name ?? "Takeaway"}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {ticket.ticket_number} · {ticket.station_name ?? "Routing not configured"} ·{" "}
-              {titleCase(ticket.order_type ?? ticket.course ?? "")}
-            </p>
-            {ticket.order_number ? (
-              <p className="text-xs text-muted-foreground">Order {ticket.order_number}</p>
-            ) : null}
+              <CardTitle className="text-base">
+                {ticket.table_code ?? ticket.guest_name ?? "Takeaway"}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {ticket.ticket_number} · {ticket.station_name ?? "Routing not configured"} ·{" "}
+                {titleCase(ticket.order_type ?? ticket.course ?? "")}
+              </p>
+              {ticket.order_number ? (
+                <p className="text-xs text-muted-foreground">Order {ticket.order_number}</p>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -121,12 +127,14 @@ export function TicketCard({
                     </p>
                   ))}
                   {i.allergy_note ? (
-                    <p className="text-xs font-medium text-destructive">Allergy: {i.allergy_note}</p>
+                    <p className="text-xs font-medium text-destructive">
+                      Allergy: {i.allergy_note}
+                    </p>
                   ) : null}
                 </div>
                 <StatusPill tone="default">{titleCase(i.status)}</StatusPill>
               </div>
-              {renderItemActions && stationAuthority ? (
+              {renderItemActions && stationAuthority && !readOnly ? (
                 <div className="mt-2 flex flex-wrap gap-1">{renderItemActions(i)}</div>
               ) : null}
             </li>
@@ -148,13 +156,21 @@ export function TicketCard({
             </Button>
           ))}
           {onOpenAudit ? (
-            <Button size="sm" variant="ghost" onClick={onOpenAudit} aria-label="Open ticket audit trail">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onOpenAudit}
+              aria-label="Open ticket audit trail"
+            >
               <History className="mr-1 size-4" /> Audit
             </Button>
           ) : null}
-          {stationAuthority ? (
-            <Button size="sm" variant="outline" disabled={working} onClick={onDelay}>
-              Report delay{ticket.is_delayed ? ` (${Math.max(0, ticket.age_minutes - ticket.target_minutes)}m over)` : ""}
+          {stationAuthority && !readOnly ? (
+            <Button size="sm" variant="outline" disabled={working || readOnly} onClick={onDelay}>
+              Report delay
+              {ticket.is_delayed
+                ? ` (${Math.max(0, ticket.age_minutes - ticket.target_minutes)}m over)`
+                : ""}
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground">

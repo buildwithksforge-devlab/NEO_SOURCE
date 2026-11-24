@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouter } from "@tanstack/react-router";
 import { PublicWorkspaceProvider, WorkspaceNotFound } from "@/components/public/PublicAppShell";
 import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
 import { useTrackEntry } from "@/lib/traffic";
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/delivery/$hotelSlug")({
     return {
       meta: [
         { title },
+        ...(loaderData?.branch_id ? [{ name: "neo-public-property", content: `delivery:${loaderData.branch_id}` }] : []),
         { name: "description", content: description },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
@@ -25,8 +26,21 @@ export const Route = createFileRoute("/delivery/$hotelSlug")({
     };
   },
   component: DeliveryAppLayout,
+  errorComponent: DeliveryPublicationError,
 });
 
+function DeliveryPublicationError() {
+  const router = useRouter();
+  return (
+    <main className="neo-public-app grid place-items-center p-6">
+      <div className="neo-public-panel max-w-md p-6">
+        <h1 className="text-xl font-semibold">Delivery couldn’t load</h1>
+        <p className="mt-2 text-sm text-white/80">We couldn’t check this property’s published app. Try the same link again.</p>
+        <button className="neo-commerce-primary mt-4" onClick={() => void router.invalidate()}>Retry</button>
+      </div>
+    </main>
+  );
+}
 function DeliveryAppLayout() {
   const workspace = Route.useLoaderData();
   const { hotelSlug } = Route.useParams();

@@ -49,6 +49,11 @@ export function CashRequestInbox() {
                   <span className="text-base font-semibold">{money(r.amount)}</span>
                   <StatusPill tone="warning">Awaiting cash</StatusPill>
                 </div>
+                {r.tendered != null && r.change_due != null ? (
+                  <p className="text-xs text-muted-foreground">
+                    Tendered {money(r.tendered)} · Change due {money(r.change_due)}
+                  </p>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
                   Requested {new Date(r.created_at).toLocaleString()}
                   {r.reference ? ` · Ref ${r.reference}` : ""}

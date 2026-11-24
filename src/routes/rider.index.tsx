@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RiderHandoverForm } from "@/components/public/RiderHandoverForm";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CarTaxiFront, LifeBuoy, Loader2, LogOut, Phone, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,6 @@ import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel } from "@/lib/public-delivery";
 import {
   useClaimWaitingOrder,
-  useConfirmDelivery,
   useMyDeliveries,
   useMyOutstandingCash,
   useMyRiderProfile,
@@ -26,7 +26,8 @@ import {
   type ZoneQueueGroup,
 } from "@/lib/delivery-data";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
-import { RiderTabBar } from "@/components/public/RiderTabBar";
+import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
+import { BrandMark } from "@/components/public/PublicAppShell";
 import { useRiderLocationSharing } from "@/lib/delivery-live";
 
 export const Route = createFileRoute("/rider/")({
@@ -56,11 +57,11 @@ function RiderHome() {
   const navigate = useNavigate();
   const { user, loading } = useCustomerSession();
   const rider = useMyRiderProfile();
+  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
   const riderId = rider.data?.["id"] as string | undefined;
   const deliveries = useMyDeliveries(riderId);
   const advance = useRiderAdvance();
   const claim = useClaimWaitingOrder();
-  const confirm = useConfirmDelivery();
   const setAvailability = useSetRiderAvailability();
   const transportJobs = useMyTransportJobs();
   const waiting = useZoneWaitingQueue((rider.data?.["branch_id"] as string | null) ?? null);
@@ -109,22 +110,28 @@ function RiderHome() {
   const availability = String(rider.data["availability_status"] ?? "offline");
   const active = ((deliveries.data ?? []) as Row[]).filter(
     (o) => !["delivered", "completed", "cancelled", "returned"].includes(String(o["order_status"])),
-  );
+  ).sort((a, b) => riderJobPriority(b) - riderJobPriority(a));
   const onRoad = active.filter((o) => ["rider-assigned", "collected", "out-for-delivery"].includes(String(o["order_status"])));
   const done = ((deliveries.data ?? []) as Row[]).filter((o) =>
     ["delivered", "completed"].includes(String(o["order_status"])),
   );
 
   return (
-     <div className="neo-rider-page">
+     <div className="neo-rider-page" style={brand.style}>
       <PreviewBanner experience="Rider" />
       <header className="sticky top-0 z-10 bg-[color:var(--rider-navy)] px-4 py-4" style={{ background: brandFallback.navy }}>
          <div className="mx-auto grid w-full max-w-md min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-           <div className="min-w-0">
+           <div className="flex min-w-0 items-center gap-2">
+            {brand.property ? <span className="max-w-10 shrink-0 overflow-hidden rounded-lg"><BrandMark size={32} workspace={{
+              hotel_name: brand.property.property_name, app_name: "Rider", primary_color: brand.primary,
+              logo_url: brand.property.media?.logo_url || brand.property.logo_url, button_style: "rounded",
+            }} /></span> : null}
+            <div className="min-w-0">
              <p className="truncate text-sm font-semibold text-white">
               {String(rider.data["display_name"] ?? "Rider")}
             </p>
-            <p className="text-xs text-white/60">{statusLabel(availability)} · {active.length} active</p>
+            <p className="truncate text-xs text-white/75">{brand.property?.property_name || statusLabel(availability)} · {active.length} active</p>
+            </div>
           </div>
            <div className="flex shrink-0 items-center gap-2">
             <Link to="/rider/support" aria-label="My support" className="text-white/70">
@@ -142,8 +149,8 @@ function RiderHome() {
               }
               className="rounded-full px-3 py-1.5 text-xs font-semibold"
               style={{
-                background: availability === "available" ? brandFallback.primary : "#ffffff22",
-                color: "#fff",
+                background: availability === "available" ? brand.primary : "#ffffff22",
+                color: availability === "available" ? "var(--pa-on-primary)" : "#fff",
               }}
             >
               {availability === "available" ? "Available" : "Go online"}
@@ -162,28 +169,21 @@ function RiderHome() {
       </header>
 
        <main className="mx-auto w-full max-w-md min-w-0 space-y-5 px-4 pb-28 pt-5">
-        <section className="neo-rider-hero">
-          <div>
-            <p className="neo-commerce-eyebrow">Today's run</p>
-            <h1 className="mt-1 text-2xl font-bold text-white">Your delivery board</h1>
-            <p className="mt-2 text-sm text-white/75">Pick up only when Kitchen is ready. Complete the handover with PIN/POD and reconcile cash here.</p>
+        <section className="neo-rider-hero !flex flex-wrap items-center justify-between">
+          <div><h1 className="text-2xl font-bold text-white">My deliveries</h1>
+            <p className="mt-1 text-sm text-white/80">{active.length} assigned · {statusLabel(availability)}</p>
           </div>
-          <div className="neo-rider-stat-grid">
-            <div><strong>{active.length}</strong><span>Active</span></div>
-            <div><strong>{onRoad.length}</strong><span>On road</span></div>
-            <div><strong>{done.length}</strong><span>Done</span></div>
-          </div>
+          {onRoad.length ? <Link to="/rider/active" className="neo-commerce-primary">Active jobs</Link> : null}
         </section>
 
-        <LocationSharing deliveryIds={onRoad.map((o) => String(o["id"]))} />
-
-        <div className="flex items-center justify-between gap-3">
-          <div><p className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">Assigned to you</p><h2 className="text-lg font-bold text-slate-950">Deliveries</h2></div>
-          <Link to="/rider/active" className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800">Open active job</Link>
-        </div>
-
-
-        {active.length === 0 ? (
+        {deliveries.isLoading ? (
+          <p className="neo-rider-card p-5 text-slate-700" role="status">Loading assigned deliveries…</p>
+        ) : deliveries.isError ? (
+          <div className="neo-rider-card p-5 text-slate-800" role="alert">
+            <p>Your assigned deliveries couldn’t load.</p>
+            <button className="neo-commerce-primary mt-3" onClick={() => void deliveries.refetch()}>Retry</button>
+          </div>
+        ) : active.length === 0 ? (
           <p className="neo-rider-card p-6 text-center text-sm" style={{ color: brandFallback.steel }}>
             No active deliveries assigned to you right now.
           </p>
@@ -192,18 +192,13 @@ function RiderHome() {
             <DeliveryCard
               key={String(order["id"])}
               order={order}
+              busy={advance.isPending}
               onAdvance={(to) => advance.mutate({ orderId: String(order["id"]), to })}
-              onConfirm={(pin, recipient, cash) =>
-                confirm.mutate({
-                  orderId: String(order["id"]),
-                  pin,
-                  recipient,
-                  ...(cash === undefined ? {} : { cash }),
-                })
-              }
             />
           ))
         )}
+
+        <LocationSharing deliveryIds={onRoad.filter((o) => o["order_status"] !== "rider-assigned").map((o) => String(o["id"]))} />
 
         <ZoneQueue
           groups={waiting.data ?? []}
@@ -223,7 +218,7 @@ function RiderHome() {
         {done.length ? (
           <section>
             <h2 className="mb-2 mt-6 text-sm font-semibold" style={{ color: brandFallback.steel }}>
-              Completed today
+              Recently completed
             </h2>
             <ul className="space-y-2">
               {done.slice(0, 10).map((order) => (
@@ -244,6 +239,13 @@ function RiderHome() {
       <RiderTabBar active="home" />
     </div>
   );
+}
+
+function riderJobPriority(order: Row) {
+  const status = order["order_status"];
+  if (status === "out-for-delivery") return 3;
+  if (status === "collected") return 2;
+  return ["ready", "completed"].includes(String(order["kitchen_status"])) ? 1 : 0;
 }
 
 const TRANSPORT_NEXT: Record<string, { to: "arriving" | "picked-up" | "completed"; label: string }> = {
@@ -446,23 +448,23 @@ function CashHandover({ riderId, branchId }: { riderId: string; branchId: string
 
 function DeliveryCard({
   order,
+  busy,
   onAdvance,
-  onConfirm,
 }: {
   order: Row;
+  busy: boolean;
   onAdvance: (to: string) => void;
-  onConfirm: (pin: string, recipient: string, cash?: number) => void;
 }) {
   const status = String(order["order_status"]);
   const next = NEXT_STEP[status];
+  const readyForPickup = status !== "rider-assigned" || ["ready", "completed"].includes(String(order["kitchen_status"]));
+  const snapshot = (order["address_snapshot"] ?? {}) as Row;
+  const destination = [snapshot["address_line"] ?? snapshot["line1"] ?? order["delivery_address"], snapshot["city"]].filter(Boolean).join(", ");
   // Older orders were saved as "cash-on-delivery"; they still count as cash.
   const isCash = normalisePaymentMethod(String(order["payment_method"] ?? "")) === "cash";
-  const [pin, setPin] = useState("");
-  const [recipient, setRecipient] = useState("");
-  const [cash, setCash] = useState("");
 
   return (
-    <article className="neo-rider-card p-4">
+    <article id={`job-${String(order["id"])}`} className="neo-rider-card scroll-mt-24 p-4">
       <div className="neo-public-row">
         <div className="min-w-0">
           <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
@@ -476,74 +478,28 @@ function DeliveryCard({
         {order["contact_phone"] ? (
           <a
             href={`tel:${String(order["contact_phone"])}`}
-            className="inline-flex items-center gap-1 text-xs font-medium"
-            style={{ color: brandFallback.primary }}
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-800"
           >
             <Phone className="size-3.5" /> Call
           </a>
         ) : null}
       </div>
 
-      {order["delivery_address"] ? (
+      {destination ? (
         <p className="mt-2 break-words text-sm" style={{ color: brandFallback.secondary }}>
-          {String(order["delivery_address"])}
+          {destination}
         </p>
       ) : null}
 
       {next ? (
-        <button
-          onClick={() => onAdvance(next.to)}
-          className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
-          style={{ background: brandFallback.primary }}
-        >
+        readyForPickup ? <button onClick={() => onAdvance(next.to)} disabled={busy}
+          className="neo-commerce-primary mt-4 w-full">
           {next.label}
-        </button>
+        </button> : <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">Waiting for the kitchen to mark this order ready.</p>
       ) : null}
 
       {status === "out-for-delivery" ? (
-        <div className="mt-4 space-y-2 border-t border-black/5 pt-4">
-          <Label htmlFor={`pod-pin-${String(order["id"])}`}>Customer PIN</Label>
-          <Input
-            id={`pod-pin-${String(order["id"])}`}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="Ask the customer for their PIN"
-          />
-          <p className="text-xs" style={{ color: brandFallback.steel }}>
-            Ask the customer to read it from their order screen. After five wrong tries the
-            handover locks and dispatch has to authorise it.
-          </p>
-          <Label htmlFor={`pod-recipient-${String(order["id"])}`}>Received by</Label>
-          <Input
-            id={`pod-recipient-${String(order["id"])}`}
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-          />
-          {isCash ? (
-            <>
-              <Label htmlFor={`pod-cash-${String(order["id"])}`}>Cash collected</Label>
-              <Input
-                id={`pod-cash-${String(order["id"])}`}
-                value={cash}
-                onChange={(e) => setCash(e.target.value)}
-                inputMode="decimal"
-              />
-            </>
-          ) : null}
-          <button
-            onClick={() => onConfirm(pin, recipient, cash ? Number(cash) : undefined)}
-            disabled={!recipient || (pin.length > 0 && pin.length < 4)}
-            className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ background: brandFallback.secondary }}
-          >
-            Confirm delivery
-          </button>
-          <p className="text-xs" style={{ color: brandFallback.steel }}>
-            Leave the PIN blank only if dispatch has authorised this handover without it.
-          </p>
-        </div>
+        <RiderHandoverForm orderId={String(order["id"])} paymentMethod={String(order["payment_method"] ?? "")} />
       ) : null}
     </article>
   );

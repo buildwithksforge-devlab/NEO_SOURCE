@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BedDouble, Loader2, Receipt, Shirt, Sparkles, Car, Heart } from "lucide-react";
+import { BedDouble, Loader2, Receipt, Shirt, Sparkles, Car, Heart, Settings, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { BrandButton, PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
@@ -45,10 +45,10 @@ function ProfilePage() {
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
   const customer = profile.data;
   const customerId = customer?.["id"] as string | undefined;
-  const reservations = useGuestReservations(ws.organization_id, customerId);
-  const requests = useGuestRequests(ws.organization_id, customerId);
+  const reservations = useGuestReservations(ws.organization_id, customerId, ws.branch_id);
+  const requests = useGuestRequests(ws.organization_id, ws.branch_id, customerId);
   const addresses = useGuestAddresses(ws.organization_id, customerId);
-  const stay = useGuestActiveStay(ws.organization_id, Boolean(user));
+  const stay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const update = useUpdateGuestProfile(ws.organization_id);
   useGuestScreenView(ws.organization_id, "profile", Boolean(customerId));
 
@@ -86,7 +86,7 @@ function ProfilePage() {
     return (
       <GuestScreen hotelSlug={hotelSlug} active="profile">
         <div className="flex justify-center py-16">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
       </GuestScreen>
     );
@@ -119,50 +119,36 @@ function ProfilePage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="profile">
-      {/* Overview: an identity band, not a white card. */}
-      <section
-        className="grid min-w-0 gap-5 rounded-3xl p-6 text-white sm:grid-cols-[auto_minmax(0,1fr)] sm:p-8"
-        style={{ background: `linear-gradient(135deg, ${brandFallback.navy}, ${primary}55)` }}
-      >
-        <AvatarUploader
-          path={(customer["avatar_url"] as string | null) ?? null}
-          name={String(customer["full_name"] ?? "")}
-          onChange={async (next) => {
-            await update.mutateAsync({ avatarUrl: next });
-          }}
-        />
+      <section className="neo-guest-profile">
         <div className="min-w-0">
-          <h1 className="neo-line-2 text-2xl font-semibold tracking-tight">
-            {String(customer["full_name"] ?? "Guest")}
-          </h1>
-          <p className="mt-1 truncate text-sm text-white/70">
-            {String(customer["email"] ?? "—")}
-            {customer["phone"] ? ` · ${String(customer["phone"])}` : ""}
+          <h1 className="neo-public-title">Your account</h1>
+          <p className="mt-2 break-words text-base font-semibold">
+            {String(customer["full_name"] || "Guest")}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-white/12 px-3 py-1">
-              Guest {String(customer["customer_number"] ?? "—")}
-            </span>
-            <span className="rounded-full bg-white/12 px-3 py-1">
-              {String(customer["guest_account_status"] ?? "active")}
-            </span>
-            <span className="rounded-full bg-white/12 px-3 py-1 truncate">{ws.hotel_name}</span>
-            {stayRow ? (
-              <span className="rounded-full bg-white px-3 py-1 font-semibold" style={{ color: brandFallback.navy }}>
-                {stayRow.room_number ? `Checked in · Room ${stayRow.room_number}` : "Checked in"}
-              </span>
-            ) : null}
-          </div>
+          <p className="neo-public-copy mt-0.5 text-sm text-[var(--guest-muted)]">{String(customer["email"] ?? "")}</p>
+          {stayRow ? <p className="mt-2 text-sm font-medium">{stayRow.room_number ? `Checked in · Room ${stayRow.room_number}` : "Checked in"}</p> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a href="#guest-contact-details" className="neo-guest-outline-action"><Pencil className="size-4" aria-hidden /> Edit details</a>
+          <Link to="/guest/$hotelSlug/settings" params={{ hotelSlug }} className="neo-guest-outline-action"><Settings className="size-4" aria-hidden /> Settings</Link>
+        </div>
+        <div className="neo-guest-profile-photo">
+          <AvatarUploader
+            path={(customer["avatar_url"] as string | null) ?? null}
+            name={String(customer["full_name"] ?? "")}
+            hint="JPEG, PNG, WebP or GIF up to 5 MB."
+            onChange={async (next) => { await update.mutateAsync({ avatarUrl: next }); }}
+          />
         </div>
       </section>
 
-      <GuestSection title="My hotel" description="Only relationships this hotel's records actually hold.">
+      <GuestSection title="My hotel">
         <ul className="grid min-w-0 gap-2 sm:grid-cols-2">
           <li className="neo-rider-card p-4">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               {ws.hotel_name}
             </p>
-            <p className="text-xs" style={{ color: brandFallback.steel }}>
+            <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
               {stayRow
                 ? `Staying now · ${dateLabel(stayRow.arrival_date)} – ${dateLabel(stayRow.departure_date)}`
                 : grouped.upcoming.length > 0
@@ -173,10 +159,10 @@ function ProfilePage() {
             </p>
           </li>
           <li className="neo-rider-card p-4">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
               Loyalty
             </p>
-            <p className="text-xs" style={{ color: brandFallback.steel }}>
+            <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
               This hotel has not published a loyalty programme in your account yet.
             </p>
           </li>
@@ -203,7 +189,7 @@ function ProfilePage() {
             ] as const).map(([label, rows]) =>
               rows.length === 0 ? null : (
                 <div key={label} className="min-w-0">
-                  <h3 className="text-xs uppercase tracking-[0.18em]" style={{ color: brandFallback.steel }}>
+                  <h3 className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {label}
                   </h3>
                   <ul className="mt-2 space-y-2">
@@ -213,10 +199,10 @@ function ProfilePage() {
                         className="grid min-w-0 gap-1 rounded-xl border border-black/5 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                          <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                             {String(row["confirmation_number"] ?? "Reservation")}
                           </p>
-                          <p className="truncate text-xs" style={{ color: brandFallback.steel }}>
+                          <p className="truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                             {dateLabel(row["arrival_date"])} – {dateLabel(row["departure_date"])} ·{" "}
                             {String(row["nights"] ?? "—")} night(s)
                           </p>
@@ -225,7 +211,7 @@ function ProfilePage() {
                           to="/guest/$hotelSlug/reservations/$reservationReference"
                           params={{ hotelSlug, reservationReference: String(row["confirmation_number"] ?? "") }}
                           className="text-sm font-semibold"
-                          style={{ color: primary }}
+                          style={{ color: "var(--pa-accent-ink)" }}
                         >
                           View
                         </Link>
@@ -252,12 +238,12 @@ function ProfilePage() {
             const Icon = entry.icon;
             return (
               <Link key={entry.to} to={entry.to} params={{ hotelSlug }} className="neo-rider-card flex min-w-0 items-start gap-3 p-4">
-                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: primary }} aria-hidden />
+                <Icon className="mt-0.5 size-4 shrink-0" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  <span className="block text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                     {entry.label}
                   </span>
-                  <span className="neo-line-2 block text-xs" style={{ color: brandFallback.steel }}>
+                  <span className="neo-line-2 block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                     {entry.detail}
                   </span>
                 </span>
@@ -267,7 +253,7 @@ function ProfilePage() {
         </nav>
       </GuestSection>
 
-      <GuestSection title="Personal information" description="Only what this hotel needs to look after you.">
+      <GuestSection id="guest-contact-details" title="Personal information" surface>
         <div className="max-w-md space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="profile-name">Full name</Label>
@@ -279,7 +265,7 @@ function ProfilePage() {
           </div>
           <div className="space-y-1.5">
             <Label>Email</Label>
-            <p className="text-sm" style={{ color: brandFallback.steel }}>
+            <p className="text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
               {String(customer["email"] ?? "—")} — your verified sign-in address. Change it in Settings.
             </p>
           </div>
@@ -297,10 +283,10 @@ function ProfilePage() {
           <ul className="grid gap-2 sm:grid-cols-2">
             {(addresses.data ?? []).map((a) => (
               <li key={String(a["id"])} className="rounded-xl border border-black/5 bg-white p-3 text-sm">
-                <span className="font-medium" style={{ color: brandFallback.secondary }}>
+                <span className="font-medium" style={{ color: "var(--guest-text, #07142D)" }}>
                   {String(a["label"] ?? "Address")}
                 </span>
-                <span className="block text-xs" style={{ color: brandFallback.steel }}>
+                <span className="block text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {String(a["address_line"] ?? "")} {String(a["city"] ?? "")}
                 </span>
               </li>

@@ -24,6 +24,26 @@ import { guardedRpc } from "@/lib/rpc-guard";
 
 export type PaymentMethodKind = "recorded" | "provider";
 
+export type PaymentAdapterCapabilities = {
+  collection: "stk-prompt" | "processor-handoff";
+  refundExecution: "external-confirmation-only";
+};
+
+/** Operations NEØ implements. A connected provider's full and partial refund rules need separate verification. */
+const PAYMENT_ADAPTER_CAPABILITIES: Readonly<Record<
+  "mpesa" | "card_terminal" | "qr_payments",
+  PaymentAdapterCapabilities
+>> = {
+  mpesa: { collection: "stk-prompt", refundExecution: "external-confirmation-only" },
+  card_terminal: { collection: "processor-handoff", refundExecution: "external-confirmation-only" },
+  qr_payments: { collection: "processor-handoff", refundExecution: "external-confirmation-only" },
+};
+
+export function paymentAdapterCapabilities(method: string): PaymentAdapterCapabilities | undefined {
+  const provider = paymentMethod(method)?.provider;
+  return provider ? PAYMENT_ADAPTER_CAPABILITIES[provider] : undefined;
+}
+
 export type PaymentMethodDefinition = {
   value: string;
   label: string;
@@ -129,6 +149,17 @@ export function paymentMethodLabel(value: string | null | undefined): string {
   const known = PAYMENT_METHOD_CATALOGUE.find((m) => m.value === canonical);
   if (known) return known.label;
   return canonical.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Methods with an implemented customer checkout and settlement flow. */
+export const DELIVERY_CHECKOUT_METHODS = PAYMENT_METHOD_CATALOGUE.filter(
+  ({ value }) => value === "cash" || value === "mpesa",
+);
+
+export function deliveryPaymentLabel(value: string | null | undefined) {
+  if (normalisePaymentMethod(value) === "cash") return "Cash on delivery";
+  if (value === "pay-on-collection") return "Pay on collection";
+  return paymentMethodLabel(value);
 }
 
 export type MpesaCollectionStatus = {

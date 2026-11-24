@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
 import { applyStockNeedStatus } from "@/lib/stock-needs";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 
 // The laundry trail spans many generated table types; call sites narrow.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,8 +93,10 @@ export function useLaundryContext() {
 
 function useLaundryInvalidate() {
   const qc = useQueryClient();
+  const { organizationId } = useAuth();
   return () => {
     void qc.invalidateQueries({ queryKey: ["laundry-department"] });
+    void qc.invalidateQueries({ queryKey: ["guest-laundry-mine", organizationId] });
     void qc.invalidateQueries({ queryKey: ["ops"] });
   };
 }
@@ -157,6 +160,7 @@ export function useMyLaundryBatches(includeDone = false) {
   return useQuery({
     queryKey: ["laundry-department", "my-batches", organizationId, branchId, user?.id, includeDone],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("laundry_batches")
@@ -250,12 +254,16 @@ export function useAdvanceLaundryBatch() {
   const invalidate = useLaundryInvalidate();
   return useMutation({
     mutationFn: async (input: { batchId: string; status: string }) => {
-      const { error } = await guardedRpc(db, "neo_laundry_batch_advance", {
+      const { data, error } = await guardedRpc(db, "neo_laundry_batch_advance", {
         _batch: input.batchId,
         _status: input.status,
       });
       if (error) throw new Error(error.message);
-      return input.status;
+      const result = data as { ok?: boolean; status?: string; detail?: string } | null;
+      if (result?.ok !== true || result.status !== input.status) {
+        throw new Error(result?.detail || "The server did not confirm the requested batch stage. Refresh before trying again.");
+      }
+      return result.status;
     },
     onSuccess: (status) => {
       invalidate();
@@ -469,6 +477,7 @@ export function useMyLaundryTasks() {
   return useQuery({
     queryKey: ["laundry-department", "my-tasks", organizationId, branchId, user?.id],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("tasks")

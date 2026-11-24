@@ -1,7 +1,12 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
+import { requireReceivingReviewResult } from "@/lib/supply-command-result";
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -9,6 +14,7 @@ import { OpsGuard } from "@/components/operations/OpsShared";
 import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 
 const db = supabase as any;
 
@@ -31,6 +37,14 @@ type ReviewLine = {
   expiry_date: string | null;
 };
 
+type StorekeeperLine = {
+  line_id: string;
+  delivered: string;
+  rejected: string;
+  batch: string | null;
+  expiry: string | null;
+};
+
 type ReviewCount = {
   count_id: string;
   purchase_order_id: string;
@@ -38,6 +52,13 @@ type ReviewCount = {
   branch_id: string;
   delivery_note: string;
   submitted_by: string;
+  submitted_by_current_user?: boolean;
+  custody_status: "pending" | "acknowledged" | "matched" | "discrepancy" | "recount-required" | "own-recount" | "own-custody";
+  recount_requested?: boolean;
+  clerk_grn_workflow?: boolean;
+  recount_reason?: string | null;
+  custody_lines: StorekeeperLine[] | null;
+  prior_custody_lines?: StorekeeperLine[] | null;
   submitted_at: string;
   status: string;
   remarks: string | null;
@@ -57,11 +78,20 @@ function formatQuantity(value: number) {
 }
 
 function Page() {
+  const { organizationId, user, permissionsLoaded } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [recentlyPosted, setRecentlyPosted] = useState<{
+    grnId: string;
+    orderNumber: string;
+    orderId: string;
+    propertyId: string;
+  } | null>(null);
 
   const queue = useQuery({
-    queryKey: ["procurement", "blind-reconciliation"],
+    queryKey: ["procurement", "blind-reconciliation", organizationId, user?.id, filterKey],
+    enabled: Boolean(organizationId && user && permissionsLoaded),
     queryFn: async (): Promise<ReviewCount[]> => {
       const { data, error } = await guardedRpc(
         db,
@@ -71,7 +101,9 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return Array.isArray(data) ? (data as ReviewCount[]) : [];
+      return Array.isArray(data)
+        ? (data as ReviewCount[]).filter((row) => !branchId || row.branch_id === branchId)
+        : [];
     },
   });
 
@@ -80,6 +112,9 @@ function Page() {
       countId: string;
       decision: "approved" | "rejected";
       notes: string;
+      orderNumber: string;
+      orderId: string;
+      propertyId: string;
     }) => {
       const { data, error } = await guardedRpc(
         db,
@@ -93,15 +128,28 @@ function Page() {
 
       if (error) throw new Error(error.message);
 
-      return data;
+      return requireReceivingReviewResult(data, payload.countId, payload.decision);
     },
 
-    onSuccess: () => {
-      toast.success("Receiving review decision recorded.");
+    onSuccess: async (result, payload) => {
+      if (payload.decision === "approved" && result && typeof result === "object") {
+        const grnId = (result as Record<string, unknown>)["grn_id"];
+        if (typeof grnId === "string" && grnId) {
+          setRecentlyPosted({ grnId, orderNumber: payload.orderNumber, orderId: payload.orderId, propertyId: payload.propertyId });
+          const postingResult = result["posting_result"] as Record<string, unknown> | undefined;
+          const lifecycle = postingResult?.["lifecycle_result"] as Record<string, unknown> | undefined;
+          const posting = lifecycle?.["posting"] as Record<string, unknown> | undefined;
+          if (posting?.["status"] === "pending-finance")
+            toast.warning("GRN created and stock received. Finance accrual needs attention.");
+          else toast.success("Receiving approved, stock updated, and GRN generated.");
+        } else {
+          toast.info("Count approved. The Receiving Clerk can now create the GRN from Post GRNs.");
+        }
+      } else {
+        toast.success("Receiving review decision recorded.");
+      }
 
-      void queryClient.invalidateQueries({
-        queryKey: ["procurement"],
-      });
+      await invalidateSupplyViews(queryClient);
     },
 
     onError: (error: Error) => {
@@ -109,25 +157,22 @@ function Page() {
     },
   });
 
-  function submitDecision(
-    countId: string,
-    decision: "approved" | "rejected"
-  ) {
-    const reason = notes[countId]?.trim() ?? "";
+  function submitDecision(count: ReviewCount, decision: "approved" | "rejected") {
+    if (decide.isPending) return;
+    const reason = notes[count.count_id]?.trim() ?? "";
 
     if (!reason) {
       toast.error("Enter a reason for the review decision.");
       return;
     }
 
-    if (!window.confirm(`Confirm ${decision} decision?`)) {
-      return;
-    }
-
     decide.mutate({
-      countId,
+      countId: count.count_id,
       decision,
       notes: reason,
+      orderNumber: count.order_number,
+      orderId: count.purchase_order_id,
+      propertyId: count.branch_id,
     });
   }
 
@@ -180,7 +225,7 @@ function Page() {
 
       <SectionCard
         title="Independent receiving review"
-        description="Review and authorize the original physical counts. Approval does not post stock."
+        description="Compare the clerk’s count with the purchase order and delivery note. The review shows what Stores still needs to confirm."
       >
         <div className="mb-4 flex justify-end">
           <Button
@@ -215,6 +260,7 @@ function Page() {
 
         <div className="space-y-5">
           {counts.map((count) => {
+            const submittedByCurrentUser = count.submitted_by_current_user === true || count.submitted_by === user?.id;
             const hasExcess = count.lines.some(
               (line) => line.reconciliation_result === "excess"
             );
@@ -238,6 +284,11 @@ function Page() {
                       Submitted:{" "}
                       {new Date(count.submitted_at).toLocaleString()}
                     </p>
+                    {submittedByCurrentUser ? (
+                      <p className="mt-2 text-sm font-medium text-on-tint-warning" role="status">
+                        Submitted by you. Another authorized reviewer must decide this count.
+                      </p>
+                    ) : null}
                   </div>
 
                   <span className="h-fit rounded-full border px-3 py-1 text-xs">
@@ -251,7 +302,7 @@ function Page() {
                       <tr className="border-b text-muted-foreground">
                         <th className="p-3">PO item</th>
                         <th className="p-3 text-right">Ordered</th>
-                        <th className="p-3 text-right">Previously received</th>
+                        <th className="p-3 text-right">{count.clerk_grn_workflow ? "Previously accepted" : "Previously received"}</th>
                         <th className="p-3 text-right">Outstanding</th>
                         <th className="p-3 text-right">Delivered</th>
                         <th className="p-3 text-right">Rejected</th>
@@ -337,62 +388,106 @@ function Page() {
                   </table>
                 </div>
 
-                <div className="space-y-3 rounded-lg border p-4">
-                  <p className="text-sm font-semibold">
-                    Independent review decision
+                <p className="text-sm" role="status">
+                  {count.custody_status === "pending" && (count.clerk_grn_workflow
+                    ? "Review the clerk’s quantities against the purchase order."
+                    : "Awaiting the receiving workflow database update or an existing custody check.")}
+                  {count.custody_status === "acknowledged" && "Stores confirmed custody."}
+                  {count.custody_status === "matched" && "The independent Storekeeper count matched."}
+                  {count.custody_status === "recount-required" && "Awaiting the requested Storekeeper recount."}
+                  {count.custody_status === "own-recount" && "A different reviewer must approve this recount."}
+                  {count.custody_status === "own-custody" && "Another reviewer must approve this delivery."}
+                  {count.custody_status === "discrepancy" && "A discrepancy is on record. Reject with a reason so the clerk can correct the submission."}
+                </p>
+                {count.recount_reason && <p className="text-sm">Recount reason: {count.recount_reason}</p>}
+                {[
+                  { label: "Storekeeper count", lines: count.custody_lines },
+                  { label: "Previous Storekeeper count", lines: count.prior_custody_lines },
+                ].map(({ label, lines }) => lines?.map((line) => (
+                  <p key={`${label}:${line.line_id}`} className="text-sm text-muted-foreground">
+                    {label} for {count.lines.find((item) => item.count_line_id === line.line_id)?.item_name ?? "purchase item"}
+                    {" · "}{line.delivered} delivered · {line.rejected} rejected
+                    {" · Batch "}{line.batch || "not entered"}
+                    {" · Expiry "}{line.expiry || "not entered"}
                   </p>
-
-                  <Textarea
-                    value={notes[count.count_id] ?? ""}
-                    onChange={(event) =>
-                      setNotes((previous) => ({
-                        ...previous,
-                        [count.count_id]: event.target.value,
-                      }))
-                    }
-                    placeholder="Record review findings and justification..."
-                  />
-
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <Button
-                      variant="destructive"
-                      disabled={decide.isPending}
-                      onClick={() =>
-                        submitDecision(count.count_id, "rejected")
-                      }
-                    >
-                      Reject Count
-                    </Button>
-
-                    <Button
-                      disabled={decide.isPending || hasExcess}
-                      onClick={() =>
-                        submitDecision(count.count_id, "approved")
-                      }
-                    >
-                      Approve Count
-                    </Button>
-                  </div>
-
-                  {hasExcess && (
-                    <p className="text-xs text-destructive">
-                      Approval is blocked because this delivery exceeds
-                      the outstanding purchase-order quantity.
+                )))}
+                {!submittedByCurrentUser ? (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <p className="text-sm font-semibold">
+                      Independent review decision
                     </p>
-                  )}
 
-                  <p className="text-xs text-muted-foreground">
-                    The physical count remains unchanged. Approval
-                    does not create a GRN or post inventory.
-                  </p>
-                </div>
+                    <label className="block text-sm" htmlFor={`receiving-review-${count.count_id}`}>
+                      Review reason (required)
+                    </label>
+                    <Textarea
+                      id={`receiving-review-${count.count_id}`}
+                      value={notes[count.count_id] ?? ""}
+                      onChange={(event) =>
+                        setNotes((previous) => ({
+                          ...previous,
+                          [count.count_id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Record review findings and justification..."
+                    />
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                      <Button
+                        variant="destructive"
+                        disabled={decide.isPending || !notes[count.count_id]?.trim()}
+                        onClick={() => submitDecision(count, "rejected")}
+                      >
+                        Reject Count
+                      </Button>
+
+                      <Button
+                        disabled={decide.isPending || !notes[count.count_id]?.trim() || hasExcess ||
+                          !(count.clerk_grn_workflow ? count.custody_status !== "discrepancy" :
+                            count.custody_status === "matched" || (typeof count.recount_requested === "boolean" &&
+                              ["pending", "acknowledged"].includes(count.custody_status)))}
+                        onClick={() => submitDecision(count, "approved")}
+                      >
+                        Approve Count
+                      </Button>
+                    </div>
+
+                    {hasExcess && (
+                      <p className="text-xs text-destructive">
+                        The accepted quantity exceeds the outstanding purchase order. Correct the count or purchase order before approving.
+                      </p>
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      Approval sends the count to Post GRNs. Stock updates when the GRN is posted.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             );
           })}
         </div>
       </SectionCard>
 
+      {recentlyPosted && (!branchId || recentlyPosted.propertyId === branchId) ? (
+        <SectionCard
+          title="Receiving posted"
+          description={`GRN generated for LPO ${recentlyPosted.orderNumber}. The document remains available from the LPO record.`}
+        >
+          <DocumentPrintButton
+            type="goods_receipt"
+            id={recentlyPosted.grnId}
+            label={`Download GRN - ${recentlyPosted.orderNumber}`}
+            variant="secondary"
+          />
+          <Link to="/lpos/$id" params={{ id: recentlyPosted.orderId }} className="mt-3 block text-sm underline">
+            Open purchase and document history
+          </Link>
+        </SectionCard>
+      ) : null}
+
       <ApprovedReceivingPosting />
+      <ReceivingDocumentHistory />
     </div>
   );
 }

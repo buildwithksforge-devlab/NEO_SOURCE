@@ -1,0 +1,9 @@
+﻿[MISSING] print-connector\neo_print_agent.py
+[MISSING] print-connector\test_neo_print_agent.py
+[MISSING] src\routes\api\public\print-agent.$action.ts
+[MISSING] src\components\printing\PrinterSetupWizard.tsx
+[MISSING] drizzle\migrations\0001_print_connector_secure_claims.sql
+[MISSING] drizzle\migrations\0002_station_production_auto_print.sql
+[MISSING] drizzle\migrations\0003_printer_truthful_verification.sql
+[PASS] TypeScript
+[BLOCKED] Connector tests: implementation not installed

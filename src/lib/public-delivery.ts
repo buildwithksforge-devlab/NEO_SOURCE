@@ -10,6 +10,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { guardPreview } from "@/lib/preview-mode";
+import { requireGuestOrderResult } from "@/lib/guest-order-result";
+import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
 
 type Row = Record<string, unknown>;
 
@@ -19,8 +21,10 @@ const sb = supabase as unknown as {
 };
 
 export type Quote = {
+  currency?: string;
   subtotal: number;
   tax_total: number;
+  tax_breakdown?: { label: string; amount: number }[] | null;
   discount_total: number;
   /** The property's configured service charge — the same figure the till applies. */
   service_charge: number;
@@ -35,6 +39,18 @@ export type Quote = {
 
 function keys(organizationId: string) {
   return ["public-delivery", organizationId] as const;
+}
+
+export function usePublishedDeliveryForGuest(organizationId: string, branchId: string | null, slug: string, enabled = true) {
+  return useQuery({
+    queryKey: [...keys(organizationId), "published-workspace", branchId, slug],
+    enabled: enabled && Boolean(branchId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const workspace = await resolvePublicWorkspace({ data: { appKey: "delivery", slug } });
+      return workspace?.organization_id === organizationId && workspace.branch_id === branchId ? workspace : null;
+    },
+  });
 }
 
 /** Branches of this organisation that participate in delivery/pickup. */
@@ -105,23 +121,31 @@ export function usePublicMenu(
   organizationId: string,
   branchId: string | null,
   fulfilment: "delivery" | "pickup" | "room-service" = "delivery",
+  enabled = true,
 ) {
   return useQuery({
     queryKey: [...keys(organizationId), "menu", branchId ?? "all", fulfilment],
+    enabled,
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(sb, "neo_public_menu", {
-        _org: organizationId,
-        _branch: branchId,
-        _fulfilment: fulfilment,
-      });
-      if (error) throw new Error(error.message);
       // Preserve the embedded-category shape the public screens already read.
-      return ((data ?? []) as Row[]).map((row) => ({
+      return (await loadPublicMenu(organizationId, branchId, fulfilment)).map((row) => ({
         ...row,
         menu_categories: row["category_name"] ? { name: row["category_name"] } : null,
       })) as Row[];
     },
   });
+}
+
+export async function loadPublicMenu(organizationId: string, branchId: string | null, fulfilment: string) {
+  const args = { _org: organizationId, _branch: branchId, _fulfilment: fulfilment };
+  const stock = await guardedRpc<Row[]>(sb, "neo_public_menu_with_stock", args);
+  // Support the existing published menu during an app-first database rollout.
+  const result = stock.error && ["PGRST202", "42883"].includes(stock.error.code ?? "")
+    ? await guardedRpc<Row[]>(sb, "neo_public_menu", args)
+    : stock;
+  if (result.error) throw new Error(result.error.message);
+  return result.data ?? [];
 }
 
 
@@ -153,6 +177,7 @@ export function useMyPublicCart(organizationId: string, customerId?: string | nu
         .select(
           "*, cart_items(*, menu_items(name, base_price, image_url, availability, available_delivery), cart_item_modifiers(*))",
         )
+        .eq("organization_id", organizationId)
         .eq("customer_id", customerId)
         .eq("status", "active")
         .maybeSingle();
@@ -170,24 +195,29 @@ export function usePublicAddToCart(organizationId: string, customerId?: string |
       menuItemId: string;
       quantity?: number;
       specialInstructions?: string;
+      allergyNote?: string;
+      optionIds?: string[];
+      fulfilment?: "delivery" | "pickup";
     }) => {
       guardPreview();
       if (!customerId) throw new Error("Sign in to start an order");
       const { error } = await guardedRpc(sb, "neo_guest_cart_add_item", {
         _org: organizationId,
-        _fulfilment: "delivery",
+        _fulfilment: input.fulfilment ?? "delivery",
         _menu_item: input.menuItemId,
         _quantity: input.quantity ?? 1,
         _special_instructions: input.specialInstructions ?? null,
-        _allergy_note: null,
+        _allergy_note: input.allergyNote ?? null,
         _branch: input.branchId,
-        _options: [],
+        _options: input.optionIds ?? [],
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Added to your order");
       void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -204,7 +234,11 @@ export function usePublicUpdateCartItem() {
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -221,7 +255,11 @@ export function usePublicUpdateCart() {
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -243,14 +281,19 @@ export function usePublicPlaceOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { cartId: string; paymentMethod: string }) => {
+      guardPreview();
       const { data, error } = await guardedRpc(sb, "delivery_place_order", {
         _cart: input.cartId,
         _payment_method: input.paymentMethod,
       });
       if (error) throw new Error(error.message);
-      return data as { delivery_order_id: string; order_number: string; pin: string };
+      return requireGuestOrderResult(data);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -271,20 +314,20 @@ export function useDeliveryMpesaCharge() {
   });
 }
 
-export function useMyPublicOrders(organizationId: string, customerId?: string | null) {
+export function useMyPublicOrders(organizationId: string, customerId?: string | null, branchId?: string | null) {
   return useQuery({
-    queryKey: [...keys(organizationId), "orders", customerId ?? "none"],
+    queryKey: [...keys(organizationId), "orders", customerId ?? "none", branchId ?? "all"],
     enabled: Boolean(customerId),
     queryFn: async () => {
-      const { data, error } = await sb
+      let query = sb
         .from("delivery_orders")
         .select(
-          "id, order_number, order_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, branch_id",
+          "id, order_number, order_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, scheduled_for, branch_id",
         )
         .eq("organization_id", organizationId)
-        .eq("customer_id", customerId)
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .eq("customer_id", customerId);
+      if (branchId) query = query.eq("branch_id", branchId);
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(50);
       if (error) throw new Error(error.message);
       return (data ?? []) as Row[];
     },
@@ -292,19 +335,27 @@ export function useMyPublicOrders(organizationId: string, customerId?: string | 
 }
 
 /** Tracking by order reference — RLS still decides what the caller may read. */
-export function usePublicOrderByReference(organizationId: string, reference?: string) {
+export function usePublicOrderByReference(organizationId: string, reference: string, branchId: string | null, userId?: string) {
   return useQuery({
-    queryKey: [...keys(organizationId), "track", reference ?? "none"],
-    enabled: Boolean(reference),
+    queryKey: [...keys(organizationId), "track", reference, branchId, userId],
+    enabled: Boolean(organizationId && reference && userId),
+    refetchInterval: (query) => {
+      const order = query.state.data;
+      if (!order || ["cancelled", "rejected", "failed", "delivered", "completed"].includes(String(order["order_status"]))) {
+        return false;
+      }
+      return 5_000;
+    },
     queryFn: async () => {
-      const { data, error } = await sb
+      let query = sb
         .from("delivery_orders")
         .select(
           "id, order_number, order_status, kitchen_status, dispatch_status, fulfilment_type, payment_status, payment_method, grand_total, currency, created_at, estimated_delivery_at, contact_name, rider_id, branch_id",
         )
         .eq("organization_id", organizationId)
-        .eq("order_number", reference)
-        .maybeSingle();
+        .eq("order_number", reference);
+      if (branchId) query = query.eq("branch_id", branchId);
+      const { data, error } = await query.maybeSingle();
       if (error) throw new Error(error.message);
       return (data as Row | null) ?? null;
     },
@@ -348,7 +399,9 @@ export function useSavePublicAddress(organizationId: string, customerId?: string
 /** Human label for every status in the delivery / pickup lifecycle. */
 export const orderStatusLabels: Record<string, string> = {
   draft: "Order received",
+  "pending-payment": "Payment pending",
   "payment-pending": "Payment pending",
+  "payment-verification": "Verifying payment",
   placed: "Order received",
   confirmed: "Confirmed",
   accepted: "Accepted",

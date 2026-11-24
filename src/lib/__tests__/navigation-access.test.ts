@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { navigation } from "@/lib/navigation";
+import { capabilityForPath, isUniversalRoute, pathPermitted } from "@/lib/capabilities";
 import {
   navigationForAccess,
   permissionActionForPath,
@@ -88,6 +90,16 @@ describe("sidebar navigation matches granted permissions exactly", () => {
 });
 
 describe("route guards agree with the sidebar", () => {
+  it("registers every sidebar destination in the generated router", () => {
+    const tree = readFileSync("src/routeTree.gen.ts", "utf8");
+    const registered = new Set(
+      [...tree.matchAll(/fullPath: '([^']+)'/g)]
+        .map((match) => match[1]!.replace(/\/$/, "") || "/"),
+    );
+    const missing = allNavPaths.filter((path) => !registered.has(path.replace(/\/$/, "") || "/"));
+    expect(missing).toEqual([]);
+  });
+
   it("guards every navigable path with the same module check the sidebar uses", () => {
     const can = canFor(grantSet(OPERATIONS_MANAGER));
     const shown = new Set(
@@ -108,10 +120,35 @@ describe("route guards agree with the sidebar", () => {
   });
 
   it("maps every navigable path to a known module or an explicit universal page", () => {
-    for (const path of allNavPaths) {
-      const module = permissionModuleForPath(path);
-      expect(module === null || typeof module === "string").toBe(true);
-    }
+    const tree = readFileSync("src/routeTree.gen.ts", "utf8");
+    const staffPaths = [...tree.matchAll(/'(\/_shell\/[^']+)': \{\s*id: '[^']+'\s*path: '[^']+'\s*fullPath: '([^']+)'/g)]
+      .map((match) => match[2]!);
+    expect(staffPaths.length).toBeGreaterThan(allNavPaths.length);
+    const missing = [...new Set([...allNavPaths, ...staffPaths])]
+      .filter((path) => !isUniversalRoute(path) && !capabilityForPath(path));
+    expect(missing).toEqual([]);
+  });
+
+  it("resolves case variants and trailing slashes to their existing permission checks", () => {
+    const settings = capabilityForPath("/pos/settings");
+    expect(settings?.action).toBe("edit");
+    expect(capabilityForPath("/PoS/SeTTings/")).toEqual(settings);
+    expect(pathPermitted(() => false, "/PoS/SeTTings/")).toBe(false);
+    expect(pathPermitted((module, feature, action) =>
+      module === settings?.module && feature === settings.feature && action === settings.action,
+    "/PoS/SeTTings/")).toBe(true);
+    expect(pathPermitted((module, feature, action) =>
+      module === "delivery" && feature === "orders" && action === "view-own",
+    "/RIDER/PROFILE/")).toBe(true);
+  });
+
+  it("keeps explicit staff destinations open and refuses unknown paths", () => {
+    expect(pathPermitted(() => false, "/Workspace?home=1")).toBe(true);
+    expect(pathPermitted(() => false, "/profile")).toBe(true);
+    expect(pathPermitted(() => false, "/dashboards/front-office")).toBe(true);
+    expect(pathPermitted(() => true, "/dashboards-unknown")).toBe(false);
+    expect(pathPermitted(() => true, "/dashboards/front-office/unknown")).toBe(false);
+    expect(pathPermitted(() => true, "/new-unregistered-staff-route")).toBe(false);
   });
 });
 

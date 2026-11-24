@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { useBranchScope } from "@/lib/branches";
+import {usePropertyClock} from "@/lib/use-property-clock";
+import {propertyToday} from "@/lib/availability-search";
 import { money } from "@/lib/pms";
 import { PAYMENT_METHOD_CATALOGUE } from "@/lib/payment-methods";
 import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
@@ -36,16 +37,17 @@ import {
 
 /** Same names as every other payment surface, from the one catalogue. */
 const METHODS = ["cash", "card", "mpesa", "bank-transfer", "voucher"].flatMap((v) =>
-  PAYMENT_METHOD_CATALOGUE.filter((m) => m.value === v),
+  PAYMENT_METHOD_CATALOGUE.filter((m) => m.value === v && m.kind === "recorded"),
 );
 
-export function DepositPanel({ reservationId }: { reservationId: string }) {
+export function DepositPanel({ reservationId, branchId }: { reservationId: string; branchId: string | null }) {
   const { can } = useAuth();
-  const { activeBranchId } = useBranchScope();
+  const {timeZone} = usePropertyClock(branchId);
   const position = useDepositPosition(reservationId);
   const record = useRecordDeposit();
   const override = useDepositOverride();
 
+  const [intentKey,setIntentKey]=useState(()=>crypto.randomUUID());
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [reference, setReference] = useState("");
@@ -53,13 +55,13 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
 
   const p = position.data;
   const gate = depositGate(p);
-  const mayRecord = can("pms", "reservations.edit") || can("finance", "collections.collect_payment");
+  const mayRecord = can("pms", "reservations.edit") || can("finance", "collections.record_payment");
   const mayOverride = can("front-office", "folios.approve");
 
   return (
     <SectionCard
-      title="Deposit"
-      description="Held against this reservation before arrival. A deposit is a liability, never revenue."
+      title="Minimum deposit for check-in"
+      description="This minimum controls check-in eligibility. It is separate from the full booking balance. Every saved collection appears under Payments."
     >
       {position.isLoading ? (
         <p className="text-sm text-muted-foreground">Reading the deposit position…</p>
@@ -73,7 +75,7 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
             <Figure label="Required" value={money(p.required ?? 0)} />
             <Figure label="Received" value={money(p.paid ?? 0)} />
             <Figure label="Applied to folio" value={money(p.applied ?? 0)} />
-            <Figure label="Outstanding" value={money(p.outstanding ?? 0)} />
+            <Figure label="Still due for minimum" value={money(p.outstanding ?? 0)} />
           </dl>
 
           {p.policy_name ? (
@@ -128,8 +130,9 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
                 />
               </div>
               <Button
-                disabled={!amount || Number(amount) <= 0 || record.isPending}
+                disabled={!branchId || !timeZone || !amount || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || record.isPending}
                 onClick={() => {
+                  if (!branchId || !timeZone) return;
                   record.mutate(
                     {
                       reservationId,
@@ -138,7 +141,9 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
                       ...(reference ? { reference } : {}),
                       idempotencyKey: depositIdempotencyKey({
                         reservationId,
-                        propertyId: activeBranchId === "all" ? null : (activeBranchId ?? null),
+                        propertyId: branchId,
+                        businessDate: propertyToday(timeZone),
+                        intentKey,
                         amount: Number(amount),
                         method,
                         ...(reference ? { reference } : {}),
@@ -146,6 +151,7 @@ export function DepositPanel({ reservationId }: { reservationId: string }) {
                     },
                     {
                       onSuccess: () => {
+                        setIntentKey(crypto.randomUUID());
                         setAmount("");
                         setReference("");
                       },

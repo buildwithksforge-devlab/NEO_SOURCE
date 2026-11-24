@@ -1,0 +1,2255 @@
+﻿
+============================================================
+FILE: src/lib/checkin-lifecycle.ts
+============================================================
+/**
+ * The canonical check-in / revert lifecycle.
+ *
+ * Front-end mirror of `public.pms_check_in`, `public.pms_revert_check_in` and
+ * `public.neo_checkin_reconciliation`. It states, in one place, which records a
+ * successful arrival must create, which of those a revert must undo, and every
+ * reason a revert is refused. `checkin-lifecycle.test.ts` asserts each entry
+ * against the deployed SQL, so drift fails the build instead of quietly
+ * breaking the in-house count.
+ */
+
+/** Records `pms_check_in` writes. Every one of these is part of the in-house picture. */
+export const CHECK_IN_EFFECTS = [
+  "stays",
+  "folios",
+  "reservations",
+  "rooms",
+  "room_assignments",
+  "room_status_history",
+  "tasks",
+  "notifications",
+  "customer_timeline_events",
+  "pms_workflow_events",
+  "audit_logs",
+] as const;
+
+/** What a revert must undo, so the reservation looks as it did before arrival. */
+export const REVERT_EFFECTS = [
+  "folio_lines",
+  "folios",
+  "stays",
+  "reservations",
+  "rooms",
+  "room_assignments",
+  "room_status_history",
+  "pms_workflow_events",
+  "customer_timeline_events",
+  "notifications",
+  "audit_logs",
+] as const;
+
+export type RevertRefusal = {
+  reason: string;
+  /** Plain-language explanation shown to staff. */
+  meaning: string;
+};
+
+/** Every non-exception refusal the RPC returns as `{ ok: false, reason }`. */
+export const REVERT_REFUSALS: RevertRefusal[] = [
+  { reason: "no_organisation", meaning: "The session has no workspace attached." },
+  { reason: "reason_required", meaning: "A written reason is mandatory for the audit trail." },
+  { reason: "not_found", meaning: "The reservation does not exist in this workspace." },
+  { reason: "not_checked_in", meaning: "There is no open stay to revert." },
+  { reason: "already_checked_out", meaning: "Reverse the departure before the arrival." },
+  { reason: "folio_has_activity", meaning: "Posted folio lines must be reversed or transferred first." },
+];
+
+/** Reconciliation findings surfaced by neo_checkin_reconciliation. */
+export const RECONCILIATION_ISSUES = [
+  { issue: "checked_in_without_stay", severity: "critical", drill: "/pms/arrivals" },
+  { issue: "stay_without_folio", severity: "critical", drill: "/pms/in-house" },
+  { issue: "room_not_occupied", severity: "warning", drill: "/pms/rooms" },
+  { issue: "occupied_without_stay", severity: "warning", drill: "/pms/rooms" },
+  { issue: "timeline_missing", severity: "info", drill: "/crm/guests" },
+] as const;
+
+/** Capabilities the revert path accepts (either is sufficient). */
+export const REVERT_CAPABILITIES = ["pms.checkin.revert", "pms.checkin.perform"] as const;
+
+/** True when the folio state permits a revert without accounting side effects. */
+export function revertAllowed(input: {
+  hasStay: boolean;
+  checkedOut: boolean;
+  liveFolioLines: number;
+  reason: string;
+}): { allowed: boolean; reason?: string } {
+  if (!input.reason.trim()) return { allowed: false, reason: "reason_required" };
+  if (!input.hasStay) return { allowed: false, reason: "not_checked_in" };
+  if (input.checkedOut) return { allowed: false, reason: "already_checked_out" };
+  if (input.liveFolioLines > 0) return { allowed: false, reason: "folio_has_activity" };
+  return { allowed: true };
+}
+
+
+============================================================
+FILE: src/lib/deposit-policies.ts
+============================================================
+/**
+ * Deposit policy and deposit reconciliation.
+ *
+ * A property states once how a pre-arrival deposit is calculated; every
+ * reservation then reads the same rule, so the amount shown at the desk and
+ * the amount enforced at check-in cannot drift apart. Reconciliation reads the
+ * database view of each deposit together with its Finance posting and journal.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { guardedRpc } from "@/lib/rpc-guard";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
+export type DepositBasis = "percentage" | "flat" | "nights";
+
+export type DepositPolicy = {
+  id: string;
+  branch_id: string | null;
+  rate_plan_id: string | null;
+  name: string;
+  basis: DepositBasis;
+  value: number;
+  minimum_amount: number;
+  reason: string;
+  priority: number;
+  active: boolean;
+};
+
+
+export type DepositReconciliationRow = {
+  deposit_id: string;
+  reservation_id: string | null;
+  confirmation_number: string | null;
+  guest_name: string;
+  property: string | null;
+  arrival_date: string | null;
+  departure_date: string | null;
+  reservation_status: string | null;
+  amount: number;
+  currency: string;
+  method: string | null;
+  reference: string | null;
+  deposit_status: string;
+  received_at: string | null;
+  required_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  applied_folio_id: string | null;
+  applied_at: string | null;
+  posting_status: string | null;
+  posting_receipt_id: string | null;
+  posting_error: string | null;
+  journal_id: string | null;
+  journal_number: string | null;
+  journal_debit: number;
+  journal_credit: number;
+  journal_status: string | null;
+};
+
+/** How a policy reads to the desk, in words rather than in configuration. */
+export function describePolicy(policy: Pick<DepositPolicy, "basis" | "value" | "minimum_amount">) {
+  const base =
+    policy.basis === "percentage"
+      ? `${policy.value}% of the stay value`
+      : policy.basis === "nights"
+        ? `${policy.value} night(s) at the nightly rate`
+        : `A flat ${policy.value}`;
+  return policy.minimum_amount > 0 ? `${base}, minimum ${policy.minimum_amount}` : base;
+}
+
+export function useDepositPolicies() {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pms", "deposit-policies", organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<DepositPolicy[]> => {
+      const { data, error } = await db
+        .from("deposit_policies")
+        .select("*")
+        .order("priority", { ascending: true });
+      if (error) throw new Error(error.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((r) => ({
+        id: String(r.id),
+        branch_id: r.branch_id ?? null,
+        rate_plan_id: r.rate_plan_id ?? null,
+
+        name: String(r.name ?? ""),
+        basis: (r.basis ?? "percentage") as DepositBasis,
+        value: Number(r.value ?? 0),
+        minimum_amount: Number(r.minimum_amount ?? 0),
+        reason: String(r.reason ?? ""),
+        priority: Number(r.priority ?? 100),
+        active: Boolean(r.active),
+      }));
+    },
+  });
+}
+
+export function useSaveDepositPolicy() {
+  const { organizationId } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Partial<DepositPolicy> & { name: string }) => {
+      const payload = {
+        organization_id: organizationId,
+        branch_id: input.branch_id ?? null,
+        rate_plan_id: input.rate_plan_id ?? null,
+
+        name: input.name,
+        basis: input.basis ?? "percentage",
+        value: Number(input.value ?? 0),
+        minimum_amount: Number(input.minimum_amount ?? 0),
+        reason: input.reason ?? "Standard pre-arrival deposit",
+        priority: Number(input.priority ?? 100),
+        active: input.active ?? true,
+      };
+      const q = input.id
+        ? db.from("deposit_policies").update(payload).eq("id", input.id)
+        : db.from("deposit_policies").insert(payload);
+      const { error } = await q;
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: () => {
+      toast.success("Deposit policy saved");
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteDepositPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await db.from("deposit_policies").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: () => {
+      toast.success("Deposit policy removed");
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * Re-runs the Finance recognition for a deposit. The routine is repeat-safe:
+ * a deposit already carrying a journal returns that journal rather than a
+ * second entry.
+ */
+export function usePostDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (depositId: string) => {
+      const { data, error } = await guardedRpc(db, "neo_deposit_post", { _deposit: depositId });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as { ok?: boolean; reason?: string; detail?: string };
+      if (result.ok === false) {
+        throw new Error(result.detail ?? result.reason ?? "The deposit could not be posted.");
+      }
+      return result;
+    },
+    onSuccess: (r) => {
+      toast.success(
+        r.reason === "already_posted"
+          ? "This deposit is already recognised in Finance"
+          : "Deposit posted to Finance",
+      );
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
+
+export function useDepositReconciliation() {
+  const { organizationId } = useAuth();
+  const { branchId } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["finance", "deposit-reconciliation", organizationId, branchId ?? "all"],
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<DepositReconciliationRow[]> => {
+      const { data, error } = await guardedRpc(db, "neo_deposit_reconciliation", {
+        _branch: branchId,
+      });
+      if (error) throw new Error(error.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((r) => ({
+        deposit_id: String(r.deposit_id),
+        reservation_id: r.reservation_id ?? null,
+        confirmation_number: r.confirmation_number ?? null,
+        guest_name: String(r.guest_name ?? "Guest"),
+        property: r.property ?? null,
+        arrival_date: r.arrival_date ?? null,
+        departure_date: r.departure_date ?? null,
+        reservation_status: r.reservation_status ?? null,
+        amount: Number(r.amount ?? 0),
+        currency: String(r.currency ?? "KES"),
+        method: r.method ?? null,
+        reference: r.reference ?? null,
+        deposit_status: String(r.deposit_status ?? "held"),
+        received_at: r.received_at ?? null,
+        required_amount: Number(r.required_amount ?? 0),
+        paid_amount: Number(r.paid_amount ?? 0),
+        outstanding_amount: Number(r.outstanding_amount ?? 0),
+        applied_folio_id: r.applied_folio_id ?? null,
+        applied_at: r.applied_at ?? null,
+        posting_status: r.posting_status ?? null,
+        posting_receipt_id: r.posting_receipt_id ?? null,
+        posting_error: r.posting_error ?? null,
+        journal_id: r.journal_id ?? null,
+        journal_number: r.journal_number ?? null,
+        journal_debit: Number(r.journal_debit ?? 0),
+        journal_credit: Number(r.journal_credit ?? 0),
+        journal_status: r.journal_status ?? null,
+      }));
+    },
+  });
+}
+
+
+============================================================
+FILE: src/lib/deposits.ts
+============================================================
+/**
+ * Pre-arrival deposits.
+ *
+ * A deposit is a liability held against a reservation, not revenue, and it is
+ * the gate the arrivals desk must pass before a stay may open. Nothing here
+ * computes the position: `neo_reservation_deposit_position` is the single
+ * source of truth, and the same rule is enforced again by the database trigger
+ * on stays, so a refresh, a reopen or a direct call can never bypass it.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { stableIdempotencyKey } from "@/lib/transaction-scope";
+
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const rpc = (fn: string, args: Record<string, unknown>) =>
+  (supabase as any).rpc(fn, args) as Promise<{ data: any; error: { message: string } | null }>;
+
+export type DepositPosition = {
+  ok: boolean;
+  reason?: string;
+  reservation_id?: string;
+  currency?: string;
+  required?: number;
+  held?: number;
+  applied?: number;
+  paid?: number;
+  outstanding?: number;
+  waiver?: string | null;
+  override_id?: string | null;
+  may_check_in?: boolean;
+  required_source?: "manual" | "policy" | "none" | string | null;
+  policy_id?: string | null;
+  policy_name?: string | null;
+  policy_reason?: string | null;
+  policy_amount?: number | null;
+};
+
+/** Why check-in is or is not permitted, in the words the desk should read. */
+export function depositGate(position: DepositPosition | undefined | null): {
+  blocked: boolean;
+  message: string;
+} {
+  if (!position || !position.ok) {
+    return { blocked: false, message: "Deposit position unavailable." };
+  }
+  if (position.waiver === "corporate-credit") {
+    return { blocked: false, message: "Charged to a corporate credit account â€” no deposit due." };
+  }
+  if (position.override_id) {
+    return {
+      blocked: false,
+      message: "An authorised override is on file for this arrival. It is used once.",
+    };
+  }
+  const outstanding = Number(position.outstanding ?? 0);
+  if (outstanding > 0.009) {
+    return {
+      blocked: true,
+      message: `Deposit outstanding: ${outstanding.toFixed(2)} of ${Number(position.required ?? 0).toFixed(2)} required. Record the deposit or obtain an authorised override.`,
+    };
+  }
+  return { blocked: false, message: "Deposit settled." };
+}
+
+export function useDepositPosition(reservationId: string | null | undefined, enabled = true) {
+  const { organizationId } = useAuth();
+  return useQuery({
+    queryKey: ["pms", "deposit-position", organizationId, reservationId],
+    enabled: enabled && Boolean(organizationId) && Boolean(reservationId),
+    queryFn: async (): Promise<DepositPosition> => {
+      const { data, error } = await rpc("neo_reservation_deposit_position", {
+        _reservation: reservationId,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? { ok: false }) as DepositPosition;
+    },
+  });
+}
+
+function useInvalidateDeposits() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["pms"] });
+    void qc.invalidateQueries({ queryKey: ["finance"] });
+  };
+}
+
+/**
+ * Records a received deposit. The idempotency key is minted per submission, so
+ * a double-click, a retry or a refreshed request returns the first deposit
+ * instead of taking the guest's money twice.
+ */
+export function useRecordDeposit() {
+  const invalidate = useInvalidateDeposits();
+  return useMutation({
+    mutationFn: async (input: {
+      reservationId: string;
+      amount: number;
+      method: string;
+      reference?: string;
+      notes?: string;
+      idempotencyKey: string;
+    }) => {
+      const { data, error } = await rpc("neo_reservation_deposit_record", {
+        _reservation: input.reservationId,
+        _amount: input.amount,
+        _method: input.method,
+        _reference: input.reference ?? null,
+        _idempotency_key: input.idempotencyKey,
+        _notes: input.notes ?? null,
+      });
+      if (error) throw new Error(error.message);
+       const result = (data ?? {}) as {
+         deposit_id?: string;
+         idempotent?: boolean;
+         position?: DepositPosition;
+         finance?: { ok?: boolean; reason?: string; detail?: string };
+       };
+       if (!result.deposit_id) throw new Error("The deposit was not persisted.");
+       return result;
+    },
+    onSuccess: (r) => {
+      if (r.finance?.ok) {
+        toast.success(r.idempotent ? "Deposit already recorded and posted" : "Deposit recorded and posted to Finance");
+      } else {
+        toast.warning(`Deposit recorded â€” Finance ${r.finance?.reason ?? "posting is pending"}`);
+      }
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Authorised, single-use permission to check in with a deposit still outstanding. */
+export function useDepositOverride() {
+  const invalidate = useInvalidateDeposits();
+  return useMutation({
+    mutationFn: async (input: { reservationId: string; reason: string; authority: string }) => {
+      const { data, error } = await rpc("neo_checkin_deposit_override", {
+        _reservation: input.reservationId,
+        _reason: input.reason,
+        _authority: input.authority,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    onSuccess: () => {
+      toast.success("Override authorised for this arrival");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * One posting intent per source event and property.
+ *
+ * A key minted at random per submission made every retry â€” and every second
+ * operator confirming the same money â€” a *new* deposit, which is how one
+ * reservation came to sit twice in the Finance posting queue. The key is now
+ * derived from the facts of the intent itself (property, reservation, amount,
+ * method, reference, business date), so repeating the same intent returns the
+ * existing deposit while a genuinely different one still records.
+ */
+export const depositIdempotencyKey = (input: {
+  reservationId: string;
+  propertyId: string | null;
+  amount: number;
+  method: string;
+  reference?: string;
+  businessDate?: string;
+}) =>
+  stableIdempotencyKey("deposit", "record", [
+    input.propertyId,
+    input.reservationId,
+    input.amount.toFixed(2),
+    input.method,
+    input.reference ?? "",
+    input.businessDate ?? new Date().toISOString().slice(0, 10),
+  ]);
+
+
+
+============================================================
+FILE: src/components/pms/DepositPanel.tsx
+============================================================
+/**
+ * Pre-arrival deposit container.
+ *
+ * Shows the liability held against a reservation â€” required, received,
+ * outstanding â€” and lets an authorised user record a deposit or request a
+ * single-use check-in override. The figures come from the database position,
+ * so they survive a refresh, a reopen and a new session unchanged.
+ */
+import { useState } from "react";
+import { ShieldCheck } from "lucide-react";
+import { SectionCard } from "@/components/common/DataDisplay";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/lib/auth";
+import { useBranchScope } from "@/lib/branches";
+import { money } from "@/lib/pms";
+import { PAYMENT_METHOD_CATALOGUE } from "@/lib/payment-methods";
+import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
+import {
+  depositGate,
+  depositIdempotencyKey,
+  useDepositOverride,
+  useDepositPosition,
+  useRecordDeposit,
+} from "@/lib/deposits";
+
+/** Same names as every other payment surface, from the one catalogue. */
+const METHODS = ["cash", "card", "mpesa", "bank-transfer", "voucher"].flatMap((v) =>
+  PAYMENT_METHOD_CATALOGUE.filter((m) => m.value === v),
+);
+
+export function DepositPanel({ reservationId }: { reservationId: string }) {
+  const { can } = useAuth();
+  const { activeBranchId } = useBranchScope();
+  const position = useDepositPosition(reservationId);
+  const record = useRecordDeposit();
+  const override = useDepositOverride();
+
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("cash");
+  const [reference, setReference] = useState("");
+  const [reason, setReason] = useState("");
+
+  const p = position.data;
+  const gate = depositGate(p);
+  const mayRecord = can("pms", "reservations.edit") || can("finance", "collections.collect_payment");
+  const mayOverride = can("front-office", "folios.approve");
+
+  return (
+    <SectionCard
+      title="Deposit"
+      description="Held against this reservation before arrival. A deposit is a liability, never revenue."
+    >
+      {position.isLoading ? (
+        <p className="text-sm text-muted-foreground">Reading the deposit positionâ€¦</p>
+      ) : position.error ? (
+        <p className="text-sm text-destructive">{(position.error as Error).message}</p>
+      ) : !p?.ok ? (
+        <p className="text-sm text-muted-foreground">{p?.reason ?? "No deposit position."}</p>
+      ) : (
+        <div className="space-y-4">
+          <dl className="grid gap-3 text-sm sm:grid-cols-4">
+            <Figure label="Required" value={money(p.required ?? 0)} />
+            <Figure label="Received" value={money(p.paid ?? 0)} />
+            <Figure label="Applied to folio" value={money(p.applied ?? 0)} />
+            <Figure label="Outstanding" value={money(p.outstanding ?? 0)} />
+          </dl>
+
+          {p.policy_name ? (
+            <p className="text-xs text-muted-foreground">
+              Required by policy <span className="font-medium">{p.policy_name}</span> â€”{" "}
+              {p.policy_reason ?? "property deposit rule"} ({money(p.policy_amount ?? 0)}).
+            </p>
+          ) : p.required_source === "manual" && (p.required ?? 0) > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Deposit entered by hand on this reservation; no property policy applied.
+            </p>
+          ) : null}
+
+          <div
+            className={`rounded-lg border p-3 text-sm ${
+              gate.blocked
+                ? "border-warning/40 bg-warning/10"
+                : "border-border/70 bg-muted/30 text-muted-foreground"
+            }`}
+          >
+            {gate.blocked ? null : <ShieldCheck className="mr-1 inline size-4" />}
+            {gate.message}
+            {p.waiver ? (
+              <Badge variant="outline" className="ml-2">
+                {p.waiver}
+              </Badge>
+            ) : null}
+          </div>
+
+          {mayRecord ? (
+            <div className="grid gap-3 sm:grid-cols-[1fr_10rem_1fr_auto] sm:items-end">
+              <div className="grid gap-1.5">
+                <Label htmlFor="dep-amount">Amount</Label>
+                <Input
+                  id="dep-amount"
+                  type="number"
+                  min={0}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <PaymentMethodPicker methods={METHODS} value={method} onChange={setMethod} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="dep-ref">Reference</Label>
+                <Input
+                  id="dep-ref"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="Receipt or transaction number"
+                />
+              </div>
+              <Button
+                disabled={!amount || Number(amount) <= 0 || record.isPending}
+                onClick={() => {
+                  record.mutate(
+                    {
+                      reservationId,
+                      amount: Number(amount),
+                      method,
+                      ...(reference ? { reference } : {}),
+                      idempotencyKey: depositIdempotencyKey({
+                        reservationId,
+                        propertyId: activeBranchId === "all" ? null : (activeBranchId ?? null),
+                        amount: Number(amount),
+                        method,
+                        ...(reference ? { reference } : {}),
+                      }),
+                    },
+                    {
+                      onSuccess: () => {
+                        setAmount("");
+                        setReference("");
+                      },
+                    },
+                  );
+                }}
+              >
+                Record deposit
+              </Button>
+            </div>
+          ) : null}
+
+          {gate.blocked && mayOverride ? (
+            <div className="grid gap-2 rounded-lg border border-border/70 p-3">
+              <Label htmlFor="dep-override">Authorise check-in without the deposit</Label>
+              <Textarea
+                id="dep-override"
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Policy reason for waiving the deposit at check-in"
+              />
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={reason.trim().length < 5 || override.isPending}
+                  onClick={() =>
+                    override.mutate(
+                      {
+                        reservationId,
+                        reason: reason.trim(),
+                        authority: "front-office.folios.approve",
+                      },
+                      { onSuccess: () => setReason("") },
+                    )
+                  }
+                >
+                  Authorise override
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The override is single-use: it authorises this arrival only, and is recorded with
+                your name, the reason and the outstanding amount.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function Figure({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+
+============================================================
+FILE: src/components/pms/ReservationActions.tsx
+============================================================
+import { useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/lib/auth";
+import { depositGate, useDepositPosition } from "@/lib/deposits";
+import { DepositPanel } from "@/components/pms/DepositPanel";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useMyOpenShift } from "@/lib/pos-data";
+import { useOpenCashShift } from "@/lib/frontdesk-ops";
+import {
+  useFolioCashRequests,
+  useRequestCashPayment,
+  useTillContext,
+} from "@/lib/cash-routing";
+import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
+
+import {
+  FOLIO_CATEGORIES,
+  PAYMENT_METHODS,
+  money,
+  titleCase,
+  today,
+} from "@/lib/pms";
+import {
+  useAssignRoom,
+  useAvailability,
+  useCheckIn,
+  useCheckOut,
+  usePostCharge,
+  useReceivingAccounts,
+  useRecordPayment,
+  useTransferRoom,
+} from "@/lib/pms-data";
+
+type Reservation = {
+  id: string;
+  confirmation_number: string;
+  room_id: string | null;
+  room_type_id: string | null;
+  arrival_date: string;
+  departure_date: string;
+  adults: number;
+  children: number;
+  branch_id: string | null;
+};
+
+function ActionDialog({
+  trigger,
+  title,
+  description,
+  children,
+  onConfirm,
+  confirmLabel,
+  disabled,
+  open,
+  setOpen,
+}: {
+  trigger: ReactNode;
+  title: string;
+  description: string;
+  children: ReactNode;
+  onConfirm: () => void | Promise<unknown>;
+  confirmLabel: string;
+  disabled?: boolean;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">{children}</div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={disabled}
+            onClick={async () => {
+              await onConfirm();
+              setOpen(false);
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Assign or change the physical room from live availability. */
+export function AssignRoomDialog({
+  reservation,
+  label = "Assign room",
+  transfer = false,
+}: {
+  reservation: Reservation;
+  label?: string;
+  transfer?: boolean;
+}) {
+  const { can } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [room, setRoom] = useState("");
+  const [reason, setReason] = useState("");
+  const [moveType, setMoveType] = useState("transfer");
+  const assign = useAssignRoom();
+  const move = useTransferRoom();
+
+  const availability = useAvailability({
+    branch: reservation.branch_id,
+    arrival: reservation.arrival_date,
+    departure: reservation.departure_date,
+    roomType: transfer ? null : reservation.room_type_id,
+    adults: reservation.adults,
+    children: reservation.children,
+    enabled: open,
+  });
+
+  // The same availability engine, asked without the room-type filter. The
+  // Availability screen shows the property's sellable rooms; the assignment
+  // dialog narrowed to the booked room type and then reported "no room free",
+  // which reads as a disagreement between two screens. When the booked type
+  // has nothing, the free rooms of other types are offered explicitly.
+  const anyType = useAvailability({
+    branch: reservation.branch_id,
+    arrival: reservation.arrival_date,
+    departure: reservation.departure_date,
+    roomType: null,
+    adults: reservation.adults,
+    children: reservation.children,
+    enabled: open && !transfer,
+  });
+
+  const typedRooms = availability.data ?? [];
+  const otherRooms = transfer ? [] : (anyType.data ?? []);
+  const rooms = typedRooms.length > 0 ? typedRooms : otherRooms;
+  const offeringOtherTypes = typedRooms.length === 0 && otherRooms.length > 0;
+  const checking = availability.isLoading || (!transfer && anyType.isLoading);
+
+  const permitted = can("pms", transfer ? "in-house.edit" : "arrivals.edit");
+  if (!permitted) return null;
+
+  return (
+    <ActionDialog
+      open={open}
+      setOpen={setOpen}
+      trigger={
+        <Button variant="outline" size="sm">
+          {label}
+        </Button>
+      }
+      title={transfer ? "Move guest to another room" : "Assign room"}
+      description={
+        transfer
+          ? "The folio, charges and stay history follow the guest. The vacated room is sent for cleaning."
+          : "Only rooms that are free, sellable and large enough for the party are listed."
+      }
+      confirmLabel={transfer ? "Move guest" : "Assign"}
+      disabled={!room || (transfer && !reason.trim())}
+      onConfirm={() =>
+        transfer
+          ? move.mutateAsync({ reservation: reservation.id, toRoom: room, reason, moveType })
+          : assign.mutateAsync({ reservation: reservation.id, room, reason })
+      }
+    >
+      <div className="space-y-2">
+        <Label>Available rooms</Label>
+        {checking ? (
+          <p className="text-sm text-muted-foreground">Checking availabilityâ€¦</p>
+        ) : rooms.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No room is free for {reservation.arrival_date} â†’ {reservation.departure_date}. Add rooms, release a block
+            or use the waitlist.
+          </p>
+        ) : (
+          <>
+            {offeringOtherTypes ? (
+              <p className="text-sm text-muted-foreground">
+                No room of the booked type is free for these dates. The rooms below are free at this property
+                on other room types â€” assigning one changes the room type on the stay.
+              </p>
+            ) : null}
+            <Select value={room} onValueChange={setRoom}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a room" />
+              </SelectTrigger>
+              <SelectContent>
+                {rooms.map((r) => (
+                  <SelectItem key={r.room_id} value={r.room_id}>
+                    {r.room_number} Â· {r.room_type_name}
+                    {r.floor ? ` Â· Floor ${r.floor}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+      </div>
+      {transfer ? (
+        <div className="space-y-2">
+          <Label>Move type</Label>
+          <Select value={moveType} onValueChange={setMoveType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["transfer", "upgrade", "downgrade", "maintenance", "guest-request"].map((t) => (
+                <SelectItem key={t} value={t}>
+                  {titleCase(t)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+      <div className="space-y-2">
+        <Label>Reason {transfer ? "(required)" : "(optional)"}</Label>
+        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
+      </div>
+    </ActionDialog>
+  );
+}
+
+export function CheckInDialog({ reservation }: { reservation: Reservation }) {
+  const { can } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [keys, setKeys] = useState(1);
+  const [notes, setNotes] = useState("");
+  const [idVerified, setIdVerified] = useState(false);
+  const checkIn = useCheckIn();
+  const deposit = useDepositPosition(reservation.id, open);
+  const gate = depositGate(deposit.data);
+
+  if (!can("pms", "arrivals.edit")) return null;
+
+  return (
+    <ActionDialog
+      open={open}
+      setOpen={setOpen}
+      trigger={<Button size="sm">Check in</Button>}
+      title={`Check in ${reservation.confirmation_number}`}
+      description="Opens the guest folio, marks the room occupied and notifies housekeeping."
+      confirmLabel="Complete check-in"
+      disabled={!reservation.room_id || !idVerified || gate.blocked || deposit.isLoading}
+      onConfirm={() => checkIn.mutateAsync({ reservation: reservation.id, keys, notes })}
+    >
+      {!reservation.room_id ? (
+        <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          Assign a room before checking this guest in.
+        </p>
+      ) : null}
+      {gate.blocked ? (
+        <div className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          <p>{gate.message}</p>
+          <p className="text-xs text-muted-foreground">
+            Record the deposit or authorise an override on the reservation before checking in.
+          </p>
+        </div>
+      ) : null}
+      <DepositPanel reservationId={reservation.id} />
+      <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
+        <div>
+          <p className="text-sm font-medium">Identity document sighted</p>
+          <p className="text-xs text-muted-foreground">Recorded on the registration card.</p>
+        </div>
+        <Switch checked={idVerified} onCheckedChange={setIdVerified} />
+      </div>
+      <div className="space-y-2">
+        <Label>Keys issued</Label>
+        <Input type="number" min={0} value={keys} onChange={(e) => setKeys(Number(e.target.value))} />
+      </div>
+      <div className="space-y-2">
+        <Label>Check-in notes</Label>
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+      </div>
+    </ActionDialog>
+  );
+}
+
+export function CheckOutDialog({
+  reservation,
+  balance,
+}: {
+  reservation: Reservation;
+  balance: number;
+}) {
+  const { can, isAdmin } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [force, setForce] = useState(false);
+  const [notes, setNotes] = useState("");
+  const checkOut = useCheckOut();
+
+  if (!can("pms", "departures.edit")) return null;
+  const outstanding = balance > 0.009;
+
+  return (
+    <ActionDialog
+      open={open}
+      setOpen={setOpen}
+      trigger={<Button size="sm">Check out</Button>}
+      title={`Check out ${reservation.confirmation_number}`}
+      description="Settles the stay, releases the room for cleaning and closes the folio."
+      confirmLabel="Complete check-out"
+      disabled={outstanding && !force}
+      onConfirm={() => checkOut.mutateAsync({ reservation: reservation.id, force, notes })}
+    >
+      <div className="rounded-lg border border-border/70 p-3 text-sm">
+        <span className="text-muted-foreground">Folio balance</span>
+        <p className={outstanding ? "text-lg font-semibold text-destructive" : "text-lg font-semibold text-success"}>
+          {money(balance)}
+        </p>
+      </div>
+      {outstanding ? (
+        <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3">
+          <div>
+            <p className="text-sm font-medium">Check out with an outstanding balance</p>
+            <p className="text-xs text-muted-foreground">
+              {isAdmin ? "Requires an authorised override and is written to the audit trail." : "Only authorised staff may override."}
+            </p>
+          </div>
+          <Switch checked={force} onCheckedChange={setForce} disabled={!isAdmin} />
+        </div>
+      ) : null}
+      <div className="space-y-2">
+        <Label>Check-out notes</Label>
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+      </div>
+    </ActionDialog>
+  );
+}
+
+export function PostChargeDialog({ folioId }: { folioId: string }) {
+  const { can } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<string>("miscellaneous");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [tax, setTax] = useState(0);
+  const post = usePostCharge();
+
+  if (!can("pms", "folios.create")) return null;
+
+  return (
+    <ActionDialog
+      open={open}
+      setOpen={setOpen}
+      trigger={
+        <Button variant="outline" size="sm">
+          Post charge
+        </Button>
+      }
+      title="Post a charge"
+      description="Charges are posted once â€” a duplicate submission is ignored by the posting service."
+      confirmLabel="Post charge"
+      disabled={!description.trim() || unitPrice <= 0}
+      onConfirm={() =>
+        post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax })
+      }
+    >
+      <div className="space-y-2">
+        <Label>Category</Label>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FOLIO_CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {titleCase(c)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Description</Label>
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>Qty</Label>
+          <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+        </div>
+        <div className="space-y-2">
+          <Label>Unit price</Label>
+          <Input type="number" min={0} value={unitPrice} onChange={(e) => setUnitPrice(Number(e.target.value))} />
+        </div>
+        <div className="space-y-2">
+          <Label>Tax</Label>
+          <Input type="number" min={0} value={tax} onChange={(e) => setTax(Number(e.target.value))} />
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Net amount <span className="font-semibold text-foreground">{money(quantity * unitPrice + tax)}</span>
+      </p>
+    </ActionDialog>
+  );
+}
+
+export function RecordPaymentDialog({ folioId, balance }: { folioId: string; balance: number }) {
+  const { can } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(balance > 0 ? balance : 0);
+  const [method, setMethod] = useState("cash");
+  const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const [float, setFloat] = useState("");
+  const [account, setAccount] = useState<string>("");
+  const pay = useRecordPayment();
+  const accounts = useReceivingAccounts();
+  // One collection intent per opening of this dialog: retries settle the same
+  // receipt, while a genuine second payment of the same amount still goes through.
+  const [intentKey, setIntentKey] = useState(() => crypto.randomUUID());
+  const myShift = useMyOpenShift();
+  const openShift = useOpenCashShift();
+  const { branchId } = useActivePropertyFilter();
+  const till = useTillContext(branchId);
+  const requestCash = useRequestCashPayment();
+  const folioRequests = useFolioCashRequests(open ? folioId : null);
+
+  if (!can("pms", "folios.edit")) return null;
+  const selected = PAYMENT_METHODS.find((m) => m.value === method);
+  const isCash = method === "cash";
+  const ctx = till.data;
+  // Billing and cash handling are separate acts: a user holding their own till
+  // settles directly, everyone else routes the cash to an active drawer.
+  const selfService = Boolean(ctx?.self_service);
+  const routedTill = ctx?.active_tills?.[0] ?? null;
+  const noTill = isCash && !till.isLoading && !selfService && !routedTill;
+  const mayOpenDrawer = Boolean(ctx?.can_open_drawer);
+  const pendingHere = (folioRequests.data ?? []).filter((r) => r.status === "pending");
+
+  return (
+    <ActionDialog
+      open={open}
+      setOpen={(next) => {
+        if (next) setIntentKey(crypto.randomUUID());
+        setOpen(next);
+      }}
+      trigger={<Button size="sm">Record payment</Button>}
+      title={isCash ? "Take a cash payment" : "Record a payment"}
+      description={
+        isCash
+          ? selfService
+            ? "Confirms cash physically received into your own till and produces a numbered receipt."
+            : "Routes the cash to an authorised cashier, who confirms the money was physically received."
+          : "Produces a numbered receipt and reduces the folio balance."
+      }
+      confirmLabel={isCash ? (selfService ? "Confirm cash received" : "Send to cashier") : "Record payment"}
+      disabled={amount <= 0 || !selected || noTill || requestCash.isPending || pay.isPending}
+      onConfirm={() =>
+        isCash
+          ? requestCash.mutateAsync({ folio: folioId, amount, reference, notes })
+          : pay.mutateAsync({
+              folio: folioId,
+              amount,
+              method,
+              reference,
+              notes,
+              intentKey,
+              account: account || null,
+            })
+      }
+    >
+      <div className="space-y-2">
+        <Label>Amount</Label>
+        <Input type="number" min={0} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+        <p className="text-xs text-muted-foreground">Outstanding balance {money(balance)}</p>
+      </div>
+      {isCash && !selfService && routedTill ? (
+        <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          Cash will be routed to <span className="font-medium text-foreground">{routedTill.cashier_name}</span> on till{" "}
+          {routedTill.shift_number ?? routedTill.shift_id.slice(0, 8)}. The folio settles only when that cashier
+          confirms the money in hand.
+        </p>
+      ) : null}
+      {pendingHere.length ? (
+        <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-on-tint-warning">
+          {pendingHere.length} cash {pendingHere.length === 1 ? "request is" : "requests are"} already awaiting
+          confirmation on this folio.
+        </p>
+      ) : null}
+      {noTill ? (
+        <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3">
+          <p className="text-xs text-on-tint-warning">
+            No active cash drawer is open for this outlet. {mayOpenDrawer
+              ? "Count your opening float and open your till to continue."
+              : "Ask a cashier or supervisor with drawer authority to open one for this outlet."}
+          </p>
+          {mayOpenDrawer ? (
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <Label>Opening float</Label>
+                <Input type="number" min={0} value={float} onChange={(e) => setFloat(e.target.value)} />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={openShift.isPending || float === ""}
+                onClick={async () => {
+                  await openShift.mutateAsync({ branch: branchId, station: null, float: Number(float) });
+                  await myShift.refetch();
+                  await till.refetch();
+                }}
+              >
+                Open drawer
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+
+      <div className="space-y-2">
+        <PaymentMethodPicker methods={PAYMENT_METHODS} value={method} onChange={setMethod} />
+        {selected?.provider === "mpesa" ? (
+          <p className="text-xs text-muted-foreground">
+            This records money the customer has already sent. To ask the customer's phone for the payment, use the
+            M-Pesa prompt on the folio instead.
+          </p>
+        ) : null}
+
+      </div>
+      {!isCash ? (
+        <div className="space-y-2">
+          <Label>Money received into</Label>
+          <Select value={account} onValueChange={setAccount}>
+            <SelectTrigger>
+              <SelectValue placeholder="Use the default account for this method" />
+            </SelectTrigger>
+            <SelectContent>
+              {(accounts.data ?? []).map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}
+                  {a.account_kind ? ` Â· ${titleCase(a.account_kind.replace(/[-_]/g, " "))}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {accounts.data?.length
+              ? "Choose the bank, card or mobile-money account the money landed in. Leave it unset to use the default for this method."
+              : "No receiving accounts are set up yet, so the default account for this method is used."}
+          </p>
+        </div>
+      ) : null}
+      <div className="space-y-2">
+        <Label>Reference</Label>
+        <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Receipt / transaction reference" />
+      </div>
+      <div className="space-y-2">
+        <Label>Notes</Label>
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+      </div>
+    </ActionDialog>
+  );
+}
+
+export const operationalToday = today;
+
+
+============================================================
+FILE: src/routes/_shell.pms.reservations.new.tsx
+============================================================
+import { guardedRpc } from "@/lib/rpc-guard";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { parseAvailabilitySearch } from "@/lib/availability-search";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateSystem";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NeoDateRangePicker } from "@/components/common/DatePicker";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+import {
+  BOOKING_SOURCES,
+  GUARANTEE_METHODS,
+  RESERVATION_TYPES,
+  addDays,
+  money,
+  nightsBetween,
+  titleCase,
+  today,
+} from "@/lib/pms";
+import {
+  useAvailability,
+  useCustomers,
+  useMealPlans,
+  useRatePlans,
+  useRoomTypes,
+  useRooms,
+} from "@/lib/pms-data";
+import { useRateQuote } from "@/lib/rates-data";
+import {
+  RatePlanPicker,
+  roomTypeForRoom,
+  selectableRatePlans,
+} from "@/components/pms/RatePlanPicker";
+import { PmsGuard } from "@/components/pms/PmsShared";
+
+
+export const Route = createFileRoute("/_shell/pms/reservations/new")({
+  // Receives the exact search context the operator used on Availability.
+  validateSearch: parseAvailabilitySearch,
+  head: () => ({
+    meta: [
+      { title: "New Reservation â€” NEÃ˜" },
+      {
+        name: "description",
+        content: "Create a booking with live availability, rate selection and deposit rules.",
+      },
+      { property: "og:title", content: "New Reservation â€” NEÃ˜" },
+      {
+        property: "og:description",
+        content: "Create a booking with live availability, rate selection and deposit rules.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: () => (
+    <PmsGuard action="reservations.create">
+      <ReservationWizard />
+    </PmsGuard>
+  ),
+});
+
+const STEPS = ["Stay", "Guest", "Room & rate", "Payment", "Review"];
+
+function ReservationWizard() {
+  const { organizationId, profile, can } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  // The reservation belongs to the property currently selected in the global
+  // selector â€” never the booking clerk's home branch.
+  const { branchId: activeBranchId } = useActivePropertyFilter();
+  const handoff = useSearch({ from: "/_shell/pms/reservations/new" });
+  const [step, setStep] = useState(0);
+
+  const [arrival, setArrival] = useState(handoff.arrival ?? today());
+  const [departure, setDeparture] = useState(handoff.departure ?? addDays(today(), 1));
+  const [adults, setAdults] = useState(handoff.adults ?? 1);
+  const [children, setChildren] = useState(handoff.children ?? 0);
+  const [infants, setInfants] = useState(0);
+  const [reservationType, setReservationType] = useState<string>("individual");
+  const [bookingSource, setBookingSource] = useState<string>("direct");
+
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [newGuestName, setNewGuestName] = useState("");
+  const [newGuestEmail, setNewGuestEmail] = useState("");
+  const [newGuestPhone, setNewGuestPhone] = useState("");
+  const [isVip, setIsVip] = useState(false);
+  /** Email stays optional; it is only rejected when something was typed and it
+   *  is not a valid address. */
+  const emailInvalid =
+    newGuestEmail.trim().length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newGuestEmail.trim());
+
+  const [roomTypeId, setRoomTypeId] = useState<string>("");
+  const [roomId, setRoomId] = useState<string>(handoff.roomId ?? "");
+  const [ratePlanId, setRatePlanId] = useState<string>("");
+  const [mealPlanId, setMealPlanId] = useState<string>("");
+  const [overrideOn, setOverrideOn] = useState(false);
+  const [overrideRate, setOverrideRate] = useState(0);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [specialRequests, setSpecialRequests] = useState("");
+
+  const [guarantee, setGuarantee] = useState<string>("none");
+  const [depositRequired, setDepositRequired] = useState(0);
+  const [status, setStatus] = useState("tentative");
+
+  const nights = nightsBetween(arrival, departure);
+  const roomTypes = useRoomTypes();
+  const ratePlans = useRatePlans();
+  const mealPlans = useMealPlans();
+  const customers = useCustomers(customerSearch);
+  const canOverrideRate = can("front-office", "rates", "manage");
+  const quote = useRateQuote({
+    ratePlanId: ratePlanId || null,
+    arrival,
+    departure,
+    adults,
+    children,
+    enabled: step >= 2 && nights > 0,
+  });
+  const availability = useAvailability({
+    branch: activeBranchId ?? profile?.branch_id ?? null,
+    arrival,
+    departure,
+    roomType: roomTypeId || null,
+    adults,
+    children,
+    enabled: step >= 2 && nights > 0,
+  });
+  // A room handed off from Availability resolves to its own room type so the
+  // applicable rate plans are shown without weakening the availability check.
+  const rooms = useRooms();
+  const handoffRoomType = roomTypeForRoom(
+    (rooms.data ?? []) as Array<{ id: string; room_type_id?: string | null }>,
+    roomId,
+  );
+  useEffect(() => {
+    if (roomTypeId || !handoffRoomType) return;
+    setRoomTypeId(handoffRoomType);
+  }, [handoffRoomType, roomTypeId]);
+
+  /** Changing the room type clears every selection that no longer applies. */
+  const changeRoomType = useCallback(
+    (next: string) => {
+      setRoomTypeId(next);
+      setRatePlanId("");
+      setMealPlanId("");
+      setOverrideOn(false);
+      setOverrideRate(0);
+      setOverrideReason("");
+      if (roomId && handoffRoomType !== next) setRoomId("");
+    },
+    [roomId, handoffRoomType],
+  );
+
+
+
+
+  const derivedRate = quote.data?.ok ? Number(quote.data.nightly_rate ?? 0) : 0;
+  const nightlyRate = overrideOn && canOverrideRate ? overrideRate : derivedRate;
+  const taxAmount = overrideOn && canOverrideRate ? 0 : Number(quote.data?.tax_amount ?? 0);
+  const serviceCharge = overrideOn && canOverrideRate ? 0 : Number(quote.data?.service_charge ?? 0);
+  const total = useMemo(
+    () => Math.round((nightlyRate * nights + taxAmount + serviceCharge) * 100) / 100,
+    [nightlyRate, nights, taxAmount, serviceCharge],
+  );
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!organizationId) throw new Error("No organisation context");
+      if (nights < 1) throw new Error("Departure must be after arrival");
+      if (!ratePlanId) throw new Error("Select a rate plan so the nightly rate can be derived");
+      if (nightlyRate <= 0)
+        throw new Error("The selected rate plan produced no price for these dates");
+      if (overrideOn && (!canOverrideRate || overrideReason.trim().length < 4))
+        throw new Error("An authorised reason is required for a rate override");
+      const branchId = activeBranchId ?? profile?.branch_id;
+      if (!branchId)
+        throw new Error(
+          "Select a property in the property selector before creating a reservation.",
+        );
+
+      let guestId = customerId;
+      if (!guestId) {
+        if (!newGuestName.trim()) throw new Error("A guest name is required");
+        // Resolve against existing guest profiles first so repeat guests are never duplicated.
+        const { data: resolved, error: customerError } = await guardedRpc(supabase, 
+          "neo_customer_resolve",
+          {
+            _org: organizationId,
+            _branch: branchId,
+            _full_name: newGuestName.trim(),
+            ...(newGuestPhone.trim() ? { _phone: newGuestPhone.trim() } : {}),
+            ...(newGuestEmail.trim() ? { _email: newGuestEmail.trim() } : {}),
+          },
+        );
+        if (customerError) throw customerError;
+        guestId = resolved as string;
+        await supabase
+          .from("customers")
+          .update({ customer_type: "individual-guest", is_vip: isVip, source: bookingSource })
+          .eq("id", guestId);
+      }
+
+      const { data, error } = await guardedRpc(supabase, "neo_reservation_create", {
+        _payload: {
+          branch_id: branchId,
+          customer_id: guestId as string,
+          booking_source: bookingSource,
+          reservation_type: reservationType,
+          arrival_date: arrival,
+          departure_date: departure,
+          nights,
+          adults,
+          children,
+          infants,
+          room_type_id: roomTypeId || null,
+          room_id: roomId || null,
+          rate_plan_id: ratePlanId || null,
+          meal_plan_id: mealPlanId || null,
+          nightly_rate: nightlyRate,
+          tax_amount: taxAmount,
+          total_amount: total,
+          rate_source: overrideOn && canOverrideRate ? "override" : "rate-plan",
+          rate_override_reason: overrideOn && canOverrideRate ? overrideReason.trim() : null,
+          rate_quoted_amount: derivedRate,
+          deposit_required: depositRequired,
+          balance: total,
+          guarantee_method: guarantee,
+          special_requests: specialRequests,
+          is_vip: isVip,
+          status,
+        },
+        _idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      const result = data as { ok?: boolean; id?: string; confirmation_number?: string } | null;
+      if (!result?.ok || !result.id || !result.confirmation_number) {
+        throw new Error("The reservation was not persisted.");
+      }
+      return { id: result.id, confirmation_number: result.confirmation_number };
+    },
+    onSuccess: (data) => {
+      toast.success(`Reservation ${data.confirmation_number} created`);
+      // Refresh every surface that lists the new booking before we navigate.
+      for (const key of ["reservations", "pms", "arrivals", "availability", "facts"]) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      void navigate({ to: "/pms/reservations/$id", params: { id: data.id } });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canAdvance = [
+    nights > 0,
+    (Boolean(customerId) || newGuestName.trim().length > 1) && !emailInvalid,
+    Boolean(roomTypeId) &&
+      Boolean(ratePlanId) &&
+      nightlyRate > 0 &&
+      (!overrideOn || overrideReason.trim().length > 3),
+    true,
+    true,
+  ][step];
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Front Office"
+        title="New reservation"
+        description="Availability is checked against real rooms, existing stays, blocks and holds before the booking is written."
+      />
+
+      <ol className="mb-6 flex flex-wrap gap-2">
+        {STEPS.map((s, i) => (
+          <li key={s}>
+            <button
+              type="button"
+              onClick={() => setStep(i)}
+              className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                i === step
+                  ? "border-primary/40 bg-chip-selected font-semibold text-chip-selected-foreground shadow-[var(--elevation-1)]"
+                  : i < step
+                    ? "border-success/40 bg-success/10 text-success"
+                    : "border-border text-muted-foreground"
+              }`}
+            >
+              {i < step ? <Check className="size-3.5" /> : <span className="text-xs">{i + 1}</span>}
+              {s}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <SectionCard title={STEPS[step] ?? ""} description="">
+          {step === 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Stay dates</Label>
+                <NeoDateRangePicker
+                  from={arrival}
+                  to={departure}
+                  onChange={({ from, to }) => {
+                    setArrival(from);
+                    setDeparture(to);
+                  }}
+                  fromLabel="Arrival"
+                  toLabel="Departure"
+                  showNights
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Adults</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={adults}
+                  onChange={(e) => setAdults(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Children</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={children}
+                  onChange={(e) => setChildren(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Infants</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={infants}
+                  onChange={(e) => setInfants(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Reservation type</Label>
+                <Select value={reservationType} onValueChange={setReservationType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RESERVATION_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {titleCase(t)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Booking source</Label>
+                <Select value={bookingSource} onValueChange={setBookingSource}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BOOKING_SOURCES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {titleCase(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {nights < 1 ? (
+                <p className="sm:col-span-2 text-sm text-destructive">
+                  Departure must be at least one night after arrival.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {step === 1 ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="guest-search">Search existing guests</Label>
+                <Input
+                  id="guest-search"
+                  name="guest-search"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="Name, email, phone or customer number"
+                />
+                {customerSearch.trim().length >= 2 ? (
+                  <div className="max-h-52 overflow-y-auto rounded-lg border border-border/70">
+                    {(customers.data ?? []).length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground">
+                        No matching guest â€” capture the details below to create a new profile.
+                      </p>
+                    ) : (
+                      (customers.data ?? []).map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setCustomerId(c.id);
+                            setCustomerName(c.full_name);
+                            setIsVip(Boolean(c.is_vip));
+                          }}
+                          className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted ${
+                            customerId === c.id ? "bg-primary-soft" : ""
+                          }`}
+                        >
+                          <span>
+                            <span className="font-medium">{c.full_name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {c.email || c.phone || c.customer_number}
+                            </span>
+                          </span>
+                          {customerId === c.id ? <Check className="size-4 text-primary" /> : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {customerId ? (
+                <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
+                  <p className="text-sm">
+                    Booking for <span className="font-semibold">{customerName}</span>
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={() => setCustomerId(null)}>
+                    Clear
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2 sm:col-span-3">
+                    <Label htmlFor="new-guest-name">New guest full name</Label>
+                    <Input
+                      id="new-guest-name"
+                      name="new-guest-name"
+                      value={newGuestName}
+                      onChange={(e) => setNewGuestName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-guest-email">Email (optional)</Label>
+                    {/* A plain text field with an explicit pattern: the browser
+                        email widget and password managers must never rewrite or
+                        clear what the agent typed. Validation is ours. */}
+                    <Input
+                      id="new-guest-email"
+                      name="new-guest-email"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={newGuestEmail}
+                      onChange={(e) => setNewGuestEmail(e.target.value)}
+                      aria-invalid={emailInvalid || undefined}
+                      aria-describedby="new-guest-email-hint"
+                    />
+                    <p
+                      id="new-guest-email-hint"
+                      className={`text-xs ${emailInvalid ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {emailInvalid
+                        ? "Enter a valid email address, or leave it blank."
+                        : "Optional â€” used for confirmations and the folio statement."}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-guest-phone">Phone</Label>
+                    <Input
+                      id="new-guest-phone"
+                      name="new-guest-phone"
+                      value={newGuestPhone}
+                      onChange={(e) => setNewGuestPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
+                <div>
+                  <p className="text-sm font-medium">VIP handling</p>
+                  <p className="text-xs text-muted-foreground">
+                    Flags the arrival for management attention.
+                  </p>
+                </div>
+                <Switch checked={isVip} onCheckedChange={setIsVip} />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Room type</Label>
+                  <Select value={roomTypeId} onValueChange={changeRoomType}>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          (roomTypes.data ?? []).length
+                            ? "Select a room type"
+                            : "No room types configured"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(roomTypes.data ?? []).map((rt) => (
+                        <SelectItem key={rt.id} value={rt.id}>
+                          {rt.name} Â· sleeps {rt.max_occupancy}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label id="rate-plan-label">Rate plan</Label>
+                  {ratePlans.isLoading ? (
+                    <LoadingState variant="rows" rows={2} />
+                  ) : ratePlans.error ? (
+                    <ErrorState
+                      inline
+                      error={ratePlans.error}
+                      title="Rate plans could not be loaded"
+                      onRetry={() => void ratePlans.refetch()}
+                    />
+                  ) : (
+                    <RatePlanPicker
+                      plans={(ratePlans.data ?? []) as never}
+                      roomTypeId={roomTypeId || null}
+                      value={ratePlanId}
+                      onSelect={(planId) => {
+                        setRatePlanId(planId);
+                        setOverrideOn(false);
+                        const plan = selectableRatePlans(
+                          (ratePlans.data ?? []) as never,
+                          roomTypeId || null,
+                        ).find((p) => p.id === planId);
+                        setMealPlanId(plan?.meal_plan_id ?? "");
+                      }}
+                    />
+                  )}
+                </div>
+
+
+
+                <div className="space-y-2">
+                  <Label>Meal plan</Label>
+                  <Select value={mealPlanId} onValueChange={setMealPlanId}>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          (mealPlans.data ?? []).length
+                            ? "Select a meal plan"
+                            : "No meal plans configured"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(mealPlans.data ?? []).map((mp) => (
+                        <SelectItem key={mp.id} value={mp.id}>
+                          {mp.code} â€” {mp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Nightly rate</Label>
+                  {!ratePlanId ? (
+                    <p className="text-sm text-muted-foreground">
+                      Select a rate plan â€” the nightly rate is derived, never typed.
+                    </p>
+                  ) : quote.isLoading ? (
+                    <LoadingState variant="rows" rows={1} />
+                  ) : quote.error ? (
+                    <ErrorState
+                      inline
+                      error={quote.error}
+                      title="Rate could not be calculated"
+                      onRetry={() => void quote.refetch()}
+                    />
+                  ) : quote.data && !quote.data.ok ? (
+                    <p className="text-sm text-destructive">{quote.data.reason}</p>
+                  ) : (
+                    <div className="rounded-lg border border-border p-3 text-sm">
+                      <div className="flex justify-between font-medium">
+                        <span>{money(derivedRate, quote.data?.currency)}</span>
+                        <span className="text-muted-foreground">per night</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {nights} night(s) Â· service {money(serviceCharge)} Â· tax {money(taxAmount)}{" "}
+                        Â· total {money(total)}
+                      </p>
+                      {(quote.data?.restrictions ?? []).map((r) => (
+                        <p key={r} className="mt-1 text-xs text-on-tint-warning">
+                          {r}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {canOverrideRate && ratePlanId ? (
+                    <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Authorised rate override</Label>
+                        <Switch
+                          checked={overrideOn}
+                          onCheckedChange={(v) => {
+                            setOverrideOn(v);
+                            if (v) setOverrideRate(derivedRate);
+                          }}
+                        />
+                      </div>
+                      {overrideOn ? (
+                        <>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={overrideRate}
+                            onChange={(e) => setOverrideRate(Number(e.target.value))}
+                          />
+                          <Input
+                            placeholder="Reason for the override (required, audited)"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Plan price {money(derivedRate)} will be preserved on the reservation
+                            record.
+                          </p>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Assign a specific room (optional)</Label>
+                {availability.isLoading ? (
+                  <LoadingState variant="rows" rows={1} />
+                ) : (availability.data ?? []).length === 0 ? (
+                  <EmptyState
+                    inline
+                    title="No room is free for these dates"
+                    description="The booking can still be taken and assigned later, or added to the waitlist."
+                  />
+                ) : (
+                  <Select value={roomId} onValueChange={setRoomId}>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={`${(availability.data ?? []).length} room(s) available`}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(availability.data ?? []).map((r) => (
+                        <SelectItem key={r.room_id} value={r.room_id}>
+                          {r.room_number} Â· {r.room_type_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Special requests</Label>
+                <Textarea
+                  value={specialRequests}
+                  onChange={(e) => setSpecialRequests(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Guarantee method</Label>
+                <Select value={guarantee} onValueChange={setGuarantee}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GUARANTEE_METHODS.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {titleCase(g)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Deposit required</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={depositRequired}
+                  onChange={(e) => setDepositRequired(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Reservation status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["enquiry", "tentative", "pending-deposit", "confirmed", "guaranteed"].map(
+                      (s) => (
+                        <SelectItem key={s} value={s}>
+                          {titleCase(s)}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Deposits are recorded against the folio after check-in, or as a pre-arrival
+                  payment from the folio screen.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 4 ? (
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <Detail label="Guest" value={customerId ? customerName : newGuestName || "â€”"} />
+              <Detail label="Stay" value={`${arrival} â†’ ${departure} (${nights} night(s))`} />
+              <Detail
+                label="Party"
+                value={`${adults} adult(s), ${children} child(ren), ${infants} infant(s)`}
+              />
+              <Detail
+                label="Room type"
+                value={(roomTypes.data ?? []).find((r) => r.id === roomTypeId)?.name ?? "â€”"}
+              />
+              <Detail
+                label="Room"
+                value={
+                  (availability.data ?? []).find((r) => r.room_id === roomId)?.room_number ??
+                  "Assign later"
+                }
+              />
+              <Detail label="Rate" value={`${money(nightlyRate)} per night`} />
+              <Detail label="Total" value={money(total)} />
+              <Detail label="Deposit" value={money(depositRequired)} />
+              <Detail label="Status" value={titleCase(status)} />
+              <Detail label="Source" value={titleCase(bookingSource)} />
+            </dl>
+          ) : null}
+
+          <div className="mt-6 flex items-center justify-between">
+            <Button variant="ghost" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+              <ChevronLeft className="mr-1 size-4" /> Back
+            </Button>
+            {step < STEPS.length - 1 ? (
+              <Button disabled={!canAdvance} onClick={() => setStep((s) => s + 1)}>
+                Continue <ChevronRight className="ml-1 size-4" />
+              </Button>
+            ) : (
+              <Button
+                disabled={
+                  create.isPending ||
+                  !ratePlanId ||
+                  nightlyRate <= 0 ||
+                  (overrideOn && overrideReason.trim().length < 4)
+                }
+                onClick={() => create.mutate()}
+              >
+                {create.isPending ? "Creatingâ€¦" : "Create reservation"}
+              </Button>
+            )}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Booking summary" description="Updates as you complete each step.">
+          <dl className="space-y-3 text-sm">
+            <Detail label="Nights" value={String(nights)} />
+            <Detail label="Nightly rate" value={money(nightlyRate)} />
+            <Detail label="Accommodation total" value={money(total)} />
+            <Detail label="Deposit required" value={money(depositRequired)} />
+            <Detail
+              label="Balance on arrival"
+              value={money(Math.max(total - depositRequired, 0))}
+            />
+          </dl>
+          {isVip ? <Badge className="mt-4">VIP arrival</Badge> : null}
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 pb-2 last:border-0">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+
+============================================================
+FILE: supabase/migrations/20260830040148_a1812bd0-17aa-444a-bfff-c9ba5b8a0230.sql
+============================================================
+CREATE OR REPLACE FUNCTION public.pms_check_in(_reservation uuid, _keys integer DEFAULT 1, _notes text DEFAULT ''::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE _org uuid := public.current_org_id(); _res public.reservations; _stay uuid; _folio uuid;
+  _room public.rooms; _key text; _folio_no text; _tax_rate numeric; _svc_rate numeric;
+  _treatment text; _tax numeric; _svc numeric; _line uuid;
+BEGIN
+  IF NOT public.has_permission('pms','checkin.perform') THEN RAISE EXCEPTION 'Not permitted to check in guests'; END IF;
+  SELECT * INTO _res FROM public.reservations WHERE id=_reservation AND organization_id=_org FOR UPDATE;
+  IF _res.id IS NULL THEN RAISE EXCEPTION 'Reservation not found'; END IF;
+  _key := 'checkin:' || _reservation::text;
+
+  SELECT id INTO _stay FROM public.stays WHERE reservation_id=_reservation;
+  IF _stay IS NOT NULL THEN
+    SELECT id INTO _folio FROM public.folios WHERE stay_id=_stay AND folio_type='guest';
+    RETURN jsonb_build_object('stay_id',_stay,'folio_id',_folio,'idempotent',true);
+  END IF;
+
+  IF _res.status NOT IN ('confirmed','guaranteed','tentative','pending-deposit') THEN
+    RAISE EXCEPTION 'Reservation status % is not eligible for check-in', _res.status;
+  END IF;
+  IF _res.room_id IS NULL THEN RAISE EXCEPTION 'Assign a room before check-in'; END IF;
+  SELECT * INTO _room FROM public.rooms WHERE id=_res.room_id FOR UPDATE;
+  IF _room.room_condition IN ('out-of-order','out-of-service','maintenance','blocked') THEN
+    RAISE EXCEPTION 'Room % is not available (%).', _room.room_number, _room.room_condition;
+  END IF;
+  IF _room.occupancy_status = 'occupied' THEN
+    RAISE EXCEPTION 'Room % is already occupied', _room.room_number;
+  END IF;
+
+  INSERT INTO public.stays (organization_id, branch_id, reservation_id, customer_id, room_id,
+    checked_in_by, expected_departure)
+  VALUES (_org, _res.branch_id, _reservation, _res.customer_id, _res.room_id, auth.uid(), _res.departure_date)
+  RETURNING id INTO _stay;
+
+  _folio_no := public.next_document_number('invoice');
+  INSERT INTO public.folios (organization_id, branch_id, folio_number, reservation_id, stay_id,
+    customer_id, corporate_account_id, group_booking_id, created_by)
+  VALUES (_org, _res.branch_id, _folio_no, _reservation, _stay, _res.customer_id,
+          _res.corporate_account_id, _res.group_booking_id, auth.uid())
+  RETURNING id INTO _folio;
+
+  UPDATE public.reservations SET status='checked-in', updated_at=now() WHERE id=_reservation;
+  UPDATE public.rooms SET occupancy_status='occupied', room_condition='occupied-clean',
+    housekeeping_status='occupied', updated_at=now() WHERE id=_res.room_id;
+  UPDATE public.room_assignments SET stay_id=_stay, updated_at=now()
+    WHERE reservation_id=_reservation AND status='active';
+
+  -- The arrival night is charged immediately so the folio carries a real
+  -- balance from check-in; the nightly posting run skips it via the
+  -- one-night-per-reservation unique index.
+  --
+  -- Tax and service follow exactly the same rules as public.pms_quote_rate:
+  -- an inclusive rate plan adds nothing on top, an exclusive plan adds the
+  -- service charge first and taxes the sum. Without this the folio line
+  -- disagreed with the price the guest was quoted and confirmed.
+  SELECT COALESCE(rp.tax_rate,0), COALESCE(rp.service_charge_rate,0),
+         COALESCE(rp.tax_treatment,'exclusive')
+    INTO _tax_rate, _svc_rate, _treatment
+  FROM public.rate_plans rp WHERE rp.id = _res.rate_plan_id;
+  _tax_rate := COALESCE(_tax_rate, 0);
+  _svc_rate := COALESCE(_svc_rate, 0);
+  _treatment := COALESCE(_treatment, 'exclusive');
+
+  IF COALESCE(_res.nightly_rate,0) > 0 AND _res.arrival_date < _res.departure_date THEN
+    IF _treatment = 'exclusive' THEN
+      _svc := round(_res.nightly_rate * _svc_rate / 100.0, 2);
+      _tax := round((_res.nightly_rate + _svc) * _tax_rate / 100.0, 2);
+    ELSE
+      _svc := 0;
+      _tax := 0;
+    END IF;
+    BEGIN
+      INSERT INTO public.folio_lines (organization_id, branch_id, folio_id, reservation_id, line_type,
+        category, source_module, description, operational_date, quantity, unit_price,
+        gross_amount, tax_amount, service_charge_amount, net_amount, posted_by)
+      VALUES (_org, _res.branch_id, _folio, _reservation, 'charge', 'accommodation', 'pms',
+        'Accommodation â€” room ' || _room.room_number || ' Â· ' || _res.arrival_date::text,
+        _res.arrival_date, 1, _res.nightly_rate, _res.nightly_rate, _tax, _svc,
+        _res.nightly_rate + _tax + _svc, auth.uid())
+      RETURNING id INTO _line;
+      UPDATE public.folios SET total_charges = total_charges + _res.nightly_rate,
+        total_taxes = total_taxes + _tax,
+        balance = balance + _res.nightly_rate + _tax + _svc, updated_at=now()
+      WHERE id=_folio;
+      PERFORM public.pkg_allocate_folio_line(_line, 'check-in');
+    EXCEPTION WHEN unique_violation THEN
+      NULL;
+    END;
+  END IF;
+
+  INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+  VALUES (_org, _res.branch_id, _res.room_id, 'occupancy_status', _room.occupancy_status, 'occupied', 'Guest checked in', auth.uid());
+
+  INSERT INTO public.notifications (organization_id, branch_id, category, title, body, link)
+  VALUES (_org, _res.branch_id, 'operations', 'Guest checked in',
+    'Room ' || _room.room_number || ' â€” folio ' || _folio_no || ' is now active.', '/pms/in-house');
+
+  INSERT INTO public.customer_timeline_events (organization_id, branch_id, customer_id, event_type,
+    description, source_module, source_record_id, staff_user_id)
+  SELECT _org, _res.branch_id, _res.customer_id, 'stay',
+    'Checked in Â· room ' || _room.room_number || ' Â· ' || _res.arrival_date::text || ' â†’ ' || _res.departure_date::text,
+    'front-office', _reservation::text, auth.uid()
+  WHERE _res.customer_id IS NOT NULL;
+
+  INSERT INTO public.pms_workflow_events (organization_id, branch_id, event_type, reservation_id, stay_id, folio_id, idempotency_key, created_by)
+  VALUES (_org, _res.branch_id, 'guest.checked-in', _reservation, _stay, _folio, _key, auth.uid())
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)
+  VALUES (_org, auth.uid(), '', 'pms.checkin', 'front-office', _reservation::text,
+    jsonb_build_object('stay_id',_stay,'folio_id',_folio,'room',_room.room_number,'keys',_keys), _notes);
+
+  RETURN jsonb_build_object('stay_id',_stay,'folio_id',_folio,'folio_number',_folio_no,'idempotent',false);
+END; $function$;

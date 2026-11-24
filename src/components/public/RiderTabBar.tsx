@@ -1,6 +1,11 @@
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Bike, Home, LifeBuoy, UserRound } from "lucide-react";
+import type { CSSProperties } from "react";
+import { fetchRelationshipProperty } from "@/lib/front-door";
 import { brandFallback } from "@/lib/public-apps";
+import { normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 
 const tabs = [
   { key: "home", label: "Home", icon: Home, to: "/rider" },
@@ -11,14 +16,36 @@ const tabs = [
 
 export type RiderTab = (typeof tabs)[number]["key"];
 
+/** The Rider app's roster determines the property, independently of the staff workspace. */
+export function useRiderBrand(branchId: string | null, userId?: string) {
+  const property = useQuery({
+    queryKey: ["rider", "property-brand", userId, branchId],
+    enabled: Boolean(userId && branchId),
+    queryFn: () => branchId ? fetchRelationshipProperty(branchId) : null,
+    staleTime: 60_000,
+  });
+  const match = property.data?.branch_id === branchId ? property.data : null;
+  const primary = normalizedHex(match?.brand?.primary || brandFallback.primary);
+  return {
+    property: match,
+    primary,
+    style: {
+      ...(match?.brand ? brandStyle(match.brand) : {}),
+      "--pa-primary": primary,
+      "--pa-on-primary": primaryInk(primary),
+      "--pa-secondary": normalizedHex(match?.brand?.accent || brandFallback.secondary, brandFallback.secondary),
+    } as CSSProperties,
+  };
+}
+
 /**
  * Persistent bottom navigation for the standalone Rider app, mirroring the
  * customer experience standard: mobile-first, one tap between screens.
  */
 export function RiderTabBar({ active }: { active: RiderTab }) {
   return (
-    <nav aria-label="Rider app" className="neo-pub-float max-w-[calc(100vw-1rem)] px-2 py-2">
-      <ul className="grid grid-cols-4 items-center gap-1">
+    <nav aria-label="Rider app" className="neo-app-dock">
+      <ul className="contents">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.key === active;
@@ -27,13 +54,9 @@ export function RiderTabBar({ active }: { active: RiderTab }) {
               <Link
                 to={tab.to}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex min-w-0 items-center justify-center gap-2 rounded-full px-2.5 py-2 text-[0.72rem] font-semibold transition-colors ${
-                  isActive ? "bg-white/12 text-white" : "text-white/60 hover:text-white"
-                }`}
-                style={isActive ? { color: brandFallback.primary } : undefined}
               >
-                <Icon className="size-4" aria-hidden />
-                <span className={`${isActive ? "" : "hidden sm:inline"} truncate`}>{tab.label}</span>
+                <Icon className="size-5" aria-hidden />
+                <span>{tab.label}</span>
               </Link>
             </li>
           );

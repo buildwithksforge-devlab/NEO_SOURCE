@@ -1,0 +1,294 @@
+{
+  "scope": "Local JSX document/print/export surfaces; not a live acceptance record or proof that every possible generator exists",
+  "regenerate": "node scripts/inventory-document-surfaces.mjs",
+  "components": {
+    "DocumentPreview": 2,
+    "DocumentPrintButton": 19,
+    "FactExportButton": 3,
+    "FactSection": 3,
+    "FolioStatementDialog": 1,
+    "SalarySlipDialog": 1,
+    "SendToPrinterButton": 2
+  },
+  "surfaces": [
+    {
+      "key": "src/components/common/FactSection.tsx:65",
+      "file": "src/components/common/FactSection.tsx",
+      "line": 65,
+      "component": "FactExportButton",
+      "sourceHash": "f2edc495513ff17a4445d2ab75a9af242da51c397d3cbc764444710434a211b9",
+      "excerpt": "<FactExportButton scope={scope} scopeLabel={scopeLabel} paths={paths} enabled={enabled} title={title} />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/dashboard/DashboardFrame.tsx:393",
+      "file": "src/components/dashboard/DashboardFrame.tsx",
+      "line": 393,
+      "component": "FactExportButton",
+      "sourceHash": "86dda6a2f35a28833ad9a40cfc03468012057bf1e9f57af842dc35afdc1d985f",
+      "excerpt": "<FactExportButton\n              scope={factScope}\n              scopeLabel={spec.scopeHint}\n              enabled={Boolean(organizationId)}\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/hr/PayrollLedgerCard.tsx:216",
+      "file": "src/components/hr/PayrollLedgerCard.tsx",
+      "line": 216,
+      "component": "SalarySlipDialog",
+      "sourceHash": "5c39f082948d7f0eeee10341fe0be260a1cb041fd0989f1c34550d0fb534f460",
+      "excerpt": "<SalarySlipDialog\n            period={slip?.period ?? null}\n            employee={slip?.employee ?? null}\n            onOpenChange={(open) => (open ? null : setSlip(null))}\n          />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/hr/SalarySlipDialog.tsx:87",
+      "file": "src/components/hr/SalarySlipDialog.tsx",
+      "line": 87,
+      "component": "DocumentPreview",
+      "sourceHash": "0551a0439f965dace53f017bedda7e21f463ceb4b7b59cfb5b2f433e468d3ede",
+      "excerpt": "<DocumentPreview\n      documentType=\"Salary slip\"\n      numberLabel=\"Pay period\"\n      documentNumber={String(period[\"name\"] ?? \"Pay period\")}\n      meta={[\n        {\n          label: \"Period\",\n          value: `${shortDate(period[\"period_start\"])} → ${shortDate(period[\"period_end\"])}`,\n        },\n        { label: \"Pay frequency\", value: titleCase(employee.pay_frequency || \"—\") },\n        { label: \"Currency\", value: currency },\n        {\n          label: \"Posting\",\n          value: posted ? `Posted ${shortDate(period[\"posted_at\"])}` : \"Not yet posted\",\n        },\n      ]}\n      addressedTo={{\n        title: \"Paid to\",\n        lines: [\n          employee.full_name,\n          input?.[\"cost_cen",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/inventory/ApprovedReceivingPosting.tsx:120",
+      "file": "src/components/inventory/ApprovedReceivingPosting.tsx",
+      "line": 120,
+      "component": "DocumentPrintButton",
+      "sourceHash": "5d3aa7accae3d0fa188fd280e209986e0aef753ecccb4bf8eb63436660bd3a00",
+      "excerpt": "<DocumentPrintButton type=\"goods_receipt\" id={posted.grnId} label=\"Print GRN\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/inventory/ReceivingDocumentHistory.tsx:21",
+      "file": "src/components/inventory/ReceivingDocumentHistory.tsx",
+      "line": 21,
+      "component": "DocumentPrintButton",
+      "sourceHash": "1761dc491f7793f39d8c535f78ca42df1e9471b75d5cfb552d4ac65f83938f20",
+      "excerpt": "<DocumentPrintButton type=\"goods_receipt\" id={String(receipt['id'])} label=\"Open / reprint GRN\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/pms/FolioStatementDialog.tsx:65",
+      "file": "src/components/pms/FolioStatementDialog.tsx",
+      "line": 65,
+      "component": "DocumentPreview",
+      "sourceHash": "bec984e48f013b587306f0b2cc177b32afde79b1391760a21acd481d5603fda7",
+      "excerpt": "<DocumentPreview\n          documentType=\"Folio statement\"\n          documentNumber={String(f[\"folio_number\"] ?? \"\")}\n          meta={[\n            { label: \"Opened\", value: formatDateTime(f[\"opened_at\"] as string) || \"—\" },\n            { label: \"Closed\", value: formatDateTime(f[\"closed_at\"] as string) || \"Open\" },\n            { label: \"Status\", value: titleCase(String(f[\"status\"] ?? \"\")) },\n            { label: \"Currency\", value: currency },\n          ]}\n          addressedTo={{\n            title: \"Statement for\",\n            lines: [\n              account,\n              identity && identity.companyName !== \"—\" ? `Account ${identity.companyName}` : \"Individual account\",\n              identit",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/components/pms/FolioStatementDialog.tsx:152",
+      "file": "src/components/pms/FolioStatementDialog.tsx",
+      "line": 152,
+      "component": "DocumentPrintButton",
+      "sourceHash": "bec984e48f013b587306f0b2cc177b32afde79b1391760a21acd481d5603fda7",
+      "excerpt": "<DocumentPrintButton type=\"folio_statement\" id={folioId} label=\"Print statement\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.analytics.index.tsx:123",
+      "file": "src/routes/_shell.analytics.index.tsx",
+      "line": 123,
+      "component": "FactSection",
+      "sourceHash": "c7aa5c1451b73e231394373089773189803e87740419ceb2ccbe2b3a6a91c7a6",
+      "excerpt": "<FactSection\n          title=\"Canonical facts\"\n          description=\"The same scoped fact layer the dashboards and Finance read. Operational sales, forecast, collections and posted accounting revenue are separate facts and are never added together.\"\n          paths={SHARED_FACT_PATHS}\n          scope={{ branchId: scope.branchId, from: scope.from, to: scope.to }}\n          scopeLabel={scope.branchId ? \"Selected property\" : \"All authorised properties\"}\n        />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.analytics.index.tsx:130",
+      "file": "src/routes/_shell.analytics.index.tsx",
+      "line": 130,
+      "component": "FactSection",
+      "sourceHash": "c7aa5c1451b73e231394373089773189803e87740419ceb2ccbe2b3a6a91c7a6",
+      "excerpt": "<FactSection\n          title=\"Profit, payroll & stock turnover\"\n          description=\"Posted accounting revenue against posted cost of sales, payroll and operating expenses, with how quickly stock is being used. Only posted entries and approved payroll are counted.\"\n          paths={PROFITABILITY_FACT_PATHS}\n          scope={{ branchId: scope.branchId, from: scope.from, to: scope.to }}\n          scopeLabel={scope.branchId ? \"Selected property\" : \"All authorised properties\"}\n        />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.events.billing.tsx:141",
+      "file": "src/routes/_shell.events.billing.tsx",
+      "line": 141,
+      "component": "DocumentPrintButton",
+      "sourceHash": "0e6ecbe724cad0067ffb855b439cddb0b98fb00b2cb2c477005f45c1d46158a0",
+      "excerpt": "<DocumentPrintButton\n                        type=\"invoice\"\n                        id={invoiceByBooking[r.booking_id]!.id}\n                        label={`View / Print Invoice${\n                          invoiceByBooking[r.booking_id]!.invoice_number\n                            ? ` ${invoiceByBooking[r.booking_id]!.invoice_number}`\n                            : \"\"\n                        }`}\n                      />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.events.bookings.$id.tsx:156",
+      "file": "src/routes/_shell.events.bookings.$id.tsx",
+      "line": 156,
+      "component": "DocumentPrintButton",
+      "sourceHash": "ce7a3b65c23a1b1fa3bd9ed46e7af952e702130ee0ef8d9b82ac328a972f26cf",
+      "excerpt": "<DocumentPrintButton\n              type=\"beo\"\n              id={latestBeo ? String(latestBeo[\"id\"]) : null}\n              label=\"Print BEO\"\n              size=\"default\"\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.events.bookings.$id.tsx:834",
+      "file": "src/routes/_shell.events.bookings.$id.tsx",
+      "line": 834,
+      "component": "DocumentPrintButton",
+      "sourceHash": "ce7a3b65c23a1b1fa3bd9ed46e7af952e702130ee0ef8d9b82ac328a972f26cf",
+      "excerpt": "<DocumentPrintButton\n                    type=\"invoice\"\n                    id={eventInvoice.data.id}\n                    label=\"View / Print Invoice\"\n                  />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.finance.index.tsx:352",
+      "file": "src/routes/_shell.finance.index.tsx",
+      "line": 352,
+      "component": "FactSection",
+      "sourceHash": "712741ac2be1c6019a152b069b9add90278933b3a94c084c75b0101e53b8f2f0",
+      "excerpt": "<FactSection\n            title=\"Canonical facts\"\n            description=\"Identical to the figures on the dashboards and /analytics — one scoped fact layer, one period, one currency.\"\n            paths={SHARED_FACT_PATHS}\n            scope={factScope}\n            scopeLabel={factScope.branchId ? \"Selected property\" : \"All authorised properties\"}\n          />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.finance.receivables.tsx:289",
+      "file": "src/routes/_shell.finance.receivables.tsx",
+      "line": 289,
+      "component": "DocumentPrintButton",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
+      "excerpt": "<DocumentPrintButton\n                            type=\"invoice\"\n                            id={String(i[\"id\"])}\n                            label={fiscalAccepted ? \"Fiscal PDF\" : \"Invoice PDF\"}\n                          />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.finance.receivables.tsx:338",
+      "file": "src/routes/_shell.finance.receivables.tsx",
+      "line": 338,
+      "component": "DocumentPrintButton",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
+      "excerpt": "<DocumentPrintButton type=\"credit_note\" id={String(c[\"id\"])} label=\"Note PDF\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.finance.receivables.tsx:486",
+      "file": "src/routes/_shell.finance.receivables.tsx",
+      "line": 486,
+      "component": "DocumentPrintButton",
+      "sourceHash": "5b50077449717fb1a46c80d2c8e9f8d9d79b6a6a5f69e2fbe9f27fbb95ceb215",
+      "excerpt": "<DocumentPrintButton\n              type=\"invoice\"\n              id={String(inspected[\"id\"])}\n              label=\"Print invoice\"\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.hr.payslips.tsx:352",
+      "file": "src/routes/_shell.hr.payslips.tsx",
+      "line": 352,
+      "component": "DocumentPrintButton",
+      "sourceHash": "94976f899cf30998ad67b4cf37b8acd2d5d1bea0a39215404612ce190a8aa086",
+      "excerpt": "<DocumentPrintButton\n              type=\"payslip\"\n              id={payslip.record_id}\n              label=\"Print payslip\"\n              variant=\"outline\"\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.hr.scheduling.tsx:182",
+      "file": "src/routes/_shell.hr.scheduling.tsx",
+      "line": 182,
+      "component": "DocumentPrintButton",
+      "sourceHash": "3582d4172490f6b7055050e9d44922d8732aac9ebb14f08a81b772773d8237da",
+      "excerpt": "<DocumentPrintButton\n                              type=\"staff_schedule\"\n                              id={String(r[\"id\"])}\n                              label=\"Print schedule\"\n                            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.inventory.counts.tsx:363",
+      "file": "src/routes/_shell.inventory.counts.tsx",
+      "line": 363,
+      "component": "DocumentPrintButton",
+      "sourceHash": "d6ae05beac21d7231c436ed9570d2f43336eb44bd38adbf4225746a32f231d3b",
+      "excerpt": "<DocumentPrintButton type=\"stock_sheet\" id={id} label=\"Stock sheet\" />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.inventory.requisitions.tsx:317",
+      "file": "src/routes/_shell.inventory.requisitions.tsx",
+      "line": 317,
+      "component": "DocumentPrintButton",
+      "sourceHash": "09cd2b80456839d939edaf8c1d45e296c4f4f30f67b32478653ce255c217a641",
+      "excerpt": "<DocumentPrintButton\n                type=\"requisition\"\n                id={id}\n                label=\"Print requisition\"\n                variant=\"ghost\"\n              />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.lpos.$id.tsx:102",
+      "file": "src/routes/_shell.lpos.$id.tsx",
+      "line": 102,
+      "component": "DocumentPrintButton",
+      "sourceHash": "a56837dff66e20675e6bf3d7f67cfff85ba8f9e01d66a8e95a4271ecc944cca9",
+      "excerpt": "<DocumentPrintButton\n          type=\"purchase_order\"\n          id={order[\"id\"] ? String(order[\"id\"]) : null}\n          label=\"Print LPO\"\n          variant=\"secondary\"\n        />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.lpos.$id.tsx:282",
+      "file": "src/routes/_shell.lpos.$id.tsx",
+      "line": 282,
+      "component": "DocumentPrintButton",
+      "sourceHash": "a56837dff66e20675e6bf3d7f67cfff85ba8f9e01d66a8e95a4271ecc944cca9",
+      "excerpt": "<DocumentPrintButton\n                          type=\"goods_receipt\"\n                          id={String(g[\"id\"])}\n                          label=\"Print GRN\"\n                          variant=\"ghost\"\n                        />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.pms.folios.$id.tsx:192",
+      "file": "src/routes/_shell.pms.folios.$id.tsx",
+      "line": 192,
+      "component": "DocumentPrintButton",
+      "sourceHash": "f6db6fa6db301e7c2edcf358a84d61a8f87175e536959538e72b724dd4b1579c",
+      "excerpt": "<DocumentPrintButton\n              type=\"folio_statement\"\n              id={f ? String(f[\"id\"]) : null}\n              label=\"Print statement\"\n              size=\"default\"\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.pms.folios.index.tsx:183",
+      "file": "src/routes/_shell.pms.folios.index.tsx",
+      "line": 183,
+      "component": "FolioStatementDialog",
+      "sourceHash": "16f4f2d801fd418ad167910a18ae154fe64477e5ea266c2fc4ef5e12695b4aaf",
+      "excerpt": "<FolioStatementDialog\n        folioId={preview?.id ?? null}\n        folioNumber={preview?.number ?? null}\n        onOpenChange={(open) => (open ? undefined : setPreview(null))}\n      />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.pos.orders.$id.tsx:273",
+      "file": "src/routes/_shell.pos.orders.$id.tsx",
+      "line": 273,
+      "component": "DocumentPrintButton",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<DocumentPrintButton\n                type=\"pos_receipt\"\n                id={data.id}\n                label={fiscalAccepted ? \"Fiscal Receipt PDF\" : \"Receipt PDF\"}\n                size=\"default\"\n              />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.pos.orders.$id.tsx:307",
+      "file": "src/routes/_shell.pos.orders.$id.tsx",
+      "line": 307,
+      "component": "SendToPrinterButton",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<SendToPrinterButton\n                  type=\"pos_receipt\"\n                  id={data.id}\n                  documentNumber={data.order_number}\n                  role=\"restaurant\"\n                  branchId={data.branch_id}\n                  existingJobId={receiptPrintState.data.inProgressId}\n                  label={receiptPrintState.data.inProgressId ? \"Track receipt print\" : \"Send to receipt printer\"}\n                />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.pos.orders.$id.tsx:319",
+      "file": "src/routes/_shell.pos.orders.$id.tsx",
+      "line": 319,
+      "component": "SendToPrinterButton",
+      "sourceHash": "9ceca7ee1d53dc86c67a796bb93f97f9b1504939a0dca5a4cb303800c0ef1eb8",
+      "excerpt": "<SendToPrinterButton\n                  type=\"pos_receipt\"\n                  id={data.id}\n                  documentNumber={data.order_number}\n                  role=\"restaurant\"\n                  branchId={data.branch_id}\n                  existingJobId={receiptPrintState.data?.inProgressId ?? null}\n                  label={receiptPrintState.data?.inProgressId ? \"Track receipt print\" : \"Reprint receipt\"}\n                />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.procurement.reconciliation.tsx:477",
+      "file": "src/routes/_shell.procurement.reconciliation.tsx",
+      "line": 477,
+      "component": "DocumentPrintButton",
+      "sourceHash": "c3d5f99e72479025d34bdbdf7ef67aff3551a9ea73222a007eb50e2fc3c9777a",
+      "excerpt": "<DocumentPrintButton\n            type=\"goods_receipt\"\n            id={recentlyPosted.grnId}\n            label={`Download GRN - ${recentlyPosted.orderNumber}`}\n            variant=\"secondary\"\n          />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.reports.tsx:419",
+      "file": "src/routes/_shell.reports.tsx",
+      "line": 419,
+      "component": "FactExportButton",
+      "sourceHash": "19a673126982c43bd8e89e1de6720d198d8d373b6aaf79b55db646cf22e95713",
+      "excerpt": "<FactExportButton\n                scope={factScope}\n                scopeLabel={scopeLabel}\n                {...(section.paths.length ? { paths: section.paths } : {})}\n                title={section.title}\n              />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    },
+    {
+      "key": "src/routes/_shell.tasks.tsx:944",
+      "file": "src/routes/_shell.tasks.tsx",
+      "line": 944,
+      "component": "DocumentPrintButton",
+      "sourceHash": "3e829f8c8f945a145542420a6b30f614915bf6ff18107032c830e97253333219",
+      "excerpt": "<DocumentPrintButton\n              type=\"task_sheet\"\n              id={\n                profile?.department_id ??\n                null\n              }\n              label=\"Task sheet\"\n            />",
+      "acceptance": "OPEN: inspect deployed role-visible control and rendered output"
+    }
+  ]
+}

@@ -1,0 +1,2552 @@
+{
+  "updated": "2026-11-19",
+  "scope": "All existing/future organisations, departments, audience apps and cross-department workflows in the established system scope",
+  "overall_status": "OPEN",
+  "status_rule": "A milestone verifies only its stated scope. Every chain remains OPEN until applicable common checks and finish evidence pass. Historical statuses are preserved, not automatically recertified.",
+  "chains": [
+    {
+      "id": "WF01",
+      "priority": "P0",
+      "name": "Organisation, property and data isolation",
+      "roles": "Owner / administrator / scoped staff",
+      "flow": "Organisation setup → property configuration → role scope → property switch → reads/writes/documents/reports",
+      "finish": "Existing and new organisations work without fixed hotel IDs; foreign property/organisation access is denied in UI, RPC, storage and reports.",
+      "next": "Retain the 23 installed shared routines; verify actual staff property switching and hidden-record refusal.",
+      "dependencies": [],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-R06"
+      ]
+    },
+    {
+      "id": "WF02",
+      "priority": "P0",
+      "name": "Staff identity, Users, roles, PIN and devices",
+      "roles": "Administrator / supervisor / employee",
+      "flow": "Invite/create → approve/access → role assignment → sign-in/PIN/device pairing → recovery → suspend/revoke",
+      "finish": "The intended person has exactly their permitted scope; recovery email really arrives; privileged actions audit; revoked access stops working.",
+      "next": "Verify the supported privileged Users executor and role/audit parity; complete live recovery and paired-device checks.",
+      "dependencies": [
+        "WF01"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-B01",
+        "NEO-BKL-B02",
+        "NEO-BKL-B03",
+        "NEO-BKL-B04",
+        "NEO-BKL-B05",
+        "NEO-BKL-B06",
+        "NEO-BKL-B07",
+        "NEO-BKL-B08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-B09",
+        "NEO-BKL-B10",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-R09"
+      ]
+    },
+    {
+      "id": "WF03",
+      "priority": "P0",
+      "name": "Shared business configuration and pricing",
+      "roles": "Property administrator / Finance",
+      "flow": "Currency/timezone/business date → tax/service/discount/rate/meal policy → calculation → bill → settlement → journal/report",
+      "finish": "Configured components propagate once with documented inclusion/exclusion, rounding, units and dates; optional charges need no fixed-name assumptions.",
+      "next": "Inventory actual policies and verify inclusive tax, new charge components, exemptions and rate changes using saved examples.",
+      "dependencies": [
+        "WF01",
+        "WF02"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-R08",
+        "FIN-R01",
+        "FIN-R02",
+        "FIN-R03",
+        "FIN-R04",
+        "FIN-R05",
+        "FIN-R06",
+        "FIN-R07",
+        "FIN-R08"
+      ]
+    },
+    {
+      "id": "WF04",
+      "priority": "P1",
+      "name": "Purchase request through approved LPO",
+      "roles": "Department requester / procurement / approver",
+      "flow": "Need/requisition → RFQ → supplier quotation → comparison/selection → approval → numbered LPO → supplier dispatch",
+      "finish": "Approved purchase, supplier, quantities/prices, approvals and actual outbound delivery evidence form one retrievable chain.",
+      "next": "Complete real role handoffs and supplier communication; retain the original approved document and delivery reference.",
+      "dependencies": [
+        "WF03"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-G01",
+        "NEO-BKL-G02",
+        "NEO-BKL-G03",
+        "NEO-BKL-G04",
+        "NEO-BKL-G05",
+        "NEO-BKL-G06"
+      ]
+    },
+    {
+      "id": "WF05",
+      "priority": "P1",
+      "name": "Delivery, blind receiving and GRN",
+      "roles": "Receiver / independent reviewer / stock poster / Finance",
+      "flow": "Supplier delivery note/file → blind count → reconciliation → accepted/rejected/short → approval → GRN → stock/batch/cost → accrual",
+      "finish": "Only accepted quantities post; repeated/partial deliveries trace to original PO lines; GRN, lots, stock value and accrual agree; finance recovery does not repost stock.",
+      "next": "Verify installed guards and both authority paths; reconcile a real delivery and archive the supplier original.",
+      "dependencies": [
+        "WF04",
+        "WF07",
+        "WF08",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-G01",
+        "NEO-BKL-G02",
+        "NEO-BKL-G03",
+        "NEO-BKL-G04",
+        "NEO-BKL-G05",
+        "NEO-BKL-G06"
+      ]
+    },
+    {
+      "id": "WF06",
+      "priority": "P1",
+      "name": "Supplier invoice, payable and payment",
+      "roles": "AP clerk / Finance approver / payer",
+      "flow": "Supplier invoice → LPO/GRN/price/tax match → variance approval/rejection → payable/journal → schedule → release → settlement/remittance",
+      "finish": "Original purchase, accepted GRN, invoice, aging, payment and balanced journal agree; duplicate invoice/payment and incorrect journal reuse refuse.",
+      "next": "Verify AP dashboard/aging, approval and payment stages with source-linked journals and remittance output.",
+      "dependencies": [
+        "WF05",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-G01",
+        "NEO-BKL-G02",
+        "NEO-BKL-G03",
+        "NEO-BKL-G04",
+        "NEO-BKL-G05",
+        "NEO-BKL-G06"
+      ]
+    },
+    {
+      "id": "WF07",
+      "priority": "P1",
+      "name": "Stores, station mapping and transfers",
+      "roles": "Stores / department issuer / receiving department",
+      "flow": "Owned item/base unit → physical store → departmental/station mapping → requisition/approval → dispatch → in-transit → receipt/return/cancel",
+      "finish": "Actual source/destination and authority are correct; base quantities, lots, saved cost and in-transit valuation reconcile without invented mappings.",
+      "next": "Obtain explicit-station repair postcheck, resolve remaining actual store choices, then verify transfer handoff and reports.",
+      "dependencies": [
+        "WF03"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-C01",
+        "NEO-BKL-C02",
+        "NEO-BKL-C03",
+        "NEO-BKL-C04",
+        "NEO-BKL-C05",
+        "NEO-BKL-C06",
+        "NEO-BKL-C07",
+        "NEO-BKL-C09",
+        "NEO-BKL-G01",
+        "NEO-BKL-G02",
+        "NEO-BKL-G03",
+        "NEO-BKL-C08",
+        "NEO-BKL-G04",
+        "NEO-BKL-G05",
+        "NEO-BKL-G06"
+      ]
+    },
+    {
+      "id": "WF08",
+      "priority": "P1",
+      "name": "Stock counts, adjustments, lots and expiry",
+      "roles": "Counter / reviewer / stock controller",
+      "flow": "Physical count → variance → independent approval → adjustment → lot/expiry coverage → valuation/report",
+      "finish": "Signed movements and FEFO allocations reconcile to balances; expired/blocked-lot policy is explicit; no silent negative stock or historical cost rewrite.",
+      "next": "Resolve existing batch/cost discrepancies, expired-lot policy, configured conversions and report parity.",
+      "dependencies": [
+        "WF03",
+        "WF07"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-C01",
+        "NEO-BKL-C02",
+        "NEO-BKL-C03",
+        "NEO-BKL-C04",
+        "NEO-BKL-C05",
+        "NEO-BKL-C06",
+        "NEO-BKL-C07",
+        "NEO-BKL-C09",
+        "NEO-BKL-C08"
+      ]
+    },
+    {
+      "id": "WF09",
+      "priority": "P1",
+      "name": "Menu, recipes, production and consumption",
+      "roles": "Kitchen / Bar / Coffee / Pastry / stock controller",
+      "flow": "Owned stock/menu binding → manual/import draft → review/activation → units/yield/sub-recipes → produce/sell → consume → waste/return",
+      "finish": "One intended active version uses owned property stock/store; direct-sale and batch units/costs agree; actual deductions/returns happen once with source IDs.",
+      "next": "Confirm 21-recipe/20-menu cleanup; verify staff save/import/activation and real station depletion; resolve skipped consumption coverage.",
+      "dependencies": [
+        "WF07",
+        "WF08"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-C01",
+        "NEO-BKL-C02",
+        "NEO-BKL-C03",
+        "NEO-BKL-C04",
+        "NEO-BKL-C05",
+        "NEO-BKL-C06",
+        "NEO-BKL-C07",
+        "NEO-BKL-C09",
+        "NEO-BKL-C08"
+      ]
+    },
+    {
+      "id": "WF10",
+      "priority": "P1",
+      "name": "POS order and production handoff",
+      "roles": "Waiter / cashier / production station / supervisor",
+      "flow": "Table/channel order → item/modifiers → send → scoped station ticket/display → accept/prepare/ready → serve → approved void/return",
+      "finish": "Prices/options persist atomically; correct department receives each item; paid/pending-protected lines cannot drift; lost-response item retry cannot duplicate a sale.",
+      "next": "Verify all station channels, reconnect/handoffs, item-attempt identity and authentic recovery of the historical KES51 sale.",
+      "dependencies": [
+        "WF09"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-A01",
+        "NEO-BKL-A04",
+        "NEO-BKL-A07",
+        "NEO-BKL-A02",
+        "NEO-BKL-A03",
+        "NEO-BKL-A08",
+        "NEO-BKL-B01",
+        "NEO-BKL-B02",
+        "NEO-BKL-B03",
+        "NEO-BKL-B04",
+        "NEO-BKL-B05",
+        "NEO-BKL-B06",
+        "NEO-BKL-B07",
+        "NEO-BKL-B08",
+        "NEO-BKL-B09",
+        "NEO-BKL-B10",
+        "NEO-BKL-A06",
+        "NEO-BKL-A05",
+        "NEO-BKL-R04"
+      ]
+    },
+    {
+      "id": "WF11",
+      "priority": "P0",
+      "name": "POS collections and settlement",
+      "roles": "Cashier / cashier supervisor / Finance / provider",
+      "flow": "Amount due → cash/card/bank/M-Pesa/QR attempt → pending/confirmation/callback → receipt → allocations → journal → close/refund",
+      "finish": "Only verified receipts reduce debt once; split tenders, cash change, provider uncertainty, late callbacks and recovery retain the original attempt and source.",
+      "next": "Trace real existing attempts; verify installed start/dispatch and recovery contracts, partial tenders, pending card/QR and cashier close.",
+      "dependencies": [
+        "WF03",
+        "WF10",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-A01",
+        "NEO-BKL-A04",
+        "NEO-BKL-A07",
+        "NEO-BKL-A02",
+        "NEO-BKL-A03",
+        "NEO-BKL-A08",
+        "NEO-BKL-A06",
+        "NEO-BKL-A05",
+        "NEO-BKL-K02",
+        "NEO-BKL-K03",
+        "NEO-BKL-K04",
+        "NEO-BKL-K05",
+        "FIN-R01",
+        "FIN-R02",
+        "FIN-R03",
+        "FIN-R04",
+        "FIN-R05",
+        "FIN-R06",
+        "FIN-R07",
+        "FIN-R08",
+        "NEO-BKL-K01"
+      ]
+    },
+    {
+      "id": "WF12",
+      "priority": "P1",
+      "name": "Delivery, rider and remittance",
+      "roles": "Guest / dispatcher / production / rider / cashier",
+      "flow": "Guest order → quote/payment intent → preparation → rider assignment/dispatch → delivery/proof → cash handover/remittance → settlement/refund",
+      "finish": "Guest, dispatcher and rider see the same scoped order; delivery status does not invent payment; collected cash and remittance/journal agree.",
+      "next": "Verify guest-to-rider handoffs, failed/cancelled deliveries, collected-cash reconciliation and app recovery.",
+      "dependencies": [
+        "WF10",
+        "WF11",
+        "WF34"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-K02",
+        "NEO-BKL-K03",
+        "NEO-BKL-K04",
+        "NEO-BKL-K05",
+        "NEO-BKL-K01"
+      ]
+    },
+    {
+      "id": "WF13",
+      "priority": "P0",
+      "name": "Availability, quote, reservation and deposit",
+      "roles": "Reservations / guest / Finance",
+      "flow": "Dates/availability → rate/room/meal/tax quote → reservation/confirmation → deposit request → confirmed receipt → held liability/history",
+      "finish": "Nights, quote, deposit requirement and confirmed money reconcile; availability/property/date checks hold; pending money is separate and retry is once-only.",
+      "next": "Run corrected existing-ID money inspection and trace actual bookings, receipts, pending requests and quote differences.",
+      "dependencies": [
+        "WF03",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-D01",
+        "NEO-BKL-D02",
+        "NEO-BKL-D03",
+        "NEO-BKL-D04",
+        "NEO-BKL-D05",
+        "NEO-BKL-D09",
+        "NEO-BKL-D06",
+        "NEO-BKL-D07",
+        "NEO-BKL-D08"
+      ]
+    },
+    {
+      "id": "WF14",
+      "priority": "P0",
+      "name": "Arrival and deposit application",
+      "roles": "Front desk / cashier / supervisor",
+      "flow": "Eligible reservation → identity/deposit gate → room assignment → check-in → stay/folio → one deposit application → first accommodation charge",
+      "finish": "Reservation, stay, room and folio agree; held deposit transfers without a second receipt/revenue entry; first-night and original liability journals reconcile.",
+      "next": "Verify one real arrival and the original deposit/payment/application IDs, including waivers, denied arrival and rollback.",
+      "dependencies": [
+        "WF13"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-D01",
+        "NEO-BKL-D02",
+        "NEO-BKL-D03",
+        "NEO-BKL-D04",
+        "NEO-BKL-D05",
+        "NEO-BKL-D09",
+        "NEO-BKL-D06",
+        "NEO-BKL-D07",
+        "NEO-BKL-D08"
+      ]
+    },
+    {
+      "id": "WF15",
+      "priority": "P0",
+      "name": "In-house stay, room move and night audit",
+      "roles": "Front desk / night auditor / Finance",
+      "flow": "Assigned stay → room/type/rate changes → consecutive business-day accommodation → taxes/service → adjustments → audit close",
+      "finish": "No missing/duplicate nights or double quote charges; room moves preserve ownership, date/rate history and balances; audit refuses incomplete financial evidence.",
+      "next": "Verify installed nightly/pricing guards and actual consecutive days, adjustments, future-date refusal and business-date reporting.",
+      "dependencies": [
+        "WF14",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-J02",
+        "NEO-BKL-D01",
+        "NEO-BKL-D02",
+        "NEO-BKL-D03",
+        "NEO-BKL-J03",
+        "NEO-BKL-D04",
+        "NEO-BKL-D05",
+        "NEO-BKL-D09",
+        "NEO-BKL-J01",
+        "NEO-BKL-J05",
+        "NEO-BKL-J04",
+        "NEO-BKL-J06",
+        "NEO-BKL-J07",
+        "NEO-BKL-D06",
+        "NEO-BKL-D07",
+        "NEO-BKL-D08"
+      ]
+    },
+    {
+      "id": "WF16",
+      "priority": "P1",
+      "name": "Minibar, room service, laundry and guest services",
+      "roles": "Housekeeping / station staff / laundry / front desk",
+      "flow": "Service intake/consumption → correct current stay/room/folio/store → fulfilment/stock → charge → delivery/return → history/journal",
+      "finish": "Each operational source is billed once with correct quantities, tax/service, stock and durable historical identity; non-folio settlement is accounted for.",
+      "next": "Verify installed durable Minibar with staff, actual store designation, room-service transfers and laundry intake/processing/delivery/billing.",
+      "dependencies": [
+        "WF09",
+        "WF15",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-H01",
+        "NEO-BKL-H03",
+        "NEO-BKL-H02",
+        "NEO-BKL-H04",
+        "NEO-BKL-H05"
+      ]
+    },
+    {
+      "id": "WF17",
+      "priority": "P0",
+      "name": "Corporate/group credit and folio allocation",
+      "roles": "Front desk / corporate accounts / credit controller / Finance",
+      "flow": "Corporate/group authority → room/master/guest folios → routing/transfers → deposits/payments → allocation → invoice/credit account → collection",
+      "finish": "Every included folio and shared master reconciles separately; credit cannot hide another folio's debt; one receipt cannot be allocated twice.",
+      "next": "Complete shared-master/split-allocation behavior and actual corporate-credit settlement; retain installed multi-folio checkout.",
+      "dependencies": [
+        "WF13",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-D01",
+        "NEO-BKL-D02",
+        "NEO-BKL-D03",
+        "NEO-BKL-D04",
+        "NEO-BKL-D05",
+        "NEO-BKL-D09",
+        "NEO-BKL-D06",
+        "NEO-BKL-D07",
+        "NEO-BKL-D08"
+      ]
+    },
+    {
+      "id": "WF18",
+      "priority": "P0",
+      "name": "Departure, refunds and room release",
+      "roles": "Front desk / authorized override/refund approver / cashier",
+      "flow": "Review every folio → settle/refund/authorized credit departure → checkout → release assignments → vacant dirty → issued final history",
+      "finish": "Each debt/credit has evidence and authority; room transition is saved; maintenance holds survive; repeated checkout/refund cannot duplicate effects.",
+      "next": "Reconcile actual reservation/POS room-charge money, including prior POS payments, then verify departure and refund journal evidence.",
+      "dependencies": [
+        "WF15",
+        "WF16",
+        "WF17",
+        "WF23"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-D01",
+        "NEO-BKL-D02",
+        "NEO-BKL-D03",
+        "NEO-BKL-D04",
+        "NEO-BKL-D05",
+        "NEO-BKL-D09",
+        "NEO-BKL-D06",
+        "NEO-BKL-D07",
+        "NEO-BKL-D08"
+      ]
+    },
+    {
+      "id": "WF19",
+      "priority": "P1",
+      "name": "Housekeeping, inspection and sellability",
+      "roles": "Housekeeping attendant / inspector / front desk",
+      "flow": "Vacant dirty/in-house task → assign → clean → linen/amenity use → independent inspection → sellable availability",
+      "finish": "Dirty, uninspected or maintenance-held rooms cannot be sold early; room axes, tasks, consumption and front-desk availability agree.",
+      "next": "Verify real departure-to-clean/inspect handoff, blocked-room refusal and inspector permissions.",
+      "dependencies": [
+        "WF18",
+        "WF20"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-E01",
+        "NEO-BKL-E04",
+        "NEO-BKL-E02",
+        "NEO-BKL-E03"
+      ]
+    },
+    {
+      "id": "WF20",
+      "priority": "P1",
+      "name": "Assets, maintenance and room holds",
+      "roles": "Requester / engineer / independent verifier / stores",
+      "flow": "Fault/asset/PM → work order/assignment → hold → parts/work log → completion → independent verification → closure → dirty-room handback",
+      "finish": "Parts/cost/asset history persist; concurrent work orders retain holds; technician cannot self-release an unverified room; cleaning remains required.",
+      "next": "Run actual repair/hold/verification and competing-work-order regressions; verify asset history and departmental stock effects.",
+      "dependencies": [
+        "WF02",
+        "WF07"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-I01",
+        "NEO-BKL-I02",
+        "NEO-BKL-I03"
+      ]
+    },
+    {
+      "id": "WF21",
+      "priority": "P1",
+      "name": "Events and departmental fulfilment",
+      "roles": "Sales / event coordinator / production / Finance",
+      "flow": "Enquiry → quotation/version → contract/approval → deposit → event booking/BEO → departmental tasks/stock → delivery → final invoice/payment/cancel",
+      "finish": "Approved event version drives BEO, quantities, assignments and billing; existing invoices are reused; deposits and cancellation/refund obligations reconcile.",
+      "next": "Verify real event handoffs, approved versions, final billing and quotation/contract/confirmation/BEO retrieval.",
+      "dependencies": [
+        "WF09",
+        "WF11",
+        "WF23",
+        "WF24"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-F01",
+        "NEO-BKL-F02",
+        "NEO-BKL-F03",
+        "NEO-BKL-F04",
+        "NEO-BKL-F05",
+        "NEO-BKL-F06",
+        "NEO-BKL-F07"
+      ]
+    },
+    {
+      "id": "WF22",
+      "priority": "P1",
+      "name": "HR, attendance, scheduling and payroll",
+      "roles": "HR / employee / supervisor / payroll / Finance",
+      "flow": "Employee/contract → roster → attendance/leave/approval → payroll inputs → review/release → payout/journal → payslip/history",
+      "finish": "Authorized employee/period figures reconcile; release gates and payroll privacy hold; staff letters/contracts/schedules and payslips retain source identity.",
+      "next": "Inventory actual HR/payroll scenarios, verify approval/release/access and money/document parity with the existing configured payroll process.",
+      "dependencies": [
+        "WF02",
+        "WF23",
+        "WF24"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": []
+    },
+    {
+      "id": "WF23",
+      "priority": "P0",
+      "name": "Finance, receivables, cashbook and close",
+      "roles": "Finance clerk / approver / accountant / night auditor",
+      "flow": "Operational source → classification/recognition → journal → register/cashbook/AR/AP → reconciliation → shift/business-date/period close → reversal",
+      "finish": "Revenue, deposits, tax/service/tips, refunds, receivables and liabilities are classified correctly; posted journals balance and reconcile to original records/reports.",
+      "next": "Reconcile real operational source IDs and accounts; verify period/shift close, original journal identity and controlled reversals.",
+      "dependencies": [
+        "WF03"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-R01",
+        "NEO-BKL-J02",
+        "NEO-BKL-J03",
+        "NEO-BKL-J01",
+        "NEO-BKL-J05",
+        "NEO-BKL-J04",
+        "NEO-BKL-J06",
+        "NEO-BKL-J07",
+        "NEO-BKL-R07",
+        "FIN-R01",
+        "FIN-R02",
+        "FIN-R03",
+        "FIN-R04",
+        "FIN-R05",
+        "FIN-R06",
+        "FIN-R07",
+        "FIN-R08"
+      ]
+    },
+    {
+      "id": "WF24",
+      "priority": "P1",
+      "name": "Every required document and lifecycle",
+      "roles": "Issuing department / Finance / authorized recipient",
+      "flow": "Approved saved source/version → preview → numbered issue → PDF/download → print/send → retrieval after status change → reprint/supersession",
+      "finish": "Correct identity/logo/fields/currency/timezone/amounts and access; all required outputs exist or use an explicit uploaded original; reprint never creates a transaction.",
+      "next": "Complete the document register below, alternative/missing generators, long/multipage cases and actual source-to-render comparison.",
+      "dependencies": [
+        "WF03"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-F01",
+        "NEO-BKL-F02",
+        "NEO-BKL-F03",
+        "NEO-BKL-F04",
+        "NEO-BKL-F05",
+        "NEO-BKL-F06",
+        "NEO-BKL-F07",
+        "NEO-BKL-R08",
+        "FIN-R01",
+        "FIN-R02",
+        "FIN-R03",
+        "FIN-R04",
+        "FIN-R05",
+        "FIN-R06",
+        "FIN-R07",
+        "FIN-R08"
+      ]
+    },
+    {
+      "id": "WF25",
+      "priority": "P1",
+      "name": "Printer and production-output routing",
+      "roles": "Device administrator / cashier / production station",
+      "flow": "Document/ticket → browser/OS or paired agent → scoped printer/queue → transport acknowledgement → correct paper → offline/retry/reprint",
+      "finish": "User-reported working printer is preserved; each required receipt/A4/station output has correct paper/layout and backup behavior; acknowledgement is distinct from paper.",
+      "next": "Extend the successful physical test to required document types, Kitchen/Bar/Coffee/Pastry routes and safe uncertain-outcome/reprint handling.",
+      "dependencies": [
+        "WF10",
+        "WF24"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-R02",
+        "NEO-BKL-B01",
+        "NEO-BKL-B02",
+        "NEO-BKL-B03",
+        "NEO-BKL-B04",
+        "NEO-BKL-B05",
+        "NEO-BKL-B06",
+        "NEO-BKL-B07",
+        "NEO-BKL-B08",
+        "NEO-BKL-B09",
+        "NEO-BKL-B10"
+      ]
+    },
+    {
+      "id": "WF26",
+      "priority": "P1",
+      "name": "Approvals, tasks, communications and automation",
+      "roles": "Requester / delegated approver / assignee / communications owner",
+      "flow": "Business trigger → approval/task/rule → correct recipient/scope → provider dispatch → delivery/failure/retry → audit/history/escalation",
+      "finish": "No false sent/success labels, duplicate outbound action or unauthorized approval; correct record links, provider references and human handoff persist.",
+      "next": "Verify approved runtime paths, actual email/SMS/notification delivery, scheduling/retry/timezone and automation-to-business-action authority.",
+      "dependencies": [
+        "WF02",
+        "WF03"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-R09"
+      ]
+    },
+    {
+      "id": "WF27",
+      "priority": "P1",
+      "name": "Public guest discovery and self-service",
+      "roles": "Guest / reservations / front desk",
+      "flow": "Property listing → room/menu/event discovery → booking/order → deposit/payment → confirmation → stay requests/folio/documents → departure feedback",
+      "finish": "Guest sees correct property, quote and saved work across inner routes; private staff/customer data remains protected and failed/expired sessions recover.",
+      "next": "Walk the guest entry and inner flows on the latest build, including configured photography, real source links and mobile/back navigation.",
+      "dependencies": [
+        "WF12",
+        "WF13",
+        "WF16",
+        "WF34"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-M01",
+        "NEO-BKL-M02",
+        "NEO-BKL-M03",
+        "NEO-BKL-M04",
+        "NEO-BKL-M05"
+      ]
+    },
+    {
+      "id": "WF28",
+      "priority": "P1",
+      "name": "Security, visitors, incidents and handover",
+      "roles": "Security officer / supervisor / authorized operations staff",
+      "flow": "Visitor/vehicle/incident/lost-property intake → assignment/patrol/escalation → authorized closure/return → shift handover → audit/report",
+      "finish": "Identity/privacy and property limits hold; chain of custody, accountable handover and incident evidence remain linked after closure.",
+      "next": "Inventory and verify existing security workflows and their operations/task/stock handoffs under actual roles.",
+      "dependencies": [
+        "WF02",
+        "WF26"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": []
+    },
+    {
+      "id": "WF29",
+      "priority": "P1",
+      "name": "Reports, dashboards, analytics and AI answers",
+      "roles": "Management / department manager / Finance",
+      "flow": "Saved operational/financial source → scoped facts → period/filter/aggregation → dashboard/report/AI explanation → export → drill-back",
+      "finish": "Figures, definitions, currency/timezone and filters agree with source/ledger; AI output cites available records and does not fabricate completion.",
+      "next": "Reconcile financial and operational reports plus every management exporter; test denied scope, stale refresh and reproducible drill-back.",
+      "dependencies": [
+        "WF23",
+        "WF24"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-R01",
+        "NEO-BKL-J02",
+        "NEO-BKL-J03",
+        "NEO-BKL-J01",
+        "NEO-BKL-J05",
+        "NEO-BKL-J04",
+        "NEO-BKL-J06",
+        "NEO-BKL-J07",
+        "FIN-R01",
+        "FIN-R02",
+        "FIN-R03",
+        "FIN-R04",
+        "FIN-R05",
+        "FIN-R06",
+        "FIN-R07",
+        "FIN-R08"
+      ]
+    },
+    {
+      "id": "WF30",
+      "priority": "P0",
+      "name": "Release, runtime and operational reliability",
+      "roles": "Release operator / administrator / support",
+      "flow": "Reviewed source → installed-contract comparison → checks/build/artifact → deploy → live identity → monitoring/live refresh → backup/restore/recovery",
+      "finish": "App/SQL/agent versions are compatible; no unknown newer repair is overwritten; secrets stay private; real runtime, reconnect, performance and recovery are evidenced.",
+      "next": "Retain the verified 19 November preview/SQL milestone; finish original Horizon publication parity, live runtime gaps and rollback/recovery acceptance.",
+      "dependencies": [],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-R05"
+      ]
+    },
+    {
+      "id": "WF31",
+      "priority": "P2",
+      "name": "CRM, sales, marketing and loyalty",
+      "roles": "Sales / marketing / customer-service staff",
+      "flow": "Customer/lead identity → consent/preferences → enquiry/opportunity → offer/campaign/loyalty → booking/sale → delivery/outcome → account history",
+      "finish": "Deduplicated scoped identity links the actual booking/sale; consent, eligibility, redemptions and provider outcomes persist without fabricated sends.",
+      "next": "Inventory configured CRM/loyalty/campaign paths and verify real source linkage, permissions, opt-out and outcome reporting.",
+      "dependencies": [
+        "WF26",
+        "WF29"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": []
+    },
+    {
+      "id": "WF32",
+      "priority": "P2",
+      "name": "Transport, fleet and operational handoffs",
+      "roles": "Dispatcher / driver / asset custodian / Finance",
+      "flow": "Transport request → vehicle/driver availability → approval/assignment → trip/service/expenses → completion/handover → cost/asset/report",
+      "finish": "Where configured, assignments, movement, expenses and asset history agree; unauthorized/double allocation and unsupported actions are explicit.",
+      "next": "Inventory implemented transport/fleet routes and required hotel use cases; repair or explicitly account for missing workflow steps.",
+      "dependencies": [
+        "WF20",
+        "WF23",
+        "WF26"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": []
+    },
+    {
+      "id": "WF33",
+      "priority": "P1",
+      "name": "Supplier/partner account and external handoffs",
+      "roles": "Supplier/partner / procurement / account owner",
+      "flow": "Invitation/access → scoped catalogue/quote/document → order/approval → fulfilment evidence → invoice/account/payment → support/history",
+      "finish": "External users see only authorized owned records; supplier originals, acknowledgements and account balances connect to the internal purchase/finance chain.",
+      "next": "Walk existing partner/supplier routes and actual inbound/outbound handoffs; distinguish manual record keeping from delivered communication.",
+      "dependencies": [
+        "WF04",
+        "WF06",
+        "WF26",
+        "WF34"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": []
+    },
+    {
+      "id": "WF34",
+      "priority": "P1",
+      "name": "All audience apps, displays and presentation",
+      "roles": "Guest / supplier / rider / employee / display operator",
+      "flow": "Correct audience entry → sign-in/device/PWA → inner routes/actions → handoff/deep-link → loading/error/empty/offline → back/re-entry/session recovery",
+      "finish": "Guest, partner, rider, staff and displays finish their intended tasks on mobile/desktop; navigation, accessibility, contrast and OS handoffs are coherent.",
+      "next": "Inventory all audience routes and visible actions, then verify functioning inner flows, device identity, public-data exposure and measured performance.",
+      "dependencies": [
+        "WF01",
+        "WF02",
+        "WF30"
+      ],
+      "status": "OPEN",
+      "evidence": [],
+      "legacy_issue_ids": [
+        "NEO-BKL-L08",
+        "NEO-BKL-B01",
+        "NEO-BKL-B02",
+        "NEO-BKL-B03",
+        "NEO-BKL-B04",
+        "NEO-BKL-B05",
+        "NEO-BKL-B06",
+        "NEO-BKL-B07",
+        "NEO-BKL-B08",
+        "NEO-BKL-L06",
+        "NEO-BKL-L07",
+        "NEO-BKL-B09",
+        "NEO-BKL-B10",
+        "NEO-BKL-L01",
+        "NEO-BKL-L02",
+        "NEO-BKL-L03",
+        "NEO-BKL-L04",
+        "NEO-BKL-L05",
+        "NEO-BKL-L09",
+        "NEO-BKL-L10",
+        "NEO-BKL-L11",
+        "NEO-BKL-M01",
+        "NEO-BKL-M02",
+        "NEO-BKL-M03",
+        "NEO-BKL-M04",
+        "NEO-BKL-M05",
+        "NEO-BKL-R03",
+        "NEO-BKL-R04"
+      ]
+    }
+  ],
+  "execution_task_ledger": {
+    "updated": "2026-11-19",
+    "active_task": "WF11-T01",
+    "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
+    "tasks": [
+      {
+        "id": "WF11-T01",
+        "chains": [
+          "WF11",
+          "WF18",
+          "WF23"
+        ],
+        "title": "Protect unpaid POS-to-room transfers and prevent subsequent POS collection",
+        "status": "IN_PROGRESS",
+        "confirmed_problem": "Reviewed room-transfer source posts the full bill despite prior POS money, replays by key without proving the requested destination/source, and the terminal still offers POS collection after transfer.",
+        "finish_checks": [
+          "An unpaid sent/served bill posts exactly one original-source folio charge with inclusive tax/service/discount components.",
+          "Prior or pending money, routed cash, provider success/uncertainty and active receipt review stop an unallocated transfer.",
+          "Retries match original order, folio, property, currency, components and valid saved line; wrong destination/key/source refuses.",
+          "New POS receipts, late confirmation and routed cash cannot collect the transferred debt again; non-monetary evidence remains recordable.",
+          "Folio/stay ownership and status are checked; all effects roll back on downstream failure; original function owner/grants remain.",
+          "Terminal displays POS collection separately from transferred debt and refreshes Finance/folio views. Tests, TypeScript, build and smoke pass."
+        ],
+        "local_evidence": [
+          "Initial actual-engine and pure-state run: 42 tests passed in 2 files"
+        ],
+        "installation": "NOT_INSTALLED; candidate guards unknown installed definitions; read-only preflight required",
+        "live_acceptance": "OPEN",
+        "limits": [
+          "Partial-payment allocation and bills with tips/delivery fees require a separately reconciled allocation workflow; this task refuses them instead of guessing.",
+          "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."
+        ]
+      },
+      {
+        "id": "WF13-T01",
+        "chains": [
+          "WF13",
+          "WF14",
+          "WF15",
+          "WF17",
+          "WF18"
+        ],
+        "title": "Reconcile existing reservation money by saved IDs",
+        "status": "AWAITING_LIVE_RESULTS",
+        "next_action": "Review the corrected RESERVATION-MONEY-INSPECTION.sql JSON and trace each reported source/application/allocation/journal ID. Do not invent or overwrite balances.",
+        "local_evidence": [
+          "Inspection corrected for absent reservations.currency; 9 PostgreSQL checks passed"
+        ],
+        "live_acceptance": "OPEN"
+      },
+      {
+        "id": "WF07-T01",
+        "chains": [
+          "WF07",
+          "WF09"
+        ],
+        "title": "Reconcile explicit existing station/store links and actual remaining configuration",
+        "status": "AWAITING_LIVE_RESULTS",
+        "next_action": "Review explicit-link repair postcheck, preserve valid canonical mappings, resolve ambiguous or missing physical stores using actual department ownership; confirm depletion.",
+        "live_acceptance": "OPEN"
+      },
+      {
+        "id": "WF10-T01",
+        "chains": [
+          "WF10"
+        ],
+        "title": "Stable item-selection identity after an uncertain successful insert",
+        "status": "QUEUED",
+        "next_action": "Bind one durable item intent to the atomic item/modifier write; recover the saved item after a lost response without creating a duplicate. Retain paid-bill protection."
+      }
+    ]
+  },
+  "common_acceptance_checks": [
+    "Record lineage: trigger and every saved source/destination ID, organization/property, actor and status transition.",
+    "Money/units/dates: configured pricing and components, inclusive/exclusive tax, discounts, service, deposits, pending money, rounding, currency, base units and business dates.",
+    "Downstream effects: stock/lot/value, room/task/asset state, operational registers and balanced source-linked journals; mark a genuinely inapplicable effect N/A with a reason.",
+    "Authority/isolation: real requester/approver/operator roles, organization/property/department/station boundaries and explicit denied cases.",
+    "Failure/retry: validation, partial failure/rollback, duplicate clicks, concurrent actions, lost responses, callbacks, reconnect and replay retain the original attempt.",
+    "Corrections/history: reject, cancel, void, transfer, return, refund, reversal and supersession follow policy and retain original records/audit.",
+    "Outputs: relevant preview/PDF/download/send/print/reprint/retrieval and physical/provider proof; sending/queuing/transport/paper are distinct states.",
+    "Installed/deployed acceptance: installed routine/permissions, app/agent build, actual role/browser/device, expected versus observed result and open exceptions."
+  ],
+  "evidence_fields": [
+    "chain_id",
+    "step",
+    "case_or_issue_id",
+    "source_and_linked_record_ids",
+    "organisation_property_department_station",
+    "actor_and_role",
+    "source_commit_and_app_agent_build",
+    "installed_routine_hash_and_grants",
+    "expected_result",
+    "observed_result",
+    "before_after_money_stock_room_state",
+    "journal_and_document_provider_references",
+    "retry_failure_denial_evidence",
+    "verification_time",
+    "status_and_remaining_gap"
+  ],
+  "required_document_register": [
+    "POS/customer receipt and corrected/reprint copy",
+    "Customer invoice, credit/refund document and account statement",
+    "Reservation/booking confirmation and final guest folio",
+    "Corporate/group invoice, statement and routing evidence",
+    "RFQ/quotation, approved LPO and supplier dispatch evidence",
+    "Supplier original delivery note/attachment, blind count/reconciliation record and posted GRN",
+    "Supplier invoice/matching/variance decision, statement and remittance advice",
+    "Requisition, transfer/dispatch/receipt/return, count/adjustment/stock sheets",
+    "Recipe/version/batch/production/waste/return and station preparation tickets",
+    "Event quotation, contract/signed original, confirmation, BEO and final bill",
+    "Employment/HR letters/contracts, authorized staff records, roster and released payslip",
+    "Laundry/service/maintenance/task sheets and handover records",
+    "Every management/Finance/department report exporter and filtered export"
+  ],
+  "verified_milestones": [
+    {
+      "id": "M01",
+      "state": "INSTALLED_VERIFIED",
+      "scope": "23 shared workflow routines across the returned 28-organisation inspection; preserve 20 shared and 3 reviewed later definitions",
+      "source": "ACTIVE-EXECUTION-QUEUE.md: verified system-wide checkpoint"
+    },
+    {
+      "id": "M02",
+      "state": "INSTALLED_VERIFIED",
+      "scope": "Atomic recipe save/approval/history, authenticated execution allowed and anonymous denied; actual staff full-chain acceptance remains open",
+      "source": "ACTIVE-EXECUTION-QUEUE.md: recipe installation evidence"
+    },
+    {
+      "id": "M03",
+      "state": "INSTALLED_VERIFIED",
+      "scope": "19 November shared checkout and durable Minibar installation, including retry storage and guarded staff execution",
+      "source": "ACTIVE-EXECUTION-QUEUE.md: verified deployment checkpoint, 19 November"
+    },
+    {
+      "id": "M04",
+      "state": "DEPLOYED_VERIFIED",
+      "scope": "neo-preview build 25f97e90e69f9ae0; deployment/version evidence recorded; original Horizon publication separately unverified",
+      "source": "ACTIVE-EXECUTION-QUEUE.md: verified deployment checkpoint, 19 November"
+    },
+    {
+      "id": "M05",
+      "state": "USER_REPORTED_PHYSICAL_PASS",
+      "scope": "Kelvin's successful physical printer test; preserve that setup; other document/station layouts remain open",
+      "source": "ACTIVE-EXECUTION-QUEUE.md: verified deployment checkpoint, 19 November"
+    }
+  ],
+  "legacy_issue_mapping": [
+    {
+      "id": "NEO-BKL-R01",
+      "chain_ids": [
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance",
+      "historical_status": "POS/folio installation and live figures verified; other streams still open",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve verified POS/folio reporting; separately reconcile events, collections/deposits and other remaining streams.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R02",
+      "chain_ids": [
+        "WF25"
+      ],
+      "historical_department": "Printing",
+      "historical_status": "DNS-SD and token-free local discovery launcher repaired; hosted agent deployment pending",
+      "historical_closed": "False",
+      "historical_next_action": "Update/run the paired property agent and confirm discovery through the hosted configuration screen.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L08",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Discovery source repaired/tested; pairing and paper proof open",
+      "historical_closed": "False",
+      "historical_next_action": "Pair/run the agent, confirm compatible device, then labelled physical receipt/ticket and safe reprint.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A01",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Order-property till preview repaired locally; full till/shift workflow still open",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A04",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "historical_closed": "False",
+      "historical_next_action": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A07",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J02",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "historical_closed": "False",
+      "historical_next_action": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A02",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Prepaid terminal-service closure engine repaired and installation verified; live workflow pending",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve installed engine; verify normal terminal-service-to-close flow under intended roles with no duplicate payment/stock/journal.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A03",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Prepaid closure subfix installed; full payment/service/closure handoff still needs proof",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve installed engine; verify normal terminal-service-to-close flow under intended roles with no duplicate payment/stock/journal.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A08",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B01",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Display/mapping client subfix tested locally. Continue remaining server department/category ticket routing and configuration-driven station setup; verify ordinary station-role execution after deployment. Do not merge stations, reassign staff or claim PIN setup complete from display tests.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B02",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Display/mapping client subfix tested locally. Continue remaining server department/category ticket routing and configuration-driven station setup; verify ordinary station-role execution after deployment. Do not merge stations, reassign staff or claim PIN setup complete from display tests.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B03",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Display/mapping client subfix tested locally. Continue remaining server department/category ticket routing and configuration-driven station setup; verify ordinary station-role execution after deployment. Do not merge stations, reassign staff or claim PIN setup complete from display tests.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B04",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Display/mapping client subfix tested locally. Continue remaining server department/category ticket routing and configuration-driven station setup; verify ordinary station-role execution after deployment. Do not merge stations, reassign staff or claim PIN setup complete from display tests.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B05",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Code subfixes tested and deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Retest new-station routing, PIN authentication and actual production handoffs; classification/cache coverage does not certify the entire station lifecycle.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B06",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B07",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B08",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L06",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L07",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Payment UI authority aligned locally; broader staff role/permission validation remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Deploy the local UI changes and verify actual property-till/allowed-denied authority behavior; complete broader acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C01",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C02",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C03",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C04",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C05",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C06",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C07",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C09",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B09",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-B10",
+      "chain_ids": [
+        "WF02",
+        "WF10",
+        "WF25",
+        "WF34"
+      ],
+      "historical_department": "Production",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A06",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Guarded SQL 93 is a tested local candidate; SQL 94 is a code-only postcheck. Confirm deployed definition compatibility before installation. Actual dependency integration, physical stock and complete lifecycle acceptance remain separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D01",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Currency/register/retry repairs deployed; full reservation balance and confirmation semantics remain under repair",
+      "historical_closed": "False",
+      "historical_next_action": "Repair minimum-deposit/full-booking status distinction and test actual balances, allocations, partial/split tenders, pending confirmation and refunds. Review historical conflicts from source evidence; do not recollect automatically.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D02",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D03",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J03",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Currency/register/retry repairs deployed; full reservation balance and confirmation semantics remain under repair",
+      "historical_closed": "False",
+      "historical_next_action": "Repair minimum-deposit/full-booking status distinction and test actual balances, allocations, partial/split tenders, pending confirmation and refunds. Review historical conflicts from source evidence; do not recollect automatically.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D04",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Source repair exists; affected live scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D05",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-E01",
+      "chain_ids": [
+        "WF19"
+      ],
+      "historical_department": "Housekeeping",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-E04",
+      "chain_ids": [
+        "WF19"
+      ],
+      "historical_department": "Housekeeping",
+      "historical_status": "Source repair exists; affected live scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-E02",
+      "chain_ids": [
+        "WF19"
+      ],
+      "historical_department": "Housekeeping",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-E03",
+      "chain_ids": [
+        "WF19"
+      ],
+      "historical_department": "Housekeeping",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D09",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-H01",
+      "chain_ids": [
+        "WF16"
+      ],
+      "historical_department": "Laundry / Minibar",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-H03",
+      "chain_ids": [
+        "WF16"
+      ],
+      "historical_department": "Laundry / Minibar",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-H02",
+      "chain_ids": [
+        "WF16"
+      ],
+      "historical_department": "Laundry / Minibar",
+      "historical_status": "Batch 22 code installed and web deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Complete missing fresh laundry intake RPC and test intake through handover.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-H04",
+      "chain_ids": [
+        "WF16"
+      ],
+      "historical_department": "Laundry / Minibar",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-H05",
+      "chain_ids": [
+        "WF16"
+      ],
+      "historical_department": "Laundry / Minibar",
+      "historical_status": "Batch 22 code installed and web deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Complete non-folio settlement and detergent/stock policy integration; retain folio journal evidence.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-I01",
+      "chain_ids": [
+        "WF20"
+      ],
+      "historical_department": "Engineering",
+      "historical_status": "Source repair exists; affected live scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Confirm deployed parity, then execute the existing scenario regression under the intended role.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-I02",
+      "chain_ids": [
+        "WF20"
+      ],
+      "historical_department": "Engineering",
+      "historical_status": "Source repair exists; affected live scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Confirm deployed parity, then execute the existing scenario regression under the intended role.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-I03",
+      "chain_ids": [
+        "WF20"
+      ],
+      "historical_department": "Engineering",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G01",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G02",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G03",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-C08",
+      "chain_ids": [
+        "WF07",
+        "WF08",
+        "WF09"
+      ],
+      "historical_department": "Inventory",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G04",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G05",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-G06",
+      "chain_ids": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF07"
+      ],
+      "historical_department": "Procurement / Stores",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-A05",
+      "chain_ids": [
+        "WF10",
+        "WF11"
+      ],
+      "historical_department": "Restaurant / Cashier",
+      "historical_status": "Three metadata links and catering journal recovered; wider scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Source candidate SQL 95 is tested; SQL 96 verifies code only. Review deployed definition compatibility before any controlled installation. No blanket historical retry; complete source/payment/journal acceptance remains separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J01",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "November observed exceptions cleared; other periods and full finance still open",
+      "historical_closed": "False",
+      "historical_next_action": "Source candidate SQL 95 is tested; SQL 96 verifies code only. Review deployed definition compatibility before any controlled installation. No blanket historical retry; complete source/payment/journal acceptance remains separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J05",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Source candidate SQL 95 is tested; SQL 96 verifies code only. Review deployed definition compatibility before any controlled installation. No blanket historical retry; complete source/payment/journal acceptance remains separate.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J04",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J06",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-J07",
+      "chain_ids": [
+        "WF15",
+        "WF23",
+        "WF29"
+      ],
+      "historical_department": "Finance / Night audit",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D06",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D07",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-D08",
+      "chain_ids": [
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18"
+      ],
+      "historical_department": "Front Office",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F01",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Confirm source parity at deployment, then check the specific repaired outcome. Source proof is in batch 4; broader workflows remain separately tracked.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F02",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve batch 4 outcome-validation fixes; resolve the remaining root cause described in the batch evidence before full acceptance.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F03",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve batch 4 outcome-validation fixes; resolve the remaining root cause described in the batch evidence before full acceptance.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F04",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F05",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve batch 4 outcome-validation fixes; resolve the remaining root cause described in the batch evidence before full acceptance.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F06",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-F07",
+      "chain_ids": [
+        "WF21",
+        "WF24"
+      ],
+      "historical_department": "Events",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve batch 4 outcome-validation fixes; resolve the remaining root cause described in the batch evidence before full acceptance.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-K02",
+      "chain_ids": [
+        "WF11",
+        "WF12"
+      ],
+      "historical_department": "Delivery / Payments",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-K03",
+      "chain_ids": [
+        "WF11",
+        "WF12"
+      ],
+      "historical_department": "Delivery / Payments",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-K04",
+      "chain_ids": [
+        "WF11",
+        "WF12"
+      ],
+      "historical_department": "Delivery / Payments",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-K05",
+      "chain_ids": [
+        "WF11",
+        "WF12"
+      ],
+      "historical_department": "Delivery / Payments",
+      "historical_status": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "historical_closed": "False",
+      "historical_next_action": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L01",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Source repair exists; affected live scenario awaits regression",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L02",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L03",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "New roster assignment uses property timezone and correct overnight end date; deployment/regression pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L04",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L05",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Known manual task creation paths fixed, tested and deployed; role/property workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Retest creation from all six surfaces with permitted staff; verify actual assignment guard and worker inbox handoff, including denied cross-property/department assignments.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L09",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Code subfixes tested and deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Retest actual staff dashboard under the reported role/property and session transitions; source boundary tests do not establish the cause of every intermittent failure.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L10",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Code subfixes tested and deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Deploy and test configured provider evidence with authorised real accounts; no email, SMS, payment or genuine provider certification was performed by the synthetic tests.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-L11",
+      "chain_ids": [
+        "WF01",
+        "WF02",
+        "WF03",
+        "WF26",
+        "WF30",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Batch 22 code installed and web deployed; broader workflow acceptance remains open",
+      "historical_closed": "False",
+      "historical_next_action": "Complete remaining readiness workflows, physical devices and provider evidence before go-live certification.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-M01",
+      "chain_ids": [
+        "WF27",
+        "WF34"
+      ],
+      "historical_department": "Guest experience",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-M02",
+      "chain_ids": [
+        "WF27",
+        "WF34"
+      ],
+      "historical_department": "Guest experience",
+      "historical_status": "Exact two confirmed QA catalog records unpublished and disabled; all three anonymous public menu channels verified clear",
+      "historical_closed": "True",
+      "historical_next_action": "Preserve regression: QA publication requires explicit test isolation; do not re-publish these two records accidentally.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-M03",
+      "chain_ids": [
+        "WF27",
+        "WF34"
+      ],
+      "historical_department": "Guest experience",
+      "historical_status": "Reported issue — current reproduction pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-M04",
+      "chain_ids": [
+        "WF27",
+        "WF34"
+      ],
+      "historical_department": "Guest experience",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-M05",
+      "chain_ids": [
+        "WF27",
+        "WF34"
+      ],
+      "historical_department": "Guest experience",
+      "historical_status": "Open verification gate",
+      "historical_closed": "False",
+      "historical_next_action": "Run the documented role-correct workflow within a confirmed safe test boundary; capture downstream proof.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R03",
+      "chain_ids": [
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Source fixes; real-device/native release evidence pending",
+      "historical_closed": "False",
+      "historical_next_action": "Confirm deployed parity, then execute the existing scenario regression under the intended role.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R04",
+      "chain_ids": [
+        "WF10",
+        "WF34"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Source work exists; station/session end-to-end retest pending",
+      "historical_closed": "False",
+      "historical_next_action": "Run the affected original scenario on the deployed build under its real role/property, checking saved downstream evidence and denied access.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R05",
+      "chain_ids": [
+        "WF30"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Partial source audit completed; remaining action inventory open",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R06",
+      "chain_ids": [
+        "WF01"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Read-only evidence/access gate open",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R07",
+      "chain_ids": [
+        "WF23"
+      ],
+      "historical_department": "Finance",
+      "historical_status": "Review required; do not rewrite posted history",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R08",
+      "chain_ids": [
+        "WF03",
+        "WF24"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Investigate identity mapping; no leak established",
+      "historical_closed": "False",
+      "historical_next_action": "Preserve batch 4 outcome-validation fixes; resolve the remaining root cause described in the batch evidence before full acceptance.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-R09",
+      "chain_ids": [
+        "WF02",
+        "WF26"
+      ],
+      "historical_department": "Administration",
+      "historical_status": "Configuration verification and delivery proof pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R01",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R02",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R03",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R04",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Cash identity/tender database repairs installed; payment interface deployed; full fresh workflow acceptance open",
+      "historical_closed": "False",
+      "historical_next_action": "Verify fresh split cash receipt/change and partly-paid Open visibility. Continue receipt layout, mixed-tender accounting and register/deposit evidence fixes.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R05",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R06",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R07",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "FIN-R08",
+      "chain_ids": [
+        "WF03",
+        "WF11",
+        "WF23",
+        "WF24",
+        "WF29"
+      ],
+      "historical_department": "Finance / Selling departments",
+      "historical_status": "Existing requirement retained; verification/development pending",
+      "historical_closed": "False",
+      "historical_next_action": "Inspect/reproduce the current scenario, link existing repairs, implement the remaining gap and verify acceptance criteria.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    },
+    {
+      "id": "NEO-BKL-K01",
+      "chain_ids": [
+        "WF11",
+        "WF12"
+      ],
+      "historical_department": "Delivery / Payments",
+      "historical_status": "Specific missing-function defect repaired and verified; preserve regression gate",
+      "historical_closed": "True",
+      "historical_next_action": "Preserve the verified queue-read regression; full merchant workflow remains separately open.",
+      "source": "NEO-106-EXECUTION-QUEUE-2026-11-07.csv"
+    }
+  ],
+  "coverage": {
+    "workflow_chains": 34,
+    "historical_issues": 106,
+    "mapped_historical_issues": 106,
+    "unmapped_historical_issues": 0
+  },
+  "execution_batches": [
+    {
+      "id": "B01",
+      "work": "Preserve deployed/installed milestones; collect corrected reservation inspection and explicit station-store repair results",
+      "chains": [
+        "WF01",
+        "WF07",
+        "WF13",
+        "WF18",
+        "WF30"
+      ]
+    },
+    {
+      "id": "B02",
+      "work": "Resolve real money discrepancies and partial-payment room transfers, deposit/nightly/credit/refund evidence",
+      "chains": [
+        "WF03",
+        "WF11",
+        "WF13",
+        "WF14",
+        "WF15",
+        "WF17",
+        "WF18",
+        "WF23"
+      ]
+    },
+    {
+      "id": "B03",
+      "work": "Resolve physical store choices, historic ownership and recipe/import/consumption chains",
+      "chains": [
+        "WF07",
+        "WF08",
+        "WF09",
+        "WF10",
+        "WF16"
+      ]
+    },
+    {
+      "id": "B04",
+      "work": "Close supplier purchase/receiving/AP/communication/document evidence",
+      "chains": [
+        "WF04",
+        "WF05",
+        "WF06",
+        "WF24",
+        "WF26",
+        "WF33"
+      ]
+    },
+    {
+      "id": "B05",
+      "work": "Complete guest, delivery, events, housekeeping/maintenance and HR/operational handoffs",
+      "chains": [
+        "WF12",
+        "WF19",
+        "WF20",
+        "WF21",
+        "WF22",
+        "WF27",
+        "WF28",
+        "WF31",
+        "WF32"
+      ]
+    },
+    {
+      "id": "B06",
+      "work": "Complete Users/provider acceptance, all documents/station prints, apps/reports and final release/recovery evidence",
+      "chains": [
+        "WF02",
+        "WF24",
+        "WF25",
+        "WF26",
+        "WF29",
+        "WF30",
+        "WF34"
+      ]
+    }
+  ]
+}

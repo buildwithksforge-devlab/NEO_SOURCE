@@ -7,22 +7,26 @@
  * has not configured says so instead of showing an example.
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { canonicalLink, canonicalUrl, robotsDirective } from "@/lib/route-visibility";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { BedDouble, Bike, Heart, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { BedDouble, Bike, ChevronRight, Heart, Search, Shirt, Sparkles, UtensilsCrossed } from "lucide-react";
 import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestImage } from "@/components/public/GuestImage";
 import { GuestRowsSkeleton } from "@/components/public/GuestSkeleton";
+import { Input } from "@/components/ui/input";
 import { GUEST_CARD_WIDTHS } from "@/lib/responsive-image";
 import { brandFallback, buttonRadius } from "@/lib/public-apps";
-import { money, usePublicMenu } from "@/lib/public-delivery";
+import { money, usePublicMenu, usePublishedDeliveryForGuest } from "@/lib/public-delivery";
 import { useGuestScreenView } from "@/lib/guest-app";
 import { useCustomerSession } from "@/lib/public-session";
-import { useGuestFavourites, useToggleFavourite, useTransportProducts } from "@/lib/guest-ordering";
+import { useGuestActiveStay, useGuestFavourites, useToggleFavourite, useTransportProducts } from "@/lib/guest-ordering";
 import { useGuestProfile } from "@/lib/guest-app";
 import { useLaundryOffering } from "@/lib/guest-laundry";
 import { nightsBetween, useRoomOffers } from "@/lib/guest-booking";
+import { fetchPublicPropertyRooms } from "@/lib/front-door";
+import { publishedNightlyRate } from "@/lib/guest-presentation";
 import {
   experienceBasis,
   experienceGuests,
@@ -30,6 +34,10 @@ import {
 } from "@/lib/guest-experiences";
 
 export const Route = createFileRoute("/guest/$hotelSlug/explore")({
+  validateSearch: (search): { section?: TabKey } => {
+    const section = tabs.find((entry) => entry.key === search["section"])?.key;
+    return section ? { section } : {};
+  },
   head: ({ params }) => ({
     meta: [
       { title: "Explore the hotel — NEØ Guest" },
@@ -67,23 +75,6 @@ function isoDay(offset: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** A dish with no photograph gets the property's own colour, not a stock icon. */
-function DishArtwork({ name, tint }: { name: string; tint: string }) {
-  return (
-    <span
-      className="flex size-full items-center justify-center"
-      style={{ background: `linear-gradient(140deg, ${tint}26, ${tint}0d)`, color: tint }}
-    >
-      <span className="flex flex-col items-center gap-1">
-        <UtensilsCrossed className="size-5" aria-hidden />
-        <span className="max-w-[7rem] truncate text-[0.6rem] uppercase tracking-[0.16em]">
-          {name}
-        </span>
-      </span>
-    </span>
-  );
-}
-
 function Pill({
   active,
   tint,
@@ -102,9 +93,9 @@ function Pill({
       aria-pressed={active}
       className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium"
       style={{
-        borderColor: active ? tint : "rgba(0,0,0,0.1)",
-        color: active ? "#ffffff" : brandFallback.secondary,
-        background: active ? tint : "#ffffff",
+        borderColor: active ? tint : "var(--guest-border)",
+        color: active ? "var(--pa-on-primary)" : "var(--guest-text)",
+        background: active ? tint : "var(--guest-surface)",
       }}
     >
       {children}
@@ -115,12 +106,24 @@ function Pill({
 function ExplorePage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
-  const { user } = useCustomerSession();
+  const { section } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const { user, loading } = useCustomerSession();
   const profile = useGuestProfile(ws.organization_id, user?.id, ws.branch_id);
+  const activeStay = useGuestActiveStay(ws.organization_id, ws.branch_id, user?.id);
   const customerId = profile.data?.["id"] as string | undefined;
 
-  const [tab, setTab] = useState<TabKey>("rooms");
+  const tab = section ?? "rooms";
+  const delivery = usePublishedDeliveryForGuest(ws.organization_id, ws.branch_id, hotelSlug, tab === "dining");
   const [category, setCategory] = useState<string | null>(null);
+  const [dishSearch, setDishSearch] = useState("");
+  const [dishLimit, setDishLimit] = useState(12);
+  const publicRooms = useQuery({
+    queryKey: ["public-rooms", hotelSlug],
+    queryFn: () => fetchPublicPropertyRooms(hotelSlug),
+    enabled: tab === "rooms",
+    staleTime: 60_000,
+  });
   const primary = ws.primary_color || brandFallback.primary;
   const radius = buttonRadius(ws.button_style);
 
@@ -140,7 +143,18 @@ function ExplorePage() {
     tab === "rooms" && Boolean(user),
   );
 
-  const menu = usePublicMenu(ws.organization_id, ws.branch_id, "room-service");
+  const roomMenu = usePublicMenu(ws.organization_id, ws.branch_id, "room-service", tab === "dining");
+  const collectionMenu = usePublicMenu(ws.organization_id, ws.branch_id, "pickup", tab === "dining");
+  const deliveryMenu = usePublicMenu(ws.organization_id, ws.branch_id, "delivery", tab === "dining");
+  const catalogues = [roomMenu, collectionMenu, deliveryMenu];
+  const menuPending = catalogues.some((menu) => menu.isLoading);
+  const menuFailed = catalogues.some((menu) => menu.isError);
+  const dishes = [...new Map(catalogues.flatMap((menu) => menu.data ?? []).map((item) => [item["id"], item])).values()];
+  const sellable = (rows: Record<string, unknown>[] | undefined) =>
+    new Set((rows ?? []).filter((item) => item["availability"] === "available").map((item) => item["id"]));
+  const deliveryAvailable = sellable(deliveryMenu.data);
+  const collectionAvailable = sellable(collectionMenu.data);
+  const roomAvailable = sellable(roomMenu.data);
   const favourites = useGuestFavourites(ws.organization_id, customerId);
   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
   const favouriteByItem = new Map(
@@ -149,43 +163,42 @@ function ExplorePage() {
 
   // Both of these lists are released by the hotel to signed-in guests only.
   const laundry = useLaundryOffering(ws.organization_id, user ? ws.branch_id : null);
-  const transport = useTransportProducts(ws.organization_id);
+  const transport = useTransportProducts(ws.organization_id, ws.branch_id, tab === "services" && Boolean(customerId));
 
   // Experiences are published marketing content: readable before sign-in.
   const experiences = usePublicExperiences(ws.branch_id ?? undefined);
 
+  const categoryOf = (item: Record<string, unknown>) => (item["menu_categories"] as { name?: string } | null)?.name ?? "Menu";
+  const categories = [...new Set(dishes.map(categoryOf))];
+  const searchTerm = dishSearch.trim().toLowerCase();
+  const matchedDishes = dishes.filter((item) => (!category || category === categoryOf(item)) &&
+    `${String(item["name"] ?? "")} ${String(item["description"] ?? "")}`.toLowerCase().includes(searchTerm));
   const grouped = new Map<string, Record<string, unknown>[]>();
-  for (const item of menu.data ?? []) {
-    const name =
-      ((item["menu_categories"] as { name?: string } | null)?.name as string | undefined) ?? "Menu";
+  for (const item of matchedDishes.slice(0, dishLimit)) {
+    const name = categoryOf(item);
     grouped.set(name, [...(grouped.get(name) ?? []), item]);
   }
-  const categories = [...grouped.keys()];
-  const shown = category && grouped.has(category) ? [category] : categories;
   const nights = nightsBetween(arrival, departure);
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="explore">
-      <section className="grid min-w-0 items-end gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <section className="neo-guest-explore-heading neo-guest-discovery-heading">
         <div className="min-w-0">
-          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
-            Explore {ws.hotel_name}
+          <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: "var(--guest-text, #07142D)" }}>
+            {tab === "rooms" ? "Find your room" : tab === "dining" ? "Dining" : tab === "services" ? "Hotel services" : "Experiences"}
           </h1>
-          <p className="neo-public-copy mt-2 max-w-xl text-sm" style={{ color: brandFallback.steel }}>
-            Rooms, dining, services and experiences — prices and availability exactly as the
-            property publishes them.
-          </p>
         </div>
       </section>
 
-      <div className="neo-scroll-x mt-6 flex gap-2">
+      <div className="neo-guest-segments neo-guest-explore-tabs mt-3" role="group" aria-label="Explore sections">
         {tabs.map((entry) => {
           const Icon = entry.icon;
           return (
-            <Pill key={entry.key} active={tab === entry.key} tint={primary} onClick={() => setTab(entry.key)}>
+            <button type="button" key={entry.key} aria-pressed={tab === entry.key}
+              onClick={() => void navigate({ search: { section: entry.key }, resetScroll: false })}>
               <Icon className="size-4" aria-hidden />
               {entry.label}
-            </Pill>
+            </button>
           );
         })}
       </div>
@@ -193,30 +206,47 @@ function ExplorePage() {
       {/* --------------------------------------------------------- rooms */}
       {tab === "rooms" ? (
         <GuestSection
-          title="Rooms available"
-          description={`Live availability for ${arrival} → ${departure} (${nights} night, 2 adults). Pick your own dates when you book.`}
+          title={user ? "Available for your dates" : "Rooms at the hotel"}
+          {...(user ? { description: `${arrival} → ${departure} · ${nights} night · 2 adults` } : {})}
           action={
             <Link
               to="/guest/$hotelSlug/book"
               params={{ hotelSlug }}
               className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-              style={{ background: primary, borderRadius: radius }}
+              style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
             >
               Choose dates
             </Link>
           }
         >
           {!user ? (
-            <PublicEmptyState
-              title="Sign in to see live room rates"
-              description="This hotel releases live availability and pricing to signed-in guests. You can still open the booking screen to choose dates."
-            />
+            publicRooms.isLoading ? <GuestRowsSkeleton rows={3} label="Loading rooms" />
+              : publicRooms.isError ? <PublicEmptyState title="Rooms couldn’t load" description="Try the public room catalogue again." action={<button type="button" className="neo-guest-outline-action" onClick={() => void publicRooms.refetch()}>Retry</button>} />
+              : !publicRooms.data?.length ? <PublicEmptyState title="No rooms published" description="Contact reception for room options." />
+              : <ul className="neo-guest-room-gallery">
+                {publicRooms.data.map((room) => {
+                  const nightly = publishedNightlyRate(room.from_rate);
+                  return <li key={room.room_type_id}>
+                    <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: room.room_type_id }} className="neo-guest-room-preview">
+                      {room.images?.[0] ? <GuestImage src={room.images[0]} alt="" width={480} height={300} sizes="(min-width: 800px) 35vw, 100vw" className="neo-guest-room-cover" /> : null}
+                      <span className="neo-guest-room-caption">
+                        <span className="min-w-0">
+                          <strong>{room.name}</strong>
+                          <small>{[room.max_occupancy ? `Sleeps ${room.max_occupancy}` : null, room.bed_configuration].filter(Boolean).join(" · ")}</small>
+                        </span>
+                        {nightly !== null ? <span className="neo-guest-room-rate">From {money(nightly, room.currency ?? ws.currency ?? "KES")}</span> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
+                      </span>
+                    </Link>
+                  </li>;
+                })}
+              </ul>
           ) : rooms.isLoading ? (
             <GuestRowsSkeleton rows={3} label="Checking availability" />
           ) : rooms.isError ? (
             <PublicEmptyState
-              title="Sign in to see live room rates"
-              description="This hotel releases live availability and pricing to signed-in guests. You can still open the booking screen to choose dates."
+                title="Room rates couldn’t load"
+                description="Try again to see live availability for these dates."
+                action={<button className="neo-guest-secondary" onClick={() => void rooms.refetch()}>Retry room rates</button>}
             />
           ) : (rooms.data ?? []).length === 0 ? (
             <PublicEmptyState
@@ -224,49 +254,44 @@ function ExplorePage() {
               description="Try other dates on the booking screen, or call reception to check what is held."
             />
           ) : (
-            <ul className="grid gap-4 lg:grid-cols-2">
-              {(rooms.data ?? []).map((offer) => (
+            <ul className="neo-guest-room-gallery">
+              {(rooms.data ?? []).map((offer) => {
+                const cover = publicRooms.data?.find((room) => room.room_type_id === offer.room_type_id)?.images?.[0];
+                return (
                 <li
                   key={offer.room_type_id}
-                  className="flex min-w-0 flex-col gap-2 rounded-2xl border border-black/5 bg-white p-5"
                 >
-                  <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                  <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} search={{ room: offer.room_type_id }} className="neo-guest-room-preview" aria-label={`View ${offer.room_type_name}`}>
+                    {cover ? <GuestImage src={cover} alt="" width={480} height={300} sizes="(min-width: 800px) 35vw, 100vw" className="neo-guest-room-cover" /> : null}
+                    <div className="neo-guest-room-caption">
                     <div className="min-w-0">
-                      <p className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {offer.room_type_name}
                       </p>
                       {offer.description ? (
-                        <p className="neo-line-2 text-xs" style={{ color: brandFallback.steel }}>
+                        <p className="neo-line-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                           {offer.description}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="mt-1 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {offer.rooms_available} available
                         {offer.max_occupancy ? ` · sleeps ${offer.max_occupancy}` : ""}
                         {offer.rate_plan_name ? ` · ${offer.rate_plan_name}` : ""}
                       </p>
                     </div>
-                    <div className="min-w-0 sm:text-right">
-                      <p className="text-base font-semibold" style={{ color: brandFallback.secondary }}>
+                    <div className="text-right">
+                      <p className="text-base font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {money(offer.nightly_rate, offer.currency)}
                       </p>
-                      <p className="text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         per night
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-auto pt-3" data-public-actions>
-                    <Link
-                      to="/guest/$hotelSlug/book"
-                      params={{ hotelSlug }}
-                      className="inline-flex min-h-10 items-center px-4 text-sm font-semibold text-white"
-                      style={{ background: primary, borderRadius: radius }}
-                    >
-                      Book this room
-                    </Link>
-                  </div>
+                    </div>
+                    <span className="neo-guest-room-action">View room <ChevronRight className="size-4" aria-hidden /></span>
+                  </Link>
                 </li>
-              ))}
+              ); })}
             </ul>
           )}
         </GuestSection>
@@ -275,9 +300,22 @@ function ExplorePage() {
       {/* -------------------------------------------------------- dining */}
       {tab === "dining" ? (
         <>
+          <div className="neo-guest-dining-paths mt-4">
+            {activeStay.data ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug }} search={{ room: true }} className="neo-guest-outline-action">Order to my room</Link> : null}
+            {delivery.data ? <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">Delivery &amp; collection <ChevronRight className="size-4" aria-hidden /></Link> : null}
+            {delivery.data ? <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug: delivery.data.slug }} className="neo-guest-outline-action">View cart</Link> : null}
+            <Link to="/guest/$hotelSlug/favourites" params={{ hotelSlug }} className="neo-guest-outline-action">Favourites</Link>
+          </div>
+          {dishes.length ? (
+            <div className="relative mt-5">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--guest-muted)]" aria-hidden />
+              <Input type="search" aria-label="Search dishes" placeholder="Search dishes" value={dishSearch}
+                onChange={(event) => { setDishSearch(event.target.value); setDishLimit(12); }} className="min-h-11 pl-10" />
+            </div>
+          ) : null}
           {categories.length > 1 ? (
             <div className="neo-scroll-x mt-6 flex gap-2">
-              <Pill active={category === null} tint={primary} onClick={() => setCategory(null)}>
+              <Pill active={category === null} tint={primary} onClick={() => { setCategory(null); setDishLimit(12); }}>
                 All
               </Pill>
               {categories.map((name) => (
@@ -285,7 +323,7 @@ function ExplorePage() {
                   key={name}
                   active={category === name}
                   tint={primary}
-                  onClick={() => setCategory(name)}
+                  onClick={() => { setCategory(name); setDishLimit(12); }}
                 >
                   {name}
                 </Pill>
@@ -293,10 +331,15 @@ function ExplorePage() {
             </div>
           ) : null}
 
-          {menu.isLoading ? (
+          {menuPending && !dishes.length ? (
             <div className="mt-6">
               <GuestRowsSkeleton rows={5} label="Loading the menu" />
             </div>
+          ) : menuFailed && !dishes.length ? (
+            <PublicEmptyState title="Menus couldn’t load" description="Refresh to see what the kitchen publishes here."
+              action={<button type="button" className="neo-guest-secondary" onClick={() => {
+                catalogues.filter((menu) => menu.isError).forEach((menu) => void menu.refetch());
+              }}>Retry menus</button>} />
           ) : categories.length === 0 ? (
             <div className="mt-6">
               <PublicEmptyState
@@ -304,38 +347,47 @@ function ExplorePage() {
                 description="Dining opens here as soon as the kitchen publishes its dishes. Reception can take your order in the meantime."
               />
             </div>
+          ) : matchedDishes.length === 0 ? (
+            <PublicEmptyState title="No matching dishes" description="Try another dish or category."
+              action={<button type="button" className="neo-guest-secondary" onClick={() => {
+                setDishSearch(""); setCategory(null); setDishLimit(12);
+              }}>Clear filters</button>} />
           ) : (
-            shown.map((name) => (
+            [...grouped.keys()].map((name) => (
               <GuestSection key={name} title={name}>
                 <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {(grouped.get(name) ?? []).map((item) => (
+                  {(grouped.get(name) ?? []).map((item) => {
+                    const itemId = item["id"];
+                    const deliveryMode = deliveryAvailable.has(itemId) ? "delivery"
+                      : collectionAvailable.has(itemId) ? "pickup" : null;
+                    const soldOut = !deliveryMode && !roomAvailable.has(itemId);
+                    return (
                     <li
                       key={String(item["id"])}
-                      className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-black/5 bg-white"
+                      className="neo-guest-dish"
+                      data-sold-out={soldOut}
                     >
-                      <GuestImage
-                        src={item["image_url"] ? String(item["image_url"]) : null}
+                      {item["image_url"] ? <GuestImage
+                        src={String(item["image_url"])}
                         alt=""
                         width={480}
                         height={320}
                         widths={GUEST_CARD_WIDTHS}
                         sizes="(min-width: 1280px) 22rem, (min-width: 640px) 45vw, 90vw"
-                        rounded="rounded-none"
-                        className="w-full"
-                        fallback={<DishArtwork name={name} tint={primary} />}
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
-                        <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                        className="neo-guest-dish-photo"
+                      /> : null}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                           {String(item["name"])}
                         </p>
                         {item["description"] ? (
-                          <p className="neo-line-2 text-xs" style={{ color: brandFallback.steel }}>
+                          <p className="neo-line-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                             {String(item["description"])}
                           </p>
                         ) : null}
                         <div className="mt-auto grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pt-3">
-                          <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
-                            {money(item["base_price"])}
+                          <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
+                            {money(item["base_price"], ws.currency ?? "KES")}
                           </span>
                           <span className="flex min-w-0 items-center gap-1">
                             {customerId ? (
@@ -352,8 +404,8 @@ function ExplorePage() {
                                     favouriteId: favouriteByItem.get(String(item["id"])) ?? null,
                                   })
                                 }
-                                className="grid min-h-9 min-w-9 place-items-center rounded-full"
-                                style={{ color: primary }}
+                                className="grid min-h-11 min-w-11 place-items-center rounded-full"
+                                style={{ color: "var(--pa-accent-ink)" }}
                               >
                                 <Heart
                                   className="size-4"
@@ -361,24 +413,33 @@ function ExplorePage() {
                                 />
                               </button>
                             ) : null}
-                            <Link
+                            {soldOut ? <span className="neo-sold-out-label">Out of stock</span> :
+                              delivery.data && deliveryMode ? (
+                              <Link to="/delivery/$hotelSlug" params={{ hotelSlug: delivery.data.slug }}
+                                search={{ item: String(item["id"]), mode: deliveryMode }}
+                                className="neo-guest-outline-action">Order</Link>
+                            ) : delivery.data && !activeStay.data ? <span className="text-xs text-[var(--guest-muted)]">Room service</span> : <Link
                               to="/guest/$hotelSlug/order"
                               params={{ hotelSlug }}
                               search={{ item: String(item["id"]) }}
-                              className="inline-flex min-h-9 items-center px-3 text-xs font-semibold"
-                              style={{ color: primary, border: `1px solid ${primary}`, borderRadius: radius }}
+                              className="inline-flex min-h-11 items-center px-3 text-xs font-semibold"
+                              style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                             >
                               Order
-                            </Link>
+                            </Link>}
                           </span>
                         </div>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </GuestSection>
             ))
           )}
+          {matchedDishes.length > dishLimit ? (
+            <button type="button" className="neo-guest-secondary mt-5" onClick={() => setDishLimit((limit) => limit + 12)}>Show more dishes</button>
+          ) : null}
         </>
       ) : null}
 
@@ -388,20 +449,23 @@ function ExplorePage() {
           <GuestSection
             title="Laundry"
             description="The hotel's own price list, charged to your room or paid on collection."
+            surface
             action={
-              laundry.data?.enabled ? (
+              !loading && (!user || laundry.data?.enabled) ? (
                 <Link
                   to="/guest/$hotelSlug/laundry"
                   params={{ hotelSlug }}
                   className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-                  style={{ background: primary, borderRadius: radius }}
+                  style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
                 >
-                  Send laundry
+                  {user ? "Send laundry" : "Open laundry"}
                 </Link>
               ) : undefined
             }
           >
-            {!user ? (
+            {loading ? (
+              <GuestRowsSkeleton rows={2} label="Loading laundry prices" />
+            ) : !user ? (
               <PublicEmptyState
                 title="Sign in to see laundry prices"
                 description="This hotel publishes its laundry list to signed-in guests."
@@ -410,8 +474,9 @@ function ExplorePage() {
               <GuestRowsSkeleton rows={3} label="Loading laundry prices" />
             ) : laundry.isError ? (
               <PublicEmptyState
-                title="Sign in to see laundry prices"
-                description="This hotel publishes its laundry list to signed-in guests."
+                title="Laundry prices could not load"
+                description="Refresh the property’s current prices."
+                action={<button type="button" className="neo-guest-secondary" onClick={() => void laundry.refetch()}>Try again</button>}
               />
             ) : !laundry.data?.enabled || (laundry.data.items ?? []).length === 0 ? (
               <PublicEmptyState
@@ -426,14 +491,14 @@ function ExplorePage() {
                     className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white p-4"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {item.name}
                       </p>
-                      <p className="text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         Express {money(item.express_price)} · {item.turnaround_hours}h
                       </p>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <span className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {money(item.normal_price)}
                     </span>
                   </li>
@@ -445,25 +510,31 @@ function ExplorePage() {
           <GuestSection
             title="Transport"
             description="Transfers the property runs or arranges."
+            surface
             action={
-              (transport.data ?? []).length > 0 ? (
                 <Link
                   to="/guest/$hotelSlug/transport"
                   params={{ hotelSlug }}
                   className="inline-flex min-h-11 items-center border px-5 text-sm font-semibold"
-                  style={{ color: primary, borderColor: primary, borderRadius: radius }}
+                  style={{ color: "var(--pa-accent-ink)", borderColor: primary, borderRadius: radius }}
                 >
                   Request a transfer
                 </Link>
-              ) : undefined
             }
           >
-            {transport.isLoading ? (
+            {loading ? (
               <GuestRowsSkeleton rows={2} label="Loading transfers" />
+            ) : !user ? (
+              <PublicEmptyState title="Sign in to see transfers" description="You can also contact reception for help with a trip." />
+            ) : transport.isLoading ? (
+              <GuestRowsSkeleton rows={2} label="Loading transfers" />
+            ) : transport.isError ? (
+              <PublicEmptyState title="Transfers couldn’t load" description="Try again to see the property’s transfers."
+                action={<button className="neo-guest-secondary" onClick={() => void transport.refetch()}>Retry transfers</button>} />
             ) : (transport.data ?? []).length === 0 ? (
               <PublicEmptyState
                 title="No transfers are published"
-                description="Ask reception and they will quote a transfer for you."
+                description="Request a custom trip and the concierge can provide a quote."
               />
             ) : (
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -472,19 +543,20 @@ function ExplorePage() {
                     key={String(product["id"])}
                     className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white p-4"
                   >
-                    <Bike className="size-4 shrink-0" style={{ color: primary }} aria-hidden />
+                    <Bike className="size-4 shrink-0" style={{ color: "var(--pa-accent-ink)" }} aria-hidden />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                      <p className="truncate text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                         {String(product["name"])}
                       </p>
-                      <p className="truncate text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="truncate text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {String(product["category"] ?? "Transfer")}
                         {product["max_passengers"] ? ` · up to ${String(product["max_passengers"])}` : ""}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
-                      {money(product["base_price"], String(product["currency"] ?? "KES"))}
-                    </span>
+                    <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} search={{ product: String(product["id"]) }}
+                      hash="transfer-request" aria-label={`Request ${String(product["name"])}`} className="neo-guest-outline-action">
+                      {product["base_price"] == null ? "Request" : money(product["base_price"], String(product["currency"] ?? "KES"))}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -500,7 +572,7 @@ function ExplorePage() {
                 to="/guest/$hotelSlug/trips"
                 params={{ hotelSlug }}
                 className="inline-flex min-h-11 items-center px-5 text-sm font-semibold text-white"
-                style={{ background: primary, borderRadius: radius }}
+                style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: radius }}
               >
                 Make a request
               </Link>
@@ -536,14 +608,14 @@ function ExplorePage() {
                       <div className="min-w-0">
                         <p
                           className="break-words text-sm font-semibold"
-                          style={{ color: brandFallback.secondary }}
+                          style={{ color: "var(--guest-text, #07142D)" }}
                         >
                           {item.name}
                         </p>
                         {item.event_type ? (
                           <p
                             className="truncate text-[0.68rem] uppercase tracking-[0.16em]"
-                            style={{ color: brandFallback.steel }}
+                            style={{ color: "var(--guest-muted, #52627A)" }}
                           >
                             {item.event_type}
                           </p>
@@ -551,17 +623,17 @@ function ExplorePage() {
                       </div>
                       <span
                         className="shrink-0 text-sm font-semibold"
-                        style={{ color: brandFallback.secondary }}
+                        style={{ color: "var(--guest-text, #07142D)" }}
                       >
                         {money(item.price, "KES")}
                       </span>
                     </div>
                     {item.description ? (
-                      <p className="break-words text-xs" style={{ color: brandFallback.steel }}>
+                      <p className="break-words text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                         {item.description}
                       </p>
                     ) : null}
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {[basis, guests, item.valid_to ? `Available until ${item.valid_to}` : null]
                         .filter(Boolean)
                         .join(" · ") || "Ask reception for today's availability."}
@@ -569,8 +641,10 @@ function ExplorePage() {
                     <Link
                       to="/guest/$hotelSlug/trips"
                       params={{ hotelSlug }}
+                      search={{ experience: item.id }}
+                      hash="request-assistance"
                       className="inline-flex min-h-11 w-fit items-center px-4 text-sm font-semibold"
-                      style={{ color: primary, border: `1px solid ${primary}`, borderRadius: radius }}
+                      style={{ color: "var(--pa-accent-ink)", border: `1px solid ${primary}`, borderRadius: radius }}
                     >
                       Enquire
                     </Link>

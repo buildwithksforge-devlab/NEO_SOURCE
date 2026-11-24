@@ -1,5 +1,7 @@
 # NEØ source and release status — 25 September 2026
 
+> Historical bundle report. For the current deployment, installed SQL, confirmed fixes and ordered remaining work, use [the active execution queue](docs/repair/ACTIVE-EXECUTION-QUEUE.md). Do not use this September report to infer today's deployment state.
+
 ## In this source bundle
 
 - Guest checkout waits for payment availability before declaring online payment unavailable. A payment request remains pending until a provider callback confirms the balance.

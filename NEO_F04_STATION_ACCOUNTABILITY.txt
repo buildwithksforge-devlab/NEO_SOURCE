@@ -1,0 +1,265 @@
+﻿=== src/routes/station-screen.tsx ===
+26: export const Route = createFileRoute("/station-screen")({
+37: const [pin, setPin] = useState("");
+40: const [station, setStation] = useState("all");
+66: setPin("");
+74: return actOnSharedDisplay(token, code, pin, { ...selected, reason });
+78: setPin("");
+87: `${result.idempotent ? "Already recorded" : "Recorded"} · ${result.actor_name ?? "Staff member"}`,
+93: `${error.message} Your code and PIN have been cleared. Re-enter them to retry this same action.`,
+109: A production supervisor must sign in, choose a property and station display, then pair
+129: : "Identify yourself with your staff code and PIN for each action."}
+177: {snapshot.isLoading ? <p role="status">Loading station tickets…</p> : null}
+180: <nav aria-label="Shared display stations" className="flex flex-wrap gap-2">
+182: variant={station === "all" ? "default" : "outline"}
+183: onClick={() => setStation("all")}
+185: All paired stations
+187: {data.stations.map((s) => (
+190: variant={station === s.id ? "default" : "outline"}
+191: onClick={() => setStation(s.id)}
+204: .filter((t) => station === "all" || t.station_id === station)
+211: stationAuthority={!data.read_only}
+236: {t.accepted_at
+237: ? ` · accepted ${new Date(t.accepted_at).toLocaleTimeString()}`
+264: : titleCase(selected?.to ?? "Staff action")}
+267: This identifies you for this action only. Your code and PIN clear after submission.
+278: <Label htmlFor="display-code">Staff code</Label>
+291: <Label htmlFor="display-pin">Personal PIN</Label>
+293: id="display-pin"
+297: value={pin}
+300: onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+324: <Button type="submit" disabled={disabled || pin.length !== 6 || !code.trim()}>
+325: {action.isPending ? "Recording…" : "Confirm staff action"}
+
+=== src/routes/_shell.kitchen.display.tsx ===
+5: validateSearch: (search: Record<string, unknown>): { station?: string | undefined } => ({
+6: station: typeof search["station"] === "string" ? search["station"] : undefined,
+11: const { station } = Route.useSearch();
+12: return <ProductionDisplay department="kitchen" requestedStation={station} />;
+
+=== src/routes/_shell.kitchen.my-station.tsx ===
+9: export const Route = createFileRoute("/_shell/kitchen/my-station")({
+12: { title: "My Station — Main Kitchen — NEØ" },
+18: { property: "og:title", content: "My Station — Main Kitchen — NEØ" },
+28: <KitchenGuard action="my-station.view">
+29: <MyStationPage />
+40: function MyStationPage() {
+52: title="My station"
+
+=== src/components/kitchen/ProductionDisplay.tsx ===
+21: displayStations,
+22: selectedDisplayStation,
+28: useScopedStations,
+32: useStationAuthority,
+38: requestedStation,
+41: requestedStation?: string | undefined;
+49: key={`${department}:${requestedStation ?? ""}`}
+51: requestedStation={requestedStation}
+58: requestedStation,
+61: requestedStation?: string | undefined;
+63: const scope = useScopedStations();
+70: subject="a station display"
+81: const stations = displayStations(scope.stations, department);
+82: if (!stations.length)
+87: detail="No active stations for this display are available in your property and access scope."
+90: const selected = selectedDisplayStation(stations, requestedStation);
+91: if (!selected) return <AccessDeniedPanel reason="scope" subject="the bookmarked station" />;
+96: stationId={selected.id}
+97: stations={stations}
+105: stationId,
+106: stations,
+110: stationId: string;
+111: stations: { id: string; name: string }[];
+122: const { canWorkStation } = useStationAuthority();
+123: const queue = useKitchenTickets(department === "overview" ? "all" : stationId, "live");
+143: const allowedIds = new Set(stations.map((s) => s.id));
+146: t.station_id &&
+147: allowedIds.has(t.station_id) &&
+148: (department === "overview" || t.station_id === stationId),
+158: ? "Live progress across your permitted stations."
+159: : `Personal session: ${user?.email ?? "signed-in staff"}. Actions are recorded against this account.`
+163: {pathPermitted(can, "/staff-display-code") ? (
+164: <Link to="/staff-display-code" className="rounded-md border px-3 py-2 text-sm">
+165: My display PIN
+181: stations.map((s) => s.id),
+193: {pairing ? "Pairing…" : "Pair stations & sign out this browser"}
+230: <nav aria-label="Display stations" className="flex flex-wrap gap-2">
+231: {stations.map((s) => (
+235: search={{ station: s.id }}
+236: className={`rounded-lg border px-4 py-3 ${s.id === stationId ? "bg-primary text-primary-foreground" : ""}`}
+237: aria-current={s.id === stationId ? "page" : undefined}
+251: description="Orders appear here when sent to this station."
+261: stationAuthority={!readOnly && canWorkStation(t.station_id)}
+276: if (readOnly || !canWorkStation(t.station_id)) return;
+
+=== src/lib/kitchen-tickets.ts ===
+7: * `public.neo_kitchen_ticket_delay`. No screen may query `station_tickets`
+50: station_id: string | null;
+51: station_name: string | null;
+52: station_missing: boolean;
+65: accepted_at: string | null;
+121: /** Mirrors `neo_kitchen_item_transition()`. The server re-validates every move. */
+191: * Production-station routing contract — mirrors neo_kitchen_resolve_station
+197: * exception; the server never picks an arbitrary station.
+199: export const STATION_ROUTING_PRECEDENCE = [
+208: export type StationRoutingSource = (typeof STATION_ROUTING_PRECEDENCE)[number];
+210: /** A ticket only carries a routing exception when the canonical station is absent. */
+212: ticket: Pick<KitchenTicket, "station_id" | "station_missing">,
+214: return ticket.station_id == null || ticket.station_missing;
+218: "No production station could be resolved for these items. Add a routing rule, or set a station on the menu item or its category, so the ticket reaches the right team.";
+226: export type QueueView = "live" | "all" | "delayed" | "unassigned-station" | string;
+228: export function useKitchenTickets(stationId: string | "all" = "all", view: QueueView = "live") {
+233: queryKey: [...KITCHEN_TICKETS_QUERY_KEY, organizationId, branchId ?? "all", stationId, view],
+239: ...(stationId && stationId !== "all" ? { _station: stationId } : {}),
+264: { table: "station_tickets", onChange: invalidate },
+265: { table: "station_ticket_items", onChange: invalidate },
+267: { table: "station_ticket_status_history", onChange: invalidate },
+357: const { data, error } = await guardedRpc(supabase, "neo_kitchen_item_transition", {
+482: export type StationWorkload = {
+483: station_id: string | null;
+484: station_name: string;
+497: stations: StationWorkload[];
+520: stations: m.stations ?? [],
+575: /** Re-partitions historical tickets onto their resolved production stations. */
+576: export function useKitchenStationReconcile() {
+581: const { data, error } = await guardedRpc(supabase, "neo_kitchen_reconcile_stations", {
+594: `Reconciled ${res?.tickets_assigned ?? 0} ticket(s), created ${res?.partitions_created ?? 0} station partition(s); ` +
+605: * Station selector — scoped, never wider than the user's own scope
+608: export type ScopedStations = {
+609: stations: { id: string; name: string; code?: string | null; station_type?: string | null }[];
+610: /** False for station-scoped users: they may not select "All stations". */
+616: export function useScopedStations(): ScopedStations {
+630: const stations = useQuery({
+631: queryKey: ["kitchen", "scoped-stations", organizationId, user?.id, branchId ?? "all"],
+635: .from("operational_stations")
+636: .select("id, name, branch_id, code, station_type")
+649: queryKey: ["kitchen", "my-station-ids", organizationId, user?.id],
+653: .from("user_stations")
+654: .select("station_id")
+657: return (data ?? []).map((r) => (r as { station_id: string }).station_id);
+662: queryKey: ["kitchen", "visible-station-ids", organizationId, user?.id, branchId],
+665: const { data, error } = await guardedRpc<string[]>(supabase, "neo_kitchen_visible_station_ids");
+671: const loaded = Boolean(organizationId && scope.isSuccess && stations.isSuccess && mine.isSuccess && visible.isSuccess);
+672: const stationScoped = scope.data === "station";
+673: const list = stationScoped
+674: ? (stations.data ?? []).filter((s) => (mine.data ?? []).includes(s.id))
+675: : (stations.data ?? []);
+678: stations: loaded ? list.filter((station) => visible.data?.includes(station.id)) : [],
+679: allowAll: loaded && !stationScoped,
+680: isLoading: scope.isLoading || stations.isLoading || mine.isLoading || visible.isLoading,
+681: error: (scope.error || stations.error || mine.error || visible.error) as Error | null,
+
+=== src/lib/kitchen-data.ts ===
+28: * Stations, routing and settings
+31: export function useKitchenStations() {
+35: queryKey: ["kitchen", "stations", organizationId, branchId ?? "all", filterKey],
+39: .from("operational_stations")
+40: .select(sel("id, name, code, station_type, department_id, branch_id, supervisor_user_id, status, active, sort_order"))
+52: export function useMyStations() {
+55: queryKey: ["kitchen", "my-stations", organizationId, userId],
+59: .from("user_stations")
+60: .select(sel("station_id, is_primary, operational_stations(id, name, code, station_type)"))
+75: .from("station_routing_rules")
+76: .select(sel("*, operational_stations!station_routing_rules_station_id_fkey(name), menu_items(name), menu_categories(name)"))
+90: const { error } = await supabase.from("station_routing_rules").upsert(payload as never);
+105: const { error } = await supabase.from("station_routing_rules").delete().eq("id", id);
+169: .select(sel("*, operational_stations(name), menu_items(name)")),
+198: * Live queue — reuses Phase 7 station_tickets / station_ticket_items
+202: "*, operational_stations(id, name, code), pos_orders(id, order_number, order_type, guest_name, guest_count, dietary_notes, allergy_alert, waiter_id, room_id, table_id, restaurant_tables(code)), station_ticket_items(*, pos_order_items(id, item_name, quantity, course, special_instructions, allergy_note, status, menu_item_id, pos_order_item_modifiers(option_name, group_name)))",
+205: export function useKitchenQueue(stationId: string | "all", statuses?: string[]) {
+206: // Station/self scope keeps a line chef on their own station's tickets; a
+211: queryKey: ["kitchen", "queue", organizationId, stationId, statuses?.join(",") ?? "live", scopeKey],
+215: let q = applyScope(supabase.from("station_tickets").select(TICKET_SELECT), "station_tickets").order("received_at");
+216: if (stationId !== "all") q = q.eq("station_id", stationId);
+232: .from("station_ticket_status_history")
+269: .from("station_tickets")
+288: .from("station_tickets")
+321: stationId?: string | null;
+343: export function useReassignStation() {
+346: mutationFn: async ({ ticketId, stationId, reason }: { ticketId: string; stationId: string; reason: string }) => {
+348: .from("station_tickets")
+349: .update({ station_id: stationId, routing_note: reason } as never)
+354: toast.success("Ticket moved to another station.");
+446: supabase.from("recipes").select(sel("*, menu_items(name), operational_stations(name), recipe_ingredients!recipe_ingredients_recipe_id_fkey(*)")),
+576: .select(sel("*, operational_stations(name), recipes(version, menu_items(name))"))
+691: no_location: "No kitchen store is set for this station. Choose a store first.",
+738: .select(sel("*, operational_stations(name)"))
+788: station_id: row["station_id"] || null,
+852: .select(sel("*, operational_stations(name)"))
+889: .select(sel("*, operational_stations(name), menu_items(name)"))
+977: void qc.invalidateQueries({ queryKey: ["staff-board"] });
+991: .select(sel("*, operational_stations(name), quality_checklist_items(*)"))
+1025: .select(sel("*, quality_checklists(name), operational_stations(name)"))
+1063: .select(sel("*, operational_stations(name), menu_items(name)"))
+1124: .select(sel("*, operational_stations(name)"))
+1143: station_id: (row["station_id"] as string) ?? null,
+1178: .select(sel("*, operational_stations(name)"))
+1237: .select(sel("id, name, availability, category_id, station_id, prep_minutes, menu_categories(name)"))
+1278: export function useKitchenStaff() {
+1287: table: "station_tickets",
+1293: { table: "station_ticket_items", onChange: () => void qc.invalidateQueries({ queryKey: ["kitchen", "queue"] }) },
+1313: * An ordered item reaches a chef only when it resolves to a station.
+1314: * The database resolves item rule -> category rule -> category station,
+1316: * station. This hook surfaces exactly which categories are still
+1318: * printing "No Station" on live tickets.
+1328: .select(sel("id, name, station_id, active"))
+1355: if (c["station_id"] || routedCategoryIds.has(id)) return false;
+1357: // item-level station or item-level rule already covers.
+
+=== src/lib/pos-data.ts ===
+28: export function useStations() {
+32: queryKey: ["pos", "stations", organizationId, branchId ?? "all", filterKey],
+36: .from("operational_stations")
+37: .select("id, name, code, station_type, department_id, branch_id, color, active")
+60: * Floor areas the signed-in member of staff may actually work.
+63: * the department the person belongs to: bar staff get bar areas, restaurant
+64: * staff get restaurant, coffee and room-service areas, and whole-house roles
+165: const { data, error } = await applyTo(supabase.from("menu_items").select("*, menu_categories(name, menu_id), operational_stations(name, code)"), "menu_items")
+279: "*, restaurant_tables(code, name, restaurant_areas(outlet, name)), customers(id, full_name, phone), pos_order_items(*, pos_order_item_modifiers(*), operational_stations(name, code)), pos_payments(*)",
+291: export function useStationTickets(stationId: string | "all") {
+295: queryKey: ["pos", "station-tickets", organizationId, filterKey, stationId],
+300: supabase.from("station_tickets").select(
+301: "*, operational_stations(name, code), pos_orders(order_number, order_type, guest_count, guest_name, dietary_notes, allergy_alert, restaurant_tables(code)), station_ticket_items(order_item_id, pos_order_items(*, pos_order_item_modifiers(option_name, group_name)))",
+303: "station_tickets",
+307: if (stationId !== "all") q = q.eq("station_id", stationId);
+331: void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
+343: table: "station_tickets",
+345: void qc.invalidateQueries({ queryKey: ["pos", "station-tickets"] });
+368: const { data, error } = await applyTo(supabase.from("pos_shifts").select("*, profiles!pos_shifts_cashier_id_fkey(full_name), operational_stations(name)"), "pos_shifts")
+433: const { data, error } = await applyTo(supabase.from("printer_profiles").select("*, operational_stations(name)"), "printer_profiles")
+463: // Folio rows are restricted to front-office/finance readers. Service staff
+587: station_id: string | null;
+615: station_id: input.item.station_id,
+768: * `neo_pos_send_to_kitchen` owns routing, ticket creation and item status: it
+769: * takes a per-order lock, resolves each item's station from the canonical
+770: * resolver, raises one ticket per station and course, and links each source
+773: * duplicating kitchen work. An item with no configured production station now
+777: export function useSendOrder() {
+781: const { data, error } = await guardedRpc(supabase, "neo_pos_send_to_kitchen", {
+793: unassigned_station?: number;
+799: unassigned: Number(r.unassigned_station ?? 0),
+806: toast.success(`${r.items} item(s) sent to ${r.tickets} station ticket(s).`);
+809: toast.warning(`${r.unassigned} item(s) have no production station and need assigning.`);
+828: * production station is configured for the item.
+833: return `Not sent — ${m[1]} item(s) have no production station for this property. Assign a station to the menu item, then send again.`;
+837: return `Not sent — ${s[1]} has no store to take stock from at this property. Map the station to its store in Inventory settings, then send again.`;
+922: if (status === "accepted") patch["accepted_at"] = now;
+926: const { error } = await supabase.from("station_tickets").update(patch as never).eq("id", ticketId);
+1059: /** Safe manual-terminal metadata only. Never PAN/CVV/PIN/track data. */
+1324: mutationFn: async ({ openingFloat, stationId }: { openingFloat: number; stationId?: string | null }) => {
+1328: station_id: stationId ?? null,
+1451: * station that will actually receive the ticket and where that routing came
+1537: station_id: string | null;
+1538: station_name: string | null;
+1539: station_source: string;
+1540: station_missing: boolean;
+1541: assigned_station_id: string | null;
+1577: export function useAssignMenuStation() {
+1580: mutationFn: async ({ itemId, stationId }: { itemId: string; stationId: string | null }) => {
+1581: const { error } = await guardedRpc(supabase, "neo_menu_assign_station", {
+1583: _station_id: stationId as unknown as string,
+1588: toast.success("Production station updated.");
+1597: * Menu catalogue management — canonical property → department → station
+1612: export type MenuScopedStation = {
+1616: station_type: string | null;
+

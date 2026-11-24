@@ -18,6 +18,8 @@ import { PageHeader } from "@/components/common/DataDisplay";
 import { SummaryStrip, type SummaryFigure } from "@/components/common/SummaryStrip";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useMpesaReceiptReviewQueue, useDecideMpesaReceiptReview } from "@/lib/pos-data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -164,6 +166,7 @@ function PaymentQueuePage() {
         </TabsList>
 
         <TabsContent value="collect">
+          <MpesaReceiptReviews branchId={scope.branchId} />
           <CollectionStage />
         </TabsContent>
 
@@ -268,5 +271,93 @@ function PaymentQueuePage() {
       </Tabs>
     </div>
 
+  );
+}
+
+function MpesaReceiptReviews({ branchId }: { branchId: string | null }) {
+  const queue = useMpesaReceiptReviewQueue(branchId);
+  const decide = useDecideMpesaReceiptReview();
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [matched, setMatched] = useState<Record<string, boolean>>({});
+  const rows = (queue.data ?? []).filter((r) =>
+    ["pending_approval", "execution_failed"].includes(r.status));
+
+  return (
+    <section className="mb-6 space-y-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">M-Pesa receipt reviews</h2>
+          <p className="text-sm text-muted-foreground">
+            Check that the receipt, amount and receiving account agree before approving.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" disabled={queue.isFetching}
+          onClick={() => void queue.refetch()}>Refresh reviews</Button>
+      </div>
+      {queue.isPending ? <p className="text-sm text-muted-foreground">Loading receipt reviews…</p> : null}
+      {queue.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          Receipt reviews could not be loaded. Refresh before acting.
+        </p>
+      ) : null}
+      {!queue.isPending && !queue.isError && rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No receipts awaiting review in your scope.</p>
+      ) : null}
+      {!queue.isError ? rows.map((row) => (
+        <article key={row.request_id} className="space-y-3 rounded-xl border border-border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">{row.receipt}</h3>
+              <p className="text-sm">{row.currency} {row.amount.toFixed(2)}</p>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {titleCase(row.status.replaceAll("_", " "))}
+            </span>
+          </div>
+          <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{row.evidence}</p>
+          {row.execution_error ? (
+            <p className="text-sm text-destructive">{row.execution_error}</p>
+          ) : null}
+          {row.can_approve ? (
+            <div className="space-y-3">
+              <Label htmlFor={`receipt-note-${row.request_id}`}>Your decision evidence</Label>
+              <Textarea id={`receipt-note-${row.request_id}`}
+                value={notes[row.request_id] ?? ""} maxLength={1500}
+                placeholder="Record the statement or merchant account evidence you checked."
+                onChange={(e) => setNotes((old) => ({
+                  ...old, [row.request_id]: e.target.value,
+                }))} />
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={matched[row.request_id] === true}
+                  onChange={(event) => setMatched((previous) => ({
+                    ...previous, [row.request_id]: event.target.checked,
+                  }))} />
+                I matched the receipt and exact amount to the receiving M-Pesa account.
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["approved", row.status === "execution_failed" ? "Retry confirmation" : "Approve receipt"],
+                  ["returned", "Return for correction"],
+                  ["rejected", "Reject receipt"],
+                ] as const).map(([action, label]) => (
+                  <Button key={action} size="sm"
+                    variant={action === "approved" ? "default" : "outline"}
+                    disabled={decide.isPending || (notes[row.request_id]?.trim().length ?? 0) < 10 ||
+                      (action === "approved" && !matched[row.request_id])}
+                    onClick={() => decide.mutate({
+                      requestId: row.request_id, paymentId: row.payment_id,
+                      action, note: notes[row.request_id] ?? "",
+                    })}>
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Awaiting cashier or authorized supervisor review.</p>
+          )}
+        </article>
+      )) : null}
+    </section>
   );
 }

@@ -35,13 +35,13 @@ export function PastryStatusBadge({ status }: { status: string }) {
   return <StatusPill tone={pastryTone(status)}>{titleCase(status)}</StatusPill>;
 }
 
-export function DueLabel({ value }: { value?: string | null }) {
+export function DueLabel({ value, timeZone }: { value?: string | null; timeZone?: string }) {
   if (!value) return <span className="text-xs text-muted-foreground">No due time</span>;
   const due = new Date(value);
   const late = due.getTime() < Date.now();
   return (
     <span className={late ? "text-xs font-medium text-destructive" : "text-xs text-muted-foreground"}>
-      Due {due.toLocaleString()}
+      Due {due.toLocaleString(undefined, timeZone ? {timeZone} : undefined)}{timeZone ? ` (${timeZone})` : ""}
     </span>
   );
 }

@@ -1,5 +1,8 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { accessibleAccent, normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { ArrowLeft, Receipt, ShoppingBag, Utensils } from "lucide-react";
 import {
   brandFallback,
   brandInitials,
@@ -8,6 +11,7 @@ import {
 } from "@/lib/public-apps";
 import { NEO_WORDMARK_SRC } from "@/components/brand/NeoIdentity";
 import { CREATOR_CREDIT_URL, InstagramMark } from "@/components/brand/NeoGlyph";
+import { GuestNavigation } from "@/components/public/GuestNavigation";
 
 /** The maker credit, shown beside "Powered by NEØ" on every public surface. */
 export function PublicCreatorCredit({ className = "" }: { className?: string }) {
@@ -24,7 +28,6 @@ export function PublicCreatorCredit({ className = "" }: { className?: string }) 
     </a>
   );
 }
-
 
 const WorkspaceContext = createContext<PublicWorkspace | null>(null);
 
@@ -69,19 +72,18 @@ export function PoweredByNeo({ tone = "muted" }: { tone?: "muted" | "light" }) {
   );
 }
 
-
-export function BrandMark({
-  workspace,
-  size = 40,
-}: {
-  workspace: PublicWorkspace;
+export function BrandMark({ workspace, size = 40 }: {
+  workspace: Pick<PublicWorkspace, "hotel_name" | "app_name" | "logo_url" | "button_style" | "primary_color">;
   size?: number;
 }) {
   const label = workspace.hotel_name || workspace.app_name || "Workspace";
-  if (workspace.logo_url) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const logo = workspace.logo_url;
+  if (logo && logo !== failedLogo) {
     return (
       <img
-        src={workspace.logo_url}
+        src={logo}
+        onError={() => setFailedLogo(logo)}
         alt={`${label} logo`}
         style={{ height: size }}
         className="w-auto max-w-[160px] object-contain"
@@ -96,6 +98,7 @@ export function BrandMark({
         height: size,
         borderRadius: buttonRadius(workspace.button_style),
         background: workspace.primary_color || brandFallback.primary,
+        color: primaryInk(workspace.primary_color || brandFallback.primary),
         fontSize: size * 0.38,
       }}
       aria-hidden
@@ -111,39 +114,72 @@ export function BrandMark({
  */
 export function PublicAppShell({
   children,
-  nav,
   homeTo,
+  cartCount = 0,
+  deliveryTab = "menu",
 }: {
   children: ReactNode;
-  nav?: ReactNode;
   homeTo?: { to: string; params?: Record<string, string> };
+  cartCount?: number;
+  deliveryTab?: "menu" | "cart" | "orders";
 }) {
   const ws = useWorkspace();
-  const primary = ws.primary_color || brandFallback.primary;
-  const secondary = ws.secondary_color || brandFallback.secondary;
-  const background = ws.background_color || brandFallback.background;
+  const primary = normalizedHex(ws.primary_color || brandFallback.primary);
+  const secondary = normalizedHex(ws.secondary_color || brandFallback.secondary, brandFallback.secondary);
+  const background = normalizedHex(ws.background_color || brandFallback.background, brandFallback.background);
+  const hotelSlug = homeTo?.to === "/delivery/$hotelSlug" ? homeTo.params?.["hotelSlug"] : undefined;
+  const guestSlug = hotelSlug ? ws.guest_slug : undefined;
+  const destinations = [
+    { key: "menu", to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
+    { key: "cart", to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
+    { key: "orders", to: "/delivery/$hotelSlug/orders", label: "Orders", icon: Receipt },
+  ] as const;
+  const deliveryLinks = hotelSlug ? destinations.map(({ key, to, label, icon: Icon }) => (
+    <Link
+      key={key}
+      to={to}
+      params={{ hotelSlug }}
+      aria-current={deliveryTab === key ? "page" : undefined}
+      activeOptions={{ exact: true }}
+    >
+      <span className="relative">
+        <Icon aria-hidden className="size-5" />
+        {key === "cart" && cartCount > 0 ? (
+          <>
+            <span className="neo-app-cart-count" aria-hidden>{cartCount}</span>
+            <span className="sr-only">{cartCount} {cartCount === 1 ? "item" : "items"} in</span>
+          </>
+        ) : null}
+      </span>
+      <span>{label}</span>
+    </Link>
+  )) : null;
 
   const brand = (
     <span className="flex min-w-0 items-center gap-3">
-      <span className="shrink-0"><BrandMark workspace={ws} /></span>
+      <span className="shrink-0">
+        <BrandMark workspace={ws} />
+      </span>
       <span className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-sm font-semibold text-white">
+        <span className="neo-hospitality-brand truncate text-sm font-semibold text-white">
           {ws.hotel_name || ws.app_name}
         </span>
-        <span className="truncate text-xs text-white/75">
-          {ws.app_name}
-        </span>
+        <span className="truncate text-xs text-white/75">{hotelSlug ? "Delivery & collection" : ws.app_name}</span>
       </span>
     </span>
   );
 
   return (
     <div
-      className="neo-public-app flex min-h-screen flex-col"
+      className={`neo-public-app neo-branded-app flex flex-col ${hotelSlug ? "neo-delivery-app neo-customer-frame" : ""}`}
+      data-guest-connected={guestSlug ? "true" : undefined}
       style={
         {
-          background,
+          ...(ws.experience_brand ? brandStyle(ws.experience_brand) : {}),
+          "--pa-background": background,
           "--pa-primary": primary,
+          "--pa-on-primary": primaryInk(primary),
+          "--pa-accent-ink": accessibleAccent(primary, "#FFFFFF"),
           "--pa-secondary": secondary,
           "--pa-muted": brandFallback.steel,
           "--pa-radius": buttonRadius(ws.button_style),
@@ -151,19 +187,36 @@ export function PublicAppShell({
       }
     >
       <header className="neo-pub-header">
-        <div className="neo-public-wrap grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4">
+        <div className="neo-public-wrap grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3">
           {homeTo ? (
-             <Link to={homeTo.to} params={homeTo.params ?? {}} className="min-w-0 overflow-hidden">
+            <Link to={homeTo.to} params={homeTo.params ?? {}} className="min-w-0 overflow-hidden">
               {brand}
             </Link>
           ) : (
             brand
           )}
-          {nav ? <div className="neo-scroll-x min-w-0 max-w-[52vw]">{nav}</div> : null}
+          {deliveryLinks ? (
+            <div className="flex items-center gap-2">
+              <nav aria-label="Delivery app" className="neo-delivery-header-nav hidden lg:flex">
+                {deliveryLinks}
+              </nav>
+              {guestSlug ? (
+                <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug: guestSlug }} search={{ section: "dining" }} className="neo-delivery-guest-link">
+                  <ArrowLeft className="size-3.5" aria-hidden /> Guest dining
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </div>
+        {guestSlug && deliveryLinks ? (
+          <nav aria-label="Delivery app" className="neo-public-wrap neo-guest-commerce-nav flex lg:hidden">
+            {deliveryLinks}
+          </nav>
+        ) : null}
       </header>
 
-      <main className="neo-public-wrap flex-1 py-7 sm:py-10">{children}</main>
+      <div className="neo-customer-content" data-scroll-restoration-id="delivery-body">
+      <main className="neo-public-wrap flex-1 py-5 sm:py-7">{children}</main>
 
       <footer className="neo-pub-footer">
         <div className="neo-public-wrap flex flex-col gap-3 py-8 text-xs sm:flex-row sm:items-center sm:justify-between">
@@ -181,6 +234,14 @@ export function PublicAppShell({
           </div>
         </div>
       </footer>
+      </div>
+      {guestSlug ? (
+        <GuestNavigation hotelSlug={guestSlug} active={deliveryTab === "menu" ? "explore" : "orders"} />
+      ) : deliveryLinks ? (
+        <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
+          {deliveryLinks}
+        </nav>
+      ) : null}
     </div>
   );
 }
@@ -208,12 +269,15 @@ export function BrandButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
+      className={`inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
       style={{
         borderRadius: buttonRadius(ws.button_style),
         background: variant === "solid" ? primary : "transparent",
-        color: variant === "solid" ? "#ffffff" : primary,
-        border: `1px solid ${primary}`,
+        color: variant === "solid" ? primaryInk(primary) : "var(--pa-accent-ink, " + primary + ")",
+        border:
+          variant === "solid"
+            ? `1px solid ${primary}`
+            : "1px solid var(--pa-accent-ink, " + primary + ")",
       }}
     >
       {children}
@@ -226,9 +290,7 @@ export function WorkspaceNotFound({ appLabel }: { appLabel: string }) {
   return (
     <div className="neo-public-app flex min-h-screen flex-col items-center justify-center px-6 text-center">
       <div className="neo-public-panel w-full max-w-md p-9">
-        <h1 className="neo-public-title text-white">
-          Hotel workspace not found
-        </h1>
+        <h1 className="neo-public-title text-white">Hotel workspace not found</h1>
         <p className="neo-public-copy mt-3 text-sm text-white/80">
           This {appLabel} link is not active. Check the address with the hotel, or scan their
           official QR code again.
@@ -259,10 +321,13 @@ export function PublicEmptyState({
   return (
     <div className="grid min-w-0 items-center gap-3 rounded-2xl border border-dashed border-black/10 bg-white/60 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-5">
       <div className="min-w-0">
-        <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
           {title}
         </p>
-        <p className="neo-public-copy mt-1 text-sm" style={{ color: brandFallback.steel }}>
+        <p
+          className="neo-public-copy mt-1 text-sm"
+          style={{ color: "var(--guest-muted, #52627A)" }}
+        >
           {description}
         </p>
       </div>

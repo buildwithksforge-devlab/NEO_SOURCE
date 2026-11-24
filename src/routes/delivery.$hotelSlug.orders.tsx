@@ -23,7 +23,7 @@ function OrdersPage() {
   const orders = useMyPublicOrders(ws.organization_id, customer.data?.["id"] as string | undefined);
 
   return (
-    <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+    <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
       <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
         My orders
       </h1>

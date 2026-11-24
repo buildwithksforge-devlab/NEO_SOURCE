@@ -1,0 +1,648 @@
+{
+  "fixtureNotice": "Reviewed deployed code/column contracts. No payment/shift rows or credentials included. Synthetic records only in test.",
+  "columns": [
+    {
+      "column": "id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "source_module",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "source_record_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "folio_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "amount",
+      "table": "cash_payment_requests",
+      "type": "numeric"
+    },
+    {
+      "column": "currency",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "method",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "reference",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "notes",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "requested_by",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "assigned_shift_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "assigned_cashier_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "payment_id",
+      "table": "cash_payment_requests",
+      "type": "uuid"
+    },
+    {
+      "column": "receipt_number",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "confirmed_at",
+      "table": "cash_payment_requests",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "cancelled_reason",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "idempotency_key",
+      "table": "cash_payment_requests",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "cash_payment_requests",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "cash_payment_requests",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "order_number",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "order_type",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "order_source",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "station_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "department_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "table_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "stay_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "folio_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "room_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "customer_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "corporate_account_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "waiter_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "shift_id",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "guest_count",
+      "table": "pos_orders",
+      "type": "integer"
+    },
+    {
+      "column": "guest_name",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "contact_phone",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "status",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "payment_status",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "folio_post_status",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "subtotal",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "discount_total",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "tax_total",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "service_charge_total",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "grand_total",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "paid_total",
+      "table": "pos_orders",
+      "type": "numeric"
+    },
+    {
+      "column": "currency",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "dietary_notes",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "allergy_alert",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "notes",
+      "table": "pos_orders",
+      "type": "text"
+    },
+    {
+      "column": "sent_at",
+      "table": "pos_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "served_at",
+      "table": "pos_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "closed_at",
+      "table": "pos_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "created_at",
+      "table": "pos_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "pos_orders",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "created_by",
+      "table": "pos_orders",
+      "type": "uuid"
+    },
+    {
+      "column": "id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "order_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "receipt_number",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "customer_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "amount",
+      "table": "pos_payments",
+      "type": "numeric"
+    },
+    {
+      "column": "tendered",
+      "table": "pos_payments",
+      "type": "numeric"
+    },
+    {
+      "column": "change_due",
+      "table": "pos_payments",
+      "type": "numeric"
+    },
+    {
+      "column": "currency",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "method",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "external_reference",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "provider_status",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "provider_payload",
+      "table": "pos_payments",
+      "type": "jsonb"
+    },
+    {
+      "column": "status",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "paid_at",
+      "table": "pos_payments",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "cashier_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "shift_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "verified_by",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "verification_note",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "pos_payments",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "pos_payments",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "created_by",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "idempotency_key",
+      "table": "pos_payments",
+      "type": "text"
+    },
+    {
+      "column": "correlation_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "destination_account_id",
+      "table": "pos_payments",
+      "type": "uuid"
+    },
+    {
+      "column": "id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "organization_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "branch_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "station_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "cashier_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "opened_at",
+      "table": "pos_shifts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "opening_float",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "expected_cash",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "counted_cash",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "variance",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "variance_reason",
+      "table": "pos_shifts",
+      "type": "text"
+    },
+    {
+      "column": "closed_at",
+      "table": "pos_shifts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "status",
+      "table": "pos_shifts",
+      "type": "text"
+    },
+    {
+      "column": "reviewed_by",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "reviewed_at",
+      "table": "pos_shifts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "notes",
+      "table": "pos_shifts",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "table": "pos_shifts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "table": "pos_shifts",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "shift_number",
+      "table": "pos_shifts",
+      "type": "text"
+    },
+    {
+      "column": "opened_by",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "closed_by",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "total_drops",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "total_paid_outs",
+      "table": "pos_shifts",
+      "type": "numeric"
+    },
+    {
+      "column": "review_approval_request_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "posted_journal_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    },
+    {
+      "column": "correlation_id",
+      "table": "pos_shifts",
+      "type": "uuid"
+    }
+  ],
+  "functions": [
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_branch_in_scope(_branch uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT CASE\n    WHEN public.current_access_scope() IN ('organisation','technical') THEN true\n    ELSE _branch IS NULL OR _branch = ANY (public.current_branch_ids())\n  END;\n$function$\n",
+      "definition_md5": "073af6634a1614993b8a1c0061643270",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_branch_in_scope(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_cash_request_payment(_folio uuid, _amount numeric, _reference text DEFAULT NULL::text, _notes text DEFAULT ''::text, _idempotency_key text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _f public.folios;\n  _ctx jsonb;\n  _shift uuid; _cashier uuid; _req uuid; _existing public.cash_payment_requests;\nBEGIN\n  IF NOT (public.has_permission('pms','payments.record') OR public.is_org_admin()) THEN\n    RAISE EXCEPTION 'Not permitted to record payments';\n  END IF;\n  IF _amount IS NULL OR _amount <= 0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;\n\n  SELECT * INTO _f FROM public.folios WHERE id=_folio AND organization_id=_org;\n  IF _f.id IS NULL THEN RAISE EXCEPTION 'Folio not found'; END IF;\n\n  IF _idempotency_key IS NOT NULL THEN\n    SELECT * INTO _existing FROM public.cash_payment_requests\n     WHERE organization_id=_org AND idempotency_key=_idempotency_key;\n    IF _existing.id IS NOT NULL THEN\n      RETURN jsonb_build_object('status',_existing.status,'request_id',_existing.id,\n        'payment_id',_existing.payment_id,'receipt_number',_existing.receipt_number);\n    END IF;\n  END IF;\n\n  _ctx := public.neo_cash_till_context(_f.branch_id);\n\n  IF (_ctx->>'self_service')::boolean THEN\n    _shift := (_ctx->>'my_shift_id')::uuid;\n    _cashier := auth.uid();\n  ELSE\n    SELECT s.id, s.cashier_id INTO _shift, _cashier\n      FROM public.pos_shifts s\n     WHERE s.organization_id=_org AND s.status='open'\n       AND (s.branch_id IS NULL OR _f.branch_id IS NULL OR s.branch_id=_f.branch_id)\n     ORDER BY (s.branch_id = _f.branch_id) DESC NULLS LAST, s.opened_at DESC\n     LIMIT 1;\n  END IF;\n\n  IF _shift IS NULL THEN\n    RETURN jsonb_build_object('status','no_till',\n      'message','No active cash drawer is available for this outlet.',\n      'can_open_drawer', _ctx->'can_open_drawer');\n  END IF;\n\n  INSERT INTO public.cash_payment_requests (organization_id, branch_id, source_module, source_record_id,\n    folio_id, amount, currency, method, reference, notes, status, requested_by,\n    assigned_shift_id, assigned_cashier_id, idempotency_key)\n  VALUES (_org, _f.branch_id, 'pms', _f.id, _f.id, _amount, COALESCE(_f.currency,'KES'), 'cash',\n    _reference, COALESCE(_notes,''), 'pending', auth.uid(), _shift, _cashier, _idempotency_key)\n  RETURNING id INTO _req;\n\n  INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value)\n  VALUES (_org, auth.uid(), '', 'finance.cash.request.create', 'finance', _req::text,\n    jsonb_build_object('folio_id',_f.id,'amount',_amount,'assigned_shift',_shift,'assigned_cashier',_cashier));\n\n  IF (_ctx->>'self_service')::boolean THEN\n    RETURN public.neo_cash_settle_request(_req);\n  END IF;\n\n  RETURN jsonb_build_object('status','pending','request_id',_req,'assigned_shift_id',_shift,\n    'assigned_cashier_id',_cashier,'amount',_amount);\nEND; $function$\n",
+      "definition_md5": "33a7c2397ac3e245cb9d883f0990ebda",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_cash_request_payment(uuid,numeric,text,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_cash_request_pos_payment(_order uuid, _amount numeric, _reference text DEFAULT NULL::text, _notes text DEFAULT ''::text, _idempotency_key text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _o public.pos_orders;\n  _ctx jsonb; _shift uuid; _cashier uuid; _req uuid; _existing public.cash_payment_requests;\nBEGIN\n  IF NOT (public.has_permission('pos','payments.record') OR public.has_permission('pos','orders.edit')\n          OR public.is_org_admin()) THEN\n    RAISE EXCEPTION 'Not permitted to record payments' USING ERRCODE = '42501';\n  END IF;\n  IF _amount IS NULL OR _amount <= 0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;\n\n  SELECT * INTO _o FROM public.pos_orders WHERE id=_order AND organization_id=_org;\n  IF _o.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;\n\n  IF _idempotency_key IS NOT NULL THEN\n    SELECT * INTO _existing FROM public.cash_payment_requests\n     WHERE organization_id=_org AND idempotency_key=_idempotency_key;\n    IF _existing.id IS NOT NULL THEN\n      RETURN jsonb_build_object('status',_existing.status,'request_id',_existing.id,\n        'payment_id',_existing.payment_id,'receipt_number',_existing.receipt_number);\n    END IF;\n  END IF;\n\n  _ctx := public.neo_cash_till_context(_o.branch_id);\n\n  IF (_ctx->>'self_service')::boolean THEN\n    _shift := (_ctx->>'my_shift_id')::uuid; _cashier := auth.uid();\n  ELSE\n    SELECT s.id, s.cashier_id INTO _shift, _cashier\n      FROM public.pos_shifts s\n     WHERE s.organization_id=_org AND s.status='open'\n       AND (s.branch_id IS NULL OR _o.branch_id IS NULL OR s.branch_id=_o.branch_id)\n     ORDER BY (s.branch_id = _o.branch_id) DESC NULLS LAST, s.opened_at DESC LIMIT 1;\n  END IF;\n\n  IF _shift IS NULL THEN\n    RETURN jsonb_build_object('status','no_till',\n      'message','No active cash drawer is available for this outlet.',\n      'can_open_drawer', _ctx->'can_open_drawer');\n  END IF;\n\n  INSERT INTO public.cash_payment_requests (organization_id, branch_id, source_module, source_record_id,\n    folio_id, amount, currency, method, reference, notes, status, requested_by,\n    assigned_shift_id, assigned_cashier_id, idempotency_key)\n  VALUES (_org, _o.branch_id, 'pos', _o.id, NULL, _amount, COALESCE(_o.currency,'KES'), 'cash',\n    COALESCE(_reference, _o.order_number), COALESCE(_notes,''), 'pending', auth.uid(),\n    _shift, _cashier, _idempotency_key)\n  RETURNING id INTO _req;\n\n  INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value)\n  VALUES (_org, auth.uid(), '', 'finance.cash.request.create', 'pos', _req::text,\n    jsonb_build_object('order_id',_o.id,'amount',_amount,'assigned_shift',_shift,'assigned_cashier',_cashier));\n\n  IF (_ctx->>'self_service')::boolean THEN\n    RETURN public.neo_cash_settle_request(_req);\n  END IF;\n\n  RETURN jsonb_build_object('status','pending','request_id',_req,'assigned_shift_id',_shift,\n    'assigned_cashier_id',_cashier,'amount',_amount);\nEND; $function$\n",
+      "definition_md5": "ca4a6bcb4641691751f5de1c70761206",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_cash_request_pos_payment(uuid,numeric,text,text,text)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_cash_settle_request(_request uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _r public.cash_payment_requests;\n  _f public.folios;\n  _o public.pos_orders;\n  _s public.pos_shifts;\n  _pay uuid; _receipt text; _paid numeric; _fully boolean;\nBEGIN\n  SELECT * INTO _r FROM public.cash_payment_requests WHERE id=_request AND organization_id=_org FOR UPDATE;\n  IF _r.id IS NULL THEN RAISE EXCEPTION 'Cash request not found'; END IF;\n\n  IF _r.status = 'confirmed' THEN\n    RETURN jsonb_build_object('status','confirmed','request_id',_r.id,\n      'payment_id',_r.payment_id,'receipt_number',_r.receipt_number,'amount',_r.amount);\n  END IF;\n  IF _r.status <> 'pending' THEN RAISE EXCEPTION 'Cash request is % and cannot be settled', _r.status; END IF;\n\n  SELECT * INTO _s FROM public.pos_shifts WHERE id=_r.assigned_shift_id AND organization_id=_org FOR UPDATE;\n  IF _s.id IS NULL OR _s.status <> 'open' THEN\n    RAISE EXCEPTION 'The assigned cash drawer is no longer open';\n  END IF;\n\n  _receipt := public.next_document_number('receipt');\n\n  IF _r.source_module = 'pos' THEN\n    SELECT * INTO _o FROM public.pos_orders WHERE id=_r.source_record_id AND organization_id=_org FOR UPDATE;\n    IF _o.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;\n\n    INSERT INTO public.pos_payments (organization_id, branch_id, order_id, receipt_number, customer_id,\n      amount, tendered, currency, method, external_reference, status, paid_at, cashier_id, shift_id,\n      created_by, idempotency_key)\n    VALUES (_org, _o.branch_id, _o.id, _receipt, _o.customer_id, _r.amount, _r.amount,\n      COALESCE(_o.currency,_r.currency), _r.method, _r.reference, 'confirmed', now(), _s.cashier_id, _s.id,\n      auth.uid(), 'cash-request:' || _r.id::text)\n    RETURNING id INTO _pay;\n\n    _paid := COALESCE(_o.paid_total,0) + _r.amount;\n    _fully := _paid >= COALESCE(_o.grand_total,0);\n\n    -- Move out of the service state BEFORE marking the bill paid: the lifecycle\n    -- guard refuses a fully paid order that is still sent/preparing.\n    IF _fully AND _o.status NOT IN ('awaiting-payment','paid','closed','charged-to-room','credit','cancelled','voided') THEN\n      UPDATE public.pos_orders SET status='awaiting-payment', updated_at=now() WHERE id=_o.id;\n    END IF;\n\n    UPDATE public.pos_orders\n       SET paid_total = _paid,\n           payment_status = CASE WHEN _fully THEN 'paid' ELSE 'partial' END,\n           updated_at = now()\n     WHERE id = _o.id;\n\n    IF _fully THEN\n      UPDATE public.pos_orders SET status='paid', updated_at=now()\n       WHERE id=_o.id AND status='awaiting-payment';\n    END IF;\n  ELSE\n    SELECT * INTO _f FROM public.folios WHERE id=_r.folio_id AND organization_id=_org FOR UPDATE;\n    IF _f.id IS NULL THEN RAISE EXCEPTION 'Folio not found'; END IF;\n    IF _f.status NOT IN ('open','under-review') THEN\n      RAISE EXCEPTION 'Folio is % and cannot accept payments', _f.status;\n    END IF;\n\n    INSERT INTO public.payments (organization_id, branch_id, receipt_number, folio_id, reservation_id,\n      customer_id, amount, currency, method, external_reference, status, received_by, notes, shift_id,\n      station_id, source_module, source_record_id, idempotency_key)\n    VALUES (_org, _f.branch_id, _receipt, _f.id, _f.reservation_id, _f.customer_id, _r.amount,\n      COALESCE(_f.currency,_r.currency), _r.method, _r.reference, 'confirmed', _s.cashier_id,\n      COALESCE(_r.notes,''), _s.id, _s.station_id, _r.source_module, _r.source_record_id,\n      'cash-request:' || _r.id::text)\n    RETURNING id INTO _pay;\n\n    INSERT INTO public.payment_allocations (organization_id, payment_id, folio_id, amount, created_by)\n    VALUES (_org, _pay, _f.id, _r.amount, _s.cashier_id);\n\n    UPDATE public.folios SET total_payments = COALESCE(total_payments,0) + _r.amount,\n      balance = COALESCE(balance,0) - _r.amount, updated_at = now() WHERE id=_f.id;\n  END IF;\n\n  UPDATE public.cash_payment_requests\n     SET status='confirmed', payment_id=_pay, receipt_number=_receipt,\n         assigned_cashier_id=COALESCE(assigned_cashier_id,_s.cashier_id), confirmed_at=now(), updated_at=now()\n   WHERE id=_r.id;\n\n  INSERT INTO public.audit_logs (organization_id, user_id, user_name, action, module, record_id, new_value, reason)\n  VALUES (_org, auth.uid(), '', 'finance.cash.receipt.confirm', 'finance', _pay::text,\n    jsonb_build_object('request_id',_r.id,'folio_id',_r.folio_id,'source_module',_r.source_module,\n      'source_record_id',_r.source_record_id,'amount',_r.amount,'method',_r.method,\n      'shift_id',_s.id,'collected_by',_s.cashier_id,'initiated_by',_r.requested_by,\n      'receipt_number',_receipt), _r.notes);\n\n  RETURN jsonb_build_object('status','confirmed','request_id',_r.id,'payment_id',_pay,\n    'receipt_number',_receipt,'amount',_r.amount,'shift_id',_s.id,'collected_by',_s.cashier_id);\nEND; $function$\n",
+      "definition_md5": "8536b8f2fb47d499c37bb423cc5373b2",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_cash_settle_request(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.neo_cash_till_context(_branch uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _mine public.pos_shifts;\n  _can_open boolean;\n  _can_confirm boolean;\n  _tills jsonb;\nBEGIN\n  IF _org IS NULL THEN RETURN jsonb_build_object('active_tills', '[]'::jsonb); END IF;\n\n  _can_open := public.has_permission('finance','till.create') OR public.has_permission('pos','shifts.open');\n  _can_confirm := public.has_permission('finance','till.confirm_cash')\n               OR public.has_permission('finance','till.edit')\n               OR public.has_permission('pos','shifts.open');\n\n  SELECT * INTO _mine FROM public.pos_shifts s\n   WHERE s.organization_id=_org AND s.cashier_id=auth.uid() AND s.status='open'\n     AND (_branch IS NULL OR s.branch_id IS NULL OR s.branch_id=_branch)\n   ORDER BY (s.branch_id = _branch) DESC NULLS LAST, s.opened_at DESC LIMIT 1;\n\n  SELECT COALESCE(jsonb_agg(jsonb_build_object(\n           'shift_id', s.id, 'shift_number', s.shift_number,\n           'cashier_id', s.cashier_id, 'cashier_name', COALESCE(p.full_name,'Cashier'),\n           'branch_id', s.branch_id, 'opened_at', s.opened_at) ORDER BY s.opened_at DESC), '[]'::jsonb)\n    INTO _tills\n    FROM public.pos_shifts s\n    LEFT JOIN public.profiles p ON p.id = s.cashier_id\n   WHERE s.organization_id=_org AND s.status='open'\n     AND (_branch IS NULL OR s.branch_id IS NULL OR s.branch_id=_branch);\n\n  RETURN jsonb_build_object(\n    'can_open_drawer', _can_open,\n    'can_confirm_cash', _can_confirm,\n    'my_shift_id', _mine.id,\n    'my_shift_number', _mine.shift_number,\n    'self_service', (_mine.id IS NOT NULL AND _can_confirm),\n    'active_tills', _tills\n  );\nEND; $function$\n",
+      "definition_md5": "0056bf3ebc240af86eec6901d53680c2",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "neo_cash_till_context(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.pos_reconcile_order_settlement(_order_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE _org uuid := public.current_org_id(); _o public.pos_orders;\nBEGIN\n  IF NOT public.has_permission('pos','payments','process') THEN\n    RAISE EXCEPTION 'Not permitted to settle bills';\n  END IF;\n  SELECT * INTO _o FROM public.pos_orders WHERE id = _order_id AND organization_id = _org;\n  IF _o.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;\n  IF NOT public.neo_branch_in_scope(_o.branch_id) THEN\n    RAISE EXCEPTION 'That bill belongs to a property outside your access';\n  END IF;\n  RETURN public.pos_reconcile_settlement_internal(_order_id);\nEND $function$\n",
+      "definition_md5": "39307e5eca40679a396faa1eff3efd33",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "pos_reconcile_order_settlement(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.pos_reconcile_settlement_internal(_order_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _o public.pos_orders;\n  _paid numeric := 0;\n  _pending numeric := 0;\n  _balance numeric;\n  _open_items int;\n  _closed boolean := false;\n  _pay_status text;\n  _settleable boolean;\nBEGIN\n  SELECT * INTO _o FROM public.pos_orders WHERE id = _order_id FOR UPDATE;\n  IF _o.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;\n\n  SELECT coalesce(sum(amount) FILTER (WHERE status = 'confirmed'), 0),\n         coalesce(sum(amount) FILTER (WHERE status IN ('initiated','pending')), 0)\n    INTO _paid, _pending\n    FROM public.pos_payments WHERE order_id = _order_id;\n\n  _balance := round(coalesce(_o.grand_total, 0) - _paid, 2);\n\n  SELECT count(*) INTO _open_items\n    FROM public.pos_order_items\n   WHERE order_id = _order_id AND status NOT IN ('served','cancelled','voided');\n\n  _pay_status := CASE\n    WHEN _balance <= 0.005 AND coalesce(_o.grand_total,0) > 0 THEN 'paid'\n    WHEN _paid > 0 THEN 'partial'\n    WHEN _pending > 0 THEN 'pending'\n    ELSE 'unpaid' END;\n\n  _settleable := _balance <= 0.005 AND coalesce(_o.grand_total,0) > 0 AND _open_items = 0\n                 AND _o.status NOT IN ('closed','cancelled','voided','charged-to-room','credit');\n\n  IF _settleable THEN\n    -- move the order out of the service states BEFORE marking it paid, so the\n    -- lifecycle guard never sees a fully paid order sitting in 'served'.\n    IF _o.status IN ('served','partially-served') THEN\n      UPDATE public.pos_orders SET status = 'awaiting-payment' WHERE id = _order_id;\n      _o.status := 'awaiting-payment';\n    END IF;\n\n    IF _o.status = 'awaiting-payment' THEN\n      UPDATE public.pos_orders\n         SET status = 'paid', paid_total = _paid, payment_status = _pay_status\n       WHERE id = _order_id;\n      UPDATE public.pos_orders SET status = 'closed', closed_at = now() WHERE id = _order_id;\n      _closed := true;\n    ELSE\n      UPDATE public.pos_orders\n         SET paid_total = _paid, payment_status = _pay_status\n       WHERE id = _order_id\n         AND (paid_total IS DISTINCT FROM _paid OR payment_status IS DISTINCT FROM _pay_status);\n    END IF;\n  ELSE\n    UPDATE public.pos_orders\n       SET paid_total = _paid, payment_status = _pay_status\n     WHERE id = _order_id\n       AND (paid_total IS DISTINCT FROM _paid OR payment_status IS DISTINCT FROM _pay_status);\n  END IF;\n\n  RETURN jsonb_build_object(\n    'order_id', _order_id,\n    'grand_total', coalesce(_o.grand_total,0),\n    'paid_total', _paid,\n    'pending_total', _pending,\n    'balance', greatest(_balance, 0),\n    'payment_status', _pay_status,\n    'open_items', _open_items,\n    'closed', _closed\n  );\nEND $function$\n",
+      "definition_md5": "9ac8c027fd726fabefb5c9bffdc63ab5",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "pos_reconcile_settlement_internal(uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.pos_record_payment_attempt(_order_id uuid, _amount numeric, _method text, _tendered numeric DEFAULT NULL::numeric, _reference text DEFAULT NULL::text, _shift_id uuid DEFAULT NULL::uuid, _idempotency_key text DEFAULT NULL::text, _manual_confirm boolean DEFAULT false, _note text DEFAULT NULL::text, _account uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _org uuid := public.current_org_id();\n  _o public.pos_orders;\n  _existing public.pos_payments;\n  _confirmed numeric := 0;\n  _active numeric := 0;\n  _balance numeric;\n  _headroom numeric;\n  _status text;\n  _provider boolean;\n  _needs_reference boolean;\n  _change numeric := 0;\n  _payment uuid;\n  _shift public.pos_shifts;\n  _receipt text;\n  _settle jsonb;\n  _acct uuid;\n  _finance jsonb := jsonb_build_object('ok', true, 'reason', 'not_due');\n  _key text := coalesce(nullif(_idempotency_key,''), 'pos-pay:' || _order_id::text || ':' || gen_random_uuid()::text);\nBEGIN\n  IF NOT public.neo_pos_can_take_payment() THEN\n    RAISE EXCEPTION 'Not permitted to take payments';\n  END IF;\n\n  SELECT * INTO _existing FROM public.pos_payments\n   WHERE organization_id = _org AND idempotency_key = _key;\n  IF _existing.id IS NOT NULL THEN\n    RETURN jsonb_build_object('payment_id', _existing.id, 'status', _existing.status, 'duplicate', true,\n                              'receipt_number', _existing.receipt_number)\n        || public.pos_reconcile_settlement_internal(_existing.order_id);\n  END IF;\n\n  SELECT * INTO _o FROM public.pos_orders WHERE id = _order_id AND organization_id = _org FOR UPDATE;\n  IF _o.id IS NULL THEN RAISE EXCEPTION 'Order not found'; END IF;\n  IF NOT public.neo_branch_in_scope(_o.branch_id) THEN\n    RAISE EXCEPTION 'That bill belongs to a property outside your access';\n  END IF;\n  IF _o.status IN ('closed','cancelled','voided','charged-to-room') THEN\n    RAISE EXCEPTION 'Bill is % and cannot take further payment', _o.status;\n  END IF;\n\n  _acct := public.neo_assert_financial_account(_org, _o.branch_id, _account);\n\n  IF _method = 'cash' THEN\n    _shift_id := coalesce(_shift_id, public.pos_resolve_open_shift(_o.branch_id));\n    IF _shift_id IS NULL THEN\n      RAISE EXCEPTION 'No cash drawer is open for this property. Open your till before taking cash.';\n    END IF;\n    SELECT * INTO _shift FROM public.pos_shifts WHERE id = _shift_id AND organization_id = _org FOR UPDATE;\n    IF _shift.id IS NULL THEN RAISE EXCEPTION 'Cash drawer not found for this property'; END IF;\n    IF _shift.status <> 'open' THEN\n      RAISE EXCEPTION 'That cash drawer is % and cannot take cash. Open a till first.', _shift.status;\n    END IF;\n  END IF;\n\n  SELECT coalesce(sum(amount) FILTER (WHERE status = 'confirmed'), 0),\n         coalesce(sum(amount) FILTER (WHERE status IN ('initiated','pending')), 0)\n    INTO _confirmed, _active\n    FROM public.pos_payments WHERE order_id = _order_id;\n\n  _balance := round(coalesce(_o.grand_total,0) - _confirmed, 2);\n  _headroom := round(_balance - _active, 2);\n\n  IF coalesce(_amount,0) <= 0 THEN RAISE EXCEPTION 'Payment amount must be greater than zero'; END IF;\n  IF _amount > _headroom + 0.005 THEN\n    RAISE EXCEPTION 'Payment of % exceeds the settleable balance of % (outstanding %, awaiting provider %)',\n      _amount, greatest(_headroom,0), greatest(_balance,0), _active;\n  END IF;\n\n  _provider := _method IN ('mpesa','card-terminal','qr');\n  _needs_reference := _method <> 'cash' AND _method <> 'complimentary';\n\n  IF _needs_reference AND coalesce(btrim(coalesce(_reference,'')),'') = '' THEN\n    RAISE EXCEPTION 'A reference is required for a % payment', _method;\n  END IF;\n\n  IF _manual_confirm THEN\n    IF NOT public.has_permission('pos','payments','manual-confirm') THEN\n      RAISE EXCEPTION 'Not permitted to confirm payments manually';\n    END IF;\n    IF NOT _provider THEN\n      RAISE EXCEPTION 'Manual confirmation applies to provider-backed payments only';\n    END IF;\n    IF coalesce(btrim(coalesce(_note,'')),'') = '' THEN\n      RAISE EXCEPTION 'A verification note is required for a manually confirmed payment';\n    END IF;\n    _status := 'confirmed';\n  ELSE\n    _status := CASE WHEN _provider THEN 'pending' ELSE 'confirmed' END;\n  END IF;\n\n  IF _method = 'cash' AND _tendered IS NOT NULL THEN\n    _change := greatest(0, _tendered - _amount);\n  END IF;\n\n  IF _status = 'confirmed' THEN\n    _receipt := public.next_document_number('receipt');\n  END IF;\n\n  INSERT INTO public.pos_payments (\n    organization_id, branch_id, order_id, amount, tendered, change_due, currency, method,\n    external_reference, receipt_number, status, provider_status, paid_at, cashier_id, shift_id, customer_id,\n    created_by, verified_by, verification_note, idempotency_key, destination_account_id\n  ) VALUES (\n    _org, _o.branch_id, _order_id, round(_amount,2), _tendered, _change, _o.currency, _method,\n    nullif(btrim(coalesce(_reference,'')),''), _receipt, _status,\n    CASE WHEN _manual_confirm THEN 'manual-confirmed'\n         WHEN _provider THEN 'awaiting-provider'\n         WHEN _method = 'cash' THEN NULL\n         ELSE 'recorded-unverified' END,\n    CASE WHEN _status = 'confirmed' THEN now() ELSE NULL END,\n    auth.uid(), _shift_id, _o.customer_id, auth.uid(),\n    CASE WHEN _manual_confirm THEN auth.uid() ELSE NULL END,\n    nullif(btrim(coalesce(_note,'')),''), _key, _acct\n  ) RETURNING id INTO _payment;\n\n  INSERT INTO public.audit_logs (organization_id, branch_id, user_id, action, module, record_id, new_value)\n  VALUES (_org, _o.branch_id, auth.uid(), 'pos.payment.record', 'pos', _order_id,\n          jsonb_build_object('paymentId', _payment, 'amount', round(_amount,2), 'method', _method,\n                             'status', _status, 'manualConfirm', _manual_confirm,\n                             'providerBacked', _provider, 'receiptNumber', _receipt,\n                             'shiftId', _shift_id, 'destinationAccountId', _acct,\n                             'reference', nullif(btrim(coalesce(_reference,'')),'')));\n\n  _settle := public.pos_reconcile_settlement_internal(_order_id);\n\n  IF coalesce((_settle->>'payment_status'), '') = 'paid' THEN\n    _finance := public.neo_finance_post_source('pos', _order_id, true);\n  END IF;\n\n  RETURN jsonb_build_object('payment_id', _payment, 'status', _status, 'duplicate', false,\n                            'provider_backed', _provider, 'receipt_number', _receipt,\n                            'shift_id', _shift_id, 'destination_account_id', _acct, 'finance', _finance)\n      || _settle;\nEND $function$\n",
+      "definition_md5": "e3a09ce80f0bf557e4bfd9520c93b21c",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "pos_record_payment_attempt(uuid,numeric,text,numeric,text,uuid,text,boolean,text,uuid)"
+    },
+    {
+      "definition": "CREATE OR REPLACE FUNCTION public.pos_record_payment_attempt(_order_id uuid, _amount numeric, _method text, _tendered numeric, _reference text, _shift_id uuid, _idempotency_key text, _manual_confirm boolean, _note text, _account uuid, _payment_metadata jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_result jsonb;\n  v_payment uuid;\n  v_meta jsonb := coalesce(_payment_metadata, '{}'::jsonb);\n  v_terminal text;\n  v_network text;\n  v_last4 text;\nBEGIN\n  IF jsonb_typeof(v_meta) <> 'object' THEN\n    RAISE EXCEPTION 'Payment metadata must be an object';\n  END IF;\n\n  IF EXISTS (\n    SELECT 1\n    FROM jsonb_object_keys(v_meta) AS k(key)\n    WHERE k.key NOT IN ('terminal', 'network', 'last4')\n  ) THEN\n    RAISE EXCEPTION 'Unsupported card metadata field';\n  END IF;\n\n  v_terminal := nullif(btrim(v_meta->>'terminal'), '');\n  v_network := nullif(btrim(v_meta->>'network'), '');\n  v_last4 := nullif(btrim(v_meta->>'last4'), '');\n\n  IF v_terminal IS NOT NULL AND length(v_terminal) > 80 THEN\n    RAISE EXCEPTION 'Card terminal name is too long';\n  END IF;\n\n  IF v_network IS NOT NULL\n     AND lower(v_network) NOT IN ('visa', 'mastercard', 'other') THEN\n    RAISE EXCEPTION 'Card network must be Visa, Mastercard or Other';\n  END IF;\n\n  IF v_last4 IS NOT NULL AND v_last4 !~ '^[0-9]{4}$' THEN\n    RAISE EXCEPTION 'Card last four digits must contain exactly four numbers';\n  END IF;\n\n  IF lower(coalesce(replace(_method, '-', '_'), '')) <> 'card'\n     AND v_meta <> '{}'::jsonb THEN\n    RAISE EXCEPTION 'Manual terminal metadata is only valid for Card payments';\n  END IF;\n\n  v_result := public.pos_record_payment_attempt(\n    _order_id,\n    _amount,\n    _method,\n    _tendered,\n    _reference,\n    _shift_id,\n    _idempotency_key,\n    _manual_confirm,\n    _note,\n    _account\n  );\n\n  v_payment := nullif(v_result->>'payment_id', '')::uuid;\n\n  IF v_payment IS NOT NULL\n     AND lower(coalesce(replace(_method, '-', '_'), '')) = 'card' THEN\n    UPDATE public.pos_payments\n       SET provider_payload =\n             coalesce(provider_payload, '{}'::jsonb)\n             || jsonb_strip_nulls(\n                  jsonb_build_object(\n                    'captureMode', 'manual-terminal',\n                    'terminal', v_terminal,\n                    'network',\n                      CASE\n                        WHEN v_network IS NULL THEN NULL\n                        ELSE initcap(lower(v_network))\n                      END,\n                    'last4', v_last4\n                  )\n                ),\n           updated_at = now()\n     WHERE id = v_payment\n       AND organization_id = public.current_org_id();\n  END IF;\n\n  RETURN v_result;\nEND\n$function$\n",
+      "definition_md5": "fe6d4802c4b7b16e939c53de4091ebf7",
+      "security_definer": true,
+      "settings": [
+        "search_path=public"
+      ],
+      "signature": "pos_record_payment_attempt(uuid,numeric,text,numeric,text,uuid,text,boolean,text,uuid,jsonb)"
+    }
+  ]
+}

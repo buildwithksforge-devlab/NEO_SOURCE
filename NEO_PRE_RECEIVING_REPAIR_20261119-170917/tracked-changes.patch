@@ -1,0 +1,2769 @@
+﻿diff --git a/src/components/inventory/ReceivingDocumentHistory.tsx b/src/components/inventory/ReceivingDocumentHistory.tsx
+index aef6edf..234d691 100644
+--- a/src/components/inventory/ReceivingDocumentHistory.tsx
++++ b/src/components/inventory/ReceivingDocumentHistory.tsx
+@@ -16,10 +16,10 @@ export function ReceivingDocumentHistory() {
+     {receipts.isError ? <p role="alert" className="mt-3 text-destructive">Saved GRNs could not be loaded. {receipts.error instanceof Error ? receipts.error.message : 'Refresh to retry.'}</p>
+       : receipts.isPending ? <p className="mt-3">Loading saved GRNsΓÇª</p>
+       : !receipts.data?.length ? <p className="mt-3 text-muted-foreground">No saved GRNs found for this property.</p>
+-      : <ul className="mt-3 space-y-3">{receipts.data.map(receipt => <li key={String(receipt.id)} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+-        <div><p className="font-medium">{String(receipt.grn_number || receipt.id)}</p><p className="text-sm text-muted-foreground">{String(receipt.status ?? 'Unknown status')} ┬╖ {String(receipt.received_at ?? '')}</p></div>
+-        <div className="flex flex-wrap items-center gap-3"><DocumentPrintButton type="goods_receipt" id={String(receipt.id)} label="Open / reprint GRN" />
+-          {receipt.order_id ? <Link to="/lpos/$id" params={{ id: String(receipt.order_id) }} className="text-sm underline">Purchase, reconciliation & invoices</Link> : <span className="text-sm text-destructive">Purchase link needs review</span>}
++      : <ul className="mt-3 space-y-3">{receipts.data.map(receipt => <li key={String(receipt['id'])} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
++        <div><p className="font-medium">{String(receipt['grn_number'] || receipt['id'])}</p><p className="text-sm text-muted-foreground">{String(receipt['status'] ?? 'Unknown status')} ┬╖ {String(receipt['received_at'] ?? '')}</p></div>
++        <div className="flex flex-wrap items-center gap-3"><DocumentPrintButton type="goods_receipt" id={String(receipt['id'])} label="Open / reprint GRN" />
++          {receipt['order_id'] ? <Link to="/lpos/$id" params={{ id: String(receipt['order_id']) }} className="text-sm underline">Purchase, reconciliation & invoices</Link> : <span className="text-sm text-destructive">Purchase link needs review</span>}
+         </div>
+       </li>)}</ul>}
+   </SectionCard>;
+diff --git a/src/components/pms/ReservationActions.tsx b/src/components/pms/ReservationActions.tsx
+index c9d98bc..5d1feae 100644
+--- a/src/components/pms/ReservationActions.tsx
++++ b/src/components/pms/ReservationActions.tsx
+@@ -30,7 +30,7 @@ import {
+ import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
+ 
+ import {
+-  FOLIO_CATEGORIES,
++  MANUAL_FOLIO_CATEGORIES,
+   PAYMENT_METHODS,
+   money,
+   moneyWithCode,
+@@ -398,6 +398,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
+   const [quantity, setQuantity] = useState(1);
+   const [unitPrice, setUnitPrice] = useState(0);
+   const [tax, setTax] = useState(0);
++  const [chargeIntent, setChargeIntent] = useState(() => crypto.randomUUID());
+   const post = usePostCharge();
+ 
+   if (!can("pms", "folios.create")) return null;
+@@ -412,12 +413,14 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
+         </Button>
+       }
+       title="Post a charge"
+-      description="Charges are posted once ΓÇö a duplicate submission is ignored by the posting service."
++      description="Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked."
+       confirmLabel="Post charge"
+-      disabled={!description.trim() || unitPrice <= 0}
+-      onConfirm={() =>
+-        post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax })
+-      }
++      disabled={post.isPending || !description.trim() || !Number.isFinite(unitPrice) || unitPrice <= 0
++        || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(tax) || tax < 0}
++      onConfirm={async () => {
++        await post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax, chargeIntent });
++        setChargeIntent(crypto.randomUUID());
++      }}
+     >
+       <div className="space-y-2">
+         <Label>Category</Label>
+@@ -426,7 +429,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
+             <SelectValue />
+           </SelectTrigger>
+           <SelectContent>
+-            {FOLIO_CATEGORIES.map((c) => (
++            {MANUAL_FOLIO_CATEGORIES.map((c) => (
+               <SelectItem key={c} value={c}>
+                 {titleCase(c)}
+               </SelectItem>
+diff --git a/src/components/public/GuestScreen.tsx b/src/components/public/GuestScreen.tsx
+index 9f3fcda..94c954a 100644
+--- a/src/components/public/GuestScreen.tsx
++++ b/src/components/public/GuestScreen.tsx
+@@ -96,21 +96,19 @@ export function GuestScreen({
+ 
+       <nav
+         aria-label="Guest app"
+-        className="neo-guest-tabbar fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] lg:hidden"
++        className="neo-app-dock neo-guest-tabbar lg:hidden"
+       >
+-        <ul className="mx-auto flex w-full max-w-5xl">
++        <ul className="contents">
+           {tabs.map((tab) => {
+             const Icon = tab.icon;
+             const isActive =
+               tab.key === active || (tab.key !== "home" && pathname.endsWith(`/${tab.key}`));
+             return (
+-              <li key={tab.key} className="flex-1">
++              <li key={tab.key}>
+                 <Link
+                   to={tab.to}
+                   params={{ hotelSlug }}
+                   aria-current={isActive ? "page" : undefined}
+-                  className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 px-1 py-3 text-[0.7rem] font-medium"
+-                  style={{ color: isActive ? "var(--pa-accent-ink)" : "var(--guest-muted)" }}
+                 >
+                   <Icon className="size-5" aria-hidden />
+                   <span className="w-full truncate text-center">{tab.label}</span>
+diff --git a/src/components/public/GuestSignInPrompt.tsx b/src/components/public/GuestSignInPrompt.tsx
+index fa1a8c3..6ff26c1 100644
+--- a/src/components/public/GuestSignInPrompt.tsx
++++ b/src/components/public/GuestSignInPrompt.tsx
+@@ -43,7 +43,7 @@ export function GuestSignInPrompt({
+       <div className="flex min-w-0 flex-wrap items-center gap-2" data-public-actions>
+         <Link
+           to="/guest/$hotelSlug/signin"
+-          params={{ hotelSlug }}
++          params={{ hotelSlug: ws.guest_slug ?? hotelSlug }}
+           search={{ next, mode: undefined }}
+           className="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-white"
+           style={{ background: primary, color: "var(--pa-on-primary)", borderRadius: buttonRadius(ws.button_style) }}
+@@ -52,7 +52,7 @@ export function GuestSignInPrompt({
+         </Link>
+         <Link
+           to="/guest/$hotelSlug/signin"
+-          params={{ hotelSlug }}
++          params={{ hotelSlug: ws.guest_slug ?? hotelSlug }}
+           search={{ next, mode: "register" }}
+           className="inline-flex min-h-11 items-center px-3 text-sm font-medium"
+           style={{ color: "var(--pa-accent-ink)" }}
+diff --git a/src/components/public/NeoPublic.tsx b/src/components/public/NeoPublic.tsx
+index f4b7c64..d842177 100644
+--- a/src/components/public/NeoPublic.tsx
++++ b/src/components/public/NeoPublic.tsx
+@@ -8,7 +8,7 @@
+  *
+  * Presentation only ΓÇö it never decides what a person may see or do.
+  */
+-import type { ReactNode } from "react";
++import type { CSSProperties, ReactNode } from "react";
+ import { Link } from "@tanstack/react-router";
+ import { NEO_WORDMARK_SRC } from "@/components/brand/NeoIdentity";
+ import { GUEST_HERO_WIDTHS, responsiveSrcSet } from "@/lib/responsive-image";
+@@ -17,11 +17,13 @@ import { GUEST_HERO_WIDTHS, responsiveSrcSet } from "@/lib/responsive-image";
+ export function PublicSurface({
+   children,
+   className = "",
++  style,
+ }: {
+   children: ReactNode;
+   className?: string;
++  style?: CSSProperties;
+ }) {
+-  return <div className={`neo-pub ${className}`}>{children}</div>;
++  return <div className={`neo-pub ${className}`} style={style}>{children}</div>;
+ }
+ 
+ /** Minimal top chrome: the NE├ÿ mark, and at most one action. */
+diff --git a/src/components/public/PublicAppShell.tsx b/src/components/public/PublicAppShell.tsx
+index 23ec81b..6019a74 100644
+--- a/src/components/public/PublicAppShell.tsx
++++ b/src/components/public/PublicAppShell.tsx
+@@ -1,6 +1,7 @@
+-import { primaryInk } from "@/lib/public-palette";
+-import { createContext, useContext, type ReactNode } from "react";
++import { accessibleAccent, normalizedHex, primaryInk } from "@/lib/public-palette";
++import { createContext, useContext, useState, type ReactNode } from "react";
+ import { Link } from "@tanstack/react-router";
++import { Receipt, ShoppingBag, Utensils } from "lucide-react";
+ import {
+   brandFallback,
+   brandInitials,
+@@ -69,12 +70,18 @@ export function PoweredByNeo({ tone = "muted" }: { tone?: "muted" | "light" }) {
+   );
+ }
+ 
+-export function BrandMark({ workspace, size = 40 }: { workspace: PublicWorkspace; size?: number }) {
++export function BrandMark({ workspace, size = 40 }: {
++  workspace: Pick<PublicWorkspace, "hotel_name" | "app_name" | "logo_url" | "button_style" | "primary_color">;
++  size?: number;
++}) {
+   const label = workspace.hotel_name || workspace.app_name || "Workspace";
+-  if (workspace.logo_url) {
++  const [failedLogo, setFailedLogo] = useState<string | null>(null);
++  const logo = workspace.logo_url;
++  if (logo && logo !== failedLogo) {
+     return (
+       <img
+-        src={workspace.logo_url}
++        src={logo}
++        onError={() => setFailedLogo(logo)}
+         alt={`${label} logo`}
+         style={{ height: size }}
+         className="w-auto max-w-[160px] object-contain"
+@@ -113,9 +120,15 @@ export function PublicAppShell({
+   homeTo?: { to: string; params?: Record<string, string> };
+ }) {
+   const ws = useWorkspace();
+-  const primary = ws.primary_color || brandFallback.primary;
+-  const secondary = ws.secondary_color || brandFallback.secondary;
+-  const background = ws.background_color || brandFallback.background;
++  const primary = normalizedHex(ws.primary_color || brandFallback.primary);
++  const secondary = normalizedHex(ws.secondary_color || brandFallback.secondary, brandFallback.secondary);
++  const background = normalizedHex(ws.background_color || brandFallback.background, brandFallback.background);
++  const hotelSlug = homeTo?.to === "/delivery/$hotelSlug" ? homeTo.params?.["hotelSlug"] : undefined;
++  const destinations = [
++    { to: "/delivery/$hotelSlug", label: "Menu", icon: Utensils },
++    { to: "/delivery/$hotelSlug/cart", label: "Cart", icon: ShoppingBag },
++    { to: "/delivery/$hotelSlug/orders", label: "Orders", icon: Receipt },
++  ] as const;
+ 
+   const brand = (
+     <span className="flex min-w-0 items-center gap-3">
+@@ -133,11 +146,13 @@ export function PublicAppShell({
+ 
+   return (
+     <div
+-      className="neo-public-app flex min-h-screen flex-col"
++      className={`neo-public-app neo-branded-app flex min-h-screen flex-col ${hotelSlug ? "neo-delivery-app" : ""}`}
+       style={
+         {
+-          background,
++          "--pa-background": background,
+           "--pa-primary": primary,
++          "--pa-on-primary": primaryInk(primary),
++          "--pa-accent-ink": accessibleAccent(primary, "#FFFFFF"),
+           "--pa-secondary": secondary,
+           "--pa-muted": brandFallback.steel,
+           "--pa-radius": buttonRadius(ws.button_style),
+@@ -153,7 +168,7 @@ export function PublicAppShell({
+           ) : (
+             brand
+           )}
+-          {nav ? <div className="neo-scroll-x min-w-0 max-w-[52vw]">{nav}</div> : null}
++          {nav ? <div className={`neo-scroll-x min-w-0 max-w-[52vw] ${hotelSlug ? "hidden lg:block" : ""}`}>{nav}</div> : null}
+         </div>
+       </header>
+ 
+@@ -175,6 +190,16 @@ export function PublicAppShell({
+           </div>
+         </div>
+       </footer>
++      {hotelSlug ? (
++        <nav aria-label="Delivery app" className="neo-app-dock lg:hidden">
++          {destinations.map(({ to, label, icon: Icon }) => (
++            <Link key={to} to={to} params={{ hotelSlug }} activeOptions={{ exact: label === "Menu" }}>
++              <Icon aria-hidden className="size-5" />
++              <span>{label}</span>
++            </Link>
++          ))}
++        </nav>
++      ) : null}
+     </div>
+   );
+ }
+@@ -202,7 +227,7 @@ export function BrandButton({
+       type={type}
+       onClick={onClick}
+       disabled={disabled}
+-      className={`inline-flex min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
++      className={`inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${className}`}
+       style={{
+         borderRadius: buttonRadius(ws.button_style),
+         background: variant === "solid" ? primary : "transparent",
+diff --git a/src/components/public/RiderTabBar.tsx b/src/components/public/RiderTabBar.tsx
+index fc614b6..23772b3 100644
+--- a/src/components/public/RiderTabBar.tsx
++++ b/src/components/public/RiderTabBar.tsx
+@@ -1,6 +1,10 @@
+ import { Link } from "@tanstack/react-router";
++import { useQuery } from "@tanstack/react-query";
+ import { Bike, Home, LifeBuoy, UserRound } from "lucide-react";
++import type { CSSProperties } from "react";
++import { fetchRelationshipProperty } from "@/lib/front-door";
+ import { brandFallback } from "@/lib/public-apps";
++import { normalizedHex, primaryInk } from "@/lib/public-palette";
+ 
+ const tabs = [
+   { key: "home", label: "Home", icon: Home, to: "/rider" },
+@@ -11,14 +15,35 @@ const tabs = [
+ 
+ export type RiderTab = (typeof tabs)[number]["key"];
+ 
++/** The Rider app's roster determines the property, independently of the staff workspace. */
++export function useRiderBrand(branchId: string | null, userId?: string) {
++  const property = useQuery({
++    queryKey: ["rider", "property-brand", userId, branchId],
++    enabled: Boolean(userId && branchId),
++    queryFn: () => branchId ? fetchRelationshipProperty(branchId) : null,
++    staleTime: 60_000,
++  });
++  const match = property.data?.branch_id === branchId ? property.data : null;
++  const primary = normalizedHex(match?.brand?.primary || brandFallback.primary);
++  return {
++    property: match,
++    primary,
++    style: {
++      "--pa-primary": primary,
++      "--pa-on-primary": primaryInk(primary),
++      "--pa-secondary": normalizedHex(match?.brand?.accent || brandFallback.secondary, brandFallback.secondary),
++    } as CSSProperties,
++  };
++}
++
+ /**
+  * Persistent bottom navigation for the standalone Rider app, mirroring the
+  * customer experience standard: mobile-first, one tap between screens.
+  */
+ export function RiderTabBar({ active }: { active: RiderTab }) {
+   return (
+-    <nav aria-label="Rider app" className="neo-pub-float max-w-[calc(100vw-1rem)] px-2 py-2">
+-      <ul className="grid grid-cols-4 items-center gap-1">
++    <nav aria-label="Rider app" className="neo-app-dock">
++      <ul className="contents">
+         {tabs.map((tab) => {
+           const Icon = tab.icon;
+           const isActive = tab.key === active;
+@@ -27,13 +52,9 @@ export function RiderTabBar({ active }: { active: RiderTab }) {
+               <Link
+                 to={tab.to}
+                 aria-current={isActive ? "page" : undefined}
+-                className={`flex min-w-0 items-center justify-center gap-2 rounded-full px-2.5 py-2 text-[0.72rem] font-semibold transition-colors ${
+-                  isActive ? "bg-white/12 text-white" : "text-white/60 hover:text-white"
+-                }`}
+-                style={isActive ? { color: brandFallback.primary } : undefined}
+               >
+-                <Icon className="size-4" aria-hidden />
+-                <span className={`${isActive ? "" : "hidden sm:inline"} truncate`}>{tab.label}</span>
++                <Icon className="size-5" aria-hidden />
++                <span>{tab.label}</span>
+               </Link>
+             </li>
+           );
+diff --git a/src/integrations/supabase/types.ts b/src/integrations/supabase/types.ts
+index 73c0e2c..9142425 100644
+--- a/src/integrations/supabase/types.ts
++++ b/src/integrations/supabase/types.ts
+@@ -30799,6 +30799,7 @@ export type Database = {
+           order_type: string
+           organization_id: string
+           paid_total: number
++          room_transfer_paid_total: number | null
+           payment_status: string
+           room_id: string | null
+           sent_at: string | null
+diff --git a/src/lib/__tests__/automatic-platform-checks-postgres.test.ts b/src/lib/__tests__/automatic-platform-checks-postgres.test.ts
+index 982d7b5..eecbe15 100644
+--- a/src/lib/__tests__/automatic-platform-checks-postgres.test.ts
++++ b/src/lib/__tests__/automatic-platform-checks-postgres.test.ts
+@@ -35,7 +35,7 @@ describe('automatic platform evidence and defects', () => {
+    INSERT INTO branches VALUES('${id(2)}','${id(1)}',true),('${id(4)}','${id(3)}',true);
+    SELECT set_config('test.org','${id(1)}',false),set_config('test.actor','${id(10)}',false),set_config('test.allow','true',false);`);
+  });
+- const run = async () => (await db.query<{r:any}>(`SELECT neo_platform_run_checks('${id(2)}') r`)).rows[0].r;
++ const run = async () => (await db.query<{r:any}>(`SELECT neo_platform_run_checks('${id(2)}') r`)).rows[0]!.r;
+  it('saves real checks and reuses a recent run without duplicates', async () => {
+   expect(await run()).toMatchObject({passed:4,failed:0,blocked:0,cached:false});
+   expect(await run()).toMatchObject({cached:true});
+diff --git a/src/lib/__tests__/go-live-error-render.test.tsx b/src/lib/__tests__/go-live-error-render.test.tsx
+index 08b1139..fd0268f 100644
+--- a/src/lib/__tests__/go-live-error-render.test.tsx
++++ b/src/lib/__tests__/go-live-error-render.test.tsx
+@@ -11,7 +11,7 @@ import {Route} from '@/routes/admin.go-live';
+ const Component=(Route as any).options.component;
+ beforeEach(()=>{m.readiness={data:{status:'ready',generated_at:'2026-11-09T01:00:00Z',checks:[{key:'pos',label:'Configured',domain:'POS',status:'ready',detail:'ok',count:1,route:'/pos'}]},isError:false,isPending:false,isFetching:false,refetch:vi.fn()};m.menu={data:[{item_id:'tea',name:'Tea',state:'ready',issues:[]}],isError:false,isPending:false,refetch:vi.fn()}});
+ describe('Go-Live failure visibility',()=>{
+- it('shows a readiness error instead of an empty result or stale green status',()=>{m.readiness.isError=true;m.readiness.error=new Error('network unavailable');const html=renderToStaticMarkup(<Component/>);expect(html).toContain('Readiness could not be verified');expect(html).toContain('Overall: Unknown');expect(html).not.toContain('Overall: Ready');expect(html).not.toContain('No readiness signals available')});
++ it('shows a readiness error instead of an empty result or stale green status',()=>{m.readiness.isError=true;m.readiness.error=new Error('network unavailable');const html=renderToStaticMarkup(<Component/>);expect(html).toContain('Readiness could not be verified');expect(html).toContain('Live configuration: Unknown');expect(html).not.toContain('Live configuration: Ready');expect(html).not.toContain('No readiness signals available')});
+  it('shows menu request failures instead of import advice or all-ready claims',()=>{m.menu.isError=true;m.menu.error=new Error('network unavailable');const html=renderToStaticMarkup(<Component/>);expect(html).toContain('Menu readiness could not be verified');expect(html).not.toContain('All 1 menu items');expect(html).not.toContain('No menu items for this property')});
+  it('renders pending checks as loading rather than an empty successful query',()=>{m.readiness.isPending=true;m.readiness.data=undefined;const html=renderToStaticMarkup(<Component/>);expect(html).not.toContain('No readiness signals available');expect(html).not.toContain('Overall: Ready')});
+ });
+diff --git a/src/lib/__tests__/platform-automatic-checks.test.ts b/src/lib/__tests__/platform-automatic-checks.test.ts
+index 111b2ee..9a80923 100644
+--- a/src/lib/__tests__/platform-automatic-checks.test.ts
++++ b/src/lib/__tests__/platform-automatic-checks.test.ts
+@@ -1,5 +1,5 @@
+ import { beforeEach,describe,expect,it,vi } from 'vitest';
+-const m=vi.hoisted(()=>({rpc:vi.fn(),invalidate:vi.fn(),auth:{organizationId:'org',user:{id:'worker'},phase:'ready',permissionsLoaded:true,can:()=>true},branch:{branchId:'property'}}));
++const m=vi.hoisted(()=>({rpc:vi.fn(),invalidate:vi.fn(),auth:{organizationId:'org',user:{id:'worker'},phase:'ready',permissionsLoaded:true,can:():boolean=>true},branch:{branchId:'property'}}));
+ vi.mock('@tanstack/react-query',()=>({useQuery:(q:any)=>q,useQueryClient:()=>({invalidateQueries:m.invalidate})}));
+ vi.mock('@/lib/auth',()=>({useAuth:()=>m.auth}));
+ vi.mock('@/lib/branch-filter',()=>({useActivePropertyFilter:()=>m.branch}));
+@@ -7,7 +7,7 @@ vi.mock('@/integrations/supabase/client',()=>({supabase:{}}));
+ vi.mock('@/lib/rpc-guard',()=>({guardedRpc:m.rpc}));
+ import {useAutomaticPlatformChecks} from '@/lib/platform-automatic-checks';
+ const query=()=>useAutomaticPlatformChecks() as any;
+-beforeEach(()=>{vi.clearAllMocks();m.auth={organizationId:'org',user:{id:'worker'},phase:'ready',permissionsLoaded:true,can:()=>true};m.branch={branchId:'property'};m.rpc.mockResolvedValue({data:{run_id:'saved',finished_at:'2026-11-19T08:00:00Z'},error:null});});
++beforeEach(()=>{vi.clearAllMocks();m.auth={organizationId:'org',user:{id:'worker'},phase:'ready',permissionsLoaded:true,can:():boolean=>true};m.branch={branchId:'property'};m.rpc.mockResolvedValue({data:{run_id:'saved',finished_at:'2026-11-19T08:00:00Z'},error:null});});
+ describe('automatic platform checks',()=>{
+  it('runs for the selected property and refreshes the existing Quality records',async()=>{await query().queryFn();expect(m.rpc).toHaveBeenCalledWith(expect.anything(),'neo_platform_run_checks',{_branch:'property'});expect(m.invalidate).toHaveBeenCalledWith({queryKey:['platform','defects']});expect(m.invalidate).toHaveBeenCalledWith({queryKey:['platform','test_runs']});});
+  it('does not run for signed-out or unauthorized users or missing scope',()=>{m.auth.phase='signed-out';expect(query().enabled).toBe(false);m.auth.phase='ready';m.auth.can=()=>false;expect(query().enabled).toBe(false);m.auth.can=()=>true;m.branch.branchId='';expect(query().enabled).toBe(false);});
+diff --git a/src/lib/__tests__/pos-room-transfer-postgres.test.ts b/src/lib/__tests__/pos-room-transfer-postgres.test.ts
+index 4ca89d3..39db377 100644
+--- a/src/lib/__tests__/pos-room-transfer-postgres.test.ts
++++ b/src/lib/__tests__/pos-room-transfer-postgres.test.ts
+@@ -7,7 +7,8 @@ const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
+ const org=id(1),branch=id(2),order=id(3),folio=id(4),stay=id(5),room=id(6),reservation=id(7),staff=id(8);
+ const key=`pos-room-charge:${order}`;
+ const migration=read("supabase/migrations/20261119140000_pos_room_transfer_money_integrity.sql");
+-describe("unpaid POS room transfer: actual transfer and folio-posting routines",()=>{
++const partialMigration=read("supabase/migrations/20261119170000_pos_partial_room_transfer.sql");
++describe("POS room transfer: actual transfer and folio-posting routines",()=>{
+  let db:PGlite;
+  beforeAll(async()=>{
+   db=new PGlite();await db.exec(`
+@@ -32,9 +33,54 @@ describe("unpaid POS room transfer: actual transfer and folio-posting routines",
+    CREATE TABLE pos_payments(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,order_id uuid,amount numeric,status text);
+    CREATE TABLE cash_payment_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,source_module text,source_record_id uuid,status text);
+    CREATE TABLE mpesa_transactions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,source_module text,source_record_id uuid,payment_table text,payment_id uuid,status text,result_code integer);
++   ALTER TABLE mpesa_transactions ADD COLUMN branch_id uuid, ADD COLUMN amount numeric,
++    ADD COLUMN mpesa_receipt_number text, ADD COLUMN applied_at timestamptz;
+    CREATE TABLE approval_requests(organization_id uuid,source_record_id uuid,approval_type text,status text);
+    CREATE TABLE audit_logs(organization_id uuid,branch_id uuid,user_id uuid,user_name text,action text,module text,record_id text,new_value jsonb);
+    CREATE TABLE test_events(organization_id uuid,source_id uuid,payload jsonb);
++   ALTER TABLE folios ADD COLUMN total_payments numeric DEFAULT 0;
++   ALTER TABLE pos_payments ADD COLUMN branch_id uuid, ADD COLUMN currency text, ADD COLUMN paid_at timestamptz,
++    ADD COLUMN receipt_number text, ADD COLUMN method text, ADD COLUMN shift_id uuid, ADD COLUMN cashier_id uuid,
++    ADD COLUMN external_reference text, ADD COLUMN destination_account_id uuid;
++   ALTER TABLE cash_payment_requests ADD COLUMN payment_id uuid, ADD COLUMN amount numeric,
++    ADD COLUMN branch_id uuid, ADD COLUMN currency text;
++   CREATE TABLE payments(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid,branch_id uuid,folio_id uuid,
++    reservation_id uuid,customer_id uuid,receipt_number text,amount numeric,currency text,method text,external_reference text,
++    status text,paid_at timestamptz,received_by uuid,notes text,source_module text,source_record_id uuid,
++    idempotency_key text,destination_account_id uuid,shift_id uuid,posted_journal_id uuid);
++   CREATE TABLE payment_attempts(organization_id uuid,payment_table text,payment_id uuid,posted_journal_id uuid,updated_at timestamptz);
++   CREATE TABLE test_payment_events(payment_id uuid);
++   CREATE FUNCTION trg_payment_attempt_payments() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
++    INSERT INTO payment_attempts(organization_id,payment_table,payment_id) VALUES(NEW.organization_id,'payments',NEW.id);
++    RETURN NEW;
++   END $$;
++   CREATE FUNCTION tg_payment_events() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
++    INSERT INTO test_payment_events VALUES(NEW.id);RETURN NEW;
++   END $$;
++   CREATE TRIGGER payment_attempt_sync AFTER INSERT OR UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION trg_payment_attempt_payments();
++   CREATE TRIGGER payments_domain_events AFTER INSERT OR UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION tg_payment_events();
++   CREATE TABLE payment_allocations(organization_id uuid,payment_id uuid,folio_id uuid,amount numeric,created_by uuid);
++   CREATE TABLE pos_refund_requests(order_id uuid,payment_id uuid,status text);
++   CREATE TABLE cash_refund_requests(pos_payment_id uuid,status text);
++   CREATE TABLE journal_entries(id uuid DEFAULT gen_random_uuid(),organization_id uuid,status text,reversed_by_journal_id uuid,
++    journal_type text,source_document_id uuid,source_document_type text);
++   CREATE TABLE bank_accounts(id uuid,organization_id uuid,gl_account_id uuid,branch_id uuid,active boolean);
++   CREATE TABLE chart_of_accounts(id uuid,organization_id uuid,active boolean,postable boolean,is_header boolean);
++   ALTER TABLE audit_logs ADD COLUMN reason text;
++   ALTER TABLE folios ADD COLUMN folio_number text, ADD COLUMN folio_type text, ADD COLUMN closed_at timestamptz;
++   ALTER TABLE stays ADD COLUMN checked_out_at timestamptz, ADD COLUMN checked_out_by uuid, ADD COLUMN updated_at timestamptz;
++   ALTER TABLE rooms ADD COLUMN occupancy_status text, ADD COLUMN housekeeping_status text;
++   CREATE TABLE reservations(id uuid,organization_id uuid,branch_id uuid,status text,payment_status text,updated_at timestamptz);
++   CREATE TABLE reservation_deposits(organization_id uuid,applied_folio_id uuid,applied_folio_line_id uuid,payment_id uuid,amount numeric,currency text,status text);
++   CREATE TABLE room_assignments(organization_id uuid,reservation_id uuid,status text,updated_at timestamptz);
++   CREATE TABLE pms_workflow_events(organization_id uuid,branch_id uuid,event_type text,reservation_id uuid,stay_id uuid,
++    folio_id uuid,idempotency_key text,created_by uuid,UNIQUE(organization_id,idempotency_key));
++   CREATE FUNCTION is_org_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
++   CREATE FUNCTION ops_set_room_status(uuid,text,text,text,text,uuid,text) RETURNS void LANGUAGE sql AS $$
++    UPDATE rooms SET housekeeping_status=$2,occupancy_status=$7 WHERE id=$1 $$;
++   CREATE FUNCTION neo_finance_post_txn(text,uuid,boolean) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
++    RETURN jsonb_build_object('ok',current_setting('test.finance_failure',true) IS DISTINCT FROM 'on','journal_id',gen_random_uuid());
++   END $$;
+    CREATE FUNCTION corp_assert_credit(uuid,uuid,uuid,numeric) RETURNS void LANGUAGE plpgsql AS $$ BEGIN END $$;
+    CREATE FUNCTION emit_domain_event(uuid,uuid,text,text,uuid,jsonb,text,uuid) RETURNS uuid LANGUAGE plpgsql AS $$ BEGIN
+     IF current_setting('test.event_failure',true)='on' THEN RAISE EXCEPTION 'controlled event failure'; END IF;
+@@ -47,19 +93,28 @@ describe("unpaid POS room transfer: actual transfer and folio-posting routines",
+   await db.exec("CREATE TRIGGER actual_pos_status_guard BEFORE UPDATE ON pos_orders FOR EACH ROW EXECUTE FUNCTION pos_enforce_order_status()");
+   await db.exec("REVOKE ALL ON FUNCTION pos_post_room_charge(uuid,uuid,text) FROM PUBLIC;GRANT EXECUTE ON FUNCTION pos_post_room_charge(uuid,uuid,text) TO authenticated");
+   await db.exec(migration);
++  await db.exec(migration);
++  await db.exec(partialMigration);
++  await db.exec(read("supabase/migrations/20261119174000_pms_manual_stock_sale_boundary.sql"));
++  await db.exec(extract("supabase/migrations/20261115013000_finance_checkout_ledger_parity.sql","neo_folio_financial_components"));
++  await db.exec(read("supabase/migrations/20261116220000_pms_linked_deposit_projection.sql"));
++  await db.exec(extract("supabase/migrations/20261118100000_pms_multi_folio_checkout.sql","pms_check_out"));
+  },30000);
+  beforeEach(async()=>{
+-  await db.exec(`TRUNCATE pos_orders,pos_order_status_history,folios,stays,rooms,folio_lines,pos_payments,cash_payment_requests,mpesa_transactions,approval_requests,audit_logs,test_events;
+-   SELECT set_config('test.actor','${staff}',false),set_config('test.permission','on',false),set_config('test.event_failure','off',false),set_config('neo.system_posting','off',false);
++  await db.exec(`TRUNCATE pos_orders,pos_order_status_history,folios,stays,rooms,folio_lines,pos_payments,cash_payment_requests,mpesa_transactions,approval_requests,audit_logs,test_events,
++   payments,payment_allocations,payment_attempts,test_payment_events,pos_refund_requests,cash_refund_requests,
++   journal_entries,reservations,reservation_deposits,room_assignments,pms_workflow_events;
++   SELECT set_config('test.actor','${staff}',false),set_config('test.permission','on',false),set_config('test.event_failure','off',false),set_config('test.finance_failure','off',false),set_config('neo.system_posting','off',false);
+    INSERT INTO pos_orders VALUES('${order}','${org}','${branch}',NULL,'not-posted','served','unpaid','POS-EXISTING','dine-in','KES',7050,7261.5,889.66,211.5,0,0,0,0,NULL,NULL,NULL);
+    INSERT INTO stays VALUES('${stay}','${org}','${branch}','${reservation}','${room}','in-house');
+    INSERT INTO rooms VALUES('${room}','${org}','${branch}');
+    INSERT INTO folios(id,organization_id,branch_id,reservation_id,stay_id,status,currency) VALUES('${folio}','${org}','${branch}','${reservation}','${stay}','open','KES');
++   INSERT INTO reservations VALUES('${reservation}','${org}','${branch}','checked-in','part-paid',null);
+   `);
+  });
+  afterAll(async()=>db?.close());
+  async function post(target=folio,attempt=key){return (await db.query<{line:string}>("SELECT pos_post_room_charge($1,$2,$3) line",[order,target,attempt])).rows[0]!.line;}
+- async function snapshot(){return JSON.stringify((await db.query("SELECT (SELECT jsonb_agg(to_jsonb(o)) FROM pos_orders o) orders,(SELECT jsonb_agg(to_jsonb(f)) FROM folios f) folios,(SELECT count(*) FROM folio_lines) lines,(SELECT count(*) FROM test_events) events,(SELECT count(*) FROM audit_logs) audits,(SELECT count(*) FROM pos_order_status_history) transitions")).rows);}
++ async function snapshot(){return JSON.stringify((await db.query("SELECT (SELECT jsonb_agg(to_jsonb(o)) FROM pos_orders o) orders,(SELECT jsonb_agg(to_jsonb(f)) FROM folios f) folios,(SELECT count(*) FROM folio_lines) lines,(SELECT count(*) FROM test_events) events,(SELECT count(*) FROM audit_logs) audits,(SELECT count(*) FROM pos_order_status_history) transitions,(SELECT count(*) FROM payments) payments,(SELECT count(*) FROM payment_allocations) allocations")).rows);}
+  it("posts the full unpaid inclusive-tax bill once, with the exact original source and component amounts",async()=>{
+   const line=await post();expect((await db.query("SELECT folio_id,source_record_uuid,net_amount::float8 amount,tax_amount::float8 tax,service_charge_amount::float8 service,unit_price::float8 base FROM folio_lines WHERE id=$1",[line])).rows[0])
+    .toEqual({folio_id:folio,source_record_uuid:order,amount:7261.5,tax:889.66,service:211.5,base:6160.34});
+@@ -74,10 +129,75 @@ describe("unpaid POS room transfer: actual transfer and folio-posting routines",
+   await post();await db.exec(`INSERT INTO folios(id,organization_id,branch_id,reservation_id,stay_id,status,currency) VALUES('${id(20)}','${org}','${branch}','${reservation}','${stay}','open','KES')`);
+   const saved=await snapshot();await expect(post(id(20))).rejects.toThrow(/does not match/);await expect(post(folio,"different-key")).rejects.toThrow(/does not match/);expect(await snapshot()).toBe(saved);
+  });
+- it("refuses confirmed or partial money even if the cached paid total is wrong",async()=>{
++ it("refuses a confirmed receipt when the cached paid total is wrong",async()=>{
+   await db.exec(`INSERT INTO pos_payments(organization_id,order_id,amount,status) VALUES('${org}','${order}',2000,'confirmed')`);
+   const saved=await snapshot();await expect(post()).rejects.toThrow(/recorded or unresolved money/);expect(await snapshot()).toBe(saved);
+  });
++ async function partialTender() {
++  await db.exec(`UPDATE pos_orders SET paid_total=2000,payment_status='partial';
++   INSERT INTO pos_payments(id,organization_id,order_id,branch_id,currency,amount,status,paid_at,receipt_number,method,shift_id)
++   VALUES('${id(90)}','${org}','${order}','${branch}','KES',2000,'confirmed',now(),'POS-TENDER','cash','${id(91)}');
++   INSERT INTO cash_payment_requests(organization_id,source_module,source_record_id,status,payment_id,amount,branch_id,currency)
++   VALUES('${org}','pos','${order}','confirmed','${id(90)}',2000,'${branch}','KES');
++   INSERT INTO payment_attempts(organization_id,payment_table,payment_id) VALUES('${org}','pos_payments','${id(90)}');`);
++ }
++ it("posts full revenue once and applies the original tender without adding a second till entry",async()=>{
++  await partialTender();
++  const line=await post();
++  expect((await db.query("SELECT balance::float8,total_payments::float8 FROM folios")).rows).toEqual([{balance:5261.5,total_payments:2000}]);
++  expect((await db.query("SELECT p.source_record_id,p.receipt_number,p.shift_id,p.amount::float8,a.folio_id FROM payments p JOIN payment_allocations a ON a.payment_id=p.id")).rows)
++   .toEqual([{source_record_id:id(90),receipt_number:"POS-TENDER",shift_id:null,amount:2000,folio_id:folio}]);
++  expect((await db.query("SELECT payment_table,posted_journal_id IS NOT NULL backed FROM payment_attempts")).rows)
++   .toEqual([{payment_table:"pos_payments",backed:true}]);
++  expect((await db.query("SELECT * FROM test_payment_events")).rows).toEqual([]);
++  const saved=await snapshot();
++  expect(await post()).toBe(line);
++  expect(await snapshot()).toBe(saved);
++  await expect(db.exec("UPDATE pos_payments SET status='refunded'")).rejects.toThrow(/applied to a guest folio/);
++ });
++ it("rolls back the folio and tender allocation if Finance cannot post",async()=>{
++  await partialTender();
++  await db.exec("SELECT set_config('test.finance_failure','on',false)");
++  const saved=await snapshot();
++  await expect(post()).rejects.toThrow(/could not be reconciled/);
++  expect(await snapshot()).toBe(saved);
++ });
++ it("accepts matching provider confirmation alongside cash and keeps both receipts separate",async()=>{
++  await partialTender();
++  await db.exec(`UPDATE pos_orders SET paid_total=2500;
++   INSERT INTO pos_payments(id,organization_id,order_id,branch_id,currency,amount,status,paid_at,receipt_number,method,external_reference)
++   VALUES('${id(92)}','${org}','${order}','${branch}','KES',500,'confirmed',now(),NULL,'mpesa','CONFIRMED-REFERENCE');
++   INSERT INTO mpesa_transactions(organization_id,source_module,source_record_id,payment_table,payment_id,status,result_code,
++    branch_id,amount,mpesa_receipt_number,applied_at)
++   VALUES('${org}','pos_order','${order}','pos_payments','${id(92)}','success',0,'${branch}',500,'CONFIRMED-REFERENCE',now());`);
++  const line=await post();
++  expect((await db.query("SELECT p.method,p.amount::float8,p.receipt_number FROM payments p ORDER BY p.method")).rows)
++   .toEqual([{method:"cash",amount:2000,receipt_number:"POS-TENDER"},{method:"mpesa",amount:500,receipt_number:"CONFIRMED-REFERENCE"}]);
++  expect((await db.query("SELECT balance::float8 FROM folios")).rows).toEqual([{balance:4761.5}]);
++  expect(await post()).toBe(line);
++ });
++ it("combines room and service charges with POS and settles only after the true remainder is paid",async()=>{
++  await db.exec(`UPDATE rooms SET occupancy_status='occupied',housekeeping_status='occupied';
++   INSERT INTO folio_lines(organization_id,folio_id,status,line_type,category,net_amount) VALUES
++    ('${org}','${folio}','posted','charge','accommodation',1000),('${org}','${folio}','posted','charge','laundry',300);`);
++  await partialTender();
++  const line=await post();
++  await expect(db.query("SELECT pms_check_out($1,false,'')",[reservation])).rejects.toThrow(/outstanding balance 6561.50/);
++  await db.exec(`INSERT INTO payments(organization_id,folio_id,amount,currency,status)
++   VALUES('${org}','${folio}',6561.50,'KES','confirmed')`);
++  const result=(await db.query<{result:unknown}>("SELECT pms_check_out($1,false,'') result",[reservation])).rows[0]!.result;
++  expect(result).toMatchObject({ok:true,charges:8561.50,collected:8561.50,outstanding:0,room_state:"vacant-dirty"});
++  expect(await post()).toBe(line);
++ });
++ it("routes stocked sales away from the front desk's manual folio charge form",async()=>{
++  const charge=(category:string)=>db.query(
++   "SELECT folio_post_charge($1,$2,'Desk charge',1,100,0,0,0,'pms.folio',NULL,'rooms',$3,NULL)",
++   [folio,category,`desk:${category}`],
++  );
++  await expect(charge("bar")).rejects.toThrow(/Post this stock sale from POS or Minibar/);
++  await expect(charge("laundry")).resolves.toBeTruthy();
++  expect((await db.query("SELECT category FROM folio_lines")).rows).toEqual([{category:"laundry"}]);
++ });
+  it.each(["initiated","pending","processing","unknown"])("refuses payment attempt %s before creating a folio charge",async(status)=>{
+   await db.query("INSERT INTO pos_payments(organization_id,order_id,amount,status) VALUES($1,$2,2000,$3)",[org,order,status]);const saved=await snapshot();
+   await expect(post()).rejects.toThrow(/unresolved money/);expect(await snapshot()).toBe(saved);
+@@ -136,8 +256,7 @@ describe("unpaid POS room transfer: actual transfer and folio-posting routines",
+   await db.exec("SELECT set_config('test.actor','',false)");await expect(post()).rejects.toThrow(/Not permitted/);
+   await db.exec(`SELECT set_config('test.actor','${staff}',false),set_config('test.permission','off',false)`);await expect(post()).rejects.toThrow(/Not permitted/);
+  });
+- it("reapplies without business writes and retains the existing owner and grants",async()=>{
+-  const before=await snapshot();await db.exec(migration);expect(await snapshot()).toBe(before);
++ it("retains the existing execute grants after both migrations",async()=>{
+   expect((await db.query("SELECT has_function_privilege('authenticated','pos_post_room_charge(uuid,uuid,text)','EXECUTE') allowed,has_function_privilege('anon','pos_post_room_charge(uuid,uuid,text)','EXECUTE') anonymous")).rows[0]).toEqual({allowed:true,anonymous:false});
+  });
+  it("executes the installed-definition preflight read-only without calling the transfer",async()=>{
+@@ -145,12 +264,12 @@ describe("unpaid POS room transfer: actual transfer and folio-posting routines",
+   try {
+    const result=(await db.query<{pos_room_transfer_preflight:any}>(read("supabase/repair/2026-11-19/POS-ROOM-TRANSFER-PREFLIGHT.sql"))).rows[0]!.pos_room_transfer_preflight;
+    expect(result.installed_transfer.authenticated_execute).toBe(true);expect(result.installed_transfer.anonymous_execute).toBe(false);
+-   expect(result.existing_money_guards).toHaveLength(2);
++   expect(result.existing_money_guards).toHaveLength(3);
+   } finally {await db.exec("ROLLBACK");}
+   expect(await snapshot()).toBe(before);
+  });
+  it("refuses unknown installed source rather than overwriting a newer repair",async()=>{
+   await db.exec("BEGIN;CREATE OR REPLACE FUNCTION pos_post_room_charge(_order_id uuid,_folio_id uuid,_idempotency_key text) RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$");
+-  await expect(db.exec(migration)).rejects.toThrow(/differs from reviewed source/);await db.exec("ROLLBACK");
++  await expect(db.exec(partialMigration)).rejects.toThrow(/differs from the reviewed predecessor/);await db.exec("ROLLBACK");
+  });
+ });
+diff --git a/src/lib/__tests__/pos-room-transfer-state.test.ts b/src/lib/__tests__/pos-room-transfer-state.test.ts
+index 2c49dfe..c4606d4 100644
+--- a/src/lib/__tests__/pos-room-transfer-state.test.ts
++++ b/src/lib/__tests__/pos-room-transfer-state.test.ts
+@@ -3,7 +3,14 @@ import {posRoomTransferState} from "../pos-room-transfer";
+ const bill={status:"served",folio_post_status:"not-posted",folio_id:null,grand_total:7261.5,paid_total:0,payment_status:"unpaid",pos_payments:[]};
+ describe("POS room transfer and collection boundary",()=>{
+  it("allows a completely unpaid served bill without requiring payment before production",()=>expect(posRoomTransferState(bill)).toMatchObject({canTransfer:true,canCollect:true,amountDue:7261.5}));
+- it("does not offer the remaining partial debt as a full-bill room charge",()=>expect(posRoomTransferState({...bill,paid_total:2000,payment_status:"partial"})).toMatchObject({canTransfer:false,canCollect:true,amountDue:5261.5}));
++ it("offers a partially paid bill only when confirmed tenders match",()=>{
++  const partial={...bill,paid_total:2000,payment_status:"partial"};
++  expect(posRoomTransferState(partial)).toMatchObject({canTransfer:false,canCollect:true,amountDue:5261.5});
++  const verified={...partial,pos_payments:[{status:"confirmed",amount:2000}]};
++  expect(posRoomTransferState(verified)).toMatchObject({canTransfer:true,amountDue:5261.5});
++  expect(posRoomTransferState({...verified,folio_post_status:"posted",folio_id:"folio",room_transfer_paid_total:2000}))
++   .toMatchObject({canTransfer:false,canCollect:false,overlap:false,transferredBalance:5261.5});
++ });
+  it.each(["confirmed","pending","initiated","processing","unknown"])("refuses a room transfer with saved payment status %s",status=>expect(posRoomTransferState({...bill,pos_payments:[{status}]}).canTransfer).toBe(false));
+  it("allows final failed attempts but keeps active receipt review blocked",()=>{
+   const failed={...bill,pos_payments:[{status:"failed"}]};expect(posRoomTransferState(failed).canTransfer).toBe(true);
+diff --git a/src/lib/__tests__/public-app-commerce-ux.test.ts b/src/lib/__tests__/public-app-commerce-ux.test.ts
+index bad97aa..a9819d3 100644
+--- a/src/lib/__tests__/public-app-commerce-ux.test.ts
++++ b/src/lib/__tests__/public-app-commerce-ux.test.ts
+@@ -23,7 +23,7 @@ describe("public commerce IA", () => {
+     expect(favourites).toContain('Favourites');
+     expect(folio).toContain('/guest/$hotelSlug/checkout');
+     expect(guestCheckout).toContain('useGuestFolioMpesaCheckout');
+-    expect(mpesaFunctions).toContain('neo_guest_folio_mpesa_start');
++    expect(mpesaFunctions).toMatch(/rpc\("neo_mpesa_collection_start",\s*\{\s*_source_module: "guest_folio"/);
+   });
+ });
+ 
+diff --git a/src/lib/__tests__/rpc-manifest.test.ts b/src/lib/__tests__/rpc-manifest.test.ts
+index 16bc17e..51a7487 100644
+--- a/src/lib/__tests__/rpc-manifest.test.ts
++++ b/src/lib/__tests__/rpc-manifest.test.ts
+@@ -65,6 +65,8 @@ describe("database callable surface", () => {
+     "neo_index_class",
+     "neo_index_coverage_scan",
+     "neo_rbac_model_health",
++    // The durable Minibar wrapper calls this engine in SQL and preserves its legacy grants.
++    "neo_minibar_post",
+   ]);
+ 
+   it("does not keep manifest entries with no remaining call site", () => {
+diff --git a/src/lib/__tests__/thermal-receipt-layout.test.ts b/src/lib/__tests__/thermal-receipt-layout.test.ts
+index e8d0380..8c1bc38 100644
+--- a/src/lib/__tests__/thermal-receipt-layout.test.ts
++++ b/src/lib/__tests__/thermal-receipt-layout.test.ts
+@@ -3,12 +3,16 @@ import { PDFPage } from 'pdf-lib';
+ import { writeFileSync, mkdirSync } from 'node:fs';
+ import { buildThermalReceiptPdf } from '@/lib/document-thermal-pdf.server';
+ afterEach(()=>vi.restoreAllMocks());
+-const baseline={document:{number:'LAYOUT-ONLY-001',date:'2026-11-10T12:00:00Z'},property:{name:'Sample Property',currency:'KES'},identity:{organisation:'Sample Company',organisation_id:'a6000000-0000-4000-8000-000000000001'},branch_id:'a6000000-0000-4000-8000-000000000002',generated_at:'2026-11-10T12:30:00Z',party:{label:'Guest',name:'Layout sample'},lines:[{description:'Lunch',quantity:1,unit_price:1854,total:1854}],totals:[{label:'Total',amount:1854,emphasis:true},{label:'Tendered',amount:2000},{label:'Change',amount:146}],meta:{cashier:'Sample cashier'}};
++const baseline={document:{number:'LAYOUT-ONLY-001',date:'2026-11-10T12:00:00Z',status:'closed'},property:{name:'Sample Property',currency:'KES'},identity:{organisation:'Sample Company',organisation_id:'a6000000-0000-4000-8000-000000000001'},branch_id:'a6000000-0000-4000-8000-000000000002',generated_at:'2026-11-10T12:30:00Z',party:{label:'Guest',name:'Layout sample'},lines:[{description:'Lunch',quantity:1,unit_price:1854,total:1854}],totals:[{label:'Total',amount:1854,emphasis:true},{label:'Tendered',amount:2000},{label:'Change',amount:146}],meta:{cashier:'Sample cashier'}};
+ describe('thermal receipt actual PDF layout',()=>{
+- for(const variant of ['standard','long-labels','wrapped-items'])it(variant+' keeps text and rules apart',async()=>{
++ for(const variant of ['standard','long-labels','wrapped-items','charged-to-room'])it(variant+' keeps text and rules apart',async()=>{
+   const payload=structuredClone(baseline);
+   if(variant==='long-labels'){payload.party.name='Guest with a very long name that must stay inside the receipt';payload.meta={cashier:'Cashier name with several long words',original_external_payment_confirmation_reference:'A'.repeat(70)} as any;payload.totals.unshift({label:'Remaining balance after previous confirmed payments',amount:1854,emphasis:false});}
+   if(variant==='wrapped-items'){payload.lines=[{description:'Very long item description WITHANUNBROKENIDENTIFIERTHATSHOULDWRAP on the receipt',quantity:2,unit_price:927,total:1854,note:'A long preparation note that wraps across several lines without touching the following row'} as any];}
++  if(variant==='charged-to-room'){
++   payload.document.status='charged-to-room';
++   payload.totals=[{label:'Total',amount:1854,emphasis:true},{label:'Paid',amount:1000},{label:'Balance',amount:854}];
++  }
+   const texts:any[]=[],rules:any[]=[];
+   const drawText=PDFPage.prototype.drawText,drawLine=PDFPage.prototype.drawLine;
+   vi.spyOn(PDFPage.prototype,'drawText').mockImplementation(function(this: PDFPage,text: string,options:any){const o=options??{};const ascent=o.font.heightAtSize(o.size,{descender:false}),height=o.font.heightAtSize(o.size);texts.push({text,left:o.x,right:o.x+o.font.widthOfTextAtSize(text,o.size),top:o.y+ascent,bottom:o.y-(height-ascent)});return drawText.call(this,text,options)});
+@@ -22,5 +26,10 @@ describe('thermal receipt actual PDF layout',()=>{
+   expect(collisions,'horizontal rules must not cross glyphs').toEqual([]);
+   const overlaps=texts.flatMap((a,i)=>texts.slice(i+1).filter(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>0.5&&Math.min(a.top,b.top)-Math.max(a.bottom,b.bottom)>0.5).map(b=>[a.text,b.text]));
+   expect(overlaps,'text blocks must not overlap').toEqual([]);
++  if(variant==='charged-to-room'){
++   const rendered=texts.map(t=>t.text).join(' ');
++   expect(rendered).toContain('Paid at POS');
++   expect(rendered).toContain('Transferred to guest folio');
++  }
+  });
+ });
+diff --git a/src/lib/delivery-data.ts b/src/lib/delivery-data.ts
+index fa57d7b..306ccbd 100644
+--- a/src/lib/delivery-data.ts
++++ b/src/lib/delivery-data.ts
+@@ -1267,12 +1267,11 @@ export function useRiderNotifications(riderId?: string | null, limit = 60) {
+ }
+ 
+ export function useMyDeliveries(riderId?: string) {
+-  const { applyTo, filterKey } = useActivePropertyFilter();
+   return useQuery({
+-    queryKey: ["delivery", "rider-orders", riderId, filterKey],
++    queryKey: ["delivery", "rider-orders", riderId],
+     enabled: Boolean(riderId),
+     queryFn: async () => {
+-      const { data, error } = await applyTo(sb.from("delivery_orders").select(ORDER_SELECT), "delivery_orders")
++      const { data, error } = await sb.from("delivery_orders").select(ORDER_SELECT)
+         .eq("rider_id", riderId)
+         .order("created_at", { ascending: false });
+       if (error) throw error;
+@@ -1919,8 +1918,10 @@ export type RiderIdentity = {
+  * It never reveals another rider, a guest or the staff directory.
+  */
+ export function useRiderIdentity() {
++  const { user } = useAuth();
+   return useQuery({
+-    queryKey: ["delivery", "rider-identity"],
++    queryKey: ["delivery", "rider-identity", user?.id],
++    enabled: Boolean(user?.id),
+     queryFn: async () => {
+       const { data, error } = await guardedRpc(sb, "neo_rider_me");
+       if (error) throw new Error(error.message);
+diff --git a/src/lib/document-thermal-pdf.server.ts b/src/lib/document-thermal-pdf.server.ts
+index 50f3fb3..629ce0e 100644
+--- a/src/lib/document-thermal-pdf.server.ts
++++ b/src/lib/document-thermal-pdf.server.ts
+@@ -226,6 +226,7 @@ export async function buildThermalReceiptPdf(
+   const metaSource = payload.meta ?? {};
+   const lines = Array.isArray(payload.lines) ? payload.lines : [];
+   const rawTotals = Array.isArray(payload.totals) ? payload.totals : [];
++  const chargedToRoom = document.status === "charged-to-room";
+ 
+   const documentNumber = clean(document.number) || "Unnumbered";
+   const documentTitle = clean(document.title) || "Receipt";
+@@ -295,6 +296,12 @@ export async function buildThermalReceiptPdf(
+ 
+     seenTotalLabels.add(key);
+     return true;
++  }).map((total) => {
++    if (!chargedToRoom) return total;
++    const label = total.label.trim().toLowerCase();
++    if (label === "balance") return { ...total, label: "Transferred to guest folio" };
++    if (label === "paid") return { ...total, label: "Paid at POS" };
++    return total;
+   });
+ 
+   const pdf = await PDFDocument.create();
+@@ -306,6 +313,8 @@ export async function buildThermalReceiptPdf(
+   const contentWidth = paperWidth - margin * 2;
+   const amountWidth = 72;
+   const itemWidth = contentWidth - amountWidth - 8;
++  const itemLineHeight = Math.ceil(Math.max(bold.heightAtSize(8.5), regular.heightAtSize(8.5))) + 1;
++  const noteLineHeight = Math.ceil(regular.heightAtSize(7)) + 1;
+ 
+   const black = rgb(0.05, 0.05, 0.05);
+   const muted = rgb(0.35, 0.35, 0.35);
+@@ -343,12 +352,10 @@ export async function buildThermalReceiptPdf(
+       detailParts.push(`@ ${unitPrice}`);
+     }
+ 
+-    const note = clean(line.note);
+-    if (note) detailParts.push(note);
+-
+     const detailHeight = detailParts.reduce((height, part) => height + wrap(part, regular, 7.1, contentWidth - 5).length * 9, 0);
++    const noteHeight = wrap(clean(line.note), regular, 7, itemWidth).length * noteLineHeight;
+ 
+-    return Math.max(1, descriptionLines.length) * 10 + detailHeight + 7;
++    return Math.max(1, descriptionLines.length) * itemLineHeight + detailHeight + noteHeight + 7;
+   };
+ 
+   const propertyNameLines = wrap(propertyName, bold, 11.5, contentWidth);
+@@ -545,6 +552,7 @@ export async function buildThermalReceiptPdf(
+   y -= 3;
+   lineRule(true);
+ 
++  y -= 4;
+   drawCentered("RECEIPT", 10, bold);
+   y -= 13;
+ 
+@@ -595,7 +603,7 @@ export async function buildThermalReceiptPdf(
+     for (const [index, part] of descriptionLines.entries()) {
+       page.drawText(part, {
+         x: margin,
+-        y: rowTop - index * 10,
++        y: rowTop - index * itemLineHeight,
+         size: 8.5,
+         font: index === 0 ? bold : regular,
+         color: black,
+@@ -614,7 +622,7 @@ export async function buildThermalReceiptPdf(
+       });
+     }
+ 
+-    y = rowTop - Math.max(1, descriptionLines.length) * 10;
++    y = rowTop - Math.max(1, descriptionLines.length) * itemLineHeight;
+ 
+     const quantity = qty(line.quantity);
+     const unitPrice = money(line.unit_price, currency);
+@@ -648,7 +656,7 @@ export async function buildThermalReceiptPdf(
+     if (note) {
+       for (const part of wrap(note, regular, 7, itemWidth)) {
+         drawLeft(part, margin + 5, 7, regular, muted);
+-        y -= 8;
++        y -= noteLineHeight;
+       }
+     }
+ 
+diff --git a/src/lib/guest-ordering.ts b/src/lib/guest-ordering.ts
+index 5156106..29dc0ba 100644
+--- a/src/lib/guest-ordering.ts
++++ b/src/lib/guest-ordering.ts
+@@ -141,16 +141,17 @@ export function useGuestBill(organizationId: string, enabled = true, awaitingPro
+  * app. Nothing is faked: with no configured collection contract the screen
+  * says so and points the guest at the front desk.
+  */
+-export function useGuestPaymentAvailability(organizationId: string) {
++export function useGuestPaymentAvailability(organizationId: string, enabled = true) {
+   return useQuery({
+     queryKey: ["guest-payment-availability", organizationId],
++    enabled,
+     queryFn: async () => {
+       // The integration table itself is staff-only, so availability is asked
+       // of a guarded routine that answers with a boolean and nothing else.
+       const { data, error } = await guardedRpc(sb, "neo_guest_payment_availability", {
+         _org: organizationId,
+       });
+-      if (error) return { available: false as const, reason: "not-configured" as const };
++      if (error) throw new Error(error.message);
+       const payload = (data ?? {}) as { available?: boolean };
+       return {
+         available: Boolean(payload.available),
+@@ -260,6 +261,7 @@ export function useGuestCartMutations(
+   const invalidate = () => {
+     void qc.invalidateQueries({ queryKey: ["guest-cart"] });
+     void qc.invalidateQueries({ queryKey: ["guest-quote"] });
++    void qc.invalidateQueries({ queryKey: ["public-delivery"] });
+   };
+ 
+   /**
+diff --git a/src/lib/platform-automatic-checks.ts b/src/lib/platform-automatic-checks.ts
+index d1c2cbd..d992711 100644
+--- a/src/lib/platform-automatic-checks.ts
++++ b/src/lib/platform-automatic-checks.ts
+@@ -17,7 +17,7 @@ export function useAutomaticPlatformChecks() {
+     refetchIntervalInBackground: false,
+     retry: false,
+     queryFn: async () => {
+-      const { data, error } = await guardedRpc(supabase as never, 'neo_platform_run_checks', { _branch: branchId });
++      const { data, error } = await guardedRpc(supabase as never, "neo_platform_run_checks", { _branch: branchId });
+       if (error) throw Object.assign(new Error(error.message), { code: error.code });
+       const result = data as { run_id?: string; finished_at?: string; failed?: number; blocked?: number; status?: string; cached?: boolean } | null;
+       if (!result?.run_id || !result.finished_at) throw new Error('Automatic check results were not saved.');
+diff --git a/src/lib/pms-data.ts b/src/lib/pms-data.ts
+index 0871875..3f19bad 100644
+--- a/src/lib/pms-data.ts
++++ b/src/lib/pms-data.ts
+@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
+ import { useAuth } from "@/lib/auth";
+ import { logAudit } from "@/lib/audit";
+ import { DEFAULT_PMS_SETTINGS, type PmsSettings, today } from "@/lib/pms";
++import { stableIdempotencyKey } from "@/lib/transaction-scope";
+ 
+ /* ------------------------------------------------------------------ *
+  * Reference data
+@@ -446,6 +447,7 @@ export function usePostCharge() {
+       quantity: number;
+       unitPrice: number;
+       tax: number;
++      chargeIntent: string;
+     }) => {
+       const { data, error } = await guardedRpc(supabase, "pms_post_room_charge", {
+         _folio: input.folio,
+@@ -456,9 +458,12 @@ export function usePostCharge() {
+         _tax: input.tax,
+         _source_module: "pms",
+         _source_record_id: "",
+-        _idempotency_key: crypto.randomUUID(),
++        _idempotency_key: stableIdempotencyKey("pms", "reservation-charge", [
++          input.chargeIntent, input.folio, input.category, input.description, input.quantity, input.unitPrice, input.tax,
++        ]),
+       });
+       if (error) throw error;
++      if (typeof data !== "string" || !data) throw new Error("The charge did not return its saved folio line.");
+       return data;
+     },
+     onSuccess: () => {
+diff --git a/src/lib/pms.ts b/src/lib/pms.ts
+index 1f7af49..0b496cb 100644
+--- a/src/lib/pms.ts
++++ b/src/lib/pms.ts
+@@ -117,6 +117,11 @@ export const FOLIO_CATEGORIES = [
+   "miscellaneous",
+ ] as const;
+ 
++const STOCK_SALE_FOLIO_CATEGORIES = new Set(["restaurant", "coffee-station", "bar", "room-service"]);
++export const MANUAL_FOLIO_CATEGORIES = FOLIO_CATEGORIES.filter(
++  (category) => !STOCK_SALE_FOLIO_CATEGORIES.has(category),
++);
++
+ export const GUEST_REQUEST_CATEGORIES = [
+   "housekeeping",
+   "maintenance",
+diff --git a/src/lib/pos-data.ts b/src/lib/pos-data.ts
+index ce7449e..d322b27 100644
+--- a/src/lib/pos-data.ts
++++ b/src/lib/pos-data.ts
+@@ -27,19 +27,31 @@ import {
+ import { withGuardCapture } from "@/lib/guard-violations";
+ 
+ /** Advisory only: the database stock gate still validates quantities when sending. */
+-export function usePosStockAvailability(branchId: string | null | undefined) {
++export function usePosStockAvailability(branchId: string | null | undefined, channel?: string) {
+   const { organizationId } = useAuth();
+   return useQuery({
+-    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none"],
++    queryKey: ["pos", "stock-availability", organizationId, branchId ?? "none", channel ?? "none"],
+     enabled: Boolean(organizationId && branchId),
+     refetchInterval: 30_000,
+     queryFn: async () => {
+-      const { data, error } = await guardedRpc<Array<{ menu_item_id: string; available: boolean; reason: string | null }>>(
+-        supabase, "neo_pos_menu_availability", { _branch: branchId },
+-      );
+-      if (error) throw error;
++      type Availability = { menu_item_id: string; available: boolean; reason: string | null }[];
++      const [department, commitments] = await Promise.all([
++        guardedRpc<Availability>(supabase, "neo_pos_department_menu_availability", {
++          _branch: branchId, _channel: channel ?? null,
++        }),
++        guardedRpc<Availability>(
++          supabase, "neo_pos_menu_availability", { _branch: branchId },
++        ),
++      ]);
++      if (department.error && department.error.code !== "PGRST202") throw department.error;
++      if (commitments.error && !["PGRST202", "42883"].includes(commitments.error.code ?? "")) throw commitments.error;
++      if (department.error && commitments.error) throw department.error;
++      if ((!department.error && !Array.isArray(department.data)) ||
++          (!commitments.error && !Array.isArray(commitments.data))) {
++        throw new Error("Departmental stock availability could not be verified.");
++      }
+       const unavailable = new Map<string, string>();
+-      for (const row of data ?? []) {
++      for (const row of [...(commitments.data ?? []), ...(department.data ?? [])]) {
+         if (row.available === false) unavailable.set(row.menu_item_id, row.reason || "Out of stock");
+       }
+       return unavailable;
+@@ -456,15 +468,16 @@ export function usePrinterProfiles() {
+ }
+ 
+ /** Checked-in stays only ΓÇö the sole valid target for a room charge. */
+-export function useCheckedInStays() {
++export function useCheckedInStays(branchId: string | null) {
+   const { applyTo, filterKey } = useActivePropertyFilter();
+   const { organizationId } = useAuth();
+   return useQuery({
+-    queryKey: ["pos", "checked-in-stays", organizationId, filterKey],
+-    enabled: Boolean(organizationId),
++    queryKey: ["pos", "checked-in-stays", organizationId, filterKey, branchId],
++    enabled: Boolean(organizationId && branchId),
+     queryFn: async () => {
+       const { data, error } = await applyTo(supabase.from("stays").select("id, branch_id, status, expected_departure, checked_in_at, rooms(room_number), customers(id, full_name)"), "stays")
+-        .eq("status", "in-house");
++        .eq("branch_id", branchId!)
++        .in("status", ["in-house", "checked-in", "in_house", "checked_in"]);
+       if (error) throw error;
+       return data ?? [];
+     },
+diff --git a/src/lib/pos-room-transfer.ts b/src/lib/pos-room-transfer.ts
+index b492cbe..90d4d75 100644
+--- a/src/lib/pos-room-transfer.ts
++++ b/src/lib/pos-room-transfer.ts
+@@ -5,22 +5,28 @@ function money(value:unknown):number|null {
+  if((typeof value!=="number"&&typeof value!=="string")||String(value).trim()===""||!Number.isFinite(Number(value))||Number(value)<0)return null;
+  const amount=Number(value);return Number.isSafeInteger(Math.round(amount*100))?amount:null;
+ }
+-export function posRoomTransferState(order:{status?:unknown;folio_post_status?:unknown;folio_id?:unknown;grand_total?:unknown;paid_total?:unknown;payment_status?:unknown;tip_amount?:unknown;delivery_fee?:unknown;pos_payments?:readonly {status?:unknown;provider_status?:unknown}[]|null}|null|undefined,receiptUnderReview=false){
++export function posRoomTransferState(order:{status?:unknown;folio_post_status?:unknown;folio_id?:unknown;grand_total?:unknown;paid_total?:unknown;room_transfer_paid_total?:unknown;payment_status?:unknown;tip_amount?:unknown;delivery_fee?:unknown;pos_payments?:readonly {status?:unknown;amount?:unknown}[]|null}|null|undefined,receiptUnderReview=false){
+  const total=money(order?.grand_total),paid=money(order?.paid_total);
+  const transferred=order?.folio_post_status==="posted"||order?.status==="charged-to-room";
+  const amountKnown=total!==null&&paid!==null;
+- const overlap=transferred&&(!amountKnown||paid!==0||!order?.folio_id);
++ const allocated=money(order?.room_transfer_paid_total);
++ const overlap=transferred&&(!amountKnown||(paid!==0&&allocated!==paid)||!order?.folio_id);
+  const amountDue=amountKnown&&!overlap?(transferred?0:Math.max(0,Math.round((total-paid)*100)/100)):null;
+  const credit=amountKnown&&!transferred?Math.max(0,Math.round((paid-total)*100)/100):0;
+  const attempts=order?.pos_payments;
++ const confirmed=attempts?.filter(p=>p.status==="confirmed").map(p=>money(p.amount))??[];
++ const confirmedCents=confirmed.reduce<number>((sum, amount)=>sum+Math.round((amount??0)*100),0);
+  let reason:string|null=null;
+  if(transferred)reason=overlap?"Room transfer and POS payment evidence need reconciliation. Review the original receipts and guest folio.":"This bill is already on the guest folio. Collect against that guest account.";
+  else if(!amountKnown||!Array.isArray(attempts))reason="Bill amounts and saved payment attempts could not be verified. Refresh before room transfer.";
+- else if(paid!==0||order?.payment_status!=="unpaid"||receiptUnderReview||attempts.some(p=>!inactiveAttempts.has(String(p.status??""))||p.provider_status==="manager-reviewed"))
+-  reason="This bill has recorded or unresolved money. Reconcile its original payment before room transfer.";
+- else if(!transferStatuses.has(String(order?.status??"")))reason="Send this unpaid bill to production before charging it to a room.";
++ else if(order?.payment_status!==(paid===0?"unpaid":"partial")||receiptUnderReview
++  ||attempts.some(p=>p.status!=="confirmed"&&!inactiveAttempts.has(String(p.status??"")))
++  ||confirmed.some(amount=>amount===null||amount<=0)||confirmedCents!==Math.round(paid*100))
++  reason="This bill has unresolved or unmatched payment evidence. Reconcile its original payments before room transfer.";
++ else if(!transferStatuses.has(String(order?.status??"")))reason="Send this bill to production before charging it to a room.";
+  else if((order?.tip_amount!=null&&money(order.tip_amount)!==0)||(order?.delivery_fee!=null&&money(order.delivery_fee)!==0))
+   reason="A bill with tips or delivery fees needs component allocation before room transfer.";
+- else if(total<=0)reason="Add a valid charge before room transfer.";
+- return {transferred,overlap,amountDue,credit,canCollect:amountDue!==null&&amountDue>0&&!transferred&&!terminal.has(String(order?.status??"")),canTransfer:reason===null,reason};
++ else if(total<=paid)reason="This bill has no outstanding balance to transfer.";
++ const transferredBalance=transferred&&!overlap&&amountKnown?Math.round((total-paid)*100)/100:null;
++ return {transferred,overlap,amountDue,credit,transferredBalance,canCollect:amountDue!==null&&amountDue>0&&!transferred&&!terminal.has(String(order?.status??"")),canTransfer:reason===null,reason};
+ }
+diff --git a/src/lib/public-apps-data.ts b/src/lib/public-apps-data.ts
+index ecc1259..86cd015 100644
+--- a/src/lib/public-apps-data.ts
++++ b/src/lib/public-apps-data.ts
+@@ -70,6 +70,14 @@ export function usePublicWorkspaces() {
+   });
+ }
+ 
++export function usePublishedDeliveryLink(branchId: string | null) {
++  const workspaces = usePublicWorkspaces();
++  const matches = workspaces.data?.filter(
++    (workspace) => workspace.app_key === "delivery" && workspace.published && workspace.branch_id === branchId,
++  );
++  return branchId && matches?.length === 1 ? publicUrlFor("delivery", matches[0]!.slug) : null;
++}
++
+ export function useBranchOptions() {
+   const { organizationId } = useAuth();
+   return useQuery({
+diff --git a/src/lib/public-apps.functions.ts b/src/lib/public-apps.functions.ts
+index 7eaaa76..e4665ea 100644
+--- a/src/lib/public-apps.functions.ts
++++ b/src/lib/public-apps.functions.ts
+@@ -1,5 +1,6 @@
+ import { createServerFn } from "@tanstack/react-start";
+ import { brandFallback, type PublicAppKey, type PublicWorkspace } from "@/lib/public-apps";
++import type { PublicProperty } from "@/lib/front-door";
+ 
+ type ResolveInput = { appKey: PublicAppKey; slug: string };
+ 
+@@ -14,7 +15,7 @@ type ResolveInput = { appKey: PublicAppKey; slug: string };
+ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
+   .inputValidator((input: ResolveInput): ResolveInput => ({
+     appKey: input.appKey,
+-    slug: String(input.slug ?? "").slice(0, 80),
++    slug: String(input.slug ?? "").trim().toLowerCase().slice(0, 80),
+   }))
+   .handler(async ({ data }): Promise<PublicWorkspace | null> => {
+     if (data.appKey === "guest") {
+@@ -68,6 +69,47 @@ export const resolvePublicWorkspace = createServerFn({ method: "GET" })
+       },
+     );
+ 
+-    if (error) return null;
+-    return (row as PublicWorkspace | null) ?? null;
++    if (error) throw new Error("App publication could not be checked. Try again.");
++    if (data.appKey !== "delivery") return row as PublicWorkspace | null;
++
++    const propertyResult = await supabaseAdmin.rpc("neo_public_property", { _slug: data.slug });
++    if (propertyResult.error && !row) throw new Error("Delivery publication could not be checked. Try again.");
++    let property = propertyResult.data as PublicProperty | null;
++    let workspace = row as PublicWorkspace | null;
++    // Experience Studio shares the property's slug, while App Branding can
++    // publish a different Delivery slug. Resolve the alias by property ID.
++    if (!workspace && property?.branch_id) {
++      const result = await supabaseAdmin.from("public_workspaces")
++        .select("id,organization_id,branch_id,app_key,slug,published,app_name,hotel_name,logo_url,icon_url,primary_color,secondary_color,background_color,button_style,menu_style,welcome_title,welcome_message,contact_phone,contact_email,contact_address,support_details,terms_text,policy_text,features")
++        .eq("organization_id", property.organization_id)
++        .eq("branch_id", property.branch_id)
++        .eq("app_key", "delivery")
++        .eq("published", true)
++        .limit(2);
++      if (result.error) throw new Error("Delivery publication could not be checked. Try again.");
++      if (result.data.length !== 1) return null;
++      workspace = result.data[0] as PublicWorkspace;
++    }
++    if (!workspace) return null;
++    if (workspace.branch_id && (property?.branch_id !== workspace.branch_id || property.organization_id !== workspace.organization_id)) {
++      const { data: experience } = await supabaseAdmin.from("neo_public_experience")
++        .select("public_slug").eq("branch_id", workspace.branch_id).maybeSingle();
++      if (experience?.public_slug && experience.public_slug !== data.slug) {
++        const result = await supabaseAdmin.rpc("neo_public_property", { _slug: experience.public_slug });
++        property = result.data as PublicProperty | null;
++      }
++    }
++    if (property?.branch_id !== workspace.branch_id || property.organization_id !== workspace.organization_id) {
++      return workspace;
++    }
++    return {
++      ...workspace,
++      ...(property.publicly_listed && property.doors?.stay_dine !== false ? { guest_slug: property.public_slug } : {}),
++      logo_url: workspace.logo_url || property.media?.logo_url || property.logo_url,
++      hero_url: property.media?.hero_url || property.cover_image_url,
++      currency: property.currency ?? null,
++      primary_color: workspace.primary_color || property.brand?.primary || brandFallback.primary,
++      secondary_color: workspace.secondary_color || property.brand?.accent || brandFallback.secondary,
++      background_color: workspace.background_color || property.brand?.surface || brandFallback.background,
++    };
+   })
+diff --git a/src/lib/public-apps.ts b/src/lib/public-apps.ts
+index eda6ae7..97c003f 100644
+--- a/src/lib/public-apps.ts
++++ b/src/lib/public-apps.ts
+@@ -20,11 +20,14 @@ export type PublicWorkspace = {
+   branch_id: string | null;
+   app_key: PublicAppKey;
+   slug: string;
++  guest_slug?: string;
+   published: boolean;
+   app_name: string;
+   hotel_name: string;
+   logo_url: string | null;
+   icon_url: string | null;
++  hero_url?: string | null;
++  currency?: string | null;
+   primary_color: string;
+   secondary_color: string;
+   background_color: string;
+diff --git a/src/lib/public-delivery.ts b/src/lib/public-delivery.ts
+index 9a10e16..91b60bb 100644
+--- a/src/lib/public-delivery.ts
++++ b/src/lib/public-delivery.ts
+@@ -155,6 +155,7 @@ export function useMyPublicCart(organizationId: string, customerId?: string | nu
+         .select(
+           "*, cart_items(*, menu_items(name, base_price, image_url, availability, available_delivery), cart_item_modifiers(*))",
+         )
++        .eq("organization_id", organizationId)
+         .eq("customer_id", customerId)
+         .eq("status", "active")
+         .maybeSingle();
+@@ -172,24 +173,28 @@ export function usePublicAddToCart(organizationId: string, customerId?: string |
+       menuItemId: string;
+       quantity?: number;
+       specialInstructions?: string;
++      optionIds?: string[];
++      fulfilment?: "delivery" | "pickup";
+     }) => {
+       guardPreview();
+       if (!customerId) throw new Error("Sign in to start an order");
+       const { error } = await guardedRpc(sb, "neo_guest_cart_add_item", {
+         _org: organizationId,
+-        _fulfilment: "delivery",
++        _fulfilment: input.fulfilment ?? "delivery",
+         _menu_item: input.menuItemId,
+         _quantity: input.quantity ?? 1,
+         _special_instructions: input.specialInstructions ?? null,
+         _allergy_note: null,
+         _branch: input.branchId,
+-        _options: [],
++        _options: input.optionIds ?? [],
+       });
+       if (error) throw new Error(error.message);
+     },
+     onSuccess: () => {
+       toast.success("Added to your order");
+       void qc.invalidateQueries({ queryKey: ["public-delivery"] });
++      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
++      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
+     },
+     onError: (e: Error) => toast.error(e.message),
+   });
+@@ -206,7 +211,11 @@ export function usePublicUpdateCartItem() {
+       });
+       if (error) throw new Error(error.message);
+     },
+-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
++    onSuccess: () => {
++      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
++      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
++      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
++    },
+     onError: (e: Error) => toast.error(e.message),
+   });
+ }
+@@ -223,7 +232,11 @@ export function usePublicUpdateCart() {
+       });
+       if (error) throw new Error(error.message);
+     },
+-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
++    onSuccess: () => {
++      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
++      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
++      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
++    },
+     onError: (e: Error) => toast.error(e.message),
+   });
+ }
+@@ -245,6 +258,7 @@ export function usePublicPlaceOrder() {
+   const qc = useQueryClient();
+   return useMutation({
+     mutationFn: async (input: { cartId: string; paymentMethod: string }) => {
++      guardPreview();
+       const { data, error } = await guardedRpc(sb, "delivery_place_order", {
+         _cart: input.cartId,
+         _payment_method: input.paymentMethod,
+@@ -252,7 +266,11 @@ export function usePublicPlaceOrder() {
+       if (error) throw new Error(error.message);
+       return requireGuestOrderResult(data);
+     },
+-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["public-delivery"] }),
++    onSuccess: () => {
++      void qc.invalidateQueries({ queryKey: ["public-delivery"] });
++      void qc.invalidateQueries({ queryKey: ["guest-cart"] });
++      void qc.invalidateQueries({ queryKey: ["guest-quote"] });
++    },
+     onError: (e: Error) => toast.error(e.message),
+   });
+ }
+diff --git a/src/lib/rpc-manifest.ts b/src/lib/rpc-manifest.ts
+index ff11f2c..5e48d72 100644
+--- a/src/lib/rpc-manifest.ts
++++ b/src/lib/rpc-manifest.ts
+@@ -654,6 +654,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
+   neo_settings_presence: "authenticated",
+   neo_mpesa_settings_get: "authenticated",
+   neo_pos_menu_availability: "authenticated",
++  neo_pos_department_menu_availability: "authenticated",
+   neo_mpesa_settings_save: "authenticated",
+   neo_mpesa_record_check: "authenticated",
+   neo_mpesa_collection_start: "authenticated",
+diff --git a/src/routes/_shell.pms.folios.$id.tsx b/src/routes/_shell.pms.folios.$id.tsx
+index a049ecd..15e72e8 100644
+--- a/src/routes/_shell.pms.folios.$id.tsx
++++ b/src/routes/_shell.pms.folios.$id.tsx
+@@ -38,7 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+ import { Textarea } from "@/components/ui/textarea";
+ import { EmptyState, FolioStatusBadge, PmsGuard, QueryState } from "@/components/pms/PmsShared";
+ import {
+-  FOLIO_CATEGORIES,
++  MANUAL_FOLIO_CATEGORIES,
+   formatDateTime,
+   moneyWithCode as money,
+   titleCase,
+@@ -524,7 +524,7 @@ function PostChargeDialog({
+   onClose: () => void;
+ }) {
+   const post = usePostFolioCharge();
+-  const [category, setCategory] = useState(String(FOLIO_CATEGORIES[0]));
++  const [category, setCategory] = useState("miscellaneous");
+   const [description, setDescription] = useState("");
+   const [quantity, setQuantity] = useState("1");
+   const [unitPrice, setUnitPrice] = useState("");
+@@ -545,8 +545,7 @@ function PostChargeDialog({
+         <DialogHeader>
+           <DialogTitle>Post a charge</DialogTitle>
+           <DialogDescription>
+-            The posting carries its source module, actor and an idempotency key, so a repeated click
+-            cannot double-charge the guest.
++            Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked.
+           </DialogDescription>
+         </DialogHeader>
+         <div className="grid gap-3">
+@@ -557,7 +556,7 @@ function PostChargeDialog({
+                 <SelectValue />
+               </SelectTrigger>
+               <SelectContent>
+-                {FOLIO_CATEGORIES.map((c) => (
++                {MANUAL_FOLIO_CATEGORIES.map((c) => (
+                   <SelectItem key={c} value={c}>
+                     {titleCase(c)}
+                   </SelectItem>
+diff --git a/src/routes/_shell.pos.orders.$id.tsx b/src/routes/_shell.pos.orders.$id.tsx
+index 81ab620..bb00ba2 100644
+--- a/src/routes/_shell.pos.orders.$id.tsx
++++ b/src/routes/_shell.pos.orders.$id.tsx
+@@ -101,7 +101,7 @@ function OrderTerminal() {
+   const { id } = Route.useParams();
+   const { can } = useAuth();
+   const order = usePosOrder(id);
+-  const stockOut = usePosStockAvailability(order.data?.branch_id);
++  const stockOut = usePosStockAvailability(order.data?.branch_id, order.data?.order_type);
+   const [stockIssue, setStockIssue] = useState<string | null>(null);
+   const removeDraftOrder = useRemoveDraftOrder();
+   const [removeOpen, setRemoveOpen] = useState(false);
+@@ -426,7 +426,9 @@ function OrderTerminal() {
+                           <StatusPill tone="destructive">No production station</StatusPill>
+                         ) : null}
+                         {stockOut.data?.has(m.id) && m.availability === "available" ? (
+-                          <StatusPill tone="destructive">Out of stock</StatusPill>
++                          <StatusPill tone="destructive">
++                            {stockOut.data.get(m.id)?.startsWith("Out of stock:") ? "Out of stock" : "Stock check"}
++                          </StatusPill>
+                         ) : null}
+                       </StockAwareMenuItem>
+                     ))}
+@@ -678,7 +680,7 @@ function OrderTerminal() {
+                     <dd>{roomTransfer.amountDue === null ? "Review money evidence" : money(balance)}</dd>
+                   </div>
+                   {roomTransfer.transferred && !roomTransfer.overlap ? <div className="flex justify-between">
+-                    <dt className="text-muted-foreground">Transferred to guest folio</dt><dd>{money(data.grand_total)}</dd>
++                    <dt className="text-muted-foreground">Balance transferred to guest folio</dt><dd>{money(roomTransfer.transferredBalance ?? 0)}</dd>
+                   </div> : null}
+                   {roomTransfer.credit > 0 ? <div className="flex justify-between"><dt>POS credit / overpayment</dt><dd>{money(roomTransfer.credit)}</dd></div> : null}
+                 </dl>
+@@ -841,6 +843,7 @@ function OrderTerminal() {
+             open={roomOpen && canTransferRoom}
+             onOpenChange={setRoomOpen}
+             orderId={data.id}
++            branchId={data.branch_id}
+             balance={balance}
+             eligible={canTransferRoom}
+             eligibilityReason={roomTransferReason}
+@@ -960,6 +963,7 @@ function RoomChargeDialog({
+   open,
+   onOpenChange,
+   orderId,
++  branchId,
+   balance,
+   eligible,
+   eligibilityReason,
+@@ -967,11 +971,12 @@ function RoomChargeDialog({
+   open: boolean;
+   onOpenChange: (v: boolean) => void;
+   orderId: string;
++  branchId: string | null;
+   balance: number;
+   eligible: boolean;
+   eligibilityReason: string | null;
+ }) {
+-  const stays = useCheckedInStays();
++  const stays = useCheckedInStays(branchId);
+   const [stayId, setStayId] = useState<string>("");
+   const folio = useOpenFolioForStay(stayId || undefined);
+   const post = usePostRoomCharge();
+@@ -982,8 +987,8 @@ function RoomChargeDialog({
+         <DialogHeader>
+           <DialogTitle>Charge to guest room</DialogTitle>
+           <DialogDescription>
+-            Transfer this completely unpaid bill once to a checked-in guestΓÇÖs open folio. {money(balance)} will be posted
+-            as a folio line. Recorded or unresolved payments require reconciliation before transfer.
++            Post the sale to a checked-in guestΓÇÖs open folio and apply any confirmed POS receipts.
++            The amount added to the guestΓÇÖs balance is {money(balance)}.
+           </DialogDescription>
+         </DialogHeader>
+         {(stays.data ?? []).length === 0 ? (
+diff --git a/src/routes/admin.experience-studio.tsx b/src/routes/admin.experience-studio.tsx
+index b1b3927..d04bfed 100644
+--- a/src/routes/admin.experience-studio.tsx
++++ b/src/routes/admin.experience-studio.tsx
+@@ -12,6 +12,7 @@ import { createFileRoute } from "@tanstack/react-router";
+ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { Check, Loader2, Monitor, Smartphone, Tablet } from "lucide-react";
+ import { toast } from "sonner";
++import { usePublishedDeliveryLink } from "@/lib/public-apps-data";
+ import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+@@ -113,6 +114,7 @@ function ExperienceStudioPage() {
+   const branches = useBranches();
+   const queryClient = useQueryClient();
+   const [branchId, setBranchId] = useState<string | null>(null);
++  const deliveryLink = usePublishedDeliveryLink(branchId);
+   const [section, setSection] = useState<SectionKey>("overview");
+   const [device, setDevice] = useState<"phone" | "tablet" | "desktop">("phone");
+ 
+@@ -628,7 +630,7 @@ function ExperienceStudioPage() {
+                     {[
+                       { label: "Hotel front door", url: `${origin}/start/${slug}` },
+                       { label: "Stay & Dine", url: `${origin}/guest/${slug}` },
+-                      { label: "Food delivery", url: `${origin}/delivery/${slug}` },
++                      ...(deliveryLink ? [{ label: "Food delivery", url: deliveryLink }] : []),
+                       { label: "Partner portal", url: `${origin}/partner/${slug}` },
+                       { label: "Rider app", url: `${origin}/rider` },
+                     ].map((link) => {
+diff --git a/src/routes/admin.go-live.tsx b/src/routes/admin.go-live.tsx
+index a318442..50f22b7 100644
+--- a/src/routes/admin.go-live.tsx
++++ b/src/routes/admin.go-live.tsx
+@@ -142,7 +142,7 @@ function GoLivePage() {
+       />
+ 
+       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+-        <StatCard label="Overall" value={readinessLabels[readiness.isError ? "unknown" : readiness.data?.status ?? "unknown"]} />
++        <StatCard label="Live configuration" value={readinessLabels[readiness.isError ? "unknown" : readiness.data?.status ?? "unknown"]} />
+         <StatCard label="Ready" value={String(counts.ready)} />
+         <StatCard label="Needs attention" value={String(counts.attention)} />
+         <StatCard label="Blocked" value={String(counts.blocked)} />
+@@ -156,7 +156,7 @@ function GoLivePage() {
+ 
+         <TabsContent value="checks" className="mt-4">
+           <SectionCard
+-            title="Operational readiness"
++            title="Live property checks"
+             description="POS ΓåÆ KDS, menu ΓåÆ recipe ΓåÆ station, employee ΓåÆ rider, event ΓåÆ billing ΓåÆ finance."
+           >
+             {readiness.isError ? (
+diff --git a/src/routes/admin.public-experience.tsx b/src/routes/admin.public-experience.tsx
+index 697afc5..af26b53 100644
+--- a/src/routes/admin.public-experience.tsx
++++ b/src/routes/admin.public-experience.tsx
+@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
+ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { Copy, Loader2 } from "lucide-react";
+ import { toast } from "sonner";
++import { usePublishedDeliveryLink } from "@/lib/public-apps-data";
+ import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+@@ -81,6 +82,7 @@ function PublicExperiencePage() {
+   const branches = useBranches();
+   const queryClient = useQueryClient();
+   const [branchId, setBranchId] = useState<string | null>(null);
++  const deliveryLink = usePublishedDeliveryLink(branchId);
+ 
+   useEffect(() => {
+     if (!branchId && branches.data?.length) setBranchId(branches.data[0]!.id);
+@@ -159,7 +161,7 @@ function PublicExperiencePage() {
+     ? [
+         { label: "Hotel front door", url: `${origin}/start/${slug}` },
+         { label: "Stay & Dine", url: `${origin}/guest/${slug}` },
+-        { label: "Order food / delivery", url: `${origin}/delivery/${slug}` },
++        ...(deliveryLink ? [{ label: "Order food / delivery", url: deliveryLink }] : []),
+         { label: "Partner portal", url: `${origin}/partner/${slug}` },
+         { label: "Rider app", url: `${origin}/rider` },
+       ]
+diff --git a/src/routes/delivery.$hotelSlug.cart.tsx b/src/routes/delivery.$hotelSlug.cart.tsx
+index e9b401d..ac6b78d 100644
+--- a/src/routes/delivery.$hotelSlug.cart.tsx
++++ b/src/routes/delivery.$hotelSlug.cart.tsx
+@@ -1,5 +1,5 @@
+ import { createFileRoute, Link } from "@tanstack/react-router";
+-import { Loader2, Minus, Plus, ShoppingBag, Trash2, ArrowRight } from "lucide-react";
++import { Loader2, Minus, Plus, ShoppingBag, Trash2, ArrowRight, Utensils } from "lucide-react";
+ import { PublicAppShell, PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
+ import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+ import { useCustomerSession } from "@/lib/public-session";
+@@ -22,24 +22,40 @@ function CartPage() {
+   const updateItem = usePublicUpdateCartItem();
+   const menuById = new Map(((menu.data ?? []) as Row[]).map((row) => [String(row["id"]), row]));
+   const items = (cart.data?.["cart_items"] as Row[] | undefined) ?? [];
++  const count = items.reduce((sum, item) => sum + Number(item["quantity"] ?? 0), 0);
++  const currency = quote.data?.currency ?? String(cart.data?.["currency"] ?? "KES");
+ 
+   if (!loading && !user) return <PublicAppShell homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}}><GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to see your cart" description="Your cart follows your account securely across this hotel app." /></PublicAppShell>;
+ 
+   return <PublicAppShell homeTo={{to:"/delivery/$hotelSlug",params:{hotelSlug}}}>
+     <div className="neo-commerce-hero">
+       <span className="neo-commerce-icon"><ShoppingBag className="size-5" /></span>
+-      <div><p className="neo-commerce-eyebrow">Your selection</p><h1 className="neo-commerce-title">Cart</h1><p className="neo-commerce-copy">Review quantities here. Delivery details and payment belong on Checkout.</p></div>
++      <div><h1 className="neo-commerce-title">Cart</h1><p className="neo-commerce-copy">Review what youΓÇÖre ordering from {ws.hotel_name || ws.app_name}.</p></div>
+     </div>
+-    {cart.isLoading ? <div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-white/80" /></div> : items.length===0 ?
++    {loading || customer.isLoading || cart.isLoading ? <div className="flex justify-center py-16" role="status"><Loader2 className="size-6 animate-spin text-white/80" aria-hidden /><span className="sr-only">Loading cart</span></div>
++      : customer.isError || cart.isError ? <PublicEmptyState title="Your cart couldnΓÇÖt load" description="Try again to see the items saved to your account."
++        action={<button className="neo-commerce-primary" onClick={() => void (customer.isError ? customer.refetch() : cart.refetch())}>Retry</button>} />
++      : items.length > 0 && cart.data?.["fulfilment_type"] === "room-service" ?
++      <PublicEmptyState title="Your basket is for room service" description="Review it in Stay & Dine."
++        action={<Link to="/guest/$hotelSlug/order" params={{ hotelSlug: ws.guest_slug ?? hotelSlug }} search={{ item: undefined }} className="neo-commerce-primary">Open room service</Link>} />
++      : items.length===0 ?
+       <PublicEmptyState title="Your cart is empty" description="Save favourites for later or add something from the menu." action={<Link to="/delivery/$hotelSlug" params={{hotelSlug}} className="neo-commerce-primary">Browse menu</Link>} /> :
+       <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+         <section className="neo-commerce-surface divide-y divide-black/5">
+           {items.map(item=>{ const mi=(item["menu_items"] as Row|null)??menuById.get(String(item["menu_item_id"]))??{}; const qty=Number(item["quantity"]??1); return <article key={String(item["id"])} className="flex items-center gap-4 p-4 sm:p-5">
+-            <div className="min-w-0 flex-1"><h2 className="truncate font-semibold text-slate-950">{String(mi["name"]??"Item")}</h2><p className="mt-1 text-sm text-slate-600">{money(mi["base_price"])} each</p></div>
+-            <div className="neo-quantity-control"><button aria-label="Decrease quantity" onClick={()=>updateItem.mutate({id:String(item["id"]),quantity:qty-1})}>{qty===1?<Trash2 className="size-4"/>:<Minus className="size-4"/>}</button><strong>{qty}</strong><button aria-label="Increase quantity" onClick={()=>updateItem.mutate({id:String(item["id"]),quantity:qty+1})}><Plus className="size-4"/></button></div>
++            <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-100 text-slate-600">
++              {typeof mi["image_url"] === "string" && mi["image_url"] ? <img src={mi["image_url"]} alt="" loading="lazy" className="size-full object-cover" /> : <Utensils className="size-4" aria-hidden />}
++            </div>
++            <div className="min-w-0 flex-1"><h2 className="font-semibold text-slate-950">{String(mi["name"]??"Menu item")}</h2>
++              {mi["base_price"] != null ? <p className="mt-1 text-sm text-slate-600">{money(mi["base_price"], currency)} base price</p> : null}
++              {((item["cart_item_modifiers"] as Row[] | undefined) ?? []).map((option) => (
++                <p key={String(option["id"] ?? option["option_id"])} className="text-xs text-slate-600">{String(option["option_name"] ?? "")}{Number(option["extra_charge"]) > 0 ? ` ┬╖ +${money(option["extra_charge"], currency)}` : ""}</p>
++              ))}
++            </div>
++            <div className="neo-quantity-control"><button disabled={updateItem.isPending} aria-label={qty===1 ? "Remove item" : "Decrease quantity"} onClick={()=>updateItem.mutate({id:String(item["id"]),quantity:qty-1})}>{qty===1?<Trash2 className="size-4"/>:<Minus className="size-4"/>}</button><strong>{qty}</strong><button disabled={updateItem.isPending} aria-label="Increase quantity" onClick={()=>updateItem.mutate({id:String(item["id"]),quantity:qty+1})}><Plus className="size-4"/></button></div>
+           </article>})}
+         </section>
+-        <aside className="neo-commerce-summary lg:sticky lg:top-24 lg:self-start"><p className="neo-commerce-eyebrow text-slate-500">Order summary</p><div className="mt-4 space-y-2 text-sm text-slate-600"><div className="flex justify-between"><span>Items</span><span>{items.length}</span></div>{quote.data ? <><div className="flex justify-between"><span>Subtotal</span><span>{money(quote.data.subtotal)}</span></div><div className="flex justify-between border-t border-black/5 pt-3 text-base font-bold text-slate-950"><span>Estimated total</span><span>{money(quote.data.grand_total)}</span></div></>:null}</div>
++        <aside className="neo-commerce-summary lg:sticky lg:top-24 lg:self-start"><h2 className="font-semibold text-slate-950">Order summary</h2><div className="mt-4 space-y-2 text-sm text-slate-600"><div className="flex justify-between"><span>Items</span><span>{count}</span></div>{quote.data && !quote.isError ? <><div className="flex justify-between"><span>Subtotal</span><span>{money(quote.data.subtotal, currency)}</span></div><div className="flex justify-between border-t border-black/5 pt-3 text-base font-bold text-slate-950"><span>Estimated total</span><span>{money(quote.data.grand_total, currency)}</span></div></>:quote.isError ? <button className="min-h-11 font-semibold underline" onClick={() => void quote.refetch()}>Total unavailable. Retry pricing</button> : null}</div>
+           <Link to="/delivery/$hotelSlug/checkout" params={{hotelSlug}} className="neo-commerce-primary mt-5 w-full">Continue to checkout <ArrowRight className="size-4"/></Link>
+           <Link to="/delivery/$hotelSlug" params={{hotelSlug}} className="mt-3 block text-center text-sm font-semibold text-slate-600 hover:text-slate-950">Continue browsing</Link>
+         </aside>
+diff --git a/src/routes/delivery.$hotelSlug.checkout.tsx b/src/routes/delivery.$hotelSlug.checkout.tsx
+index b19afdd..0296cb9 100644
+--- a/src/routes/delivery.$hotelSlug.checkout.tsx
++++ b/src/routes/delivery.$hotelSlug.checkout.tsx
+@@ -73,11 +73,17 @@ function CheckoutPage() {
+   // appears where cash on delivery is switched on. Hotel bank or till accounts
+   // are never shown to a customer ΓÇö the account behind the method is resolved
+   // in Finance.
+-  const configuredMethods = ((settings.data?.["allowed_payment_methods"] as string[] | null) ?? [
+-    "cash",
+-  ]).filter((m) => m !== "cash" || settings.data?.["cod_enabled"] !== false);
++  const methods = settings.data?.["allowed_payment_methods"];
++  const configuredMethods = !settings.isError && !settings.isPending
++    ? [
++      ...(fulfilment === "pickup" ? ["pay-on-collection"] : []),
++      ...(Array.isArray(methods) && methods.includes("mpesa") ? ["mpesa"] : []),
++      ...(fulfilment === "delivery" && Array.isArray(methods) && methods.includes("cash")
++        && settings.data?.["cod_enabled"] === true
++        && Number(quote.data?.grand_total) <= Number(settings.data?.["cod_limit"] ?? 0) ? ["cash"] : []),
++    ] : [];
+   const [paymentMethod, setPaymentMethod] = useState("");
+-  const activeMethod = paymentMethod || configuredMethods[0] || "";
++  const activeMethod = configuredMethods.includes(paymentMethod) ? paymentMethod : configuredMethods[0] ?? "";
+   const mpesaAmountReady = mpesaSupportsTotal(quote.data?.grand_total, quote.data?.currency ?? "KES");
+   const [mpesaPhone, setMpesaPhone] = useState("");
+   const charge = useDeliveryMpesaCharge();
+@@ -116,28 +122,29 @@ function CheckoutPage() {
+     <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+       <div className="neo-commerce-hero">
+         <div>
+-          <p className="neo-commerce-eyebrow">Secure order</p>
++          <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="inline-flex min-h-11 items-center text-sm font-semibold text-white/90">ΓåÉ Back to cart</Link>
+           <h1 className="neo-commerce-title">Checkout</h1>
+-          <p className="neo-commerce-copy">Confirm fulfilment, address and payment. Your order is created once; payment retries never duplicate it.</p>
+-          <ol className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-white/80" aria-label="Checkout progress">
+-            <li className="rounded-full bg-white/15 px-3 py-1.5">1 ┬╖ Details</li><li className="rounded-full bg-white/15 px-3 py-1.5">2 ┬╖ Payment</li><li className="rounded-full bg-white/15 px-3 py-1.5">3 ┬╖ Confirmation</li>
+-          </ol>
++          <p className="neo-commerce-copy">Confirm fulfilment, address and payment.</p>
+         </div>
+       </div>
+ 
+-      {cart.isLoading ? (
+-        <div className="flex justify-center py-10">
+-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
++      {loading || customer.isLoading || cart.isLoading ? (
++        <div className="flex justify-center py-10 text-white" role="status">
++          <Loader2 className="size-5 animate-spin" aria-hidden /><span className="sr-only">Loading checkout</span>
+         </div>
++      ) : customer.isError || cart.isError ? (
++        <PublicEmptyState title="Checkout could not load" description="Your order has not been submitted here."
++          action={<button className="neo-commerce-primary" onClick={() => void (customer.isError ? customer.refetch() : cart.refetch())}>Retry</button>} />
++      ) : fulfilment === "room-service" && items.length > 0 ? (
++        <PublicEmptyState title="Your basket is for room service" description="Review and submit it in Stay & Dine."
++          action={<Link to="/guest/$hotelSlug/order" params={{ hotelSlug: ws.guest_slug ?? hotelSlug }} search={{ item: undefined }} className="neo-commerce-primary">Open room service</Link>} />
+       ) : items.length === 0 ? (
+         <div className="mt-4">
+           <PublicEmptyState
+             title="Your cart is empty"
+             description="Add something from the menu to get started."
+             action={
+-              <Link to="/delivery/$hotelSlug" params={{ hotelSlug }}>
+-                <BrandButton>Browse the menu</BrandButton>
+-              </Link>
++              <Link to="/delivery/$hotelSlug" params={{ hotelSlug }} className="neo-commerce-primary">Browse the menu</Link>
+             }
+           />
+         </div>
+@@ -164,13 +171,17 @@ function CheckoutPage() {
+                         {String(menuItem["name"] ?? "Item")}
+                       </p>
+                       <p className="text-xs" style={{ color: brandFallback.steel }}>
+-                        {money(menuItem["base_price"])} each
++                        {menuItem["base_price"] != null ? `${money(menuItem["base_price"], quote.data?.currency ?? ws.currency ?? "KES")} base price` : "Priced in the order total"}
+                       </p>
++                      {((item["cart_item_modifiers"] as Row[] | undefined) ?? []).map((option) => (
++                        <p key={String(option["id"] ?? option["option_id"])} className="text-xs text-slate-600">{String(option["option_name"] ?? "")}</p>
++                      ))}
+                     </div>
+-                    <div className="flex items-center gap-1">
++                    <div className="neo-quantity-control">
+                       <button
+                         type="button"
+                         aria-label="Decrease quantity"
++                        disabled={updateItem.isPending}
+                         className="rounded-full border border-black/10 p-1.5"
+                         onClick={() =>
+                           updateItem.mutate({ id: String(item["id"]), quantity: qty - 1 })
+@@ -182,6 +193,7 @@ function CheckoutPage() {
+                       <button
+                         type="button"
+                         aria-label="Increase quantity"
++                        disabled={updateItem.isPending}
+                         className="rounded-full border border-black/10 p-1.5"
+                         onClick={() =>
+                           updateItem.mutate({ id: String(item["id"]), quantity: qty + 1 })
+@@ -294,9 +306,10 @@ function CheckoutPage() {
+                         />
+                       </div>
+                       <div className="space-y-1">
+-                        <Label>Delivery zone</Label>
++                        <Label htmlFor="checkout-zone">Delivery zone</Label>
+                         <select
+-                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
++                          id="checkout-zone"
++                          className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base"
+                           value={newAddress.zone_id}
+                           onChange={(e) =>
+                             setNewAddress({ ...newAddress, zone_id: e.target.value })
+@@ -305,15 +318,18 @@ function CheckoutPage() {
+                           <option value="">Select a zone</option>
+                           {(zones.data ?? []).map((z) => (
+                             <option key={String(z["id"])} value={String(z["id"])}>
+-                              {String(z["name"])}
++                              {String(z["name"])}{z["base_fee"] != null ? ` ┬╖ from ${money(z["base_fee"], quote.data?.currency ?? ws.currency ?? "KES")}` : ""}{Number(z["eta_minutes"]) > 0 ? ` ┬╖ ~${String(z["eta_minutes"])} min` : ""}
+                             </option>
+                           ))}
+                         </select>
++                        {zones.isError ? <button className="min-h-11 text-sm underline" onClick={() => void zones.refetch()}>Zones couldnΓÇÖt load. Retry</button> :
++                          <p className="text-xs text-slate-600">If your address is outside the listed zones, choose pickup. The final delivery fee appears in your total.</p>}
+                       </div>
+                       <div className="sm:col-span-2">
+                         <BrandButton
+                           disabled={
+                             saveAddress.isPending ||
++                            zones.isPending || zones.isError || !newAddress.zone_id ||
+                             !newAddress.address_line.trim() ||
+                             !newAddress.city.trim()
+                           }
+@@ -365,7 +381,12 @@ function CheckoutPage() {
+             <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+               Summary
+             </p>
+-            {quote.isLoading ? (
++            {quote.isError ? (
++              <div className="mt-3 space-y-3 text-sm text-slate-700" role="alert">
++                <p>We couldnΓÇÖt refresh your total.</p>
++                <button className="neo-commerce-primary" onClick={() => void quote.refetch()}>Retry pricing</button>
++              </div>
++            ) : quote.isLoading ? (
+               <div className="flex justify-center py-6">
+                 <Loader2 className="size-4 animate-spin" />
+               </div>
+@@ -402,9 +423,14 @@ function CheckoutPage() {
+ 
+                 <div className="pt-3">
+                   <Label>Payment</Label>
+-                  {configuredMethods.length ? (
++                  {settings.isError ? (
++                    <button className="mt-1 block min-h-11 text-sm font-semibold underline" onClick={() => void settings.refetch()}>Payment options couldnΓÇÖt load. Retry</button>
++                  ) : settings.isPending ? (
++                    <p role="status" className="mt-1">Checking payment optionsΓÇª</p>
++                  ) : configuredMethods.length ? (
+                     <select
+-                      className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
++                      aria-label="Payment method"
++                      className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-950"
+                       value={activeMethod}
+                       onChange={(e) => setPaymentMethod(e.target.value)}
+                     >
+@@ -428,6 +454,7 @@ function CheckoutPage() {
+                     <Input
+                       id="mpesa-phone"
+                       inputMode="tel"
++                      autoComplete="tel"
+                       placeholder="07xx xxx xxx"
+                       className="mt-1"
+                       value={mpesaPhone}
+@@ -444,7 +471,8 @@ function CheckoutPage() {
+                 <BrandButton
+                   className="mt-3 w-full"
+                   disabled={
+-                    !quote.data.can_checkout ||
++                    !quote.data.can_checkout || quote.isFetching || settings.isFetching ||
++                    updateCart.isPending || updateItem.isPending ||
+                     placeOrder.isPending ||
+                     charge.isPending ||
+                     !cartId ||
+@@ -452,8 +480,13 @@ function CheckoutPage() {
+                     (activeMethod === "mpesa" && (!mpesaAmountReady || mpesaPhone.replace(/\D/g, "").length < 9))
+                   }
+                   onClick={async () => {
+-                    if (!cartId) return;
+-                    const res = await placeOrder.mutateAsync({ cartId, paymentMethod: activeMethod });
++                    if (!cartId || !activeMethod) return;
++                    let res;
++                    try {
++                      res = await placeOrder.mutateAsync({ cartId, paymentMethod: activeMethod });
++                    } catch {
++                      return; // The mutation reports the saved-order error.
++                    }
+                     if (activeMethod === "mpesa") {
+                       // The order already exists, so a failed or broken payment
+                       // request must still land the guest on the order page ΓÇö
+diff --git a/src/routes/delivery.$hotelSlug.index.tsx b/src/routes/delivery.$hotelSlug.index.tsx
+index 57cab9f..982bd8e 100644
+--- a/src/routes/delivery.$hotelSlug.index.tsx
++++ b/src/routes/delivery.$hotelSlug.index.tsx
+@@ -8,6 +8,7 @@ import {
+   useWorkspace,
+ } from "@/components/public/PublicAppShell";
+ import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
++import { DeliveryItemSheet } from "@/components/public/DeliveryItemSheet";
+ import { Input } from "@/components/ui/input";
+ import { brandFallback } from "@/lib/public-apps";
+ import { useCustomerSession } from "@/lib/public-session";
+@@ -37,12 +38,14 @@ function DeliveryHome() {
+   const [branchId, setBranchId] = useState<string | null>(ws.branch_id);
+   const activeBranch = branchId ?? (branches.data?.[0]?.["id"] as string | undefined) ?? null;
+ 
+-  const menu = usePublicMenu(ws.organization_id, activeBranch);
+   const cart = useMyPublicCart(ws.organization_id, customerId);
++  const fulfilment = cart.data?.["fulfilment_type"] === "pickup" ? "pickup" : "delivery";
++  const menu = usePublicMenu(ws.organization_id, activeBranch, fulfilment);
+   const addToCart = usePublicAddToCart(ws.organization_id, customerId);
+ 
+   const [query, setQuery] = useState("");
+   const [category, setCategory] = useState("All");
++  const [selectedItem, setSelectedItem] = useState<Row | null>(null);
+ 
+   const categories = useMemo(() => ["All", ...new Set(((menu.data ?? []) as Row[]).map(
+     (item) => String((item["menu_categories"] as Row | null)?.["name"] ?? "Menu"),
+@@ -69,6 +72,8 @@ function DeliveryHome() {
+     (sum, i) => sum + Number(i["quantity"] ?? 0),
+     0,
+   );
++  const roomServiceCart = cartCount > 0 && cart.data?.["fulfilment_type"] === "room-service";
++  const otherBranchCart = cartCount > 0 && Boolean(cart.data?.["branch_id"]) && cart.data?.["branch_id"] !== activeBranch;
+ 
+   return (
+     <PublicAppShell
+@@ -78,37 +83,29 @@ function DeliveryHome() {
+           <Link
+             to="/delivery/$hotelSlug/orders"
+             params={{ hotelSlug }}
+-            className="text-sm font-medium"
+-            style={{ color: brandFallback.steel }}
++            className="neo-pub-navlink whitespace-nowrap text-white/85"
+           >
+             My orders
+           </Link>
+-          <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }}>
+-            <BrandButton>
++          <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="neo-commerce-primary">
+               <ShoppingBag className="size-4" />
+               {cartCount > 0 ? cartCount : "Cart"}
+-            </BrandButton>
+           </Link>
+         </div>
+       }
+     >
+-      <section className="neo-commerce-hero relative overflow-hidden">
++      <section className="neo-commerce-hero neo-delivery-cover relative overflow-hidden">
++        {ws.hero_url ? <img src={ws.hero_url} alt="" fetchPriority="high" className="absolute inset-y-0 right-0 h-full w-full object-cover sm:w-3/5" /> : null}
++        {ws.hero_url ? <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/55 sm:to-slate-950/10" /> : null}
+         <div className="relative z-10 max-w-2xl">
+-        <p className="neo-commerce-eyebrow">Fresh from the kitchen</p>
+         <h1 className="neo-commerce-title">
+           {ws.welcome_title || `Order from ${ws.hotel_name}`}
+         </h1>
+         <p className="neo-commerce-copy mt-3">
+-          {ws.welcome_message ||
+-            "Browse the live kitchen menu, order for delivery or collection, and track it in real time."}
++          {ws.welcome_message || "Choose delivery or collection and track your order."}
+         </p>
+-        <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-white/90">
+-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Live menu</span>
+-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Delivery & collection</span>
+-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Track your order</span>
+-        </div>
+         </div>
+-        <UtensilsCrossed className="pointer-events-none absolute -bottom-12 -right-8 size-56 rotate-12 text-white/[0.08]" aria-hidden />
++        {!ws.hero_url ? <UtensilsCrossed className="pointer-events-none absolute -bottom-12 -right-8 size-56 rotate-12 text-white/[0.08]" aria-hidden /> : null}
+       </section>
+ 
+       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Find food">
+@@ -123,10 +120,11 @@ function DeliveryHome() {
+                   key={id}
+                   type="button"
+                   onClick={() => setBranchId(id)}
+-                  className="rounded-full border px-3 py-1.5 text-sm"
++                  aria-pressed={active}
++                  className="min-h-11 rounded-full border px-3 py-1.5 text-sm"
+                   style={{
+                     borderColor: active ? ws.primary_color : brandFallback.mist,
+-                    color: active ? ws.primary_color : brandFallback.steel,
++                    color: active ? "var(--pa-accent-ink)" : brandFallback.steel,
+                     background: active ? `${ws.primary_color}14` : "transparent",
+                   }}
+                 >
+@@ -147,14 +145,14 @@ function DeliveryHome() {
+             onChange={(e) => setQuery(e.target.value)}
+             placeholder="Search the menu"
+             aria-label="Search the menu"
+-            className="pl-9"
++              className="min-h-11 pl-9 text-base"
+           />
+         </div>
+         <div className="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="Menu categories">
+           {categories.map((name) => (
+             <button key={name} type="button" onClick={() => setCategory(name)}
+               aria-pressed={category === name}
+-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${category === name ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"}`}>
++              className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${category === name ? "border-transparent bg-[var(--pa-primary)] text-[var(--pa-on-primary)]" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"}`}>
+               {name}
+             </button>
+           ))}
+@@ -168,6 +166,13 @@ function DeliveryHome() {
+           description="Browse freely, then sign in once so the property can confirm and track your order."
+         />
+       ) : null}
++      {roomServiceCart || otherBranchCart ? <div className="mt-5">
++        <PublicEmptyState title={roomServiceCart ? "You have a room-service basket" : "You have a basket at another branch"}
++          description="Finish or clear that basket before adding items from this menu."
++          action={roomServiceCart
++            ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug: ws.guest_slug ?? hotelSlug }} search={{ item: undefined }} className="neo-commerce-primary">Open room service</Link>
++            : <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="neo-commerce-primary">Review cart</Link>} />
++      </div> : null}
+ 
+       <section className="mt-6 space-y-6">
+         {menu.isLoading ? (
+@@ -188,26 +193,26 @@ function DeliveryHome() {
+         ) : (
+           grouped.map(([category, items]) => (
+             <div key={category}>
+-              <h2 className="mb-3 text-xl font-bold tracking-tight" style={{ color: brandFallback.secondary }}>
++              <h2 className="mb-3 text-xl font-bold tracking-tight text-white">
+                 {category}
+               </h2>
+-              <div className="grid gap-3 sm:grid-cols-2">
++              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                 {items.map((item) => {
+                   const available = String(item["availability"] ?? "available") === "available";
+                   return (
+                     <article
+                       key={String(item["id"])}
+-                      className="group flex min-w-0 gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
++                      className="neo-delivery-dish group flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white"
+                     >
+                       {item["image_url"] ? (
+                         <img
+                           src={String(item["image_url"])}
+                           alt={String(item["name"] ?? "Menu item")}
+                           loading="lazy"
+-                          className="size-24 shrink-0 rounded-xl object-cover sm:size-28"
++                          className="aspect-[4/3] w-full object-cover"
+                         />
+-                      ) : <div className="flex size-24 shrink-0 items-center justify-center rounded-xl bg-slate-100 sm:size-28" aria-hidden><UtensilsCrossed className="size-7 text-slate-400" /></div>}
+-                      <div className="min-w-0 flex-1">
++                      ) : <div className="neo-delivery-dish-placeholder grid aspect-[4/3] w-full place-items-center" aria-hidden><UtensilsCrossed className="size-7" /></div>}
++                      <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-4">
+                         <p
+                            className="break-words text-base font-bold"
+                           style={{ color: brandFallback.secondary }}
+@@ -222,24 +227,22 @@ function DeliveryHome() {
+                             {String(item["description"])}
+                           </p>
+                         ) : null}
+-                        <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
++                        <div className="mt-auto grid min-w-0 gap-2 pt-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+                           <span
+                             className="text-sm font-semibold"
+                             style={{ color: brandFallback.secondary }}
+                           >
+-                            {money(item["base_price"])}
++                            {money(item["base_price"], ws.currency ?? "KES")}
+                           </span>
+                           {available ? (
+                             <BrandButton
+-                              disabled={Boolean(customerId) && addToCart.isPending}
++                              className="w-full sm:w-auto"
++                              disabled={Boolean(customerId) && (addToCart.isPending || cart.isLoading || cart.isError || roomServiceCart || otherBranchCart)}
+                               onClick={() =>
+-                                customerId ? addToCart.mutate({
+-                                  branchId: activeBranch,
+-                                  menuItemId: String(item["id"]),
+-                                }) : window.location.assign(`/guest/${encodeURIComponent(hotelSlug)}/signin?next=${encodeURIComponent(`/delivery/${hotelSlug}`)}`)
++                                customerId ? setSelectedItem(item) : window.location.assign(`/guest/${encodeURIComponent(ws.guest_slug ?? hotelSlug)}/signin?next=${encodeURIComponent(`/delivery/${hotelSlug}`)}`)
+                               }
+                             >
+-                              {customerId ? "Add" : <><span>Sign in to add</span><ArrowRight className="ml-1 size-4" aria-hidden /></>}
++                              {customerId ? "View item" : <><span>Sign in to add</span><ArrowRight className="ml-1 size-4" aria-hidden /></>}
+                             </BrandButton>
+                           ) : (
+                             <span className="text-xs" style={{ color: brandFallback.steel }}>
+@@ -256,6 +259,21 @@ function DeliveryHome() {
+           ))
+         )}
+       </section>
++      {selectedItem ? <DeliveryItemSheet
++        key={String(selectedItem["id"])}
++        item={{
++          id: String(selectedItem["id"]), name: String(selectedItem["name"]),
++          description: String(selectedItem["description"] ?? ""), price: Number(selectedItem["base_price"]),
++          image: typeof selectedItem["image_url"] === "string" ? selectedItem["image_url"] : null,
++          currency: ws.currency ?? "KES",
++        }}
++        pending={addToCart.isPending}
++        onClose={() => setSelectedItem(null)}
++        onAdd={(options) => addToCart.mutate({
++          ...options, branchId: activeBranch, menuItemId: String(selectedItem["id"]),
++          fulfilment,
++        }, { onSuccess: () => setSelectedItem(null) })}
++      /> : null}
+     </PublicAppShell>
+   );
+ }
+diff --git a/src/routes/delivery.$hotelSlug.track.$orderReference.tsx b/src/routes/delivery.$hotelSlug.track.$orderReference.tsx
+index 91001e4..c814c56 100644
+--- a/src/routes/delivery.$hotelSlug.track.$orderReference.tsx
++++ b/src/routes/delivery.$hotelSlug.track.$orderReference.tsx
+@@ -1,5 +1,5 @@
+ import { createFileRoute, Link } from "@tanstack/react-router";
+-import { Loader2 } from "lucide-react";
++import { Loader2, MapPin, PackageCheck } from "lucide-react";
+ import { useState } from "react";
+ import { toast } from "sonner";
+ import {
+@@ -51,7 +51,11 @@ function TrackPage() {
+ 
+   const status = String(order.data?.["order_status"] ?? "");
+   const steps = String(order.data?.["fulfilment_type"] ?? "delivery") === "pickup" ? PICKUP_STEPS : DELIVERY_STEPS;
+-  const activeIndex = steps.findIndex((s) => s.key === status);
++  const milestone = status === "pending-payment" ? "placed"
++    : status === "collected" && steps === DELIVERY_STEPS ? "rider-assigned"
++    : status === "completed" && steps === DELIVERY_STEPS ? "delivered"
++    : status === "ready" && steps === PICKUP_STEPS ? "ready-for-pickup" : status;
++  const activeIndex = steps.findIndex((s) => s.key === milestone);
+ 
+   const charge = useDeliveryMpesaCharge();
+   const [retryPhone, setRetryPhone] = useState("");
+@@ -69,22 +73,26 @@ function TrackPage() {
+ 
+   return (
+     <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+-      <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
+-        Order {orderReference}
+-      </h1>
++      <div className="neo-commerce-hero">
++        <span className="neo-commerce-icon"><PackageCheck className="size-5" aria-hidden /></span>
++        <div><h1 className="neo-commerce-title">Track your order</h1><p className="neo-commerce-copy">{orderReference}</p></div>
++      </div>
+ 
+       {order.isLoading ? (
+         <div className="flex justify-center py-10">
+           <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+         </div>
++      ) : order.isError ? (
++        <div className="mt-4"><PublicEmptyState title="Tracking couldnΓÇÖt refresh" description="Use the same order reference when you retry."
++          action={<button className="neo-commerce-primary" onClick={() => void order.refetch()}>Retry tracking</button>} /></div>
+       ) : !order.data ? (
+         <div className="mt-4">
+           <PublicEmptyState
+             title="Order not found"
+             description="We could not find this order reference. Sign in with the account used to order, or check the reference."
+             action={
+-              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }}>
+-                <BrandButton>My orders</BrandButton>
++              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }} className="neo-commerce-primary">
++                My orders
+               </Link>
+             }
+           />
+@@ -102,11 +110,11 @@ function TrackPage() {
+                 : ""}
+             </p>
+ 
+-            <ol className="mt-5 space-y-3">
++            <ol aria-label="Order progress" className="mt-5 space-y-3">
+               {steps.map((step, index) => {
+                 const done = activeIndex >= 0 && index <= activeIndex;
+                 return (
+-                  <li key={step.key} className="flex items-center gap-3">
++                  <li key={step.key} aria-current={index === activeIndex ? "step" : undefined} className="flex items-center gap-3">
+                     <span
+                       className="size-2.5 rounded-full"
+                       style={{ background: done ? ws.primary_color : brandFallback.mist }}
+@@ -141,6 +149,18 @@ function TrackPage() {
+               </span>
+             </div>
+ 
++            {paymentStatus === "paid" ? (
++              <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-emerald-950" role="status">
++                <p className="font-semibold">Payment confirmed</p>
++                <p className="mt-1">Use order {orderReference} when requesting your receipt.</p>
++                {ws.contact_email ? (
++                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`mailto:${ws.contact_email}?subject=${encodeURIComponent(`Receipt for ${orderReference}`)}`}>Request receipt from the property</a>
++                ) : ws.contact_phone ? (
++                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`tel:${ws.contact_phone}`}>Call the property for a receipt</a>
++                ) : null}
++              </div>
++            ) : null}
++
+             {canRetryPayment ? (
+               <div className="mt-4 border-t border-black/5 pt-4">
+                 <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+@@ -283,7 +303,12 @@ function TrackPage() {
+ function LiveDeliveryCard({ organizationId, reference }: { organizationId: string; reference: string }) {
+   const live = useDeliveryLive(organizationId, reference);
+   const data = live.data;
+-  if (!data) return null;
++  if (!data) return live.isError ? (
++    <section className="neo-commerce-surface p-5 text-sm text-slate-700">
++      <p>Live location couldnΓÇÖt refresh. Follow the order progress above.</p>
++      <button className="mt-2 min-h-11 font-semibold underline" onClick={() => void live.refetch()}>Retry location</button>
++    </section>
++  ) : null;
+ 
+   const destination = data.destination;
+   const courier = data.courier;
+@@ -345,7 +370,8 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
+               This property does not share rider locations. You will still see each step above as
+               your order moves.
+             </p>
+-          ) : location ? (
++          ) : location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)
++            && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180 ? (
+             <>
+               <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                 {stale ? "Last known position" : "Rider position"}
+@@ -357,13 +383,12 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
+                 {stale ? " ├óΓé¼ΓÇ¥ the signal has dropped, so this may have moved." : ""}
+               </p>
+               <a
+-                href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
++                href={`https://maps.apple.com/?ll=${location.latitude},${location.longitude}`}
+                 target="_blank"
+                 rel="noreferrer"
+-                className="mt-2 inline-block text-sm font-medium"
+-                style={{ color: brandFallback.primary }}
++                className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--pa-accent-ink)]"
+               >
+-                Open position in maps
++                <MapPin className="size-4" aria-hidden /> Open saved position in Maps
+               </a>
+             </>
+           ) : (
+diff --git a/src/routes/delivery.$hotelSlug.tsx b/src/routes/delivery.$hotelSlug.tsx
+index bb3be1e..77df808 100644
+--- a/src/routes/delivery.$hotelSlug.tsx
++++ b/src/routes/delivery.$hotelSlug.tsx
+@@ -1,4 +1,4 @@
+-import { createFileRoute, Outlet } from "@tanstack/react-router";
++import { createFileRoute, Outlet, useRouter } from "@tanstack/react-router";
+ import { PublicWorkspaceProvider, WorkspaceNotFound } from "@/components/public/PublicAppShell";
+ import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
+ import { useTrackEntry } from "@/lib/traffic";
+@@ -25,8 +25,21 @@ export const Route = createFileRoute("/delivery/$hotelSlug")({
+     };
+   },
+   component: DeliveryAppLayout,
++  errorComponent: DeliveryPublicationError,
+ });
+ 
++function DeliveryPublicationError() {
++  const router = useRouter();
++  return (
++    <main className="neo-public-app grid place-items-center p-6">
++      <div className="neo-public-panel max-w-md p-6">
++        <h1 className="text-xl font-semibold">Delivery couldnΓÇÖt load</h1>
++        <p className="mt-2 text-sm text-white/80">We couldnΓÇÖt check this propertyΓÇÖs published app. Try the same link again.</p>
++        <button className="neo-commerce-primary mt-4" onClick={() => void router.invalidate()}>Retry</button>
++      </div>
++    </main>
++  );
++}
+ function DeliveryAppLayout() {
+   const workspace = Route.useLoaderData();
+   const { hotelSlug } = Route.useParams();
+diff --git a/src/routes/guest.$hotelSlug.checkout.tsx b/src/routes/guest.$hotelSlug.checkout.tsx
+index 554d430..618078c 100644
+--- a/src/routes/guest.$hotelSlug.checkout.tsx
++++ b/src/routes/guest.$hotelSlug.checkout.tsx
+@@ -3,18 +3,101 @@ import { createFileRoute, Link } from "@tanstack/react-router";
+ import { CreditCard, Loader2, ShieldCheck } from "lucide-react";
+ import { GuestScreen } from "@/components/public/GuestScreen";
+ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
++import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+ import { Input } from "@/components/ui/input";
+ import { useCustomerSession } from "@/lib/public-session";
+ import { money } from "@/lib/public-delivery";
++import { mpesaSupportsTotal } from "@/lib/mpesa-application-result";
+ import { useGuestBill, useGuestFolioMpesaCheckout, useGuestPaymentAvailability } from "@/lib/guest-ordering";
+ 
+-export const Route=createFileRoute("/guest/$hotelSlug/checkout")({component:GuestCheckout});
+-function GuestCheckout(){
+- const ws=useWorkspace(); const {hotelSlug}=Route.useParams(); const {user}=useCustomerSession();
+- const [phone,setPhone]=useState(""); const [started,setStarted]=useState<{transactionId?:string|undefined;status?:string|undefined;detail?:string|undefined}|null>(null);
+- const bill=useGuestBill(ws.organization_id,Boolean(user),Boolean(started)); const avail=useGuestPaymentAvailability(ws.organization_id); const pay=useGuestFolioMpesaCheckout();
+- const folio=(bill.data?.folios??[]).find(f=>Number(f.outstanding??0)>0)??bill.data?.folios?.[0]; const due=Number(folio?.outstanding??0);
+- return <GuestScreen hotelSlug={hotelSlug} active="stay"><div className="neo-commerce-hero"><span className="neo-commerce-icon"><CreditCard className="size-5"/></span><div><p className="neo-commerce-eyebrow">My bill</p><h1 className="neo-commerce-title">Checkout</h1><p className="neo-commerce-copy">Review the outstanding folio, choose payment and wait for provider confirmation. NE├ÿ never marks money paid from a button tap.</p><ol className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-white/80"><li className="rounded-full bg-white/15 px-3 py-1.5">1 ┬╖ Review</li><li className="rounded-full bg-white/15 px-3 py-1.5">2 ┬╖ Pay</li><li className="rounded-full bg-white/15 px-3 py-1.5">3 ┬╖ Receipt</li></ol></div></div>
+- {bill.isLoading?<div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-white/80"/></div>:bill.isError?<div className="mt-6"><PublicEmptyState title="Could not load your bill" description="Your balance has not been checked. Try again." action={<button className="neo-commerce-primary" onClick={() => void bill.refetch()}>Retry</button>}/></div>:!folio?<div className="mt-6"><PublicEmptyState title="Nothing to settle" description="Your checkout appears when the hotel has opened a folio for your stay."/></div>:<div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]"><section className="neo-commerce-surface p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[.18em] text-slate-500">Folio {folio.folio_number??""}</p><h2 className="mt-2 text-2xl font-bold text-slate-950">{money(due,folio.currency??"KES")} outstanding</h2><div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600"><div className="flex justify-between"><span>Gross billed</span><strong className="text-slate-950">{money(folio.gross_obligation,folio.currency??"KES")}</strong></div><div className="mt-2 flex justify-between"><span>Collected</span><strong className="text-slate-950">{money(folio.collected,folio.currency??"KES")}</strong></div></div><Link to="/guest/$hotelSlug/folio" params={{hotelSlug}} className="mt-4 inline-block text-sm font-bold text-slate-700 underline">View itemised bill</Link></section><aside className="neo-commerce-summary lg:sticky lg:top-24 lg:self-start"><div className="flex items-center gap-2 text-sm font-bold text-slate-950"><ShieldCheck className="size-4"/> Secure payment</div>{started && due <= 0?<div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-950"><strong>Balance settled.</strong><p className="mt-1">Open your itemised bill to see the recorded receipt.</p></div>:started?<div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-950"><strong>Payment request created.</strong><p className="mt-1">Approve the prompt on your phone. The folio remains outstanding until the provider confirms it.</p>{started.status?<p className="mt-2 text-xs font-bold uppercase">{started.status}</p>:null}</div>:avail.isPending?<div role="status" className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-700">Checking payment optionsΓÇª</div>:avail.data?.available?<><label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="folio-phone">M-Pesa number</label><Input id="folio-phone" className="mt-2" inputMode="tel" placeholder="07xx xxx xxx" value={phone} onChange={e=>setPhone(e.target.value)}/><button className="neo-commerce-primary mt-4 w-full" disabled={pay.isPending||phone.replace(/\D/g,"").length<9||due<=0} onClick={async()=>{if(!folio)return;try { const r=await pay.mutateAsync({organizationId:ws.organization_id,folioId:folio.id,msisdn:phone,amount:due});setStarted(r); } catch { /* mutation displays the provider error */ }}}> {pay.isPending?<Loader2 className="size-4 animate-spin"/>:null} Pay {money(due,folio.currency??"KES")}</button><p className="mt-3 text-xs leading-relaxed text-slate-500">A request is not a receipt. Confirmation must come from the configured provider.</p></>:<div className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-700">Online payment is not configured for this property. Please settle at the front desk.</div>}</aside></div>}
+- </GuestScreen>;
++export const Route = createFileRoute("/guest/$hotelSlug/checkout")({ component: GuestCheckout });
++
++function GuestCheckout() {
++  const ws = useWorkspace();
++  const { hotelSlug } = Route.useParams();
++  const { user, loading } = useCustomerSession();
++  const [phone, setPhone] = useState("");
++  const [attempt, setAttempt] = useState<{ folioId: string; userId: string } | null>(null);
++  const activeAttempt = attempt?.userId === user?.id ? attempt : null;
++  const bill = useGuestBill(ws.organization_id, Boolean(user), Boolean(activeAttempt));
++  const available = useGuestPaymentAvailability(ws.organization_id, Boolean(user));
++  const pay = useGuestFolioMpesaCheckout();
++  const folios = bill.data?.folios ?? [];
++  const folio = activeAttempt
++    ? folios.find((entry) => entry.id === activeAttempt.folioId)
++    : folios.find((entry) => Number(entry.outstanding) > 0) ?? folios[0];
++  const due = folio?.outstanding;
++  const currency = folio?.currency ?? "KES";
++  const billLink = <Link to="/guest/$hotelSlug/folio" params={{ hotelSlug }} className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-700 underline">View itemised bill</Link>;
++
++  return (
++    <GuestScreen hotelSlug={hotelSlug} active="stay">
++      <div className="neo-commerce-hero">
++        <span className="neo-commerce-icon"><CreditCard className="size-5" aria-hidden /></span>
++        <div><h1 className="neo-commerce-title">Settle your bill</h1><p className="neo-commerce-copy">{ws.hotel_name || ws.app_name}</p></div>
++      </div>
++      <div className="mt-6">
++        {loading || bill.isLoading ? (
++          <div className="flex justify-center py-12 text-[var(--guest-text)]" role="status">
++            <Loader2 className="size-6 animate-spin" aria-hidden /><span className="sr-only">Loading folio</span>
++          </div>
++        ) : !user ? (
++          <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to settle your bill" description="Use the account linked to your stay." />
++        ) : bill.isError ? (
++          <PublicEmptyState title="Your bill couldnΓÇÖt load" description="Try again to check your balance."
++            action={<button className="neo-commerce-primary" onClick={() => void bill.refetch()}>Retry</button>} />
++        ) : !folio || due == null ? (
++          <PublicEmptyState title={activeAttempt ? "Check your folio" : "No payable balance is available"}
++            description={activeAttempt ? "Your payment request was sent. Check your bill or contact the front desk." : "Checkout is available when the hotel opens a folio for your stay."}
++            action={billLink} />
++        ) : (
++          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
++            <section className="neo-commerce-surface p-5 sm:p-6">
++              <p className="text-sm font-semibold text-slate-600">Folio {folio.folio_number}</p>
++              <h2 className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{money(due, currency)}</h2>
++              <p className="text-sm text-slate-600">Outstanding balance</p>
++              <dl className="mt-5 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
++                <div className="flex justify-between gap-3"><dt>Gross billed</dt><dd className="font-semibold">{money(folio.gross_obligation, currency)}</dd></div>
++                <div className="flex justify-between gap-3"><dt>Collected</dt><dd className="font-semibold">{money(folio.collected, currency)}</dd></div>
++              </dl>
++              {billLink}
++            </section>
++            <aside className="neo-commerce-summary lg:self-start">
++              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-950"><ShieldCheck className="size-4" aria-hidden /> Payment</h2>
++              {due <= 0 ? (
++                <p className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950" role="status">No payment is due on this folio.</p>
++              ) : activeAttempt ? (
++                <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-950" role="status">
++                  <strong>Waiting for confirmation</strong><p className="mt-1">Approve the M-Pesa prompt on your phone. Your balance updates after the payment is recorded.</p>
++                </div>
++              ) : available.isError ? (
++                <button className="mt-3 min-h-11 text-sm font-semibold text-slate-800 underline" onClick={() => void available.refetch()}>Payment options couldnΓÇÖt load. Retry</button>
++              ) : available.isPending ? (
++                <p role="status" className="mt-4 text-sm text-slate-700">Checking payment optionsΓÇª</p>
++              ) : available.data?.available && mpesaSupportsTotal(due, currency) ? (
++                <form onSubmit={async (event) => {
++                  event.preventDefault();
++                  if (pay.isPending || phone.replace(/\D/g, "").length < 9) return;
++                  try {
++                    await pay.mutateAsync({ organizationId: ws.organization_id, folioId: folio.id, msisdn: phone, amount: due });
++                    setAttempt({ folioId: folio.id, userId: user.id });
++                  } catch { /* The payment mutation reports the error. */ }
++                }}>
++                  <label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="folio-phone">M-Pesa number</label>
++                  <Input id="folio-phone" className="mt-2 min-h-11 text-base" type="tel" autoComplete="tel" placeholder="07xx xxx xxx" value={phone} onChange={(event) => setPhone(event.target.value)} />
++                  <button type="submit" className="neo-commerce-primary mt-4 w-full" disabled={pay.isPending || phone.replace(/\D/g, "").length < 9}>
++                    {pay.isPending ? "Sending requestΓÇª" : `Pay ${money(due, currency)}`}
++                  </button>
++                </form>
++              ) : (
++                <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-700">
++                  {available.data?.available ? "M-Pesa requires a positive whole KES total." : "Online payment is unavailable for this property."} Please settle at the front desk.
++                </p>
++              )}
++            </aside>
++          </div>
++        )}
++      </div>
++    </GuestScreen>
++  );
+ }
+diff --git a/src/routes/guest.$hotelSlug.order.tsx b/src/routes/guest.$hotelSlug.order.tsx
+index 331d2fc..53cd319 100644
+--- a/src/routes/guest.$hotelSlug.order.tsx
++++ b/src/routes/guest.$hotelSlug.order.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from "react";
+ import { createFileRoute, useNavigate } from "@tanstack/react-router";
++import { useQuery } from "@tanstack/react-query";
+ import { Heart, Loader2, Minus, Plus, UtensilsCrossed } from "lucide-react";
+ import { toast } from "sonner";
+ import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+@@ -7,7 +8,8 @@ import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShe
+ import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+ import { brandFallback } from "@/lib/public-apps";
+ import { useCustomerSession } from "@/lib/public-session";
+-import { money } from "@/lib/public-delivery";
++import { money, usePublicDeliverySettings } from "@/lib/public-delivery";
++import { resolvePublicWorkspace } from "@/lib/public-apps.functions";
+ import { useGuestProfile, useGuestScreenView } from "@/lib/guest-app";
+ import { isPreviewMode } from "@/lib/preview-mode";
+ import {
+@@ -104,6 +106,19 @@ function OrderPage() {
+   const toggleFavourite = useToggleFavourite(ws.organization_id, customerId);
+   const placeRoomService = usePlaceRoomServiceOrder();
+   const placeDelivery = usePlaceDeliveryOrder();
++  const deliveryWorkspace = useQuery({
++    queryKey: ["guest-delivery-workspace", ws.organization_id, ws.branch_id, hotelSlug],
++    enabled: activeFulfilment !== "room-service" && Boolean(cartId),
++    queryFn: () => resolvePublicWorkspace({ data: { appKey: "delivery", slug: hotelSlug } }),
++  });
++  const cartBranch = (cart.data?.["branch_id"] as string | null) ?? ws.branch_id;
++  const deliverySettings = usePublicDeliverySettings(ws.organization_id, cartBranch);
++  const matchingDelivery = deliveryWorkspace.data?.organization_id === ws.organization_id &&
++    (deliveryWorkspace.data.branch_id === null || deliveryWorkspace.data.branch_id === cartBranch);
++  const acceptedMethods = deliverySettings.data?.["allowed_payment_methods"];
++  const cashEnabled = !deliverySettings.isError && Array.isArray(acceptedMethods) && acceptedMethods.includes("cash") &&
++    deliverySettings.data?.["cod_enabled"] === true &&
++    Number(quote.data?.grand_total) <= Number(deliverySettings.data?.["cod_limit"] ?? 0);
+ 
+   useGuestScreenView(ws.organization_id, "order", Boolean(customerId));
+ 
+@@ -116,6 +131,7 @@ function OrderPage() {
+   const [paymentIntent, setPaymentIntent] = useState<
+     "room-charge" | "pay-at-property"
+   >("room-charge");
++  const activePaymentIntent = stay.data?.can_charge_to_room ? paymentIntent : "pay-at-property";
+ 
+   const busy = placeRoomService.isPending || placeDelivery.isPending;
+ 
+@@ -166,8 +182,8 @@ function OrderPage() {
+       !cartId ||
+       updateCart.isPending ||
+       cart.data?.["fulfilment_type"] !== activeFulfilment ||
+-      quote.data?.fulfilment_type !== activeFulfilment ||
+-      quote.data?.can_checkout !== true
++      (!matchingDelivery || activeFulfilment === "room-service") &&
++        (quote.data?.fulfilment_type !== activeFulfilment || quote.data?.can_checkout !== true)
+     ) {
+       return;
+     }
+@@ -176,7 +192,7 @@ function OrderPage() {
+       if (activeFulfilment === "room-service") {
+         const result = await placeRoomService.mutateAsync({
+           cartId,
+-          paymentIntent,
++          paymentIntent: activePaymentIntent,
+         });
+ 
+         toast.success(
+@@ -195,6 +211,11 @@ function OrderPage() {
+         return;
+       }
+ 
++      if (matchingDelivery && deliveryWorkspace.data) {
++        void navigate({ to: "/delivery/$hotelSlug/checkout", params: { hotelSlug: deliveryWorkspace.data.slug } });
++        return;
++      }
++      if (activeFulfilment === "delivery" && !cashEnabled) return;
+       const result = await placeDelivery.mutateAsync({
+         cartId,
+         paymentMethod:
+@@ -221,22 +242,20 @@ function OrderPage() {
+     !updateCart.isPending &&
+     Boolean(cartId) &&
+     cart.data?.["fulfilment_type"] === activeFulfilment &&
+-    quote.data?.fulfilment_type === activeFulfilment &&
+-    quote.data?.can_checkout === true;
++    (activeFulfilment !== "room-service" && matchingDelivery ||
++      quote.data?.fulfilment_type === activeFulfilment && quote.data?.can_checkout === true &&
++      (activeFulfilment === "room-service" || (deliveryWorkspace.isSuccess && (activeFulfilment === "pickup" || cashEnabled))));
+ 
+   return (
+     <GuestScreen hotelSlug={hotelSlug} active="explore">
+-      <section className="rounded-2xl bg-white p-6 shadow-sm">
+-        <h1
+-          className="text-2xl font-semibold"
+-          style={{ color: "var(--guest-text, #07142D)" }}
+-        >
++      <section className="neo-commerce-hero">
++        <span className="neo-commerce-icon"><UtensilsCrossed className="size-5" aria-hidden /></span>
++        <div>
++        <h1 className="neo-commerce-title">
+           Order food
+         </h1>
+-        <p className="mt-2 text-sm" style={{ color: "var(--guest-muted, #52627A)" }}>
+-          Straight to {ws.hotel_name}&apos;s kitchen ΓÇö the same order the chefs
+-          and cashiers see.
+-        </p>
++        <p className="neo-commerce-copy">From {ws.hotel_name}&apos;s kitchen to your room, pickup or delivery.</p>
++        </div>
+       </section>
+ 
+       {!loading && !user ? (
+@@ -621,7 +640,7 @@ function OrderPage() {
+                           type="radio"
+                           name="payment-intent"
+                           value={option.value}
+-                          checked={paymentIntent === option.value}
++                          checked={activePaymentIntent === option.value}
+                           onChange={() =>
+                             setPaymentIntent(option.value)
+                           }
+@@ -650,21 +669,24 @@ function OrderPage() {
+                   </div>
+                 ) : null}
+ 
++                {activeFulfilment !== "room-service" && deliveryWorkspace.isError ? (
++                  <button className="mt-3 min-h-11 text-sm font-semibold underline" onClick={() => void deliveryWorkspace.refetch()}>Checkout couldnΓÇÖt load. Retry</button>
++                ) : activeFulfilment === "delivery" && deliveryWorkspace.isSuccess && !matchingDelivery && !cashEnabled ? (
++                  <p className="mt-3 text-sm text-amber-800">Delivery payment is unavailable for this basket. Choose collection or contact the property.</p>
++                ) : null}
+                 <button
+                   type="button"
+                   onClick={() => void checkout()}
+                   disabled={!canPlaceOrder}
+-                  className="mt-5 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+-                  style={{
+-                    background:
+-                      ws.primary_color || brandFallback.primary,
+-                  }}
++                  className="neo-commerce-primary mt-5 w-full"
+                 >
+                   {busy
+                     ? "Sending to the kitchenΓÇª"
+                     : preview
+                       ? "Preview only"
+-                      : "Place order"}
++                      : activeFulfilment !== "room-service" && matchingDelivery
++                        ? "Continue to checkout"
++                        : "Place order"}
+                 </button>
+               </>
+             )}
+@@ -859,4 +881,4 @@ function ItemCustomiser({
+       </div>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/routes/partner.$propertySlug.tsx b/src/routes/partner.$propertySlug.tsx
+index 08b9a9f..d6f1676 100644
+--- a/src/routes/partner.$propertySlug.tsx
++++ b/src/routes/partner.$propertySlug.tsx
+@@ -10,13 +10,16 @@ import {
+   useSendPartnerMessage,
+   type PartnerThread,
+ } from "@/lib/partner-messaging";
+-import { fetchPropertyForVisitor } from "@/lib/front-door";
+-import { PoweredByNeo } from "@/components/public/PublicAppShell";
++import { fetchPropertyForVisitor, type PublicProperty } from "@/lib/front-door";
++import { BrandMark, PoweredByNeo } from "@/components/public/PublicAppShell";
++import { brandFallback } from "@/lib/public-apps";
++import { normalizedHex, primaryInk } from "@/lib/public-palette";
+ import { PullToRefresh } from "@/components/common/PullToRefresh";
+ import { useNeoSignOut, useNeoSwitchAccount } from "@/lib/session-exit";
+ import { useAuth } from "@/lib/auth";
+ import { Display, PublicSurface, PublicTopBar } from "@/components/public/NeoPublic";
+ import { useTrackEntry } from "@/lib/traffic";
++import { useCustomerSession } from "@/lib/public-session";
+ 
+ export const Route = createFileRoute("/partner/$propertySlug")({
+   ssr: false,
+@@ -84,17 +87,12 @@ function PartnerPortal() {
+   useTrackEntry(propertySlug, "partner");
+   const [selected, setSelected] = useState<string | null>(null);
+   const [section, setSection] = useState<PartnerSection>("overview");
+-  // A visitor with no session should be offered sign-in, not told they lack a
+-  // relationship ΓÇö the hotel may well have granted them one.
+-  const session = useQuery({
+-    queryKey: ["neo-partner-session"],
+-    queryFn: async () => Boolean((await supabase.auth.getUser()).data.user),
+-    staleTime: 30_000,
+-  });
++  const { user, loading: sessionLoading } = useCustomerSession();
+ 
+ 
+   const property = useQuery({
+-    queryKey: ["neo-visitor-property", propertySlug],
++    queryKey: ["neo-visitor-property", propertySlug, user?.id],
++    enabled: !sessionLoading,
+     queryFn: () => fetchPropertyForVisitor(propertySlug),
+     staleTime: 60_000,
+   });
+@@ -102,8 +100,8 @@ function PartnerPortal() {
+   const branchId = property.data?.branch_id ?? null;
+ 
+   const context = useQuery({
+-    queryKey: ["neo-partner-context", branchId],
+-    enabled: Boolean(branchId),
++    queryKey: ["neo-partner-context", branchId, user?.id],
++    enabled: Boolean(branchId && user),
+     queryFn: async () => {
+       const { data, error } = await guardedRpc(supabase, "neo_partner_context", {
+         _branch: branchId,
+@@ -117,8 +115,8 @@ function PartnerPortal() {
+   const active = selected ?? relationships[0]?.id ?? null;
+ 
+   const records = useQuery({
+-    queryKey: ["neo-partner-records", branchId, active],
+-    enabled: Boolean(branchId && active),
++    queryKey: ["neo-partner-records", branchId, active, user?.id],
++    enabled: Boolean(branchId && active && user),
+     queryFn: async () => {
+       const { data, error } = await guardedRpc(supabase, "neo_partner_records", {
+         _branch: branchId,
+@@ -129,7 +127,7 @@ function PartnerPortal() {
+     },
+   });
+ 
+-  if (property.isLoading || context.isLoading) {
++  if (property.isLoading || sessionLoading || context.isLoading) {
+     return (
+       <Shell title="Partner portal">
+         <div className="flex items-center gap-2 text-sm text-white/70">
+@@ -139,6 +137,20 @@ function PartnerPortal() {
+     );
+   }
+ 
++  if (property.isError || context.isError) {
++    return (
++      <Shell title={property.data?.property_name ?? "Partner portal"} property={property.data}>
++        <Panel>
++          <p role="alert" className="text-sm text-white/85">Partner access couldnΓÇÖt be checked.</p>
++          <button className="neo-commerce-primary mt-4" onClick={() => {
++            if (property.isError) void property.refetch();
++            if (context.isError) void context.refetch();
++          }}>Retry</button>
++        </Panel>
++      </Shell>
++    );
++  }
++
+   if (!property.data) {
+     return (
+       <Shell title="Partner portal">
+@@ -151,13 +163,13 @@ function PartnerPortal() {
+ 
+   if (!context.data?.allowed) {
+     const reason =
+-      session.data === false
++      !user
+         ? "not_signed_in"
+         : context.data && !context.data.allowed
+           ? context.data.reason
+           : "no_relationship";
+     return (
+-      <Shell title={property.data.property_name}>
++      <Shell title={property.data.property_name} property={property.data}>
+         <Panel>
+           <h2 className="text-base font-semibold text-white">Partner access not available</h2>
+           <p className="mt-2 text-sm text-white/70">{refusal[reason] ?? refusal["no_relationship"]}</p>
+@@ -185,7 +197,7 @@ function PartnerPortal() {
+   const data = records.data;
+ 
+   return (
+-    <Shell title={property.data.property_name} section={section} onSection={setSection}>
++    <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}>
+       <section className="neo-partner-hero">
+         <span className="grid size-12 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" /></span>
+         <div className="min-w-0"><p className="neo-commerce-eyebrow">Private relationship</p><h1 className="mt-1 text-2xl font-bold text-white">Partner workspace</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/75">Purchase orders, deliveries, invoices and hotel messages for this relationship only.</p></div>
+@@ -522,16 +534,23 @@ function PartnerIdentityMenu() {
+ function Shell({
+   title,
+   children,
++  property,
+   section,
+   onSection,
+ }: {
+   title: string;
+   children: React.ReactNode;
++  property?: PublicProperty | null | undefined;
+   section?: PartnerSection;
+   onSection?: (next: PartnerSection) => void;
+ }) {
++  const primary = normalizedHex(property?.brand?.primary || brandFallback.primary);
++  const secondary = normalizedHex(property?.brand?.accent || brandFallback.secondary, brandFallback.secondary);
++  const background = normalizedHex(property?.brand?.surface || brandFallback.background, brandFallback.background);
+   return (
+-    <PublicSurface>
++    <PublicSurface className="neo-branded-app" style={{
++      "--pa-primary": primary, "--pa-on-primary": primaryInk(primary), "--pa-secondary": secondary, "--pa-background": background,
++    } as React.CSSProperties}>
+       <PublicTopBar
+         homeTo="/"
+         width="max-w-4xl"
+@@ -539,7 +558,11 @@ function Shell({
+       />
+       <PullToRefresh>
+        <main className="mx-auto w-full max-w-4xl min-w-0 px-5 pb-20 pt-8">
+-         <Display className="break-words text-3xl sm:text-5xl">{title}</Display>
++         <div className="flex min-w-0 items-center gap-4">
++           {property ? <BrandMark workspace={{ hotel_name: title, app_name: "Partner portal",
++             logo_url: property.media?.logo_url || property.logo_url, primary_color: primary, button_style: "rounded" }} /> : null}
++           <Display className="min-w-0 break-words text-3xl sm:text-5xl">{title}</Display>
++         </div>
+         {section && onSection ? (
+           <nav
+             aria-label="Partner sections"
+@@ -552,7 +575,7 @@ function Shell({
+                 onClick={() => onSection(s.key)}
+                 aria-current={s.key === section ? "page" : undefined}
+                 className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+-                  s.key === section ? "bg-white text-[#020A1C] shadow-sm" : "bg-white/10 text-white/80 hover:bg-white/15"
++                  s.key === section ? "bg-[var(--pa-primary)] text-[var(--pa-on-primary)] shadow-sm" : "bg-white/10 text-white/85 hover:bg-white/15"
+                 }`}
+               >
+                 {s.label}
+diff --git a/src/routes/rider.active.tsx b/src/routes/rider.active.tsx
+index b748f1f..c177260 100644
+--- a/src/routes/rider.active.tsx
++++ b/src/routes/rider.active.tsx
+@@ -5,7 +5,7 @@ import { brandFallback } from "@/lib/public-apps";
+ import { useCustomerSession } from "@/lib/public-session";
+ import { money, statusLabel } from "@/lib/public-delivery";
+ import { useMyDeliveries, useMyRiderProfile, useRiderAdvance } from "@/lib/delivery-data";
+-import { RiderTabBar } from "@/components/public/RiderTabBar";
++import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
+ import { PullToRefresh } from "@/components/common/PullToRefresh";
+ import { PreviewBanner } from "@/components/public/PreviewBanner";
+ 
+@@ -29,7 +29,6 @@ type Row = Record<string, unknown>;
+ const NEXT_STEP: Record<string, { to: string; label: string }> = {
+   "rider-assigned": { to: "collected", label: "Picked up from restaurant" },
+   collected: { to: "en-route", label: "Start delivery" },
+-  "en-route": { to: "arrived", label: "I have arrived" },
+ };
+ 
+ const ON_ROAD = ["rider-assigned", "collected", "out-for-delivery"];
+@@ -38,6 +37,7 @@ function RiderActiveJob() {
+   const navigate = useNavigate();
+   const { user, loading } = useCustomerSession();
+   const rider = useMyRiderProfile();
++  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
+   const riderId = rider.data?.["id"] as string | undefined;
+   const deliveries = useMyDeliveries(riderId);
+   const advance = useRiderAdvance();
+@@ -51,7 +51,7 @@ function RiderActiveJob() {
+   );
+ 
+   return (
+-    <div className="neo-rider-page">
++    <div className="neo-rider-page" style={brand.style}>
+       <PreviewBanner experience="Rider" />
+       <header className="px-4 py-4" style={{ background: brandFallback.navy }}>
+         <div className="mx-auto w-full max-w-md">
+@@ -65,12 +65,17 @@ function RiderActiveJob() {
+       <PullToRefresh>
+       <main className="mx-auto w-full max-w-md min-w-0 space-y-4 px-4 pb-28 pt-5">
+         <section className="neo-rider-hero">
+-          <div><p className="neo-commerce-eyebrow">Live run</p><h1 className="mt-1 text-2xl font-bold text-white">Active delivery</h1><p className="mt-2 text-sm text-white/75">Follow the operational sequence. Kitchen readiness and delivery confirmation remain enforced by the backend.</p></div>
++          <div><h1 className="text-2xl font-bold text-white">Active delivery</h1>{brand.property ? <p className="mt-2 text-sm text-white/80">{brand.property.property_name}</p> : null}</div>
+         </section>
+         {loading || rider.isLoading || deliveries.isLoading ? (
+           <div className="flex justify-center py-10">
+             <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+           </div>
++        ) : rider.isError || deliveries.isError ? (
++          <div className="neo-rider-card p-5 text-slate-800" role="alert">
++            <p>Active deliveries couldnΓÇÖt load.</p>
++            <button className="neo-commerce-primary mt-3" onClick={() => void (rider.isError ? rider.refetch() : deliveries.refetch())}>Retry</button>
++          </div>
+         ) : !rider.data ? (
+           <p className="neo-rider-card p-6 text-center text-sm" style={{ color: brandFallback.steel }}>
+             This account is not on an active rider roster.
+@@ -141,18 +146,18 @@ function RiderActiveJob() {
+                       disabled={advance.isPending}
+                       onClick={() => advance.mutate({ orderId: String(job["id"]), to: next.to })}
+                       className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+-                      style={{ background: brandFallback.primary }}
++                      style={{ background: brand.primary, color: "var(--pa-on-primary)" }}
+                     >
+                       {advance.isPending ? "SavingΓÇª" : next.label}
+                     </button>
+                   ) : null}
+-                  <Link
++                  {status === "out-for-delivery" ? <Link
+                     to="/rider"
+                     className="rounded-xl px-4 py-2.5 text-sm font-semibold"
+                     style={{ border: `1px solid ${brandFallback.primary}`, color: brandFallback.primary }}
+                   >
+                     Confirm delivery
+-                  </Link>
++                  </Link> : null}
+                 </div>
+               </section>
+             );
+diff --git a/src/routes/rider.index.tsx b/src/routes/rider.index.tsx
+index c4d3626..6de1762 100644
+--- a/src/routes/rider.index.tsx
++++ b/src/routes/rider.index.tsx
+@@ -26,7 +26,8 @@ import {
+   type ZoneQueueGroup,
+ } from "@/lib/delivery-data";
+ import { PreviewBanner } from "@/components/public/PreviewBanner";
+-import { RiderTabBar } from "@/components/public/RiderTabBar";
++import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
++import { BrandMark } from "@/components/public/PublicAppShell";
+ import { useRiderLocationSharing } from "@/lib/delivery-live";
+ 
+ export const Route = createFileRoute("/rider/")({
+@@ -56,6 +57,7 @@ function RiderHome() {
+   const navigate = useNavigate();
+   const { user, loading } = useCustomerSession();
+   const rider = useMyRiderProfile();
++  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
+   const riderId = rider.data?.["id"] as string | undefined;
+   const deliveries = useMyDeliveries(riderId);
+   const advance = useRiderAdvance();
+@@ -116,15 +118,21 @@ function RiderHome() {
+   );
+ 
+   return (
+-     <div className="neo-rider-page">
++     <div className="neo-rider-page" style={brand.style}>
+       <PreviewBanner experience="Rider" />
+       <header className="sticky top-0 z-10 bg-[color:var(--rider-navy)] px-4 py-4" style={{ background: brandFallback.navy }}>
+          <div className="mx-auto grid w-full max-w-md min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+-           <div className="min-w-0">
++           <div className="flex min-w-0 items-center gap-2">
++            {brand.property ? <span className="max-w-10 shrink-0 overflow-hidden rounded-lg"><BrandMark size={32} workspace={{
++              hotel_name: brand.property.property_name, app_name: "Rider", primary_color: brand.primary,
++              logo_url: brand.property.media?.logo_url || brand.property.logo_url, button_style: "rounded",
++            }} /></span> : null}
++            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">
+               {String(rider.data["display_name"] ?? "Rider")}
+             </p>
+-            <p className="text-xs text-white/60">{statusLabel(availability)} ┬╖ {active.length} active</p>
++            <p className="truncate text-xs text-white/75">{brand.property?.property_name || statusLabel(availability)} ┬╖ {active.length} active</p>
++            </div>
+           </div>
+            <div className="flex shrink-0 items-center gap-2">
+             <Link to="/rider/support" aria-label="My support" className="text-white/70">
+@@ -142,8 +150,8 @@ function RiderHome() {
+               }
+               className="rounded-full px-3 py-1.5 text-xs font-semibold"
+               style={{
+-                background: availability === "available" ? brandFallback.primary : "#ffffff22",
+-                color: "#fff",
++                background: availability === "available" ? brand.primary : "#ffffff22",
++                color: availability === "available" ? "var(--pa-on-primary)" : "#fff",
+               }}
+             >
+               {availability === "available" ? "Available" : "Go online"}
+diff --git a/src/routes/rider.profile.tsx b/src/routes/rider.profile.tsx
+index 496e534..dc2f45c 100644
+--- a/src/routes/rider.profile.tsx
++++ b/src/routes/rider.profile.tsx
+@@ -12,7 +12,7 @@ import { useRiderIdentity, useSetRiderAvailability } from "@/lib/delivery-data";
+ import { removeAvatarObject, uploadAvatar, useAvatarUrl } from "@/lib/avatars";
+ import { guardPreview, isPreviewMode } from "@/lib/preview-mode";
+ import { PreviewBanner } from "@/components/public/PreviewBanner";
+-import { RiderTabBar } from "@/components/public/RiderTabBar";
++import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
+ 
+ export const Route = createFileRoute("/rider/profile")({
+   head: () => ({
+@@ -36,6 +36,7 @@ function RiderProfilePage() {
+   const setAvailability = useSetRiderAvailability();
+   const preview = isPreviewMode();
+   const rider = identity.data;
++  const brand = useRiderBrand(rider?.branch_id ?? null, user?.id);
+   const avatar = useAvatarUrl(rider?.avatar_url ?? null);
+   const fileInput = useRef<HTMLInputElement | null>(null);
+   const [saving, setSaving] = useState(false);
+@@ -116,7 +117,7 @@ function RiderProfilePage() {
+   const availability = rider.availability_status ?? "offline";
+ 
+   return (
+-     <div className="neo-rider-page">
++     <div className="neo-rider-page" style={brand.style}>
+       <PreviewBanner experience="Rider" />
+       <header className="px-4 py-4" style={{ background: brandFallback.navy }}>
+         <div className="mx-auto flex w-full max-w-md items-center gap-3">
+diff --git a/src/routes/rider.support.tsx b/src/routes/rider.support.tsx
+index 609e5e1..e7f9a44 100644
+--- a/src/routes/rider.support.tsx
++++ b/src/routes/rider.support.tsx
+@@ -11,7 +11,8 @@ import { brandFallback } from "@/lib/public-apps";
+ import { useCustomerSession } from "@/lib/public-session";
+ import { guardPreview } from "@/lib/preview-mode";
+ import { PreviewBanner } from "@/components/public/PreviewBanner";
+-import { RiderTabBar } from "@/components/public/RiderTabBar";
++import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
++import { useMyRiderProfile } from "@/lib/delivery-data";
+ import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateSystem";
+ import { Button } from "@/components/ui/button";
+ 
+@@ -77,6 +78,8 @@ function useMyRiderTasks(userId?: string) {
+ function RiderSupportPage() {
+   const navigate = useNavigate();
+   const { user, loading } = useCustomerSession();
++  const rider = useMyRiderProfile();
++  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
+   const qc = useQueryClient();
+   const supply = useMySupplyRequests();
+   const tasks = useMyRiderTasks(user?.id);
+@@ -165,7 +168,7 @@ function RiderSupportPage() {
+   const card = "neo-rider-card p-5";
+ 
+   return (
+-    <div className="neo-rider-page">
++    <div className="neo-rider-page" style={brand.style}>
+       <PreviewBanner experience="Rider" />
+       <header className="px-5 py-4">
+         <div className="mx-auto flex w-full max-w-md items-center gap-3">
+diff --git a/src/styles.css b/src/styles.css
+index 50febac..a991d9f 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -2164,19 +2164,40 @@ body {
+ /* R9 public-commerce system: shared by Cart, Checkout, favourites and payment surfaces. */
+ @utility neo-commerce-hero {
+   display:flex; align-items:flex-start; gap:1rem; padding:1.25rem; border-radius:1.75rem;
+-  border:1px solid rgba(255,255,255,.12); background:linear-gradient(135deg,rgba(255,255,255,.11),rgba(255,255,255,.045));
++  border:1px solid rgba(255,255,255,.12);
++  background: radial-gradient(ellipse at 100% 0%, color-mix(in oklab,var(--pa-primary,#18c4c8) 18%,transparent), transparent 75%),
++    linear-gradient(145deg,color-mix(in oklab,var(--pa-secondary,#07142d) 24%,#07142d),#07142d 70%);
+   box-shadow:0 24px 70px -45px rgba(0,0,0,.9); backdrop-filter:blur(18px);
+ }
+-@utility neo-commerce-icon { display:grid; place-items:center; width:2.75rem; height:2.75rem; flex:none; border-radius:1rem; color:#07142d; background:var(--pa-primary,#18c4c8); }
++@utility neo-commerce-icon { display:grid; place-items:center; width:2.75rem; height:2.75rem; flex:none; border-radius:1rem; color:var(--pa-on-primary,#07142d); background:var(--pa-primary,#18c4c8); }
+ @utility neo-commerce-eyebrow { font-size:.68rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.72); }
+ @utility neo-commerce-title { margin-top:.2rem; font-family:var(--font-display); font-size:clamp(2rem,1.5rem + 2vw,3.25rem); line-height:1; color:#fff; }
+ @utility neo-commerce-copy { margin-top:.55rem; max-width:42rem; font-size:.9rem; line-height:1.6; color:rgba(255,255,255,.78); }
+ @utility neo-commerce-surface { overflow:hidden; border-radius:1.5rem; background:rgba(255,255,255,.98); box-shadow:0 28px 70px -45px rgba(0,0,0,.85); }
+ @utility neo-commerce-summary { border-radius:1.5rem; background:rgba(255,255,255,.98); padding:1.25rem; box-shadow:0 28px 70px -45px rgba(0,0,0,.85); }
+-@utility neo-commerce-primary { display:inline-flex; min-height:3rem; align-items:center; justify-content:center; gap:.5rem; border-radius:999px; padding:.7rem 1.1rem; font-size:.875rem; font-weight:800; color:#061127; background:var(--pa-primary,#18c4c8); box-shadow:0 14px 30px -18px color-mix(in oklab,var(--pa-primary,#18c4c8) 80%,black); }
+-@utility neo-quantity-control { display:grid; grid-template-columns:2.25rem 2rem 2.25rem; align-items:center; text-align:center; border:1px solid #e2e8f0; border-radius:999px; color:#0f172a; }
+-.neo-quantity-control button { display:grid; min-height:2.25rem; place-items:center; border-radius:999px; }
++@utility neo-commerce-primary { display:inline-flex; min-height:3rem; align-items:center; justify-content:center; gap:.5rem; border-radius:var(--pa-radius,14px); padding:.7rem 1.1rem; font-size:.875rem; font-weight:800; color:var(--pa-on-primary,#061127); background:var(--pa-primary,#18c4c8); box-shadow:0 14px 30px -18px color-mix(in oklab,var(--pa-primary,#18c4c8) 80%,black); }
++.neo-commerce-primary:disabled { opacity:.55; cursor:not-allowed; }
++@utility neo-quantity-control { display:grid; grid-template-columns:2.75rem 1.25rem 2.75rem; align-items:center; text-align:center; border:1px solid #e2e8f0; border-radius:999px; color:#0f172a; font-variant-numeric:tabular-nums; }
++.neo-quantity-control button { display:grid; min-height:2.75rem; place-items:center; border-radius:999px; }
++.neo-quantity-control button:disabled { opacity:.5; }
+ .neo-quantity-control button:hover { background:#f1f5f9; }
++.neo-delivery-cover {
++  min-height: clamp(13rem, 42vw, 23rem);
++  align-items: end;
++  padding: clamp(1.25rem, 4vw, 3rem);
++}
++.neo-delivery-dish {
++  box-shadow: 0 14px 25px -19px #020a1c;
++}
++.neo-delivery-dish-placeholder {
++  color: color-mix(in oklab, var(--pa-primary, #18c4c8) 68%, white);
++  background:
++    radial-gradient(ellipse at 75% 25%, color-mix(in oklab, var(--pa-primary, #18c4c8) 22%, transparent), transparent 70%),
++    color-mix(in oklab, var(--pa-secondary, #07142d) 36%, #07142d);
++}
++@media (width <= 350px) {
++  .neo-delivery-dish p { overflow-wrap: anywhere; }
++}
+ 
+ /* R9.1 public-app polish: operational apps share the same modern surface language. */
+ @utility neo-rider-hero {
+@@ -2205,9 +2226,65 @@ body {
+ .neo-guest-app h1 {font-size:clamp(1.75rem,1.4rem + 1.2vw,2.5rem);}
+ .neo-guest-app .neo-public-copy {line-height:1.6;}
+ .neo-guest-app .neo-rider-card {background:var(--guest-surface);color:var(--guest-text);border:1px solid var(--guest-border);border-radius:1rem;box-shadow:none;}
+-.neo-guest-tabbar {border-top:1px solid var(--guest-border);background:var(--guest-surface);color:var(--guest-muted);}
+-.neo-guest-tabbar a {min-height:3.5rem;transition:color 140ms ease;}
+-.neo-guest-tabbar a[aria-current="page"] svg {stroke-width:2.3;}
++.neo-branded-app {
++  background:
++    radial-gradient(ellipse at 85% 0%, color-mix(in oklab, var(--pa-primary) 18%, transparent), transparent 42rem),
++    linear-gradient(160deg, color-mix(in oklab, var(--pa-secondary) 24%, #07142d), #07142d 30rem,
++      color-mix(in oklab, var(--pa-background) 12%, #020a1c));
++}
++.neo-app-dock {
++  position: fixed;
++  inset-inline: 0;
++  bottom: calc(.625rem + env(safe-area-inset-bottom, 0px));
++  z-index: 40;
++  width: min(calc(100% - 2rem), 29rem);
++  margin-inline: auto;
++  display: grid;
++  grid-auto-flow: column;
++  grid-auto-columns: minmax(0, 1fr);
++  gap: .2rem;
++  padding: .35rem;
++  background: color-mix(in oklab, var(--guest-surface, #101e34) 92%, transparent);
++  color: var(--guest-text, #f1f5f9);
++  border: 1px solid var(--guest-border, #ffffff25);
++  border-radius: 1.5rem;
++  -webkit-backdrop-filter: blur(24px);
++  backdrop-filter: blur(24px);
++  box-shadow: 0 16px 34px #020a1c40;
++}
++.neo-app-dock a {
++  min-height: 3rem;
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: .2rem;
++  border-radius: 1.1rem;
++  padding: .25rem;
++  color: inherit;
++  font-size: .7rem;
++  font-weight: 650;
++  text-align: center;
++}
++.neo-app-dock a:is([aria-current="page"], [data-status="active"]) {
++  background: var(--pa-primary, #18c4c8);
++  color: var(--pa-on-primary, #07142d);
++}
++.neo-app-dock a:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
++.neo-guest-app .neo-app-dock a { transition: none; }
++.neo-delivery-app .neo-pub-footer,
++.neo-guest-app footer {padding-bottom:calc(5rem + env(safe-area-inset-bottom, 0px));}
++.neo-rider-page > header { padding-top: calc(1rem + env(safe-area-inset-top, 0px)); }
++.neo-rider-page header :is(a,button) { min-height: 2.75rem; min-width: 2.75rem; display:inline-grid; place-items:center; }
++.neo-partner-tabs button { min-height: 2.75rem; }
++@media (width >= 1024px) {
++  .neo-app-dock.lg\:hidden { display: none; }
++  .neo-delivery-app .neo-pub-footer,
++  .neo-guest-app footer {padding-bottom:env(safe-area-inset-bottom, 0px);}
++}
++@media (prefers-reduced-transparency: reduce) {
++  .neo-app-dock { background: var(--guest-surface, #101e34); backdrop-filter: none; }
++}
+ .neo-guest-app :is(button,a,input,select,textarea):focus-visible {outline:2px solid var(--pa-accent-ink);outline-offset:3px;}
+ .neo-guest-app :is(input:not([type=checkbox]):not([type=radio]),textarea,select) {background:var(--guest-surface);color:var(--guest-text);border-color:var(--guest-border);font-size:max(1rem,1em);min-height:2.75rem;}
+ .neo-guest-app :is(input,textarea)::placeholder {color:var(--guest-muted);opacity:1;}

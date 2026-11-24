@@ -1,0 +1,20 @@
+// @vitest-environment jsdom
+import {afterEach,describe,expect,it,vi} from 'vitest';
+import {QueryClient,QueryObserver,focusManager} from '@tanstack/react-query';
+import {createOperationalQueryClient,OPERATIONAL_REFRESH_ROOTS,operationalRefreshInterval} from '../operational-query-client';
+import {clearChangedAccessViews} from '../view-access-cache';
+afterEach(()=>{focusManager.setFocused(undefined);vi.useRealTimers();});
+describe('operational fallback refresh',()=>{
+ it.each(['pms','pos','inventory','tasks','stay-board','my-work','workforce','guest-menu','financial-states','neo-outbox-health'])('refreshes a visible %s screen',root=>expect(operationalRefreshInterval({queryKey:[root,'org']})).toBe(60_000));
+ it.each(['ai-simulation','simulate-access','menu-image-url','avatar-url','provider-credential-summary','guest-quote','command-records','my-production-pin'])('does not periodically repeat %s',root=>expect(operationalRefreshInterval({queryKey:[root]})).toBe(false));
+ it('has no duplicate operational roots',()=>expect(OPERATIONAL_REFRESH_ROOTS.size).toBeGreaterThan(70));
+ it('the actual application client refreshes remote work, pauses hidden work and does not poll unrelated queries',async()=>{vi.useFakeTimers();focusManager.setFocused(true);const q=createOperationalQueryClient();let server=1;const work=new QueryObserver(q,{queryKey:['my-work','org'],queryFn:async()=>server}),other=new QueryObserver(q,{queryKey:['menu-image-url','asset'],queryFn:async()=>server});const off=[work.subscribe(()=>{}),other.subscribe(()=>{})];await vi.advanceTimersByTimeAsync(1);expect(work.getCurrentResult().data).toBe(1);server=2;await vi.advanceTimersByTimeAsync(60_000);expect(work.getCurrentResult().data).toBe(2);expect(other.getCurrentResult().data).toBe(1);focusManager.setFocused(false);server=3;await vi.advanceTimersByTimeAsync(120_000);expect(work.getCurrentResult().data).toBe(2);off.forEach(f=>f());q.clear();});
+ it('retains a screen-specific faster interval',async()=>{vi.useFakeTimers();focusManager.setFocused(true);const q=createOperationalQueryClient();let server=1;const work=new QueryObserver(q,{queryKey:['payment-register'],queryFn:async()=>server,refetchInterval:15_000});const off=work.subscribe(()=>{});await vi.advanceTimersByTimeAsync(1);server=2;await vi.advanceTimersByTimeAsync(15_000);expect(work.getCurrentResult().data).toBe(2);off();q.clear();});
+ it('does not keep polling after a screen unmounts',async()=>{vi.useFakeTimers();focusManager.setFocused(true);const q=createOperationalQueryClient();const fetch=vi.fn(async()=>1),view=new QueryObserver(q,{queryKey:['my-work'],queryFn:fetch});const off=view.subscribe(()=>{});await vi.advanceTimersByTimeAsync(1);off();await vi.advanceTimersByTimeAsync(180_000);expect(fetch).toHaveBeenCalledTimes(1);q.clear();});
+});
+describe('changed access contract cache cleanup',()=>{
+ it('leaves an unchanged contract and its valid answers alone',()=>{const q=new QueryClient();q.setQueryData(['private'],1);expect(clearChangedAccessViews(q,'v1','v1')).toBe(false);expect(q.getQueryData(['private'])).toBe(1);q.clear();});
+ it('does not clear a first session before an old authority exists',()=>{const q=new QueryClient();q.setQueryData(['bootstrap'],1);expect(clearChangedAccessViews(q,null,'v1')).toBe(false);expect(q.getQueryData(['bootstrap'])).toBe(1);q.clear();});
+ it('drops private answers before the changed authority is published',()=>{const q=new QueryClient();q.setQueryData(['access-matrix-individual-overrides','org'],['old']);expect(clearChangedAccessViews(q,'v1','v2')).toBe(true);expect(q.getQueryCache().getAll()).toHaveLength(0);q.clear();});
+ it('cancels an old in-flight answer so it cannot repopulate the cleared cache',async()=>{const q=new QueryClient();let finish:((x:string)=>void)|undefined;const pending=q.fetchQuery({queryKey:['private'],queryFn:()=>new Promise<string>(r=>{finish=r;})}).catch(()=>undefined);expect(finish).toBeTypeOf('function');clearChangedAccessViews(q,'v1','v2');finish!('old authority');await pending;await Promise.resolve();expect(q.getQueryData(['private'])).toBeUndefined();q.clear();});
+});

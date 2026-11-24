@@ -1,0 +1,2159 @@
+/**
+ * Phase 14 — Delivery data layer.
+ * Every write that affects money, status or ownership goes through a
+ * SECURITY DEFINER database function so the browser can never dictate
+ * prices, fees, order status, rider assignment or payment outcome.
+ */
+import { guardedRpc } from "@/lib/rpc-guard";
+import { forgetFailedAction, rememberIfReauthNeeded } from "@/lib/retry-after-reauth";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { guardPreview } from "@/lib/preview-mode";
+import { useAuth } from "@/lib/auth";
+import { useBranchOptions } from "@/lib/branches";
+import { logAudit } from "@/lib/audit";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useDataScope } from "@/lib/data-scope";
+import { useScopedRealtime } from "@/lib/realtime-scope";
+import { invokeRpc, isRpcAccessError } from "@/lib/rpc-telemetry";
+
+/** Audit wrapper that supplies tenant + actor context from the session. */
+function useAudit() {
+  const { user, organizationId, profile } = useAuth();
+  return async (action: string, module: string, recordId: string | null, newValue?: unknown) => {
+    await logAudit({
+      organizationId: organizationId ?? null,
+      userId: user?.id ?? null,
+      userName: profile?.full_name ?? undefined,
+      action,
+      module,
+      recordId,
+      newValue,
+    });
+  };
+}
+
+type Row = Record<string, unknown>;
+
+const sb = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
+function invalidate(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ["delivery"] });
+}
+
+/* ------------------------------------------------------------------ *
+ * Customer identity (CRM customer linked to the signed-in auth user)
+ * ------------------------------------------------------------------ */
+
+export function useMyCustomer() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["delivery", "me", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("customers")
+        .select("id, organization_id, primary_branch_id, full_name, phone, email, customer_number")
+        .eq("auth_user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Row | null) ?? null;
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Reference data
+ * ------------------------------------------------------------------ */
+
+/** Delivery property picker — projects the shared organisation-scoped list. */
+export function useDeliveryBranches() {
+  return useBranchOptions();
+}
+
+
+export function useDeliveryZones(branchId?: string | null) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "zones", branchId ?? "all", filterKey],
+    queryFn: async () => {
+      let q = applyTo(sb.from("delivery_zones").select("*"), "delivery_zones").order("name");
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useDeliverySettings(branchId?: string | null) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "settings", branchId ?? "org", filterKey],
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("delivery_settings").select("*"), "delivery_settings")
+        .order("branch_id", { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      const rows = (data ?? []) as Row[];
+      return rows.find((r) => r["branch_id"] === branchId) ?? rows.find((r) => r["branch_id"] === null) ?? null;
+    },
+  });
+}
+
+/**
+ * Creates the delivery rules for a property that has none yet, with the safe
+ * database defaults. Nothing about the property's commercial offer is guessed:
+ * zones, fees and payment methods are decided by the administrator afterwards.
+ */
+export function useCreateDeliverySettings() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  return useMutation({
+    mutationFn: async ({ branchId }: { branchId: string }) => {
+      const { data, error } = await sb
+        .from("delivery_settings")
+        .insert({ organization_id: organizationId, branch_id: branchId })
+        .select("id")
+        .single();
+      if (error) throw error;
+      await audit("delivery.settings.create", "delivery_settings", String(data?.["id"] ?? ""), { branchId });
+      return data as Row;
+    },
+    onSuccess: () => {
+      toast.success("Delivery rules created for this property");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useSaveDeliverySettings() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Row & { id: string }) => {
+      const { id, ...patch } = payload;
+      const { error } = await sb.from("delivery_settings").update(patch).eq("id", id);
+      if (error) throw error;
+      await audit("delivery.settings.update", "delivery_settings", id, patch);
+    },
+    onSuccess: () => {
+      toast.success("Delivery settings saved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useSaveZone() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  return useMutation({
+    mutationFn: async (payload: Row & { id?: string }) => {
+      const { id, ...values } = payload;
+      if (id) {
+        const { error } = await sb.from("delivery_zones").update(values).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb
+          .from("delivery_zones")
+          .insert({ ...values, organization_id: organizationId });
+        if (error) throw error;
+      }
+      await audit("delivery.zone.save", "delivery_zones", id ?? "new", values);
+    },
+    onSuccess: () => {
+      toast.success("Delivery zone saved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Online menu (Phase 7 POS menu is the single source of truth)
+ * ------------------------------------------------------------------ */
+
+export function useOnlineMenu(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "menu", branchId ?? "all"],
+    queryFn: async () => {
+      let q = sb
+        .from("menu_items")
+        .select(
+          "id, name, description, base_price, tax_rate, image_url, availability, available_delivery, available_takeaway, prep_minutes, category_id, station_id, branch_id, menu_categories(name)",
+        )
+        .eq("available_delivery", true)
+        .eq("publish_status", "published")
+        .order("display_order")
+        .order("name");
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useMenuCategories() {
+  return useQuery({
+    queryKey: ["delivery", "categories"],
+    queryFn: async () => {
+      const { data, error } = await sb.from("menu_categories").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Cart
+ * ------------------------------------------------------------------ */
+
+export function useMyCart() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  const customer = useMyCustomer();
+  const customerId = customer.data?.["id"] as string | undefined;
+  return useQuery({
+    queryKey: ["delivery", "cart", customerId, filterKey],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("carts").select("*, cart_items(*, menu_items(name, base_price, tax_rate, image_url, availability, available_delivery), cart_item_modifiers(*))"), "carts")
+        .eq("customer_id", customerId)
+        .eq("status", "active")
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Row | null) ?? null;
+    },
+  });
+}
+
+export function useEnsureCart() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  const qc = useQueryClient();
+  const customer = useMyCustomer();
+  return useMutation({
+    mutationFn: async (branchId: string | null) => {
+      const c = customer.data;
+      if (!c) throw new Error("Customer profile not found");
+      const existing = await applyTo(sb.from("carts").select("id"), "carts").eq("customer_id", c["id"]).eq("status", "active").maybeSingle();
+      if (existing.data) return existing.data["id"] as string;
+      const { data, error } = await sb
+        .from("carts")
+        .insert({ organization_id: c["organization_id"], customer_id: c["id"], branch_id: branchId })
+        .select("id")
+        .single();
+      if (error) throw error;
+      return data["id"] as string;
+    },
+    onSuccess: () => invalidate(qc),
+  });
+}
+
+export function useAddToCart() {
+  const qc = useQueryClient();
+  const customer = useMyCustomer();
+  const ensure = useEnsureCart();
+  return useMutation({
+    mutationFn: async (input: {
+      branchId: string | null;
+      menuItemId: string;
+      quantity?: number;
+      specialInstructions?: string;
+      allergyNote?: string;
+      modifiers?: { group_id?: string; option_id?: string; group_name: string; option_name: string; extra_charge: number }[];
+    }) => {
+      const c = customer.data;
+      if (!c) throw new Error("Sign in to start an order");
+      const cartId = await ensure.mutateAsync(input.branchId);
+      const { data, error } = await sb
+        .from("cart_items")
+        .insert({
+          organization_id: c["organization_id"],
+          cart_id: cartId,
+          menu_item_id: input.menuItemId,
+          quantity: input.quantity ?? 1,
+          special_instructions: input.specialInstructions ?? null,
+          allergy_note: input.allergyNote ?? null,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      if (input.modifiers?.length) {
+        const { error: mErr } = await sb.from("cart_item_modifiers").insert(
+          input.modifiers.map((m) => ({
+            organization_id: c["organization_id"],
+            cart_item_id: data["id"],
+            ...m,
+          })),
+        );
+        if (mErr) throw mErr;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Added to cart");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateCartItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; quantity: number }) => {
+      if (input.quantity <= 0) {
+        const { error } = await sb.from("cart_items").delete().eq("id", input.id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await sb.from("cart_items").update({ quantity: input.quantity }).eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(qc),
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateCart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Row & { id: string }) => {
+      const { id, ...patch } = input;
+      const { error } = await sb.from("carts").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(qc),
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Server-authoritative quote. The browser never computes checkout totals. */
+export function useCartQuote(cartId?: string) {
+  return useQuery({
+    queryKey: ["delivery", "quote", cartId],
+    enabled: Boolean(cartId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "delivery_quote_cart", { _cart: cartId });
+      if (error) throw new Error(error.message);
+      return data as {
+        subtotal: number;
+        tax_total: number;
+        discount_total: number;
+        delivery_fee: number;
+        tip_amount: number;
+        grand_total: number;
+        eta_minutes: number;
+        issues: string[];
+        can_checkout: boolean;
+        lines: Row[];
+      };
+    },
+  });
+}
+
+export function usePlaceOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { cartId: string; paymentMethod: string }) => {
+      const { data, error } = await guardedRpc(sb, "delivery_place_order", {
+        _cart: input.cartId,
+        _payment_method: input.paymentMethod,
+      });
+      if (error) throw new Error(error.message);
+      return data as { delivery_order_id: string; order_number: string; pin: string };
+    },
+    onSuccess: (res) => {
+      toast.success(`Order ${res.order_number} placed`);
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * Staff-assisted order (phone orders taken at the property).
+ * Prices, zone fee, minimum order, ETA and kitchen routing are all decided by
+ * the database function, exactly as for a guest order — the screen only
+ * supplies the customer, address, zone, items and tender.
+ */
+export function useStaffPlaceDeliveryOrder() {
+  const qc = useQueryClient();
+  const audit = useAudit();
+  return useMutation({
+    mutationFn: async (input: {
+      branchId: string;
+      contactName: string;
+      contactPhone: string;
+      fulfilment: "delivery" | "pickup";
+      zoneId?: string | null;
+      address?: Record<string, unknown>;
+      items: Array<{ menu_item_id: string; quantity: number; special_instructions?: string | undefined }>;
+      paymentMethod: string;
+      notes?: string | null;
+    }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_staff_place_order", {
+        _branch: input.branchId,
+        _contact_name: input.contactName,
+        _contact_phone: input.contactPhone,
+        _items: input.items,
+        _fulfilment: input.fulfilment,
+        _zone: input.zoneId ?? null,
+        _address: input.address ?? {},
+        _payment_method: input.paymentMethod,
+        _notes: input.notes ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data as {
+        delivery_order_id: string;
+        order_number: string;
+        pin: string;
+        delivery_fee: number;
+        grand_total: number;
+        eta_minutes: number;
+        order_status: string;
+      };
+    },
+    onSuccess: async (res) => {
+      // The PIN is never shown to staff — it goes to the customer directly and
+      // appears on their order tracking screen.
+      toast.success(`Order ${res.order_number} created — collection PIN sent to the customer`);
+      await audit("delivery.order.create-assisted", "delivery_orders", res.delivery_order_id, {
+        order_number: res.order_number,
+        grand_total: res.grand_total,
+        order_status: res.order_status,
+      });
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Customer addresses & favourites
+ * ------------------------------------------------------------------ */
+
+export function useMyAddresses() {
+  const customer = useMyCustomer();
+  const customerId = customer.data?.["id"] as string | undefined;
+  return useQuery({
+    queryKey: ["delivery", "addresses", customerId],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("customer_addresses")
+        .select("*")
+        .eq("customer_id", customerId)
+        .order("is_primary", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useSaveAddress() {
+  const qc = useQueryClient();
+  const customer = useMyCustomer();
+  return useMutation({
+    mutationFn: async (payload: Row & { id?: string }) => {
+      const c = customer.data;
+      if (!c) throw new Error("Customer profile not found");
+      const { id, ...values } = payload;
+      if (id) {
+        const { error } = await sb.from("customer_addresses").update(values).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb
+          .from("customer_addresses")
+          .insert({ ...values, organization_id: c["organization_id"], customer_id: c["id"] });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Address saved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useMyFavourites() {
+  const customer = useMyCustomer();
+  const customerId = customer.data?.["id"] as string | undefined;
+  return useQuery({
+    queryKey: ["delivery", "favourites", customerId],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("customer_favourites")
+        .select("id, menu_item_id, menu_items(name, base_price, image_url, availability, available_delivery)")
+        .eq("customer_id", customerId);
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useToggleFavourite() {
+  const qc = useQueryClient();
+  const customer = useMyCustomer();
+  return useMutation({
+    mutationFn: async (input: { menuItemId: string; existingId?: string }) => {
+      const c = customer.data;
+      if (!c) throw new Error("Sign in to save favourites");
+      if (input.existingId) {
+        const { error } = await sb.from("customer_favourites").delete().eq("id", input.existingId);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await sb.from("customer_favourites").insert({
+        organization_id: c["organization_id"],
+        customer_id: c["id"],
+        menu_item_id: input.menuItemId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(qc),
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Orders — customer, staff and rider views
+ * ------------------------------------------------------------------ */
+
+const ORDER_SELECT =
+  "id, order_number, order_status, kitchen_status, dispatch_status, payment_status, payment_method, fulfilment_type, subtotal, tax_total, discount_total, delivery_fee, tip_amount, grand_total, contact_name, contact_phone, address_snapshot, zone_id, rider_id, branch_id, customer_id, scheduled_for, estimated_delivery_at, accepted_at, ready_at, collected_at, delivered_at, created_at, updated_at, packaging_checklist, allergy_note, notes, pos_order_id";
+
+export type DeliveryProofRow = {
+  id: string;
+  delivery_order_id: string;
+  method: string;
+  recipient_name: string | null;
+  pin_verified: boolean;
+  photo_path: string | null;
+  signature_path: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  confirmed_at: string;
+  delivery_orders: { order_number: string; branch_id: string | null; contact_name: string } | null;
+};
+
+/**
+ * Proof of delivery as the rider recorded it. Read-only: nothing here can be
+ * edited from the office, because the proof is the rider's own account of the
+ * handover.
+ */
+export function useDeliveryProofs(branchId?: string | null, limit = 20) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "proofs", branchId ?? "all", filterKey, limit],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      let q = applyTo(
+        sb
+          .from("delivery_proofs")
+          .select(
+            "id, delivery_order_id, method, recipient_name, pin_verified, photo_path, signature_path, latitude, longitude, confirmed_at, delivery_orders!inner(order_number, branch_id, contact_name)",
+          ),
+        "delivery_proofs",
+      )
+        .order("confirmed_at", { ascending: false })
+        .limit(limit);
+      if (branchId) q = q.eq("delivery_orders.branch_id", branchId);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return (data ?? []) as DeliveryProofRow[];
+    },
+  });
+}
+
+export function useMyOrders() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  const customer = useMyCustomer();
+  const customerId = customer.data?.["id"] as string | undefined;
+  return useQuery({
+    queryKey: ["delivery", "my-orders", customerId, filterKey],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("delivery_orders").select(ORDER_SELECT), "delivery_orders")
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+    refetchInterval: 30_000,
+  });
+}
+
+export function useDeliveryOrder(id?: string) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "order", id, filterKey],
+    enabled: Boolean(id),
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("delivery_orders").select(`${ORDER_SELECT}, pos_orders(order_number, pos_order_items(id, item_name, quantity, line_total, status, special_instructions, allergy_note))`), "delivery_orders")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Row | null) ?? null;
+    },
+    refetchInterval: 20_000,
+  });
+}
+
+export function useOrderStatusHistory(orderId?: string) {
+  return useQuery({
+    queryKey: ["delivery", "history", orderId],
+    enabled: Boolean(orderId),
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("delivery_order_status_history")
+        .select("*")
+        .eq("delivery_order_id", orderId)
+        .order("created_at");
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+/** Customer PIN types. The number itself is only ever returned to its owner. */
+export type CustomerPin = {
+  ok: boolean;
+  reason?: string;
+  pin?: string | null;
+  issued_at?: string | null;
+  expires_at?: string | null;
+  consumed_at?: string | null;
+  invalidated_at?: string | null;
+  locked?: boolean;
+  channel?: string | null;
+  sent_at?: string | null;
+  send_status?: string | null;
+};
+
+export type PinStatus = {
+  ok: boolean;
+  reason?: string;
+  issued_at?: string | null;
+  expires_at?: string | null;
+  consumed_at?: string | null;
+  invalidated_at?: string | null;
+  version?: number;
+  regenerated_count?: number;
+  attempt_count?: number;
+  max_attempts?: number;
+  locked?: boolean;
+  locked_at?: string | null;
+  override_at?: string | null;
+  override_reason?: string | null;
+  channel?: string | null;
+  sent_at?: string | null;
+  send_status?: string | null;
+  send_detail?: string | null;
+  is_legacy?: boolean;
+  events?: Array<{
+    created_at: string;
+    event_type: string;
+    channel: string | null;
+    reason: string | null;
+    detail: string | null;
+  }>;
+};
+
+/**
+ * The signed-in customer's own collection PIN. The database refuses this for
+ * anyone else, including every member of staff and every rider.
+ */
+export function useMyOrderPin(orderId?: string) {
+  return useQuery({
+    queryKey: ["delivery", "pin", orderId],
+    enabled: Boolean(orderId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_pin_for_customer", { _order: orderId });
+      if (error) throw new Error(error.message);
+      return (data ?? null) as CustomerPin | null;
+    },
+  });
+}
+
+/** Manager-side PIN state and history. Never contains the PIN itself. */
+export function useDeliveryPinStatus(orderId?: string) {
+  return useQuery({
+    queryKey: ["delivery", "pin-status", orderId],
+    enabled: Boolean(orderId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_pin_status", { _order: orderId });
+      if (error) throw new Error(error.message);
+      return (data ?? null) as PinStatus | null;
+    },
+  });
+}
+
+type PinActionResult = { ok?: boolean; reason?: string; detail?: string; channel?: string };
+
+function pinFeedback(result: PinActionResult, successMessage: string) {
+  if (result?.ok) {
+    toast.success(successMessage);
+    return;
+  }
+  const reasons: Record<string, string> = {
+    not_permitted: "You do not have permission to manage delivery PINs.",
+    no_pin: "This order has no collection PIN.",
+    no_contact: "No phone number or email is stored for this order, so nothing could be sent.",
+    pin_closed: "This PIN has already been used or replaced.",
+    already_delivered: "This delivery is already completed.",
+    reason_required: "Write a reason first.",
+  };
+  toast.error(result?.detail ?? reasons[result?.reason ?? ""] ?? "That could not be completed.");
+}
+
+function usePinAction(successMessage: string, run: (input: any) => Promise<PinActionResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: any) => {
+      guardPreview();
+      return await run(input);
+    },
+    onSuccess: async (result, variables: any) => {
+      pinFeedback(result, successMessage);
+      await qc.invalidateQueries({ queryKey: ["delivery", "pin-status", variables?.orderId] });
+      await qc.invalidateQueries({ queryKey: ["delivery", "pin", variables?.orderId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Send the same PIN again, optionally over a different channel. */
+export function useResendDeliveryPin() {
+  return usePinAction("Collection PIN sent to the customer again", async (input: { orderId: string; channel?: string | null }) => {
+    const { data, error } = await guardedRpc(sb, "neo_delivery_pin_resend", {
+      _order: input.orderId,
+      _channel: input.channel ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? {}) as PinActionResult;
+  });
+}
+
+/** Invalidate the current PIN and issue a new one. Reason is required. */
+export function useRegenerateDeliveryPin() {
+  return usePinAction("A new collection PIN was issued and sent", async (input: { orderId: string; reason: string; channel?: string | null }) => {
+    const { data, error } = await guardedRpc(sb, "neo_delivery_pin_regenerate", {
+      _order: input.orderId,
+      _reason: input.reason,
+      _channel: input.channel ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? {}) as PinActionResult;
+  });
+}
+
+/** Clear a lockout and authorise one handover without the PIN. Reason required. */
+export function useOverrideDeliveryPin() {
+  return usePinAction("Handover without the PIN authorised", async (input: { orderId: string; reason: string }) => {
+    const { data, error } = await guardedRpc(sb, "neo_delivery_pin_override", {
+      _order: input.orderId,
+      _reason: input.reason,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? {}) as PinActionResult;
+  });
+}
+
+export type PinReveal = {
+  ok: boolean;
+  reason?: string;
+  detail?: string;
+  pin?: string | null;
+  mask_after_seconds?: number;
+  revealed_by?: string | null;
+  expires_at?: string | null;
+};
+
+/**
+ * Show the PIN to an authorised delivery manager, for the rare case where the
+ * customer cannot receive it. Requires a written reason and leaves an audit
+ * record naming who looked. The caller masks it again after a few seconds.
+ */
+export function useRevealDeliveryPin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; reason: string }) => {
+      guardPreview();
+      const { data, error } = await guardedRpc(sb, "neo_delivery_pin_reveal", {
+        _order: input.orderId,
+        _reason: input.reason,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? {}) as PinReveal;
+    },
+    onSuccess: async (result, variables) => {
+      if (!result?.ok) {
+        toast.error(result?.detail ?? "The PIN could not be revealed.");
+        return;
+      }
+      toast.success("PIN revealed — this was recorded against your name");
+      await qc.invalidateQueries({ queryKey: ["delivery", "pin-status", variables.orderId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export type PinBoardRow = {
+  order_id: string;
+  order_number: string | null;
+  order_status: string | null;
+  contact_name: string | null;
+  created_at: string;
+  has_pin: boolean;
+  state: string;
+  issued_at: string | null;
+  expires_at: string | null;
+  consumed_at: string | null;
+  locked: boolean;
+  attempt_count: number;
+  max_attempts: number;
+  regenerated_count: number;
+  channel: string | null;
+  sent_at: string | null;
+  send_status: string | null;
+  is_legacy: boolean;
+};
+
+/** Every recent delivery with its PIN state, for the verification board. */
+export function useDeliveryPinBoard(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "pin-board", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_pin_board", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      const payload = (data ?? {}) as { ok?: boolean; reason?: string; orders?: PinBoardRow[] };
+      if (!payload.ok) throw new Error(
+        payload.reason === "not_permitted"
+          ? "You do not have permission to view delivery verification."
+          : "Delivery verification is unavailable.",
+      );
+      return payload.orders ?? [];
+    },
+  });
+}
+
+export function useStaffDeliveryOrders(filters?: { branchId?: string | null; status?: string }) {
+  // A rider sees their own deliveries; a delivery manager the department's;
+  // Owner/System Administration the whole organisation.
+  const { applyScope, scopeKey } = useDataScope();
+  return useQuery({
+    queryKey: ["delivery", "staff-orders", filters?.branchId ?? "all", filters?.status ?? "all", scopeKey],
+    queryFn: async () => {
+      let q = applyScope(sb.from("delivery_orders").select(ORDER_SELECT), "delivery_orders").order("created_at", { ascending: false }).limit(300);
+      if (filters?.branchId) q = q.eq("branch_id", filters.branchId);
+      if (filters?.status && filters.status !== "all") q = q.eq("order_status", filters.status);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+    refetchInterval: 20_000,
+  });
+}
+
+export function useDeliveryMetrics(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "metrics", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "delivery_metrics", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      return (data ?? {}) as Record<string, number>;
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+/** Order lifecycle actions — all validated inside the database. */
+export function useOrderAction() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { action: "accept" | "reject"; orderId: string; reason?: string }) => {
+      const fn = input.action === "accept" ? "delivery_accept_order" : "delivery_reject_order";
+      const args =
+        input.action === "accept"
+          ? { _order: input.orderId }
+          : { _order: input.orderId, _reason: input.reason ?? "" };
+      const { error } = await guardedRpc(sb, fn, args);
+      if (error) throw new Error(error.message);
+      await audit(`delivery.order.${input.action}`, "delivery_orders", input.orderId, {
+        reason: input.reason ?? null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Order updated");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateDeliveryOrder() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Row & { id: string }) => {
+      const { id, ...patch } = input;
+      const { error } = await sb.from("delivery_orders").update(patch).eq("id", id);
+      if (error) throw error;
+      await audit("delivery.order.update", "delivery_orders", id, patch);
+    },
+    onSuccess: () => {
+      toast.success("Order updated");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Riders & dispatch
+ * ------------------------------------------------------------------ */
+
+export type RiderDirectoryEntry = {
+  rider_id: string;
+  rider_code: string | null;
+  display_name: string | null;
+  vehicle_type: string | null;
+  availability_status: string | null;
+  branch_id: string | null;
+  active: boolean;
+  active_load: number;
+  max_active: number;
+  on_shift: boolean;
+};
+
+/**
+ * Rider directory for dispatch and shift selectors. Discovery happens entirely
+ * in the database: the routine refuses callers without a dispatch or rider
+ * management capability and returns only riders inside the caller's property
+ * scope, with no contact details.
+ */
+export function useRiders(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "riders", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_directory", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderDirectoryEntry[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+/**
+ * Authoritative roster: rider profiles joined to their staff account and the
+ * rider capability that account actually holds. `linkage_status` tells the
+ * dispatcher whether a roster entry is genuinely backed by a staff rider.
+ */
+export function useRiderRoster(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "rider-roster", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_roster", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Row[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+/** Staff members holding a rider capability who are not yet active on the roster. */
+export function useRiderCandidates(branchId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["delivery", "rider-candidates", branchId ?? "all"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_candidates", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useEnrolRider() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      profileId: string;
+      branchId?: string | null | undefined;
+      vehicleType?: string | undefined;
+      vehicleRegistration?: string | null | undefined;
+      workPhone?: string | null | undefined;
+      maxActive?: number | undefined;
+      cashHandling?: boolean | undefined;
+    }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_enrol", {
+        _profile: input.profileId,
+        _branch: input.branchId ?? null,
+        _vehicle_type: input.vehicleType ?? "motorcycle",
+        _vehicle_registration: input.vehicleRegistration ?? null,
+        _work_phone: input.workPhone ?? null,
+        _max_active: input.maxActive ?? 3,
+        _cash_handling: input.cashHandling ?? true,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      await audit("delivery.rider.enrol", "rider_profiles", String(result["rider_id"] ?? ""), {
+        profile_id: input.profileId,
+        operation: result["operation"] ?? "enrolled",
+      });
+      return result;
+    },
+    onSuccess: (result) => {
+      toast.success(
+        result["operation"] === "reinstated"
+          ? `Rider reinstated (${String(result["rider_code"] ?? "")})`
+          : `Rider added to the roster (${String(result["rider_code"] ?? "")})`,
+      );
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useRetireRider() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { riderId: string; reason?: string | undefined }) => {
+      const { error } = await guardedRpc(sb, "neo_delivery_rider_retire", {
+        _rider: input.riderId,
+        _reason: input.reason ?? null,
+      });
+      if (error) throw new Error(error.message);
+      await audit("delivery.rider.retire", "rider_profiles", input.riderId, { reason: input.reason ?? null });
+    },
+    onSuccess: () => {
+      toast.success("Rider retired from the roster");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
+export function useSaveRider() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  return useMutation({
+    mutationFn: async (payload: Row & { id?: string }) => {
+      const { id, ...values } = payload;
+      if (id) {
+        const { error } = await sb.from("rider_profiles").update(values).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("rider_profiles").insert({ ...values, organization_id: organizationId });
+        if (error) throw error;
+      }
+      await audit("delivery.rider.save", "rider_profiles", id ?? "new", values);
+    },
+    onSuccess: () => {
+      toast.success("Rider saved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useAssignRider() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (input: { orderId: string; riderId: string; reason?: string }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_assign", {
+        _order: input.orderId,
+        _rider: input.riderId,
+        _reason: input.reason ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "That rider could not take this order.");
+      }
+      return result;
+    },
+    onSuccess: (result, input) => {
+      forgetFailedAction(`delivery-assign:${input.orderId}`);
+      toast.success(result["reassigned"] ? "Order reassigned — both riders notified" : "Rider assigned");
+      invalidate(qc);
+    },
+    onError: (e: Error, input) => {
+      /**
+       * A dispatch refused because the session lapsed is remembered, not lost:
+       * it reruns by itself once the operator signs in again. A genuine
+       * business refusal is only reported.
+       */
+      const held = rememberIfReauthNeeded(e, {
+        key: `delivery-assign:${input.orderId}`,
+        label: "Assign rider to this delivery",
+        run: () => mutation.mutateAsync(input),
+      });
+      toast.error(
+        held ? `${e.message} This assignment will resume automatically after you sign in.` : e.message,
+      );
+    },
+  });
+  return mutation;
+}
+
+export type DispatchCandidate = {
+  rider_id: string;
+  rider_code: string | null;
+  display_name: string | null;
+  vehicle_type: string | null;
+  availability_status: string | null;
+  active_load: number;
+  max_active: number;
+  on_shift: boolean;
+  next_shift: string | null;
+  delivered_today: number;
+  cash_handling_allowed: boolean | null;
+  eligible: boolean;
+  reasons: string[];
+};
+
+/** Server-resolved eligibility for one order: who may take it, and why not. */
+export function useDispatchCandidates(orderId?: string | null) {
+  const { session } = useAuth();
+  return useQuery({
+    queryKey: ["delivery", "dispatch-candidates", orderId ?? "none"],
+    // Never dispatched anonymously: without a session the routine answers
+    // "permission denied" and the picker would show an empty rider list.
+    enabled: Boolean(orderId) && Boolean(session?.access_token),
+    retry: (count, error) => !isRpcAccessError(error) && count < 2,
+    queryFn: async () => {
+      const rows = await invokeRpc<DispatchCandidate[]>("neo_delivery_dispatch_candidates", () =>
+        guardedRpc(sb, "neo_delivery_dispatch_candidates", { _order: orderId }) as unknown as Promise<{
+          data: DispatchCandidate[] | null;
+          error: { code?: string | null; message?: string | null } | null;
+        }>,
+      );
+      return (rows ?? []).map((r) => ({ ...r, reasons: r.reasons ?? [] }));
+    },
+    refetchInterval: 30_000,
+  });
+}
+
+
+
+export function useMyRiderProfile() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["delivery", "my-rider", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      // The rider door only opens for an active roster entry: a withdrawn or
+      // suspended rider keeps their account but loses the field app. The
+      // roster entry is resolved by the routine, which recognises both a
+      // rider's own login and the hotel employee that entry belongs to, so a
+      // hotel-employed rider is the same person in Work and in Rider.
+      //
+      // The routine is the whole answer: the field app has no staff property
+      // selection to filter by, so re-reading the roster row through the
+      // office property filter would lock a rider out of their own app.
+      const { data, error } = await guardedRpc(sb, "neo_rider_me", {});
+      if (error) throw new Error(error.message);
+      const me = (data as Row | null) ?? null;
+      if (!me) return null;
+      return { ...me, id: me["rider_id"] } as Row;
+    },
+  });
+}
+
+export function useSetRiderAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { riderId: string; status: string; reason?: string }) => {
+      guardPreview();
+      // Availability gates dispatch, so the change is validated server-side:
+      // only the rider themself or a dispatcher may move it.
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_availability", {
+        _rider: input.riderId,
+        _status: input.status,
+        _reason: input.reason ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) throw new Error(String(result["reason"] ?? "availability_refused"));
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Availability updated");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export type RiderNotificationRow = {
+  created_at: string;
+  event_type: string;
+  title: string | null;
+  body: string | null;
+  idempotency_key: string | null;
+  delivery_status: string | null;
+  read_at: string | null;
+  order_number: string | null;
+  recipient: string | null;
+  duplicate_suppressed?: boolean | null;
+};
+
+export type NotificationAuditRow = {
+  created_at: string;
+  event_type: string;
+  rider_id: string;
+  rider_code: string | null;
+  rider_name: string | null;
+  order_id: string | null;
+  order_number: string | null;
+  previous_rider_name: string | null;
+  new_rider_name: string | null;
+  actor_name: string | null;
+  notification_id: string | null;
+  notification_status: string | null;
+  idempotency_key: string | null;
+  duplicate_suppressed: boolean | null;
+};
+
+/**
+ * Dispatcher-facing notification trail for the whole roster. The database
+ * decides what the caller may see; nothing here is filtered in the browser.
+ */
+export function useNotificationAudit(branchId?: string | null, limit = 120) {
+  return useQuery({
+    queryKey: ["delivery", "notification-audit", branchId ?? "all", limit],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_notification_audit", {
+        _branch: branchId ?? null,
+        _limit: limit,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as NotificationAuditRow[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+/** Rider notification trail — the source key is shown so duplicate suppression is auditable. */
+export function useRiderNotifications(riderId?: string | null, limit = 60) {
+  return useQuery({
+    queryKey: ["delivery", "rider-notifications", riderId ?? "none", limit],
+    enabled: Boolean(riderId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_notifications", { _rider: riderId, _limit: limit });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderNotificationRow[];
+    },
+  });
+}
+
+export function useMyDeliveries(riderId?: string) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "rider-orders", riderId, filterKey],
+    enabled: Boolean(riderId),
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("delivery_orders").select(ORDER_SELECT), "delivery_orders")
+        .eq("rider_id", riderId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+    refetchInterval: 20_000,
+  });
+}
+
+export type ZoneQueueGroup = {
+  zoneId: string;
+  zoneName: string;
+  orders: Row[];
+};
+
+/**
+ * Orders at this rider's property that are waiting for a rider, grouped by the
+ * served zone. Dispatch can still assign the work; a rider may also take an
+ * unclaimed order here, and the database checks the property, the load and the
+ * cash clearance before it moves.
+ */
+export function useZoneWaitingQueue(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "rider-zone-queue", branchId ?? "none"],
+    enabled: Boolean(branchId),
+    queryFn: async (): Promise<ZoneQueueGroup[]> => {
+      const [orders, zones] = await Promise.all([
+        sb
+          .from("delivery_orders")
+          .select(ORDER_SELECT)
+          .eq("branch_id", branchId!)
+          .is("rider_id", null)
+          .eq("fulfilment_type", "delivery")
+          .in("order_status", ["confirmed", "in-preparation", "ready-for-pickup"])
+          .order("created_at", { ascending: true }),
+        sb.from("delivery_zones").select("id, name").eq("branch_id", branchId!),
+      ]);
+      if (orders.error) throw orders.error;
+      if (zones.error) throw zones.error;
+      const names = new Map(((zones.data ?? []) as Row[]).map((z) => [String(z["id"]), String(z["name"])]));
+      const groups = new Map<string, ZoneQueueGroup>();
+      for (const order of (orders.data ?? []) as Row[]) {
+        const zoneId = order["zone_id"] ? String(order["zone_id"]) : "unzoned";
+        const group = groups.get(zoneId) ?? {
+          zoneId,
+          zoneName: names.get(zoneId) ?? "No zone recorded",
+          orders: [],
+        };
+        group.orders.push(order);
+        groups.set(zoneId, group);
+      }
+      return [...groups.values()].sort((a, b) => a.zoneName.localeCompare(b.zoneName));
+    },
+    refetchInterval: 20_000,
+  });
+}
+
+export function useRiderAdvance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; to: string }) => {
+      guardPreview();
+      const { error } = await guardedRpc(sb, "delivery_rider_advance", { _order: input.orderId, _to: input.to });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Delivery updated");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useConfirmDelivery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; pin: string; recipient: string; cash?: number }) => {
+      guardPreview();
+      const { error } = await guardedRpc(sb, "delivery_confirm_delivery", {
+        _order: input.orderId,
+        _pin: input.pin,
+        _recipient: input.recipient,
+        _cash_collected: input.cash ?? null,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Delivery confirmed");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useReportIssue() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; category: string; description: string; branchId?: string | null }) => {
+      guardPreview();
+      const { error } = await sb.from("delivery_issues").insert({
+        organization_id: organizationId,
+        branch_id: input.branchId ?? null,
+        delivery_order_id: input.orderId,
+        category: input.category,
+        description: input.description,
+      });
+      if (error) throw error;
+      await audit("delivery.issue.report", "delivery_issues", input.orderId, { category: input.category });
+    },
+    onSuccess: () => {
+      toast.success("Issue reported to dispatch");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeliveryIssues() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "issues", filterKey],
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("delivery_issues").select("*, delivery_orders(order_number)"), "delivery_issues")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useResolveIssue() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; resolution: string; disposition?: string }) => {
+      const { error } = await sb
+        .from("delivery_issues")
+        .update({
+          status: "resolved",
+          resolution: input.resolution,
+          food_safety_disposition: input.disposition ?? null,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq("id", input.id);
+      if (error) throw error;
+      await audit("delivery.issue.resolve", "delivery_issues", input.id, { resolution: input.resolution });
+    },
+    onSuccess: () => {
+      toast.success("Issue resolved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Cash on delivery
+ * ------------------------------------------------------------------ */
+
+export function useCashCollections() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "cash-collections", filterKey],
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("rider_cash_collections").select("*, delivery_orders(order_number), rider_profiles(display_name, rider_code)"), "rider_cash_collections")
+        .order("collected_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+/**
+ * Cash-on-delivery orders that were handed over without the money being
+ * recorded. Left alone these sit unpaid for ever, so the manager needs a way
+ * to see them and account for the cash after the fact.
+ */
+export function useUnsettledCashDeliveries() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "unsettled-cash", filterKey],
+    queryFn: async () => {
+      const { data, error } = await applyTo(
+        sb
+          .from("delivery_orders")
+          .select("id, order_number, grand_total, currency, delivered_at, contact_name, rider_id"),
+        "delivery_orders",
+      )
+        .eq("order_status", "delivered")
+        .eq("payment_method", "cash")
+        .not("payment_status", "in", "(paid,settled,completed)")
+        .order("delivered_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+/** Record cash a rider collected on delivery but did not enter at handover. */
+export function useRecordDeliveryCash() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; amount: number; reason?: string }) => {
+      guardPreview();
+      const { error } = await guardedRpc(sb, "neo_delivery_record_cash_collection", {
+        _order: input.orderId,
+        _amount: input.amount,
+        _reason: input.reason ?? null,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Cash recorded against the delivery");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useCashRemittances() {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "cash-remittances", filterKey],
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("rider_cash_remittances").select("*, rider_profiles(display_name, rider_code)"), "rider_cash_remittances")
+        .order("submitted_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+/** Cash the signed-in rider still holds — collections not yet attached to a remittance. */
+export function useMyOutstandingCash(riderId?: string) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "my-cash", riderId ?? "none", filterKey],
+    enabled: Boolean(riderId),
+    queryFn: async () => {
+      const { data, error } = await applyTo(sb.from("rider_cash_collections").select("id, collected_amount, currency, delivery_orders(order_number)"), "rider_cash_collections")
+        .eq("rider_id", riderId)
+        .eq("status", "collected")
+        .is("remittance_id", null);
+      if (error) throw error;
+      const rows = (data ?? []) as Row[];
+      const total = rows.reduce((sum, r) => sum + Number(r["collected_amount"] ?? 0), 0);
+      return { rows, total };
+    },
+  });
+}
+
+
+export function useSubmitRemittance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { declared: number; branchId?: string | null }) => {
+      guardPreview();
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_remit", {
+        _declared: input.declared,
+        _branch: input.branchId ?? null,
+      });
+      if (error) throw error;
+      const result = (data ?? {}) as { ok?: boolean; reason?: string };
+      if (!result.ok) throw new Error(result.reason ?? "Cash could not be submitted");
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Cash submitted for counting");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Cashier/Finance action — a rider can never reconcile their own cash. */
+/** Plain-language reasons the till could not take the rider's cash. */
+const REMIT_REASONS: Record<string, string> = {
+  till_not_found: "That till could not be found.",
+  till_not_open: "Your till is closed, so it cannot take cash in. Open it first.",
+  till_belongs_to_another_cashier: "That till belongs to another cashier.",
+  till_property_mismatch: "Your till is at a different property from this rider's cash.",
+  variance_reason_required: "A reason is needed when the counted amount differs.",
+  remittance_not_found: "That hand-in could not be found.",
+};
+
+export function useReconcileRemittance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; counted: number; reason?: string; shiftId?: string }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_remit_reconcile", {
+        _remittance: input.id,
+        _counted: input.counted,
+        _reason: input.reason ?? null,
+        _shift: input.shiftId ?? null,
+      });
+      if (error) throw error;
+      const result = (data ?? {}) as { ok?: boolean; reason?: string; till_recorded?: boolean };
+      if (!result.ok) {
+        const key = result.reason ?? "";
+        throw new Error(REMIT_REASONS[key] ?? key ?? "Cash could not be reconciled");
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      toast.success(
+        result.till_recorded ? "Cash counted and taken into your till" : "Cash counted",
+      );
+      invalidate(qc);
+      // The money now sits in the cashier's till, so the shift's expected cash
+      // and movement list must re-read rather than show the pre-count figure.
+      if (result.till_recorded) void qc.invalidateQueries({ queryKey: ["pos"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Promotions
+ * ------------------------------------------------------------------ */
+
+export function usePromotions() {
+  return useQuery({
+    queryKey: ["delivery", "promotions"],
+    queryFn: async () => {
+      const { data, error } = await sb.from("promotion_codes").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+  });
+}
+
+export function useSavePromotion() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  const { organizationId } = useAuth();
+  return useMutation({
+    mutationFn: async (payload: Row & { id?: string }) => {
+      const { id, ...values } = payload;
+      if (id) {
+        const { error } = await sb.from("promotion_codes").update(values).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from("promotion_codes").insert({ ...values, organization_id: organizationId });
+        if (error) throw error;
+      }
+      await audit("delivery.promotion.save", "promotion_codes", id ?? "new", values);
+    },
+    onSuccess: () => {
+      toast.success("Promotion saved");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Dispatch board, shifts, performance and rider activity
+ * ------------------------------------------------------------------ */
+
+export type DispatchRider = {
+  rider_id: string;
+  rider_code: string | null;
+  display_name: string | null;
+  vehicle_type: string | null;
+  availability_status: string | null;
+  max_active: number;
+  cash_handling_allowed: boolean | null;
+  branch_id: string | null;
+  profile_id?: string | null;
+  linkage_status?: string | null;
+  active_load: number;
+  on_shift: boolean;
+  next_shift: string | null;
+  delivered_today: number;
+};
+
+export type DispatchQueueOrder = {
+  order_id: string;
+  order_number: string;
+  contact_name: string | null;
+  order_status: string;
+  kitchen_status: string | null;
+  dispatch_status: string | null;
+  payment_method: string | null;
+  grand_total: number;
+  requested_at: string | null;
+  waiting_minutes: number;
+  branch_id: string | null;
+};
+
+/** Live dispatch picture: unassigned orders and each rider's real capacity. */
+export function useDispatchBoard(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "dispatch-board", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_dispatch_board", { _branch: branchId ?? null });
+      if (error) throw new Error(error.message);
+      const board = (data ?? {}) as Record<string, unknown>;
+      return {
+        generatedAt: (board["generated_at"] as string) ?? null,
+        riders: (board["riders"] ?? []) as DispatchRider[],
+        queue: (board["queue"] ?? []) as DispatchQueueOrder[],
+      };
+    },
+    refetchInterval: 20_000,
+  });
+}
+
+export function useRiderShifts(branchId?: string | null) {
+  const { applyTo, filterKey } = useActivePropertyFilter();
+  return useQuery({
+    queryKey: ["delivery", "rider-shifts", branchId ?? "all", filterKey],
+    queryFn: async () => {
+      let q = applyTo(sb.from("rider_shifts").select("*, rider_profiles(display_name, rider_code)"), "rider_shifts")
+        .order("starts_at", { ascending: false })
+        .limit(200);
+      if (branchId) q = q.eq("branch_id", branchId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Row[];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+export function useScheduleShift() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      riderId: string;
+      startsAt: string;
+      endsAt: string;
+      branchId?: string | null | undefined;
+      notes?: string | undefined;
+    }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_shift_schedule", {
+        _rider: input.riderId,
+        _starts_at: input.startsAt,
+        _ends_at: input.endsAt,
+        _branch: input.branchId ?? null,
+        _notes: input.notes ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "The shift could not be scheduled.");
+      }
+      await audit("delivery.rider.shift-schedule", "rider_shifts", String(result["shift_id"] ?? ""), input);
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Shift scheduled — the rider has been notified");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useCancelShift() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { shiftId: string; reason: string }) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_shift_cancel", {
+        _shift: input.shiftId,
+        _reason: input.reason,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "The shift could not be cancelled.");
+      }
+      await audit("delivery.rider.shift-cancel", "rider_shifts", input.shiftId, { reason: input.reason });
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Shift cancelled — the rider has been notified");
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export type RiderPerformanceRow = {
+  rider_id: string;
+  rider_code: string | null;
+  display_name: string | null;
+  assigned: number;
+  delivered: number;
+  failed: number;
+  active_orders: number;
+  avg_delivery_minutes: number | null;
+  avg_assignment_minutes: number | null;
+  on_time_rate: number | null;
+  cash_collected: number;
+  scheduled_hours: number;
+  configured_distance_km: number;
+  avg_minutes_per_km: number | null;
+  distance_coverage: number;
+};
+
+
+export function useRiderPerformance(branchId?: string | null, from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["delivery", "rider-performance", branchId ?? "all", from ?? "", to ?? ""],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_performance_distance", {
+        _branch: branchId ?? null,
+        _from: from ?? null,
+        _to: to ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderPerformanceRow[];
+    },
+    refetchInterval: 120_000,
+  });
+}
+
+export type RiderAuditRow = {
+  created_at: string;
+  action: string;
+  order_number: string | null;
+  detail: string | null;
+  actor: string | null;
+};
+
+export function useRiderAudit(riderId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "rider-audit", riderId ?? "none"],
+    enabled: Boolean(riderId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_audit", { _rider: riderId, _limit: 100 });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderAuditRow[];
+    },
+  });
+}
+
+/* ------------------------------------------------- rider self-service --- */
+
+/* ------------------------------------------------------------------ *
+ * Measured routes
+ *
+ * Distance is measured between the property's pickup point and where the
+ * delivery was actually confirmed. Where either coordinate is missing the row
+ * says so rather than estimating anything.
+ * ------------------------------------------------------------------ */
+
+export type RouteLogRow = {
+  order_id: string;
+  order_number: string | null;
+  rider_id: string | null;
+  rider_name: string | null;
+  zone_name: string | null;
+  delivered_at: string | null;
+  minutes: number | null;
+  distance_km: number | null;
+  distance_source: "confirmed-location" | "address-location" | "zone-distance" | "not-measured";
+  minutes_per_km: number | null;
+  km_per_hour: number | null;
+};
+
+export function useDeliveryRouteLog(branchId?: string | null, limit = 60) {
+  return useQuery({
+    queryKey: ["delivery", "route-log", branchId ?? "all", limit],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_route_log", {
+        _branch: branchId ?? null,
+        _from: null,
+        _to: null,
+        _limit: limit,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RouteLogRow[];
+    },
+    refetchInterval: 120_000,
+  });
+}
+
+export type RiderRouteRow = {
+  rider_id: string;
+  rider_name: string | null;
+  measured_deliveries: number;
+  unmeasured_deliveries: number;
+  total_km: number | null;
+  avg_km: number | null;
+  avg_minutes: number | null;
+  avg_minutes_per_km: number | null;
+  avg_km_per_hour: number | null;
+};
+
+export function useRiderRoutes(branchId?: string | null) {
+  return useQuery({
+    queryKey: ["delivery", "rider-routes", branchId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_routes", {
+        _branch: branchId ?? null,
+        _from: null,
+        _to: null,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderRouteRow[];
+    },
+    refetchInterval: 120_000,
+  });
+}
+
+export type RiderIdentity = {
+  rider_id: string;
+  organization_id: string;
+  branch_id: string | null;
+  rider_code: string | null;
+  display_name: string | null;
+  work_phone: string | null;
+  vehicle_type: string | null;
+  vehicle_registration: string | null;
+  availability_status: string | null;
+  cash_handling_allowed: boolean | null;
+  avatar_url: string | null;
+  full_name: string | null;
+  stats: { assigned_open: number; delivered_total: number; delivered_30d: number };
+};
+
+/**
+ * The signed-in rider's own record, resolved server-side from `auth.uid()`.
+ * It never reveals another rider, a guest or the staff directory.
+ */
+export function useRiderIdentity() {
+  return useQuery({
+    queryKey: ["delivery", "rider-identity"],
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_rider_me");
+      if (error) throw new Error(error.message);
+      return (data as RiderIdentity | null) ?? null;
+    },
+  });
+}
+
+export type RiderTransportJob = {
+  id: string;
+  request_number: string;
+  status: string;
+  category: string | null;
+  pickup_at: string | null;
+  pickup_point: string | null;
+  destination: string | null;
+  passengers: number | null;
+  luggage_count: number | null;
+  guest_name: string | null;
+  guest_phone: string | null;
+  notes: string | null;
+};
+
+/** Transfers assigned to this rider only. */
+export function useMyTransportJobs() {
+  return useQuery({
+    queryKey: ["delivery", "my-transport-jobs"],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_rider_transport_jobs");
+      if (error) throw new Error(error.message);
+      return (data ?? []) as RiderTransportJob[];
+    },
+  });
+}
+
+export function useAdvanceTransportJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { requestId: string; status: "arriving" | "picked-up" | "completed" }) => {
+      guardPreview();
+      const { error } = await guardedRpc(sb, "neo_rider_transport_advance", {
+        _request: input.requestId,
+        _status: input.status,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      toast.success("Transfer updated");
+      void qc.invalidateQueries({ queryKey: ["delivery", "my-transport-jobs"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export type TransportRiderCandidate = {
+  rider_id: string;
+  rider_code: string | null;
+  display_name: string | null;
+  vehicle_type: string | null;
+  availability_status: string | null;
+  active_load: number;
+  eligible: boolean;
+};
+
+/** Drivers eligible for a transfer: same tenant, same property scope. */
+export function useTransportRiderCandidates(requestId?: string | null) {
+  return useQuery({
+    queryKey: ["staff-transport-candidates", requestId ?? "none"],
+    enabled: Boolean(requestId),
+    queryFn: async () => {
+      const { data, error } = await guardedRpc(sb, "neo_transport_rider_candidates", { _request: requestId });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as TransportRiderCandidate[];
+    },
+  });
+}
+
+/**
+ * Rider identity reconciliation — links every rider record to its staff
+ * account, employee record and property, retires duplicates and enrols staff
+ * who hold a rider capability but have no rider record. The database performs
+ * every check; the browser only reports the outcome.
+ */
+export function useReconcileRiders() {
+  const audit = useAudit();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (commit: boolean) => {
+      const { data, error } = await guardedRpc(sb, "neo_delivery_rider_reconcile", { _commit: commit });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (commit) await audit("delivery.rider.reconcile", "rider_profiles", "", result);
+      return result;
+    },
+    onSuccess: (result) => {
+      const linked = Number(result["linked"] ?? 0);
+      const created = Number(result["created"] ?? 0);
+      const retired = Number(result["retired_duplicates"] ?? 0);
+      const unlinked = Number(result["still_unlinked"] ?? 0);
+      toast.success(
+        result["committed"]
+          ? `Riders reconciled — ${linked} linked, ${created} enrolled, ${retired} duplicates retired`
+          : `${unlinked} rider record(s) are not linked to a staff account`,
+      );
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * A rider taking an order that dispatch has not yet assigned.
+ *
+ * The browser only names the order: the database decides whether this rider
+ * may have it — same property, still unclaimed, within their carry limit and,
+ * for a cash order, cleared to handle cash.
+ */
+export function useClaimWaitingOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: string | { orderId: string; collect?: boolean }) => {
+      guardPreview();
+      const orderId = typeof input === "string" ? input : input.orderId;
+      const collect = typeof input === "string" ? false : Boolean(input.collect);
+      const { data, error } = await guardedRpc(sb, "neo_delivery_claim", {
+        _order: orderId,
+        _collect: collect,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "That order could not be picked up.");
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      const label = String(result["order_number"] ?? "Order");
+      toast.success(
+        result["collected"] === true
+          ? `${label} is picked up and on its way`
+          : `${label} is yours — collect it from the kitchen`,
+      );
+      invalidate(qc);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
+/**
+ * Bill a delivery order: a real invoice plus the journal entry behind it.
+ *
+ * Amounts come from the order itself and the posting is written once per
+ * order, so pressing this twice cannot double-count revenue.
+ */
+export function useBillDeliveryOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { orderId: string; reason?: string }) => {
+      guardPreview();
+      const { data, error } = await guardedRpc(sb, "neo_delivery_bill", {
+        _order: input.orderId,
+        _reason: input.reason ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "This order could not be billed.");
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      toast.success(
+        result["already_billed"]
+          ? `Already billed on ${String(result["invoice_number"])}`
+          : `Invoice ${String(result["invoice_number"])} raised · journal ${String(result["journal_number"])}`,
+      );
+      invalidate(qc);
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * Record a deposit or a settlement against a delivery order's invoice.
+ *
+ * The database writes the receipt, moves the invoice balance and posts the
+ * matching money entry; the same reference twice is recorded only once.
+ */
+export function useRecordDeliveryPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      orderId: string;
+      amount: number;
+      method: string;
+      entryType: "deposit" | "payment";
+      reference?: string;
+      reason?: string;
+      /** Which of the hotel's accounts received the money. */
+      destinationAccountId?: string | null;
+    }) => {
+      guardPreview();
+      const { data, error } = await guardedRpc(sb, "neo_delivery_record_payment", {
+        _order: input.orderId,
+        _amount: input.amount,
+        _method: input.method,
+        _entry_type: input.entryType,
+        _reference: input.reference?.trim() ? input.reference.trim() : null,
+        _reason: input.reason?.trim() ? input.reason.trim() : null,
+        _account: input.destinationAccountId ?? null,
+      } as never);
+      if (error) throw new Error(error.message);
+      const result = (data ?? {}) as Record<string, unknown>;
+      if (result["ok"] !== true) {
+        throw new Error((result["detail"] as string) ?? "That money could not be recorded.");
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      toast.success(
+        result["already_recorded"]
+          ? "That entry was already recorded."
+          : `Receipt ${String(result["receipt_number"])} · journal ${String(result["journal_number"])}`,
+      );
+      invalidate(qc);
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/**
+ * Delivery stage freshness.
+ *
+ * The stage of an order changes on two tables: the delivery order itself
+ * (rider, pickup, delivery) and the kitchen ticket (ready). Both are watched so
+ * every delivery screen recalculates the moment the kitchen marks a ticket
+ * ready, without waiting for the next poll.
+ */
+export function useDeliveryStageRealtime(enabled = true) {
+  const qc = useQueryClient();
+  useScopedRealtime(
+    "delivery-stage",
+    [
+      { table: "delivery_orders", onChange: () => invalidate(qc) },
+      { table: "station_tickets", onChange: () => invalidate(qc) },
+    ],
+    enabled,
+  );
+}

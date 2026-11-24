@@ -7,7 +7,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import {
+  checkSimulationService,
   cleanTestEnvironment,
   createTestEnvironment,
   runSystemTest,
@@ -58,12 +60,15 @@ export type TestEnvironmentRow = {
 };
 
 export function useTestEnvironments() {
+  const { organizationId, user, phase } = useAuth();
   return useQuery({
-    queryKey: ["simulation-environments"],
+    queryKey: ["simulation-environments", organizationId, user?.id],
+    enabled: phase === "ready" && Boolean(organizationId && user?.id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("neo_test_environments" as never)
         .select("id, label, kind, status, test_org_id, created_at")
+        .eq("control_org_id", organizationId!)
         .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);
       return (data ?? []) as unknown as TestEnvironmentRow[];
@@ -72,14 +77,17 @@ export function useTestEnvironments() {
 }
 
 export function useTestRunsHistory() {
+  const { organizationId, user, phase } = useAuth();
   return useQuery({
-    queryKey: ["simulation-runs"],
+    queryKey: ["simulation-runs", organizationId, user?.id],
+    enabled: phase === "ready" && Boolean(organizationId && user?.id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("neo_test_runs" as never)
         .select(
           "id, run_ref, environment, status, totals, started_at, finished_at, duration_ms, current_suite, failure_detail",
         )
+        .eq("control_org_id", organizationId!)
         .order("started_at", { ascending: false })
         .limit(30);
       if (error) throw new Error(error.message);
@@ -113,6 +121,18 @@ export function useCreateTestEnvironment() {
   return useMutation({
     mutationFn: async () => fn({}),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["simulation-environments"] }),
+  });
+}
+
+export function useSimulationServiceHealth() {
+  const { organizationId, user, phase, isAdmin } = useAuth();
+  const check = useServerFn(checkSimulationService);
+  return useQuery({
+    queryKey: ["simulation-service", organizationId, user?.id],
+    enabled: phase === "ready" && isAdmin && Boolean(organizationId && user?.id),
+    queryFn: () => check({}),
+    retry: false,
+    staleTime: 2 * 60 * 1000,
   });
 }
 

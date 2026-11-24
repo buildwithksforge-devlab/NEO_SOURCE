@@ -1,0 +1,63 @@
+﻿NEØ — BUNDLE 01 RELEASE READINESS
+Generated: 2026-10-23 17:29:21
+Environment: Local VS Code
+Database host: Lovable Cloud
+Frontend host: Cloudflare
+
+CHECK RESULTS
+PASS | F01 maker-checker
+PASS | F01 Marketing approval
+PASS | F01 property isolation
+PASS | F01 explicit quantity review
+PASS | F01 no automatic full approval
+PASS | Supervisor release connected
+PASS | Stores quantity approval connected
+PASS | Stores approval mutation connected
+PASS | TypeScript compilation
+PASS | Supply Chain targeted tests
+PASS | Production build
+PASS | Front Office route exists
+PASS | Reservations route exists
+PASS | Housekeeping route exists
+PASS | Laundry route exists
+PASS | POS route exists
+PASS | Kitchen route exists
+PASS | Stores route exists
+PASS | Procurement route exists
+PASS | Events route exists
+PASS | Marketing route exists
+PASS | Delivery route exists
+PASS | Finance route exists
+PASS | Night Audit route exists
+
+GIT STATUS
+ M src/lib/marketing-department.ts
+ M src/lib/rpc-manifest.ts
+ M src/lib/stores-department.ts
+ M src/routes/_shell.inventory.requisitions.tsx
+ M src/routes/_shell.marketing.supplies.tsx
+ M supabase/.temp/cli-latest
+?? F01_BACKUP_20261023_105555/
+?? F01_MARKETING_BACKUP_20261023_111706/
+?? NEO_ARCHITECTURE_DISCOVERY_2.txt
+?? NEO_F01_BACKEND_REVIEW.txt
+?? NEO_F01_ISSUE_DEPENDENCIES.txt
+?? NEO_F01_SOURCE_INSPECTION.txt
+?? NEO_F01_connect_marketing.ps1
+?? NEO_F01_connect_marketing.ps1.F01_20261023_111505.bak
+?? src/lib/rpc-manifest.ts.F01_20261023_111505.bak
+?? src/routes/_shell.inventory.requisitions.tsx.F01_APPROVAL_20261023_112649.bak
+?? src/routes/_shell.inventory.requisitions.tsx.F01_APPROVAL_20261023_112929.bak
+?? src/routes/_shell.inventory.requisitions.tsx.F01_FINAL_20261023_114851.bak
+?? src/routes/_shell.inventory.requisitions.tsx.F01_QUANTITIES_20261023_113300.bak
+?? src/routes/_shell.inventory.requisitions.tsx.F01_VALIDATION_20261023_113542.bak
+?? supabase/migrations/20261022133000_restrict_legacy_req_issue.sql
+?? supabase/migrations/20261023122500_secure_requisition_approval.sql
+?? supabase/migrations/20261023122500_secure_requisition_approval.sql.F01_20261023_113837.bak
+?? supabase/migrations/20261023122500_secure_requisition_approval.sql.F01_DEPARTMENT_20261023_170633.bak
+?? supabase/migrations/20261023122500_secure_requisition_approval.sql.F01_MAKER_20261023_170430.bak
+
+QUALITY GATE: PASS
+BACKEND LIVE FUNCTION TEST: PENDING
+SAVANNAH CROWN UAT: PENDING
+MAWIMBI JIKO RECORDS: NO WRITES PERFORMED

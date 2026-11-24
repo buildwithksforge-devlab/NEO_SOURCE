@@ -1,3 +1,9 @@
+import {useReservationCollectionPosition} from "@/lib/reservation-collections";
+import {ReservationCollections} from "@/components/pms/ReservationCollections";
+import {selectReservationFolio} from '@/lib/reservation-folios';
+import {useCheckoutPosition} from '@/lib/checkout-position';
+import {ReservationMoneySummary} from '@/components/pms/ReservationMoneySummary';
+import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,7 +26,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { formatDate, formatDateTime, money, titleCase } from "@/lib/pms";
+import { formatDate, formatDateTime, money, moneyWithCode, titleCase } from "@/lib/pms";
+import { canCheckInReservationStatus } from "@/lib/checkin-lifecycle";
 import { useReservation, useReservationFolios, useReservationHistory } from "@/lib/pms-data";
 import {
   EmptyState,
@@ -66,12 +73,15 @@ export const Route = createFileRoute("/_shell/pms/reservations/$id")({
   ),
 });
 
-function ReservationDetail() {
+export function ReservationDetail() {
   const { id } = Route.useParams();
   const { organizationId, user, profile, can } = useAuth();
   const qc = useQueryClient();
   const reservation = useReservation(id);
+  const collections=useReservationCollectionPosition(id);
   const folios = useReservationFolios(id);
+  const postedPosition = useCheckoutPosition(id, Boolean(folios.data?.length));
+  const [selectedFolioId, setSelectedFolioId] = useState<string | null>(null);
   const history = useReservationHistory(id);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -83,6 +93,7 @@ function ReservationDetail() {
         deposit_required: number;
         nightly_rate: number;
         payment_status: string;
+        currency: string;
         meal_plans: { code: string } | null;
         rate_plans: { name: string } | null;
         corporate_accounts: { legal_name: string; trading_name: string | null } | null;
@@ -93,8 +104,9 @@ function ReservationDetail() {
   const cancel = useMutation({
     mutationFn: async (nextStatus: "cancelled" | "no-show") => {
       if (!organizationId || !r) throw new Error("Reservation not loaded");
+      if (!canCheckInReservationStatus(r.status)) throw new Error("Cancellation and no-show apply to pre-arrival reservations. Review an active or completed stay through its stay workflow.");
       if (!cancelReason.trim()) throw new Error("A reason is required");
-      const { error } = await supabase
+      const { data: saved, error } = await supabase
         .from("reservations")
         .update({
           status: nextStatus,
@@ -102,8 +114,13 @@ function ReservationDetail() {
           cancelled_at: new Date().toISOString(),
           cancelled_by: user?.id ?? null,
         })
-        .eq("id", r.id);
+        .eq("id", r.id)
+        .eq("organization_id", organizationId)
+        .eq("status", r.status)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!saved || saved.id !== r.id) throw new Error("The reservation changed or was not saved. Refresh before changing its status.");
       await supabase.from("reservation_history").insert({
         organization_id: organizationId,
         reservation_id: r.id,
@@ -133,6 +150,7 @@ function ReservationDetail() {
 
   if (reservation.isLoading)
     return <p className="text-sm text-muted-foreground">Loading reservation…</p>;
+  if (reservation.error) return <EmptyState title="Could not load reservation" description={reservation.error instanceof Error ? reservation.error.message : "Refresh before using this reservation."} />;
   if (!r) {
     return (
       <EmptyState
@@ -147,7 +165,13 @@ function ReservationDetail() {
     );
   }
 
-  const folio = (folios.data ?? [])[0] as unknown as FolioWithLines | undefined;
+  const linkedFolios = (folios.data ?? []) as unknown as FolioWithLines[];
+  const folio = selectReservationFolio(linkedFolios, selectedFolioId);
+  const canonicalFolio = postedPosition.data?.folios.find(item => item.id === folio?.id);
+  const moneyReady = collections.isSuccess && !collections.isFetching && !collections.error && postedPosition.isSuccess
+    && !postedPosition.isFetching && !postedPosition.isError && !postedPosition.data?.mixedCurrency
+    && Boolean(canonicalFolio && canonicalFolio.currency === collections.data?.currency);
+  const canWriteFolio = moneyReady && !folios.isLoading && !folios.isError && Boolean(folio && ["open", "under-review", "reopened"].includes(folio.status));
 
   return (
     <div>
@@ -165,9 +189,9 @@ function ReservationDetail() {
             {r.status === "checked-in" ? (
               <>
                 <AssignRoomDialog reservation={r} label="Move room" transfer />
-                <CheckOutDialog reservation={r} balance={Number(folio?.balance ?? 0)} />
+                <CheckOutDialog reservation={r} />
               </>
-            ) : (
+            ) : canCheckInReservationStatus(r.status) ? (
               <>
                 <AssignRoomDialog
                   reservation={r}
@@ -175,7 +199,7 @@ function ReservationDetail() {
                 />
                 <CheckInDialog reservation={r} />
               </>
-            )}
+            ) : null}
           </div>
         }
       />
@@ -185,6 +209,7 @@ function ReservationDetail() {
           <TabsList>
             <TabsTrigger value="stay">Stay</TabsTrigger>
             <TabsTrigger value="folio">Folio</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="manage">Manage</TabsTrigger>
           </TabsList>
@@ -201,9 +226,9 @@ function ReservationDetail() {
                 <Row label="Party" value={`${r.adults} adult(s), ${r.children} child(ren)`} />
                 <Row label="Source" value={titleCase(r.booking_source)} />
                 <Row label="Guarantee" value={titleCase(r.guarantee_method)} />
-                <Row label="Nightly rate" value={money(r.nightly_rate)} />
-                <Row label="Total" value={money(r.total_amount)} />
-                <Row label="Deposit required" value={money(r.deposit_required)} />
+                <Row label="Quoted nightly rate" value={moneyWithCode(r.nightly_rate, r.currency)} />
+                <Row label="Original booking quote" value={moneyWithCode(r.total_amount, r.currency)} />
+                <Row label="Required advance deposit" value={moneyWithCode(r.deposit_required, r.currency)} />
                 {r.corporate_accounts ? (
                   <Row
                     label="Corporate"
@@ -213,7 +238,7 @@ function ReservationDetail() {
                 {r.group_bookings ? <Row label="Group" value={r.group_bookings.name} /> : null}
               </dl>
               <div className="mt-4">
-                <DepositPanel reservationId={r.id} />
+                <DepositPanel reservationId={r.id} branchId={r.branch_id} />
               </div>
               {r.special_requests ? (
                 <div className="mt-4 rounded-lg border border-border/70 p-3 text-sm">
@@ -237,13 +262,13 @@ function ReservationDetail() {
                         <ReceiptText className="mr-2 size-4" /> Open folio
                       </Link>
                     </Button>
-                    <PostChargeDialog folioId={folio.id} />
-                    <RecordPaymentDialog folioId={folio.id} balance={Number(folio.balance)} />
-                    {Number(folio.balance) > 0 ? (
+                    {canWriteFolio ? <PostChargeDialog folioId={folio.id} /> : null}
+                    {canWriteFolio && collections.data && collections.data.headroom > 0 ? <RecordPaymentDialog folioId={folio.id} balance={collections.data.headroom} balanceLabel="Available to collect for the whole booking (pending requests excluded)" /> : null}
+                    {canWriteFolio && canonicalFolio && collections.data && Math.min(Math.max(canonicalFolio.outstanding, 0), collections.data.headroom) > 0 ? (
                       <MpesaPromptDialog
                         sourceModule="folio"
                         sourceRecordId={folio.id}
-                        balance={Number(folio.balance)}
+                        balance={Math.min(Math.max(canonicalFolio.outstanding, 0), collections.data.headroom)}
 
                         description={`Folio ${folio.folio_number}`}
                       />
@@ -252,7 +277,14 @@ function ReservationDetail() {
                 ) : null
               }
             >
-              {!folio ? (
+              {linkedFolios.length > 1 ? <div className="mb-4 space-y-2">
+                <Label htmlFor="reservation-folio">Linked folio</Label>
+                <Select value={folio?.id ?? ""} onValueChange={setSelectedFolioId}>
+                  <SelectTrigger id="reservation-folio"><SelectValue placeholder="Choose a linked folio" /></SelectTrigger>
+                  <SelectContent>{linkedFolios.map(item => <SelectItem key={item.id} value={item.id}>{item.folio_number} · {titleCase(item.status)} · {item.currency}</SelectItem>)}</SelectContent>
+                </Select>
+              </div> : null}
+              {folios.isLoading ? <p className="text-sm text-muted-foreground">Loading linked folios…</p> : folios.isError ? <p role="alert" className="text-sm text-destructive">Could not verify linked folios. Refresh before recording a charge or payment.</p> : !folio ? (
                 <EmptyState
                   icon={ReceiptText}
                   title="No folio yet"
@@ -262,14 +294,13 @@ function ReservationDetail() {
                 <>
                   <div className="mb-4 flex flex-wrap items-center gap-3">
                     <FolioStatusBadge status={folio.status} />
-                    <Badge variant="secondary">
-                      Charges {money(folio.total_charges, folio.currency)}
-                    </Badge>
-                    <Badge variant="secondary">
-                      Payments {money(folio.total_payments, folio.currency)}
-                    </Badge>
-                    <Badge>Balance {money(folio.balance, folio.currency)}</Badge>
+                    {canonicalFolio && !postedPosition.isError ? <>
+                      <Badge variant="secondary">Posted charges {moneyWithCode(canonicalFolio.charges, canonicalFolio.currency)}</Badge>
+                      <Badge variant="secondary">Money applied to this folio {moneyWithCode(canonicalFolio.collected, canonicalFolio.currency)}</Badge>
+                      <Badge>{canonicalFolio.outstanding < 0 ? "Folio credit" : "Posted folio amount due"} {moneyWithCode(Math.abs(canonicalFolio.outstanding), canonicalFolio.currency)}</Badge>
+                    </> : <p role="alert" className="text-sm text-destructive">{postedPosition.isPending ? "Reading posted folio amounts…" : "Posted folio totals could not be verified. Refresh before recording a payment."}</p>}
                   </div>
+                  <p className="mb-4 text-xs text-muted-foreground">These totals cover this folio’s posted charges only. New booking payments are saved on {folio.folio_number} and checked against the whole booking’s available collection amount. Deposit application does not receive new money.</p>
                   <TableScroll>
                     <Table>
                       <TableHeader>
@@ -277,13 +308,14 @@ function ReservationDetail() {
                           <TableHead>Date</TableHead>
                           <TableHead>Description</TableHead>
                           <TableHead>Category</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead>Type / status</TableHead>
+                          <TableHead className="text-right">Saved line total</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {(folio.folio_lines ?? []).length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                            <TableCell colSpan={5} className="text-sm text-muted-foreground">
                               No charges posted yet.
                             </TableCell>
                           </TableRow>
@@ -299,6 +331,7 @@ function ReservationDetail() {
                                 <TableCell className="text-sm">
                                   {titleCase(line.category)}
                                 </TableCell>
+                                <TableCell className="text-sm">{titleCase(line.line_type ?? "charge")} · {titleCase(line.status ?? "posted")}</TableCell>
                                 <TableCell className="text-right font-medium">
                                   {money(line.net_amount, folio.currency)}
                                 </TableCell>
@@ -309,28 +342,14 @@ function ReservationDetail() {
                     </Table>
                   </TableScroll>
 
-                  <h3 className="mt-6 mb-2 text-sm font-semibold">Payments</h3>
-                  {(folio.payments ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No payments recorded.</p>
-                  ) : (
-                    <ul className="space-y-2 text-sm">
-                      {(folio.payments ?? []).map((p) => (
-                        <li
-                          key={p.id}
-                          className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2"
-                        >
-                          <span>
-                            {p.receipt_number} · {titleCase(p.method)} · {formatDateTime(p.paid_at)}
-                          </span>
-                          <span className="font-medium">{money(p.amount, folio.currency)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <h3 className="mt-6 mb-2 text-sm font-semibold">Deposits & payments</h3>
+                  <ReservationCollections reservationId={r.id} folioIds={linkedFolios.map(f=>f.id)} />
                 </>
               )}
             </SectionCard>
           </TabsContent>
+
+          <TabsContent value="payments" className="mt-4"><SectionCard title="Deposits & payments" description="Saved collections for this reservation, including deposits received before check-in."><ReservationCollections reservationId={r.id} folioIds={linkedFolios.map(f=>f.id)} /></SectionCard></TabsContent>
 
           <TabsContent value="history" className="mt-4">
             <SectionCard
@@ -372,6 +391,7 @@ function ReservationDetail() {
             >
               {can("pms", "reservations.cancel") || can("pms", "reservations.edit") ? (
                 <div className="space-y-3">
+                  {!canCheckInReservationStatus(r.status) ? <p role="alert" className="text-sm text-muted-foreground">This is not a pre-arrival reservation. Cancellation and no-show are unavailable here; use the stay’s authorized correction or departure workflow.</p> : null}
                   <div className="space-y-2">
                     <Label>Reason</Label>
                     <Textarea
@@ -385,7 +405,7 @@ function ReservationDetail() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        disabled={!cancelReason.trim() || cancel.isPending}
+                        disabled={!canCheckInReservationStatus(r.status) || !cancelReason.trim() || cancel.isPending}
                         onClick={() => cancel.mutate("cancelled")}
                       >
                         Cancel reservation
@@ -395,7 +415,7 @@ function ReservationDetail() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={!cancelReason.trim() || cancel.isPending}
+                        disabled={!canCheckInReservationStatus(r.status) || !cancelReason.trim() || cancel.isPending}
                         onClick={() => cancel.mutate("no-show")}
                       >
                         Mark as no-show
@@ -412,14 +432,27 @@ function ReservationDetail() {
           </TabsContent>
         </Tabs>
 
+        <div className="space-y-6">
         <SectionCard title="Guest" description="">
           <dl className="space-y-3 text-sm">
             <Row label="Name" value={r.customers?.full_name ?? "—"} />
             <Row label="VIP" value={r.is_vip ? "Yes" : "No"} />
-            <Row label="Payment status" value={titleCase(r.payment_status)} />
-            <Row label="Balance" value={money(folio?.balance ?? r.balance)} />
           </dl>
         </SectionCard>
+        {collections.data && !collections.error ? <ReservationMoneySummary position={collections.data} /> : <SectionCard title="Booking money" description="">
+          <p role={collections.isPending ? "status" : "alert"}>{collections.isPending ? "Reading booking charges and collections…" : "Could not verify booking money. Refresh and review the saved payments before collecting again."}</p>
+        </SectionCard>}
+        {linkedFolios.length > 0 ? <SectionCard title="Posted folios" description="Charges posted so far, across this stay’s folios. This is separate from the full booking quote.">
+          {postedPosition.data && !postedPosition.isError ? <dl className="space-y-3 text-sm">
+            <Row label="Folios reviewed" value={postedPosition.data.folios.length} />
+            {postedPosition.data.mixedCurrency ? <p role="alert">Review mixed folio currencies separately.</p> : <>
+              <Row label="Unpaid posted charges" value={moneyWithCode(postedPosition.data.amountDue, postedPosition.data.currency!)} />
+              <Row label="Credits to reconcile separately" value={moneyWithCode(postedPosition.data.creditDue, postedPosition.data.currency!)} />
+            </>}
+            {canonicalFolio ? <Row label={`${folio?.folio_number}: ${canonicalFolio.outstanding < 0 ? "credit" : "amount due"}`} value={moneyWithCode(Math.abs(canonicalFolio.outstanding), canonicalFolio.currency)} /> : null}
+          </dl> : <p role={postedPosition.isPending ? "status" : "alert"}>{postedPosition.isPending ? "Reading posted folios…" : "Posted totals could not be verified."}</p>}
+        </SectionCard> : null}
+        </div>
       </div>
     </div>
   );
@@ -438,6 +471,8 @@ type FolioWithLines = {
     posting_date: string;
     description: string;
     category: string;
+    line_type?: string | null;
+    status?: string | null;
     net_amount: number;
   }[];
   payments: {

@@ -40,6 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { reportQueryError } from "@/lib/query-telemetry";
 import { useAuth } from "@/lib/auth";
 import { useNeoSwitchAccount } from "@/lib/session-exit";
+import { isStaffPinSession } from "@/lib/staff-pin-login";
 import { useNotificationInbox } from "@/lib/notifications-inbox";
 import { useBranding } from "@/lib/branding";
 import { Avatar } from "@/components/common/AvatarDisplay";
@@ -78,10 +79,11 @@ function IconAction({
   );
 }
 
-export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
+export function Topbar({ onOpenSidebar, mobileBack }: { onOpenSidebar: () => void; mobileBack?: ReactNode }) {
   const { theme, toggleTheme } = useBranding();
   const { profile, organizationId, roleNames, signOut, isAdmin } = useAuth();
   const switchAccount = useNeoSwitchAccount();
+  const pinSession = isStaffPinSession();
   const { activeBranch, canManage } = useBranchScope();
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { tenant } = useTenant();
@@ -118,19 +120,17 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md">
+      <header className="neo-work-topbar sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md">
         {/* Full-bleed chrome: the row spans the whole staff frame beside the
             sidebar and only its contents are inset by the shared gutter. */}
-        <div className="neo-page-gutter neo-shell-bleed flex h-16 items-center gap-2 overflow-hidden md:gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-10 shrink-0 rounded-xl lg:hidden"
-            onClick={onOpenSidebar}
-          >
-            <Menu className="size-5" />
-            <span className="sr-only">Open navigation</span>
-          </Button>
+        <div className="neo-page-gutter neo-shell-bleed flex h-16 items-center gap-1 overflow-hidden max-md:h-14 md:gap-3">
+          {pathname !== "/workspace" && mobileBack ? (
+            <div className="lg:hidden">{mobileBack}</div>
+          ) : (
+            <Button variant="ghost" size="icon" className="size-10 shrink-0 rounded-full lg:hidden" onClick={onOpenSidebar} aria-label="Open navigation" aria-haspopup="dialog">
+              <Menu className="size-5" aria-hidden />
+            </Button>
+          )}
 
           {/* Permanent product identity: the square NEØ Ø symbol only, at a
               protected 28×28px. It is `shrink-0` with `object-contain` so a
@@ -303,6 +303,7 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
               <DropdownMenuTrigger asChild>
                 <button
                   data-profile-trigger
+                  aria-label="Account menu"
                   className="flex h-10 min-w-0 max-w-[13rem] shrink-0 items-center gap-2 rounded-xl border border-border bg-background/60 px-1.5 text-left transition-colors duration-200 hover:border-primary/50 sm:pr-2.5"
                 >
                   <Avatar path={profile?.avatar_url} name={hasName ? name : null} size={28} />
@@ -372,11 +373,13 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => void switchAccount()}>
-                  <UserRound className="size-4" /> Switch account
+                  <UserRound className="size-4" />{" "}
+                  {pinSession ? "Use account sign-in" : "Switch account"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void signOut()}>
-                  <LogOut className="size-4" /> Sign out
+                  <LogOut className="size-4" />{" "}
+                  {pinSession ? "Lock / Switch Staff" : "Sign out"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <div className="px-2 py-1.5">

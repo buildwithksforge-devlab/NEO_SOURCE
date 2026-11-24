@@ -17,10 +17,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { exportBusinessDocument } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf, openDocumentPrintWindow } from "@/lib/browser-document";
 
 export type BusinessDocumentType =
   | "pos_receipt"
   | "invoice"
+  | "credit_note"
   | "folio_statement"
   | "beo"
   | "purchase_order"
@@ -50,6 +52,10 @@ const DOCUMENT_PERMISSIONS: Record<BusinessDocumentType, DocumentPermission> = {
     action: "print",
   },
   invoice: {
+    module: "finance",
+    action: "print",
+  },
+  credit_note: {
     module: "finance",
     action: "print",
   },
@@ -93,14 +99,11 @@ const DOCUMENT_PERMISSIONS: Record<BusinessDocumentType, DocumentPermission> = {
 
 function canPrintDocument(
   type: BusinessDocumentType,
-  can: (
-    module: string,
-    actionOrFeature: string,
-    action?: string,
-  ) => boolean,
+  can: (module: string, actionOrFeature: string, action?: string) => boolean,
   isAdmin: boolean,
 ) {
   if (isAdmin) return true;
+  if (type === "pos_receipt" && can("restaurant", "orders", "create")) return true;
 
   const permission = DOCUMENT_PERMISSIONS[type];
 
@@ -115,10 +118,12 @@ function canPrintDocument(
    * POS receipts intentionally do not use this fallback because they already
    * have the explicit `pos.receipts.print` capability.
    */
-  return (
-    can(permission.module, permission.action) ||
-    can(permission.module, "view")
-  );
+  return can(permission.module, permission.action) || can(permission.module, "view");
+}
+
+function decodeDocumentPdf(value: string): Uint8Array<ArrayBuffer> {
+  const encoded = value.replace(/^data:application\/pdf;base64,/i, "").replace(/\s/g, "");
+  return Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
 }
 
 export function DocumentPrintButton({
@@ -144,49 +149,64 @@ export function DocumentPrintButton({
 
   if (!allowed || !id) return null;
 
-  const download = async () => {
+  const download = async (action: "print" | "download") => {
     if (busy) return;
 
     setBusy(true);
 
+    let preview: ReturnType<typeof openDocumentPrintWindow> | undefined;
+    let previewBlocked = false;
     try {
-      const result = await run({
+      if (action === "print") {
+        try {
+          preview = openDocumentPrintWindow();
+        } catch {
+          // Some devices block a new tab even for a direct button click.
+          // Still fetch the authorised PDF and let the operator print it locally.
+          previewBlocked = true;
+        }
+      }
+      const input = {
         data: {
           type,
           id,
         },
-      });
-
-      const bytes = Uint8Array.from(
-        atob(result.base64),
-        (character) => character.charCodeAt(0),
-      );
+      };
+      let result = await run(input);
+      if (!result || typeof result.base64 !== "string") {
+        throw new Error("The document service returned no PDF. Please try again; if it continues, report this receipt number.");
+      }
+      let bytes: Uint8Array<ArrayBuffer>;
+      try {
+        bytes = decodeDocumentPdf(result.base64);
+      } catch {
+        // Export is read-only. A single retry handles an incomplete response
+        // without queuing another print job or changing the sale.
+        result = await run(input);
+        if (!result || typeof result.base64 !== "string") {
+          throw new Error("The document service returned no PDF. Please try again; if it continues, report this receipt number.");
+        }
+        try {
+          bytes = decodeDocumentPdf(result.base64);
+        } catch {
+          throw new Error("The PDF response could not be decoded on this device. Refresh the page and try again.");
+        }
+      }
 
       const blob = new Blob([bytes], {
         type: "application/pdf",
       });
 
-      const url = URL.createObjectURL(blob);
+      if (preview) preview.show(blob, result.filename);
+      else downloadDocumentPdf(blob, result.filename);
 
-      try {
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = result.filename;
-        anchor.rel = "noopener";
-
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-
-      toast.success(`${result.documentNumber} ready`);
+      toast.success(previewBlocked
+        ? `${result.documentNumber} downloaded. Open the PDF and use its Print control.`
+        : `${result.documentNumber} ready`);
     } catch (error) {
+      preview?.close();
       const message =
-        error instanceof Error
-          ? error.message
-          : "The document could not be generated.";
+        error instanceof Error ? error.message : "The document could not be generated.";
 
       toast.error(message);
     } finally {
@@ -194,25 +214,37 @@ export function DocumentPrintButton({
     }
   };
 
-  const isPrintLabel = label.toLowerCase().includes("print");
+  const isDownloadLabel = /download|\bpdf\b/i.test(label) && !/print/i.test(label);
+  const isPrintLabel = !isDownloadLabel;
 
   return (
-    <Button
-      size={size}
-      variant={variant}
-      className={`gap-2 ${className ?? ""}`}
-      disabled={busy}
-      onClick={() => void download()}
-    >
-      {busy ? (
-        <Loader2 className="size-4 animate-spin" />
-      ) : isPrintLabel ? (
-        <Printer className="size-4" />
-      ) : (
-        <FileText className="size-4" />
-      )}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <Button
+        size={size}
+        variant={variant}
+        className={`gap-2 ${className ?? ""}`}
+        disabled={busy}
+        onClick={() => void download(isPrintLabel ? "print" : "download")}
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : isPrintLabel ? (
+          <Printer className="size-4" />
+        ) : (
+          <FileText className="size-4" />
+        )}
 
-      {label}
-    </Button>
+        {label}
+      </Button>
+      <Button
+        size={size}
+        variant="outline"
+        disabled={busy}
+        onClick={() => void download(isPrintLabel ? "download" : "print")}
+      >
+        {isPrintLabel ? <FileText className="mr-2 size-4" /> : <Printer className="mr-2 size-4" />}
+        {isPrintLabel ? "Download PDF" : "Print"}
+      </Button>
+    </span>
   );
 }

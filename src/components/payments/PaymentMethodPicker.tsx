@@ -40,7 +40,9 @@ export function PaymentMethodPicker({
 
   const selected = methods.find((m) => m.value === value);
   const state = selected ? byMethod.get(selected.value) : undefined;
-  const providerBlocked = Boolean(selected?.provider) && state ? !state.ready : false;
+  const providerBlocked =
+    Boolean(selected?.provider) &&
+    (readiness.isPending || readiness.isError || state?.ready !== true);
 
   return (
     <div className="space-y-2">
@@ -52,11 +54,13 @@ export function PaymentMethodPicker({
         <SelectContent>
           {methods.map((m) => {
             const r = byMethod.get(m.value);
-            const blocked = Boolean(m.provider) && r ? !r.ready : false;
+            const blocked =
+              Boolean(m.provider) &&
+              (readiness.isPending || readiness.isError || r?.ready !== true);
             return (
               <SelectItem key={m.value} value={m.value} disabled={blocked}>
                 {m.label}
-                {blocked ? " · not set up" : ""}
+                {blocked ? (readiness.isPending ? " · checking" : " · unavailable") : ""}
               </SelectItem>
             );
           })}
@@ -67,7 +71,11 @@ export function PaymentMethodPicker({
 
       {providerBlocked ? (
         <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-on-tint-warning">
-          {state?.reason ?? "This provider is not set up in this workspace yet."}{" "}
+          {readiness.isPending
+            ? "Checking provider availability…"
+            : readiness.isError
+              ? "Provider availability could not be verified. Retry before taking this payment."
+              : (state?.reason ?? "This provider is not available for this workspace.")}{" "}
           {selected?.configPath ? (
             <Link to={selected.configPath} className="font-medium underline underline-offset-2">
               Set it up

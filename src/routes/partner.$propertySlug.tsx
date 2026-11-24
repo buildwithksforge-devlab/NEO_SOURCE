@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Handshake, Loader2, MessageSquareText, PackageCheck, ShoppingBag } from "lucide-react";
+import { FileText, Handshake, Loader2, MessageSquareText, PackageCheck, Search, ShoppingBag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { usePartnerCreditInvoices } from "@/lib/partner-billing";
@@ -10,16 +12,29 @@ import {
   useSendPartnerMessage,
   type PartnerThread,
 } from "@/lib/partner-messaging";
-import { fetchPropertyForVisitor } from "@/lib/front-door";
-import { PoweredByNeo } from "@/components/public/PublicAppShell";
+import { fetchPropertyForVisitor, type PublicProperty } from "@/lib/front-door";
+import { BrandMark, PoweredByNeo } from "@/components/public/PublicAppShell";
+import { brandFallback } from "@/lib/public-apps";
+import { normalizedHex, primaryInk } from "@/lib/public-palette";
+import { brandStyle } from "@/lib/experience-brand";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { useNeoSignOut, useNeoSwitchAccount } from "@/lib/session-exit";
 import { useAuth } from "@/lib/auth";
 import { Display, PublicSurface, PublicTopBar } from "@/components/public/NeoPublic";
 import { useTrackEntry } from "@/lib/traffic";
+import { useCustomerSession } from "@/lib/public-session";
+import { exportPartnerPurchaseOrder } from "@/lib/document-pdf.functions";
+import { downloadDocumentPdf } from "@/lib/browser-document";
+import { PartnerQuotes } from "@/components/public/PartnerQuotes";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>): { section?: PartnerSection; relationship?: string } => {
+    const section = SECTIONS.find((item) => item.key === search["section"])?.key;
+    const relationship = typeof search["relationship"] === "string" &&
+      /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(search["relationship"]) ? search["relationship"] : undefined;
+    return { ...(section ? { section } : {}), ...(relationship ? { relationship } : {}) };
+  },
   head: () => ({
     meta: [
       { title: "Partner portal — NEØ" },
@@ -55,6 +70,7 @@ type PartnerContext =
 
 type PartnerRecords = {
   allowed: boolean;
+  reason?: string;
   relationship_type?: string;
   purchase_orders?: Record<string, unknown>[];
   deliveries?: Record<string, unknown>[];
@@ -62,14 +78,15 @@ type PartnerRecords = {
   corporate_account?: Record<string, unknown> | null;
 };
 
-type PartnerSection = "overview" | "orders" | "deliveries" | "invoices" | "messages";
+type PartnerSection = "overview" | "quotes" | "orders" | "deliveries" | "invoices" | "messages";
 
-const SECTIONS: { key: PartnerSection; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "orders", label: "Orders" },
-  { key: "deliveries", label: "Deliveries" },
-  { key: "invoices", label: "Invoices" },
-  { key: "messages", label: "Messages" },
+const SECTIONS: { key: PartnerSection; label: string; icon: typeof Handshake }[] = [
+  { key: "overview", label: "Overview", icon: Handshake },
+  { key: "quotes", label: "Quotes", icon: FileText },
+  { key: "orders", label: "Orders", icon: ShoppingBag },
+  { key: "deliveries", label: "Deliveries", icon: PackageCheck },
+  { key: "invoices", label: "Invoices", icon: FileText },
+  { key: "messages", label: "Messages", icon: MessageSquareText },
 ];
 
 const refusal: Record<string, string> = {
@@ -82,19 +99,18 @@ const refusal: Record<string, string> = {
 function PartnerPortal() {
   const { propertySlug } = Route.useParams();
   useTrackEntry(propertySlug, "partner");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [section, setSection] = useState<PartnerSection>("overview");
-  // A visitor with no session should be offered sign-in, not told they lack a
-  // relationship — the hotel may well have granted them one.
-  const session = useQuery({
-    queryKey: ["neo-partner-session"],
-    queryFn: async () => Boolean((await supabase.auth.getUser()).data.user),
-    staleTime: 30_000,
-  });
+  const [messageSubject, setMessageSubject] = useState("");
+  const [downloadingOrder, setDownloadingOrder] = useState<string | null>(null);
+  const exportOrder = useServerFn(exportPartnerPurchaseOrder);
+  const { section = "overview", relationship: selected } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const setSection = (next: PartnerSection) => void navigate({ search: (prev) => ({ ...prev, section: next }) });
+  const { user, loading: sessionLoading } = useCustomerSession();
 
 
   const property = useQuery({
-    queryKey: ["neo-visitor-property", propertySlug],
+    queryKey: ["neo-visitor-property", propertySlug, user?.id],
+    enabled: !sessionLoading,
     queryFn: () => fetchPropertyForVisitor(propertySlug),
     staleTime: 60_000,
   });
@@ -102,8 +118,8 @@ function PartnerPortal() {
   const branchId = property.data?.branch_id ?? null;
 
   const context = useQuery({
-    queryKey: ["neo-partner-context", branchId],
-    enabled: Boolean(branchId),
+    queryKey: ["neo-partner-context", branchId, user?.id],
+    enabled: Boolean(branchId && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_partner_context", {
         _branch: branchId,
@@ -114,11 +130,24 @@ function PartnerPortal() {
   });
 
   const relationships = context.data?.allowed ? context.data.relationships : [];
-  const active = selected ?? relationships[0]?.id ?? null;
+  const active = relationships.find((relationship) => relationship.id === selected)?.id ?? relationships[0]?.id ?? null;
+  async function downloadOrder(number: string) {
+    if (!branchId || !active || downloadingOrder) return;
+    setDownloadingOrder(number);
+    try {
+      const result = await exportOrder({ data: { branch: branchId, relationship: active, number } });
+      const bytes = Uint8Array.from(atob(result.base64), (character) => character.charCodeAt(0));
+      downloadDocumentPdf(new Blob([bytes], { type: "application/pdf" }), result.filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The purchase order could not be downloaded.");
+    } finally {
+      setDownloadingOrder(null);
+    }
+  }
 
   const records = useQuery({
-    queryKey: ["neo-partner-records", branchId, active],
-    enabled: Boolean(branchId && active),
+    queryKey: ["neo-partner-records", branchId, active, user?.id],
+    enabled: Boolean(branchId && active && user),
     queryFn: async () => {
       const { data, error } = await guardedRpc(supabase, "neo_partner_records", {
         _branch: branchId,
@@ -129,12 +158,26 @@ function PartnerPortal() {
     },
   });
 
-  if (property.isLoading || context.isLoading) {
+  if (property.isLoading || sessionLoading || context.isLoading) {
     return (
       <Shell title="Partner portal">
         <div className="flex items-center gap-2 text-sm text-white/70">
           <Loader2 className="size-4 animate-spin" /> Checking your access…
         </div>
+      </Shell>
+    );
+  }
+
+  if (property.isError || context.isError) {
+    return (
+      <Shell title={property.data?.property_name ?? "Partner portal"} property={property.data}>
+        <Panel>
+          <p role="alert" className="text-sm text-white/85">Partner access couldn’t be checked.</p>
+          <button className="neo-commerce-primary mt-4" onClick={() => {
+            if (property.isError) void property.refetch();
+            if (context.isError) void context.refetch();
+          }}>Retry</button>
+        </Panel>
       </Shell>
     );
   }
@@ -151,13 +194,13 @@ function PartnerPortal() {
 
   if (!context.data?.allowed) {
     const reason =
-      session.data === false
+      !user
         ? "not_signed_in"
         : context.data && !context.data.allowed
           ? context.data.reason
           : "no_relationship";
     return (
-      <Shell title={property.data.property_name}>
+      <Shell title={property.data.property_name} property={property.data}>
         <Panel>
           <h2 className="text-base font-semibold text-white">Partner access not available</h2>
           <p className="mt-2 text-sm text-white/70">{refusal[reason] ?? refusal["no_relationship"]}</p>
@@ -182,22 +225,38 @@ function PartnerPortal() {
     );
   }
 
-  const data = records.data;
+  const data = !records.isError && records.data?.allowed ? records.data : undefined;
+  const currency = property.data.currency;
+  const askAbout = (subject: string) => {
+    setMessageSubject(subject);
+    setSection("messages");
+  };
 
   return (
-    <Shell title={property.data.property_name} section={section} onSection={setSection}>
-      <section className="neo-partner-hero">
-        <span className="grid size-12 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" /></span>
-        <div className="min-w-0"><p className="neo-commerce-eyebrow">Private relationship</p><h1 className="mt-1 text-2xl font-bold text-white">Partner workspace</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/75">Purchase orders, deliveries, invoices and hotel messages for this relationship only.</p></div>
-      </section>
+    <Shell title={property.data.property_name} property={property.data} section={section} onSection={setSection}
+      supplier={relationships.some((rel) => rel.id === active && rel.relationship_type === "supplier")}>
+      {section === "overview" ? (
+        <section className="neo-partner-hero mt-4">
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/12 text-white"><Handshake className="size-5" aria-hidden /></span>
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold text-white">Partner workspace</h2>
+            <p className="mt-2 text-sm text-white/75">{property.data.content?.partner_note?.trim()
+              || `Follow your orders, deliveries, invoices and messages with ${property.data.property_name}.`}</p>
+          </div>
+        </section>
+      ) : null}
 
       {relationships.length > 1 ? (
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="my-4 flex flex-wrap gap-2">
           {relationships.map((rel) => (
             <button
               key={rel.id}
               type="button"
-              onClick={() => setSelected(rel.id)}
+              aria-pressed={rel.id === active}
+              onClick={() => {
+                setMessageSubject("");
+                void navigate({ search: (prev) => ({ ...prev, relationship: rel.id }) });
+              }}
               className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
                 rel.id === active ? "bg-white text-[#020A1C]" : "bg-white/10 text-white/70"
               }`}
@@ -207,16 +266,26 @@ function PartnerPortal() {
           ))}
         </div>
       ) : (
-        <p className="mb-5 text-sm text-white/60">
+        <p className="my-4 text-sm text-white/70">
           {relationships[0]?.display_name ?? "Your business"} ·{" "}
           {relationships[0]?.relationship_type.replace(/_/g, " ")}
         </p>
       )}
 
       {records.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-white/70">
+        <div role="status" className="flex items-center gap-2 text-sm text-white/70">
           <Loader2 className="size-4 animate-spin" /> Loading your records…
         </div>
+      ) : records.isError || records.data?.allowed === false ? (
+        <Panel>
+          <p role="alert" className="text-sm text-white">
+            {records.isError ? "Your partner records could not load." : refusal[records.data?.reason ?? ""] ?? refusal["no_relationship"]}
+          </p>
+          <button type="button" className="neo-commerce-primary mt-4" onClick={() => {
+            void records.refetch();
+            void context.refetch();
+          }}>Try again</button>
+        </Panel>
       ) : null}
 
       {section === "overview" ? (
@@ -236,24 +305,28 @@ function PartnerPortal() {
               </dl>
             </Panel>
           ) : null}
-          {data ? <PortalSummary data={data} /> : null}
+          {data ? <PortalSummary data={data} currency={currency} onSection={setSection} /> : null}
         </>
       ) : null}
 
-      {section === "orders" ? (
-        <RecordTable title="Purchase orders" rows={data?.purchase_orders} />
+      {section === "quotes" && branchId && active && relationships.some((rel) => rel.id === active && rel.relationship_type === "supplier")
+        ? <PartnerQuotes key={active} branch={branchId} relationship={active} /> : null}
+      {data && section === "orders" ? (
+        <PartnerRecordsList key={active} kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
+          onDownload={(number) => void downloadOrder(number)} downloading={downloadingOrder} />
       ) : null}
-      {section === "deliveries" ? (
-        <RecordTable title="Deliveries received" rows={data?.deliveries} />
+      {data && section === "deliveries" ? (
+        <PartnerRecordsList key={active} kind="deliveries" rows={data.deliveries ?? []} currency={currency} onAsk={askAbout} />
       ) : null}
-      {section === "invoices" ? (
+      {data && section === "invoices" ? (
         <>
-          <RecordTable title="Invoices and payment status" rows={data?.invoices} />
-          <CreditInvoices branchId={branchId} relationshipId={active} />
+          <PartnerRecordsList key={active} kind="invoices" rows={data.invoices ?? []} currency={currency} onAsk={askAbout} />
+          <CreditInvoices key={active} branchId={branchId} relationshipId={active} onAsk={askAbout} />
         </>
       ) : null}
-      {section === "messages" ? (
-        <PartnerMessages account={data?.corporate_account ?? null} relationshipId={active} />
+      {data && section === "messages" ? (
+        <PartnerMessages key={`${active}:${messageSubject}`} account={data?.corporate_account ?? null}
+          relationshipId={active} initialSubject={messageSubject} />
       ) : null}
     </Shell>
   );
@@ -264,32 +337,22 @@ function PartnerPortal() {
  * It counts only the records the hotel has already shared with this partner —
  * nothing is estimated, and an empty portal says so plainly.
  */
-function PortalSummary({ data }: { data: PartnerRecords }) {
-  const open = (rows: Record<string, unknown>[] | undefined, closed: string[]) =>
-    (rows ?? []).filter((r) => {
-      const status = String(r["status"] ?? r["payment_status"] ?? "").toLowerCase();
-      return status ? !closed.includes(status) : true;
-    });
-
-  const pendingOrders = open(data.purchase_orders, ["received", "closed", "cancelled", "completed"]);
-  const unpaidInvoices = open(data.invoices, ["paid", "settled", "cancelled", "void"]);
-  const outstanding = unpaidInvoices.reduce((sum, r) => {
-    const explicit = r["balance_due"] ?? r["outstanding"];
-    const gross = Number(r["amount"] ?? r["total_amount"] ?? 0);
-    const paid = Number(r["paid_amount"] ?? 0);
-    const value =
-      explicit != null
-        ? Number(explicit)
-        : (Number.isFinite(gross) ? gross : 0) - (Number.isFinite(paid) ? paid : 0);
-    return sum + (Number.isFinite(value) ? value : 0);
-  }, 0);
-
-
-  const tiles = [
-    { label: "Pending orders", value: String(pendingOrders.length), icon: ShoppingBag },
-    { label: "Deliveries recorded", value: String((data.deliveries ?? []).length), icon: PackageCheck },
-    { label: "Unpaid invoices", value: String(unpaidInvoices.length), icon: FileText },
-    { label: "Outstanding amount", value: outstanding > 0 ? outstanding.toLocaleString() : "Clear", icon: MessageSquareText },
+function PortalSummary({ data, currency, onSection }: {
+  data: PartnerRecords;
+  currency: string | null | undefined;
+  onSection: (section: PartnerSection) => void;
+}) {
+  const pendingOrders = (data.purchase_orders ?? []).filter((row) =>
+    !["received", "closed", "cancelled", "completed"].includes(String(row["status"])));
+  const unpaidInvoices = (data.invoices ?? []).filter((row) =>
+    !["paid", "settled", "cancelled", "void", "voided"].includes(String(row["status"]))
+      && Number(row["amount"]) > Number(row["paid_amount"] ?? 0));
+  const outstanding = unpaidInvoices.reduce((sum, row) => sum + Number(row["amount"]) - Number(row["paid_amount"] ?? 0), 0);
+  const tiles: { section: PartnerSection; label: string; value: string; icon: typeof ShoppingBag }[] = [
+    { section: "orders", label: "Pending orders", value: String(pendingOrders.length), icon: ShoppingBag },
+    { section: "deliveries", label: "Deliveries recorded", value: String(data.deliveries?.length ?? 0), icon: PackageCheck },
+    { section: "invoices", label: "Outstanding supplier invoices", value: formatPartnerAmount(outstanding, currency), icon: FileText },
+    { section: "messages", label: "Hotel messages", value: "Open inbox", icon: MessageSquareText },
   ];
 
   return (
@@ -297,54 +360,104 @@ function PortalSummary({ data }: { data: PartnerRecords }) {
       <h2 className="text-sm font-semibold text-white">Your account with this hotel</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((t) => { const Icon=t.icon; return (
-          <div key={t.label} className="rounded-2xl border border-white/10 bg-white/[.07] p-4">
+          <button key={t.label} type="button" onClick={() => onSection(t.section)}
+            className="min-w-0 rounded-2xl border border-white/10 bg-white/[.07] p-4 text-left hover:bg-white/15">
             <div className="flex items-center justify-between gap-2"><p className="text-[0.7rem] font-bold uppercase tracking-[.12em] text-white/65">{t.label}</p><Icon className="size-4 text-white/60" /></div>
-            <p className="mt-3 truncate text-xl font-bold text-white">{t.value}</p>
-          </div>
+            <p className="mt-3 break-words text-xl font-bold text-white">{t.value}</p>
+          </button>
         )})}
       </div>
     </Panel>
   );
 }
 
-function RecordTable({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Record<string, unknown>[] | undefined;
+function formatPartnerAmount(value: unknown, currency: string | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  const code = currency?.toUpperCase();
+  return `${code && /^[A-Z]{3}$/.test(code) ? code + " " : ""}${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const recordFields = {
+  orders: { title: "Purchase orders", reference: "order_number", amount: "total_amount", dates: [["Expected delivery", "expected_date"], ["Created", "created_at"]] },
+  deliveries: { title: "Deliveries received", reference: "grn_number", amount: "total_value", dates: [["Received", "received_at"]] },
+  invoices: { title: "Invoices and payment status", reference: "invoice_number", amount: "amount", dates: [["Due", "due_date"], ["Issued", "invoice_date"]] },
+  credit: { title: "Credit invoices from this hotel", reference: "invoice_number", amount: "total", dates: [["Due", "due_date"], ["Issued", "issue_date"]] },
+} as const;
+
+const partnerDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
+
+function formatPartnerDate(value: unknown) {
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? partnerDate.format(date) : "—";
+}
+
+function PartnerRecordsList({ kind, rows, currency, onAsk, onDownload, downloading }: {
+  kind: keyof typeof recordFields;
+  rows: Record<string, unknown>[];
+  currency?: string | null | undefined;
+  onAsk: (subject: string) => void;
+  onDownload?: (number: string) => void;
+  downloading?: string | null;
 }) {
-  if (!rows) return null;
+  const fields = recordFields[kind];
+  const [query, setQuery] = useState("");
+  const search = query.trim().toLowerCase();
+  const visible = rows.filter((row) => !search || [row[fields.reference], row["status"]].some(
+    (value) => String(value ?? "").replace(/[_-]/g, " ").toLowerCase().includes(search.replace(/[_-]/g, " ")),
+  ));
   return (
     <Panel>
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-white">{fields.title}</h2>
+        {rows.length ? <span className="text-xs tabular-nums text-white/75" role="status">{visible.length} of {rows.length}</span> : null}
+      </div>
+      {rows.length ? (
+        <label className="mt-3 flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-white">
+          <Search className="size-4 shrink-0" aria-hidden />
+          <span className="sr-only">Search {fields.title.toLowerCase()}</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by reference or status" className="min-w-0 flex-1 bg-transparent py-2 text-sm placeholder:text-white/65" />
+        </label>
+      ) : null}
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-white/60">Nothing recorded for your business yet.</p>
+      ) : visible.length === 0 ? (
+        <p className="mt-3 text-sm text-white/75">No matching records. <button type="button" className="min-h-11 underline" onClick={() => setQuery("")}>Clear search</button></p>
       ) : (
-        <div className="neo-table-scroll mt-3">
-          <table className="w-full min-w-[36rem] table-fixed text-left text-xs text-white/70">
-            <thead>
-              <tr>
-                {Object.keys(rows[0]!).map((key) => (
-                  <th key={key} className="truncate pb-2 pr-4 font-semibold text-white/65" title={key.replace(/_/g, " ")}>
-                    {key.replace(/_/g, " ")}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={index} className="border-t border-white/5">
-                  {Object.values(row).map((value, i) => (
-                    <td key={i} className="truncate py-2 pr-4" title={value === null || value === "" ? "—" : String(value)}>
-                      {value === null || value === "" ? "—" : String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+          {visible.map((row, index) => {
+            const reference = String(row[fields.reference] ?? "");
+            const rowCurrency = typeof row["currency"] === "string" ? row["currency"] : currency;
+            const paidAmount = row["paid_amount"] ?? row["amount_paid"];
+            return (
+              <li key={`${reference}:${index}`} className="min-w-0 rounded-2xl border border-white/10 bg-white/[.07] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="break-words font-semibold text-white">{reference || "Reference pending"}</h3>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs capitalize text-white/85">{String(row["status"] ?? "Status pending").replace(/[_-]/g, " ")}</span>
+                </div>
+                <dl className="mt-3 space-y-1 text-sm text-white/75">
+                  <div className="flex justify-between gap-2"><dt>Total</dt><dd className="font-medium text-white">{formatPartnerAmount(row[fields.amount], rowCurrency)}</dd></div>
+                  {fields.dates.map(([label, field]) => row[field] ? (
+                    <div key={field} className="flex justify-between gap-2"><dt>{label}</dt><dd>{formatPartnerDate(row[field])}</dd></div>
+                  ) : null)}
+                  {paidAmount != null ? <div className="flex justify-between gap-2"><dt>Paid</dt><dd>{formatPartnerAmount(paidAmount, rowCurrency)}</dd></div> : null}
+                  {kind === "credit" && row["balance"] != null ? <div className="flex justify-between gap-2"><dt>Balance</dt><dd>{formatPartnerAmount(row["balance"], rowCurrency)}</dd></div> : null}
+                  {row["invoiced_amount"] != null ? <div className="flex justify-between gap-2"><dt>Invoiced</dt><dd>{formatPartnerAmount(row["invoiced_amount"], rowCurrency)}</dd></div> : null}
+                  {row["is_partial"] === true ? <div><dt>Partial delivery</dt></div> : null}
+                  {row["match_status"] ? <div className="flex justify-between gap-2"><dt>Matching</dt><dd className="capitalize">{String(row["match_status"]).replace(/[_-]/g, " ")}</dd></div> : null}
+                </dl>
+                {reference ? <button type="button" onClick={() => onAsk(reference)} className="mt-3 min-h-11 text-sm font-medium text-white underline underline-offset-4">Ask the hotel about {reference}</button> : null}
+                {reference && onDownload &&
+                  ["approved","sent","partially-received","received","completed","closed"].includes(String(row["status"])) ? (
+                    <button type="button" className="neo-commerce-primary ml-2" disabled={Boolean(downloading)}
+                      onClick={() => onDownload(reference)}>
+                      {downloading === reference ? "Preparing PDF…" : "Download LPO"}
+                    </button>
+                  ) : null}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Panel>
   );
@@ -362,9 +475,11 @@ function Panel({ children }: { children: React.ReactNode }) {
 function PartnerMessages({
   account,
   relationshipId,
+  initialSubject,
 }: {
   account: Record<string, unknown> | null;
   relationshipId: string | null;
+  initialSubject: string;
 }) {
   const email = account?.["email"] ? String(account["email"]) : "";
   const phone = account?.["phone"] ? String(account["phone"]) : "";
@@ -372,14 +487,14 @@ function PartnerMessages({
   const send = useSendPartnerMessage(relationshipId);
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [body, setBody] = useState("");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
 
   const list: PartnerThread[] = threads.data ?? [];
   const active = list.find((t) => t.id === openThread) ?? null;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || send.isPending) return;
     send.mutate(
       { body, threadId: active?.id ?? null, subject: active ? undefined : subject },
       {
@@ -399,6 +514,8 @@ function PartnerMessages({
 
       {threads.isLoading ? (
         <p className="mt-2 text-sm text-white/60">Loading your conversations…</p>
+      ) : threads.isError ? (
+        <button type="button" onClick={() => void threads.refetch()} className="mt-2 text-sm text-white underline">Messages could not load. Try again</button>
       ) : list.length === 0 ? (
         <p className="mt-2 text-sm text-white/65">
           You have no messages with this hotel yet. Start one below.
@@ -451,6 +568,7 @@ function PartnerMessages({
         {!active ? (
           <input
             value={subject}
+            aria-label="Message subject"
             onChange={(e) => setSubject(e.target.value)}
             placeholder="What is this about?"
             className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/60"
@@ -458,6 +576,7 @@ function PartnerMessages({
         ) : null}
         <textarea
           value={body}
+          aria-label="Message"
           onChange={(e) => setBody(e.target.value)}
           rows={3}
           placeholder={active ? `Reply in ${active.subject}` : "Write your message"}
@@ -522,16 +641,26 @@ function PartnerIdentityMenu() {
 function Shell({
   title,
   children,
+  property,
   section,
   onSection,
+  supplier = false,
 }: {
   title: string;
   children: React.ReactNode;
+  property?: PublicProperty | null | undefined;
   section?: PartnerSection;
   onSection?: (next: PartnerSection) => void;
+  supplier?: boolean;
 }) {
+  const primary = normalizedHex(property?.brand?.primary || brandFallback.primary);
+  const secondary = normalizedHex(property?.brand?.accent || brandFallback.secondary, brandFallback.secondary);
+  const background = normalizedHex(property?.brand?.surface || brandFallback.background, brandFallback.background);
   return (
-    <PublicSurface>
+    <PublicSurface className="neo-branded-app" style={{
+      ...(property?.brand ? brandStyle(property.brand) : {}),
+      "--pa-primary": primary, "--pa-on-primary": primaryInk(primary), "--pa-secondary": secondary, "--pa-background": background,
+    } as React.CSSProperties}>
       <PublicTopBar
         homeTo="/"
         width="max-w-4xl"
@@ -539,23 +668,28 @@ function Shell({
       />
       <PullToRefresh>
        <main className="mx-auto w-full max-w-4xl min-w-0 px-5 pb-20 pt-8">
-         <Display className="break-words text-3xl sm:text-5xl">{title}</Display>
+         <div className="flex min-w-0 items-center gap-4">
+           {property ? <BrandMark workspace={{ hotel_name: title, app_name: "Partner portal",
+             logo_url: property.media?.logo_url || property.logo_url, primary_color: primary, button_style: "rounded" }} /> : null}
+           <Display className="min-w-0 break-words text-3xl sm:text-5xl">{title}</Display>
+         </div>
         {section && onSection ? (
           <nav
             aria-label="Partner sections"
-            className="neo-partner-tabs mt-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"
+            className={`neo-partner-tabs mt-6 grid gap-1 ${supplier ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-5"}`}
           >
-            {SECTIONS.map((s) => (
+            {SECTIONS.filter(({ key }) => key !== "quotes" || supplier).map(({ key, label, icon: Icon }) => (
               <button
-                key={s.key}
+                key={key}
                 type="button"
-                onClick={() => onSection(s.key)}
-                aria-current={s.key === section ? "page" : undefined}
-                className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                  s.key === section ? "bg-white text-[#020A1C] shadow-sm" : "bg-white/10 text-white/80 hover:bg-white/15"
+                onClick={() => onSection(key)}
+                aria-current={key === section ? "page" : undefined}
+                className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-2 text-[.625rem] font-semibold transition-colors sm:flex-row sm:gap-2 sm:text-xs ${
+                  key === section ? "bg-[var(--pa-primary)] text-[var(--pa-on-primary)] shadow-sm" : "text-white/85 hover:bg-white/15"
                 }`}
               >
-                {s.label}
+                <Icon className="size-4 shrink-0" aria-hidden />
+                {label}
               </button>
             ))}
           </nav>
@@ -578,13 +712,16 @@ function Shell({
 function CreditInvoices({
   branchId,
   relationshipId,
+  onAsk,
 }: {
   branchId: string | null;
   relationshipId: string | null;
+  onAsk: (subject: string) => void;
 }) {
   const invoices = usePartnerCreditInvoices(branchId, relationshipId);
+  if (invoices.isError) return <Panel><button type="button" className="text-white underline" onClick={() => void invoices.refetch()}>Credit invoices could not load. Try again</button></Panel>;
   if (invoices.isLoading) return null;
   const rows = invoices.data ?? [];
   if (rows.length === 0) return null;
-  return <RecordTable title="Credit invoices from this hotel" rows={rows} />;
+  return <PartnerRecordsList kind="credit" rows={rows} onAsk={onAsk} />;
 }

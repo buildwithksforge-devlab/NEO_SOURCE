@@ -52,6 +52,7 @@ export const TEST_ROLES: { key: string; roleName: string; department: string | n
   { key: "chef", roleName: "Chef", department: "Kitchen", name: "TEST Chef" },
   { key: "housekeeper", roleName: "Housekeeper", department: "Housekeeping", name: "TEST Housekeeper" },
   { key: "procurement", roleName: "Procurement Officer", department: "Procurement", name: "TEST Procurement Officer" },
+  { key: "receiving_clerk", roleName: "Receiving Clerk", department: "Inventory & Stores", name: "TEST Receiving Clerk" },
   { key: "storekeeper", roleName: "Storekeeper", department: "Inventory & Stores", name: "TEST Storekeeper" },
   { key: "events", roleName: "Events Manager", department: "Events", name: "TEST Events Manager" },
   { key: "maintenance", roleName: "Maintenance Officer", department: "Maintenance", name: "TEST Maintenance Officer" },

@@ -33,10 +33,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { simulationConnectionActions } from "@/lib/simulation/connection-status";
 import {
   useCleanTestEnvironment,
   useCreateTestEnvironment,
   useRunSystemTest,
+  useSimulationServiceHealth,
   useTestEnvironments,
   useTestResults,
   useTestRunsHistory,
@@ -147,6 +149,7 @@ function SourceRef({ row }: { row: TestResult }) {
 
 function SimulationCentre() {
   const environments = useTestEnvironments();
+  const service = useSimulationServiceHealth();
   const runs = useTestRunsHistory();
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [detail, setDetail] = useState<TestResult | null>(null);
@@ -163,10 +166,13 @@ function SimulationCentre() {
 
   const allEnvironments = environments.data ?? [];
   const active = allEnvironments.filter((e) => e.status === "active");
+  const cleanable = allEnvironments.filter((e) => e.status === "active" || e.status === "cleanup_failed");
   const shownEnvironments = showAllEnvironments ? allEnvironments : active;
   const current = (runs.data ?? []).find((r) => r.id === activeRun) ?? null;
   const totals = current?.totals ?? {};
   const running = current?.status === "running";
+  const cannotReachRegistry = service.data?.available === false;
+  const registryReady = service.isSuccess && service.data.available;
 
   const rows = results.data ?? [];
   const attention = useMemo(
@@ -210,12 +216,12 @@ function SimulationCentre() {
 
       <SectionCard
         title="NEØ System Test"
-        description="Create the isolated workspaces, run every workflow end to end, then remove the workspaces and prove nothing was left behind."
+        description="Create isolated workspaces, run the configured suites and verify cleanup."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              disabled={create.isPending}
+              disabled={create.isPending || !registryReady}
               onClick={() =>
                 create.mutate(undefined, {
                   onSuccess: () => toast.success("Test environment created"),
@@ -227,7 +233,7 @@ function SimulationCentre() {
               {create.isPending ? "Creating…" : "Create test environment"}
             </Button>
             <Button
-              disabled={run.isPending || active.length < 2}
+              disabled={run.isPending || running || active.length < 2 || !registryReady || environments.isError}
               onClick={() =>
                 run.mutate(undefined, {
                   onSuccess: (r) => {
@@ -248,7 +254,7 @@ function SimulationCentre() {
             </Button>
             <Button
               variant="ghost"
-              disabled={clean.isPending || active.length === 0}
+              disabled={clean.isPending || running || cleanable.length === 0 || !registryReady || environments.isError}
               onClick={() =>
                 clean.mutate(undefined, {
                   onSuccess: (r) => {
@@ -272,7 +278,26 @@ function SimulationCentre() {
           </div>
         }
       >
-        {allEnvironments.length === 0 ? (
+        {service.isPending ? <p role="status" className="mb-3 text-sm text-muted-foreground">Checking the test registry…</p> : null}
+        {service.data || service.isError ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+            <p role={cannotReachRegistry || service.isError ? "alert" : "status"}>
+              {service.data?.issue ? simulationConnectionActions[service.data.issue]
+                : service.isError ? "The Simulation server connection could not be verified."
+                : "The server can read the isolated test registry."}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => void service.refetch()} disabled={service.isFetching}>Recheck connection</Button>
+          </div>
+        ) : null}
+        {cannotReachRegistry || service.isError ? (
+          <p className="mb-3 text-sm text-muted-foreground">On a development computer, run <code>npm run test:simulation:local</code> to check workflows with isolated fixtures.</p>
+        ) : null}
+        {environments.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading test environments…</p>
+        : environments.isError ? <div className="flex flex-wrap items-center gap-2 text-sm" role="alert">
+          <p className="text-destructive">Test environments couldn’t be read.</p>
+          <Button size="sm" variant="outline" onClick={() => void environments.refetch()}>Retry registry</Button>
+        </div>
+        : allEnvironments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No test environment exists yet. Create one to run the system test.
           </p>

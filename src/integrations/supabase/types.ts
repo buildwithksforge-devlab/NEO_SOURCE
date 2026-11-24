@@ -30562,6 +30562,7 @@ export type Database = {
           item_name: string
           line_total: number
           menu_item_id: string | null
+          selection_modifiers: Json | null
           modifier_total: number
           normal_selling_price: number | null
           order_id: string
@@ -30596,6 +30597,7 @@ export type Database = {
           item_name: string
           line_total?: number
           menu_item_id?: string | null
+          selection_modifiers?: Json | null
           modifier_total?: number
           normal_selling_price?: number | null
           order_id: string
@@ -30630,6 +30632,7 @@ export type Database = {
           item_name?: string
           line_total?: number
           menu_item_id?: string | null
+          selection_modifiers?: Json | null
           modifier_total?: number
           normal_selling_price?: number | null
           order_id?: string
@@ -30796,6 +30799,7 @@ export type Database = {
           order_type: string
           organization_id: string
           paid_total: number
+          room_transfer_paid_total: number | null
           payment_status: string
           room_id: string | null
           sent_at: string | null
@@ -49904,6 +49908,7 @@ export type Database = {
           vehicle_type: string
         }[]
       }
+      neo_delivery_dispatch_claim: { Args: { _job: string }; Returns: boolean }
       neo_delivery_dispatch_mark_sent: {
         Args: {
           _detail?: string

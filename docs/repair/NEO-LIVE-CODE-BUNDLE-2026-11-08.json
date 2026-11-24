@@ -1,0 +1,40 @@
+{
+  "code": [
+    {
+      "matches": true,
+      "signature": "public.neo_gl_post(uuid,uuid,text,text,uuid,text,date,text,text,jsonb,uuid,uuid)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_stores_count_submit_variance(uuid,text)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_stores_issue(uuid,jsonb,uuid,uuid,text,text)"
+    },
+    {
+      "matches": true,
+      "signature": "public.pos_record_payment_attempt(uuid,numeric,text,numeric,text,uuid,text,boolean,text,uuid)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_cash_till_context(uuid)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_cash_request_payment(uuid,numeric,text,text,text)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_cash_request_pos_payment(uuid,numeric,text,text,text)"
+    },
+    {
+      "matches": true,
+      "signature": "public.neo_cash_settle_request(uuid)"
+    }
+  ],
+  "definitions_match": true,
+  "diagnostic_version": "code-bundle-95-105-live-v1",
+  "read_only": "on",
+  "scope": "Eight code functions only. No existing order, till, payment, stock count, movement, journal or period is changed by installation."
+}

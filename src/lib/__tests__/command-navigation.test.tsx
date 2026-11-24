@@ -20,6 +20,28 @@ import {
 import { isTypingTarget, resolveShortcut, shortcutLabel } from "@/lib/keyboard-shortcuts";
 import { RecordBreadcrumbs, RelatedRecords } from "@/components/common/RecordBreadcrumbs";
 
+vi.mock("@/components/common/PermittedLink", () => ({
+  usePagePermitted: () => () => true,
+  PermittedLink: ({
+    children,
+    to,
+    className,
+    "aria-current": ariaCurrent,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+    "aria-current"?: React.AriaAttributes["aria-current"];
+  }) => (
+    <a
+      href={to}
+      className={className}
+      aria-current={ariaCurrent}
+    >
+      {children}
+    </a>
+  ),
+}));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
     <a href={to} {...rest}>

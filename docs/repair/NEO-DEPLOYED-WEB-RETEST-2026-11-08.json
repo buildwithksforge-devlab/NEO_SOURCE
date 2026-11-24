@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "origin": "https://neo-preview.neo-hospitality.workers.dev",
+  "sourceId": "fc9e4adcd8389bde",
+  "cloudflareVersion": "97d6c983-a57c-4c64-8d6c-39067a103527",
+  "rows": [
+    {
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "cacheControl": "private, no-store",
+      "buildId": "fc9e4adcd8389bde"
+    },
+    {
+      "path": "/auth",
+      "status": 200,
+      "location": null,
+      "cacheControl": "private, no-store",
+      "buildId": "fc9e4adcd8389bde"
+    },
+    {
+      "path": "/pos/orders",
+      "status": 200,
+      "location": null,
+      "cacheControl": "private, no-store",
+      "buildId": "fc9e4adcd8389bde",
+      "clientGuardVerifiedDestination": "/auth?redirect=%2Fpos%2Forders",
+      "routeSsr": false
+    }
+  ],
+  "browser": {
+    "authFormRendered": true,
+    "emailInputs": 1,
+    "passwordInputs": 1,
+    "consoleErrors": 0,
+    "horizontalOverflow": false,
+    "sourceId": "fc9e4adcd8389bde"
+  },
+  "scope": "Public HTTP and isolated sign-in browser retest only; no login, password reset, order, payment or operational workflow was submitted."
+}

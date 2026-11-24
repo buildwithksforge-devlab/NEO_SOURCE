@@ -1,14 +1,19 @@
+import { PaymentDialog } from "@/components/pos/PosPaymentDialog";
+import {PosRefundPanel} from "@/components/pos/PosRefundPanel";
+import {outstandingPaidBill} from '@/lib/pos-payment-display';
+import {posRoomTransferState} from '@/lib/pos-room-transfer';
 import { MENU_OUTLET_LABELS, outletForOrder, scopeCatalogueToOutlet } from "@/lib/menu-scoping";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BedDouble, Send, Trash2 } from "lucide-react";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
 import { FileWithKraButton } from "@/components/finance/FileWithKraButton";
 import { getPosFiscalStatus } from "@/lib/etims.functions";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { AddItemDialog } from "@/components/pos/AddItemDialog";
+import { StockAwareMenuItem } from "@/components/pos/StockAwareMenuItem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,19 +42,10 @@ import {
   PosGuard,
   QueryState,
 } from "@/components/pos/PosShared";
-import { methodsFor, PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
-import { ReceivingAccountSelect } from "@/components/payments/ReceivingAccountSelect";
-import { QrPaymentPanel } from "@/components/payments/QrPaymentPanel";
 import { useAuth } from "@/lib/auth";
-import { useRequestPosCashPayment, useTillContext } from "@/lib/cash-routing";
-import {
-  useDispatchPaymentIntent,
-  useOpenPaymentIntent,
-  usePaymentIntentStatus,
-} from "@/lib/payment-intents";
-import { paymentMethod } from "@/lib/payment-methods";
+import { usePendingPosCashRequests } from "@/lib/cash-routing";
 import { SendToPrinterButton } from "@/components/common/SendToPrinterButton";
-import { COURSES, EXTERNAL_METHODS, allowedTransitions, money, titleCase } from "@/lib/pos";
+import { COURSES, allowedTransitions, money, titleCase } from "@/lib/pos";
 import {
   useAddOrderItem,
   useCheckedInStays,
@@ -59,14 +55,17 @@ import {
   useOpenFolioForStay,
   explainPosStatusError,
   usePosOrder,
+  usePosStockAvailability,
   usePosOrderDiagnostics,
   usePostRoomCharge,
   usePosDiscountPolicies,
   useApplyPosDiscount,
   useConfirmManualPayment,
-  useRecordPayment,
+  useSubmitMpesaReceiptReview,
+  useMpesaReceiptReviewQueue,
   useReconcileSettlement,
   useRemoveDraftItem,
+  useRemoveDraftOrder,
   useRequestVoid,
   useSendOrder,
   useUpdateItemStatus,
@@ -98,10 +97,31 @@ export const Route = createFileRoute("/_shell/pos/orders/$id")({
   ),
 });
 
+function SavedItemTaxes({ snapshot }: { snapshot: unknown }) {
+  if (!snapshot || typeof snapshot !== "object" || !("taxes" in snapshot) || !Array.isArray(snapshot.taxes)) return null;
+  return (
+    <ul className="text-xs text-muted-foreground" aria-label="Saved item taxes before bill discounts">
+      {snapshot.taxes.map((tax, index) => {
+        if (!tax || typeof tax.name !== "string" || typeof tax.amount !== "number") return null;
+        const rate = tax.method === "percentage" && typeof tax.value === "number" && Number.isFinite(tax.value)
+          ? `${new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 4 }).format(tax.value)} `
+          : "";
+        return <li key={`${tax.code}-${index}`}>{rate}{tax.name} · {money(tax.amount)} {tax.inclusive ? "included" : "added"}</li>;
+      })}
+    </ul>
+  );
+}
+
 function OrderTerminal() {
+  const navigate = useNavigate();
   const { id } = Route.useParams();
   const { can } = useAuth();
   const order = usePosOrder(id);
+  const stockOut = usePosStockAvailability(order.data?.branch_id, order.data?.order_type);
+  const [stockIssue, setStockIssue] = useState<string | null>(null);
+  const removeDraftOrder = useRemoveDraftOrder();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeReason, setRemoveReason] = useState("");
   // The terminal sells only from the canonical catalogue: published, scoped
   // rows carrying the station the ticket will actually be routed to.
   const items = useMenuCatalogue(false, order.data?.branch_id ?? null);
@@ -129,10 +149,16 @@ function OrderTerminal() {
   const requestVoid = useRequestVoid();
   const reconcile = useReconcileSettlement();
   const confirmManual = useConfirmManualPayment();
-  const canManualConfirm = can("pos", "orders.approve");
-  const discountPolicies = usePosDiscountPolicies();
+  const canManualConfirm = can("pos", "payments", "manual-confirm");
+  const canSubmitReceipt = can("pos", "payments", "process") || canManualConfirm
+    || can("finance", "collections", "verify_bill")
+    || can("finance", "till", "confirm_cash") || can("finance", "approve");
+  const submitReceipt = useSubmitMpesaReceiptReview();
+  const receiptReviews = useMpesaReceiptReviewQueue(order.data?.branch_id ?? null);
+  const discountPolicies = usePosDiscountPolicies(order.data?.branch_id, order.data?.order_type);
   const applyDiscount = useApplyPosDiscount();
   const receiptPrintState = usePosReceiptPrintState(id);
+  const pendingCash = usePendingPosCashRequests(id);
   const hasCompletedReceiptPrint = receiptPrintState.data?.hasCompletedPrint ?? false;
   const canReprintReceipt = can("pos", "receipts.reprint");
   const loadPosFiscalStatus = useServerFn(getPosFiscalStatus);
@@ -174,6 +200,7 @@ function OrderTerminal() {
     method: string;
   } | null>(null);
   const [confirmNote, setConfirmNote] = useState("");
+  const [confirmReceipt, setConfirmReceipt] = useState("");
 
   const q = search.trim().toLowerCase();
   // A bar tab sells the bar's menus, not the whole hotel catalogue: the
@@ -190,7 +217,7 @@ function OrderTerminal() {
   const scoped = scopeCatalogueToOutlet(items.data ?? [], outlet);
   const menuRows = scoped.rows.filter(
     (m) =>
-      m.availability !== "discontinued" &&
+      ["available", "out-of-stock"].includes(m.availability) && m.publish_status === "published" &&
       (category === "all" || m.category_id === category) &&
       (!q || m.name.toLowerCase().includes(q)),
   );
@@ -206,10 +233,21 @@ function OrderTerminal() {
   // A draft line with no production station would be marked Sent while the
   // kitchen never sees it, so Send is refused until every line can be routed.
   const unroutable = unsent.filter((l) => !l.station_id);
-  const balance = Number(data?.grand_total ?? 0) - Number(data?.paid_total ?? 0);
+  const activeReceiptReview = (data?.pos_payments ?? []).some(payment => receiptReviews.data?.some(review =>
+    review.payment_id === payment.id && ["pending_approval", "approved_pending_execution", "executing", "execution_failed"].includes(review.status)));
+  const roomTransfer = posRoomTransferState(data, activeReceiptReview);
+  const reviewsUnknown = receiptReviews.isPending || receiptReviews.isFetching || receiptReviews.isError;
+  const canTransferRoom = roomTransfer.canTransfer && !reviewsUnknown;
+  const roomTransferReason = reviewsUnknown ? "Receipt reviews could not yet be verified. Refresh before transferring this bill." : roomTransfer.reason;
+  const balance = roomTransfer.amountDue ?? 0;
   const openItems = lines.filter(
     (l) => !["served", "cancelled", "voided"].includes(l.status),
   ).length;
+  const removableDraft = data?.status === "draft" && data.payment_status === "unpaid"
+    && Number(data.paid_total ?? 0) === 0 && !data.folio_id
+    && (data.pos_payments ?? []).length === 0
+    && lines.every(line => ["draft", "cancelled", "voided"].includes(line.status));
+  const mayRemoveDraft = can("restaurant", "orders.void") || can("restaurant", "approvals.approve");
 
   return (
     <div>
@@ -225,11 +263,19 @@ function OrderTerminal() {
           data ? (
             <>
               <OrderStatusBadge status={data.status} />
+              {outstandingPaidBill(data) ? (
+                <span className="text-sm font-medium text-destructive">Payment outstanding</span>
+              ) : null}
+              {removableDraft && mayRemoveDraft ? (
+                <Button variant="destructive" onClick={() => setRemoveOpen(true)}>
+                  <Trash2 className="mr-2 size-4" /> Delete draft order
+                </Button>
+              ) : null}
 
               <DocumentPrintButton
                 type="pos_receipt"
                 id={data.id}
-                label="Receipt PDF"
+                label={fiscalAccepted ? "Fiscal Receipt PDF" : "Receipt PDF"}
                 size="default"
               />
 
@@ -242,12 +288,6 @@ function OrderTerminal() {
                       : ""}
                   </span>
 
-                  <DocumentPrintButton
-                    type="pos_receipt"
-                    id={data.id}
-                    label="Fiscal Receipt PDF"
-                    size="default"
-                  />
                 </>
               ) : fiscalEligible && fiscalPending ? (
                 <span className="text-xs text-muted-foreground">
@@ -261,29 +301,38 @@ function OrderTerminal() {
                 />
               ) : null}
 
-              {!receiptPrintState.isLoading && !hasCompletedReceiptPrint ? (
+              {receiptPrintState.isError ? (
+                <Button size="sm" variant="outline" onClick={() => void receiptPrintState.refetch()}>
+                  Reload receipt print status
+                </Button>
+              ) : receiptPrintState.data && !hasCompletedReceiptPrint ? (
                 <SendToPrinterButton
                   type="pos_receipt"
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
-                  label="Send to receipt printer"
+                  branchId={data.branch_id}
+                  existingJobId={receiptPrintState.data.inProgressId}
+                  label={receiptPrintState.data.inProgressId ? "Track receipt print" : "Send to receipt printer"}
                 />
               ) : !receiptPrintState.isLoading &&
                 hasCompletedReceiptPrint &&
-                canReprintReceipt ? (
+                (canReprintReceipt || receiptPrintState.data?.inProgressId) ? (
                 <SendToPrinterButton
                   type="pos_receipt"
                   id={data.id}
                   documentNumber={data.order_number}
                   role="restaurant"
-                  label="Reprint receipt"
+                  branchId={data.branch_id}
+                  existingJobId={receiptPrintState.data?.inProgressId ?? null}
+                  label={receiptPrintState.data?.inProgressId ? "Track receipt print" : "Reprint receipt"}
                 />
               ) : null}
             </>
           ) : null
         }
       />
+      {data ? <PosRefundPanel key={data.id} orderId={data.id}/> : null}
 
       <QueryState
         isLoading={order.isLoading}
@@ -355,28 +404,35 @@ function OrderTerminal() {
                 >
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {menuRows.map((m) => (
-                      <button
+                      <StockAwareMenuItem
                         key={m.id}
+                        name={m.name}
+                        onUnavailable={(reason) => setStockIssue(`${m.name}: ${reason}`)}
                         disabled={
                           !can("pos", "orders.create") ||
-                          m.availability === "out-of-stock" ||
-                          m.station_missing
+                          m.publish_status !== "published"
                         }
-                        title={
+                        unavailableReason={
                           m.station_missing
                             ? "This item has no production station, so the kitchen would never receive it."
-                            : undefined
+                            : m.availability !== "available" ? stockOut.data?.get(m.id) || "This item is marked out of stock for this property." : null
                         }
-                        onClick={() =>
+                        checkStock={async () => {
+                          if (!data.branch_id) return "This bill has no property assigned, so stock cannot be verified.";
+                          const fresh = await stockOut.refetch();
+                          if (fresh.isError) throw fresh.error;
+                          return fresh.data?.get(m.id) ?? null;
+                        }}
+                        onAvailable={() => {
+                          setStockIssue(null);
                           setPendingItem({
                             id: m.id,
                             name: m.name,
                             base_price: m.base_price,
                             tax_rate: m.tax_rate ?? 0,
                             station_id: m.station_id,
-                          })
-                        }
-                        className="rounded-xl border border-border bg-card p-3 text-left transition-shadow hover:shadow-lift disabled:opacity-50"
+                          });
+                        }}
                       >
                         <p className="text-sm font-semibold">{m.name}</p>
                         <p className="text-xs text-muted-foreground">{money(m.base_price)}</p>
@@ -386,7 +442,12 @@ function OrderTerminal() {
                         {m.station_missing ? (
                           <StatusPill tone="destructive">No production station</StatusPill>
                         ) : null}
-                      </button>
+                        {stockOut.data?.has(m.id) && m.availability === "available" ? (
+                          <StatusPill tone="destructive">
+                            {stockOut.data.get(m.id)?.startsWith("Out of stock:") ? "Out of stock" : "Stock check"}
+                          </StatusPill>
+                        ) : null}
+                      </StockAwareMenuItem>
                     ))}
                   </div>
                 </QueryState>
@@ -414,8 +475,7 @@ function OrderTerminal() {
                   ...(choice.instructions ? { instructions: choice.instructions } : {}),
                   ...(choice.allergyNote ? { allergyNote: choice.allergyNote } : {}),
                   ...(choice.modifiers.length ? { modifiers: choice.modifiers } : {}),
-                });
-                setPendingItem(null);
+                }, { onSuccess: () => setPendingItem(null) });
               }}
             />
 
@@ -427,13 +487,22 @@ function OrderTerminal() {
                   <Button
                     size="sm"
                     disabled={unsent.length === 0 || send.isPending || unroutable.length > 0}
-                    onClick={() => send.mutate(data.id)}
+                    onClick={() => { setStockIssue(null); send.mutate(data.id); }}
                   >
                     <Send className="mr-2 size-4" /> Send{" "}
                     {unsent.length ? `(${unsent.length})` : ""}
                   </Button>
                 }
               >
+                {stockIssue ? (
+                  <div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                    <p className="text-sm font-semibold text-destructive">{stockIssue}</p>
+                    <Button variant="ghost" size="sm" onClick={() => setStockIssue(null)}>Dismiss</Button>
+                  </div>
+                ) : null}
+                {Number(data.paid_total ?? 0) > 0 && unsent.length > 0 ? (
+                  <p role="status" className="mb-3 text-sm text-muted-foreground">Payment received. Draft items still need Send; sending checks stock again.</p>
+                ) : null}
                 {unroutable.length > 0 ? (
                   <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
                     <p className="text-sm font-semibold text-destructive">
@@ -488,6 +557,7 @@ function OrderTerminal() {
                             {titleCase(l.course)} · {l.operational_stations?.name ?? "No station"}
                           </p>
                           <ItemStatusBadge status={l.status} />
+                          <SavedItemTaxes snapshot={(l as typeof l & { sales_tax_snapshot?: unknown }).sales_tax_snapshot} />
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="text-sm">{money(l.line_total)}</span>
@@ -559,12 +629,11 @@ function OrderTerminal() {
                             )?.trim();
                             if (!reason) return;
                           }
-                          setDiscountChoice(v);
                           applyDiscount.mutate({
                             orderId: data.id,
                             discountId: v === "none" ? null : v,
                             ...(reason ? { reason } : {}),
-                          });
+                          }, { onSuccess: () => setDiscountChoice(v) });
                         }}
                         disabled={applyDiscount.isPending || !(discountPolicies.data?.length ?? 0)}
                       >
@@ -598,7 +667,7 @@ function OrderTerminal() {
 
                 <dl className="mt-4 space-y-1 border-t border-border pt-3 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Subtotal</dt>
+                    <dt className="text-muted-foreground">Items (including applicable tax)</dt>
                     <dd>{money(data.subtotal)}</dd>
                   </div>
                   {Number(data.discount_total ?? 0) > 0 ? (
@@ -608,11 +677,11 @@ function OrderTerminal() {
                     </div>
                   ) : null}
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Tax</dt>
+                    <dt className="text-muted-foreground">Tax on this bill</dt>
                     <dd>{money(data.tax_total)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Service charge</dt>
+                    <dt className="text-muted-foreground">Service charge (added)</dt>
                     <dd>{money(data.service_charge_total)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
@@ -620,30 +689,35 @@ function OrderTerminal() {
                     <dd>{money(data.grand_total)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Paid</dt>
+                    <dt className="text-muted-foreground">Paid at POS</dt>
                     <dd>{money(data.paid_total)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <dt>Balance</dt>
-                    <dd>{money(balance)}</dd>
+                    <dt>Amount due at POS</dt>
+                    <dd>{roomTransfer.amountDue === null ? "Review money evidence" : money(balance)}</dd>
                   </div>
+                  {roomTransfer.transferred && !roomTransfer.overlap ? <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Balance transferred to guest folio</dt><dd>{money(roomTransfer.transferredBalance ?? 0)}</dd>
+                  </div> : null}
+                  {roomTransfer.credit > 0 ? <div className="flex justify-between"><dt>POS credit / overpayment</dt><dd>{money(roomTransfer.credit)}</dd></div> : null}
                 </dl>
+                <p className="mt-2 text-xs text-muted-foreground">The tax shown in the bill summary is already reflected in the total. Item tax amounts are shown before bill discounts.</p>
 
                 <div className="mt-4 grid gap-2">
                   <Button
-                    disabled={!can("pos", "orders.edit") || balance <= 0}
+                    disabled={!can("pos", "orders.edit") || !roomTransfer.canCollect}
                     onClick={() => setPayOpen(true)}
                   >
                     Take payment
                   </Button>
                   <Button
                     variant="outline"
-                    disabled={!can("pos", "orders.approve") || balance <= 0}
+                    disabled={!can("pos", "orders.approve") || !canTransferRoom}
                     onClick={() => setRoomOpen(true)}
                   >
                     <BedDouble className="mr-2 size-4" /> Charge to room
                   </Button>
-                  {can("pos", "orders.edit") && balance > 0 ? (
+                  {can("pos", "orders.edit") && roomTransfer.canCollect ? (
                     <MpesaPromptDialog
                       sourceModule="pos_order"
                       sourceRecordId={data.id}
@@ -653,7 +727,7 @@ function OrderTerminal() {
                     />
                   ) : null}
 
-                  {data.status !== "closed" && Number(data.grand_total) > 0 ? (
+                  {data.status !== "closed" && !roomTransfer.transferred && roomTransfer.amountDue !== null && Number(data.grand_total) > 0 ? (
                     <Button
                       variant="ghost"
                       disabled={reconcile.isPending}
@@ -662,7 +736,8 @@ function OrderTerminal() {
                       Reconcile &amp; close if eligible
                     </Button>
                   ) : null}
-                  {openItems > 0 && balance <= 0 ? (
+                  {roomTransferReason ? <p className="text-xs text-muted-foreground" role={roomTransfer.overlap ? "alert" : undefined}>{roomTransferReason}</p> : null}
+                  {openItems > 0 && !roomTransfer.transferred && roomTransfer.amountDue !== null && balance <= 0 ? (
                     <p className="text-xs text-muted-foreground">
                       {openItems} item(s) are still in preparation. The bill closes once they are
                       served, cancelled or voided.
@@ -671,57 +746,82 @@ function OrderTerminal() {
                 </div>
               </SectionCard>
 
-              <SectionCard
-                title="Payments"
-                description="Every settlement attempt is recorded, including pending ones."
-              >
+              <SectionCard title="Payments"
+                description="Saved payment attempts and their receipt reviews. A submitted receipt remains unconfirmed until approved.">
+                {receiptReviews.isError ? (
+                  <p role="alert" className="mb-3 text-sm text-destructive">
+                    Receipt-review status could not be refreshed. Check the existing review before resubmitting.
+                  </p>
+                ) : null}
+                {pendingCash.isError ? <p role="alert" className="mb-3 text-sm text-destructive">
+                  Cash requests could not be refreshed. Check with the cashier before sending another request.
+                </p> : null}
+                {(pendingCash.data ?? []).map((request) => (
+                  <p key={request.id} className="mb-3 rounded-xl border p-3 text-sm">
+                    Cash · {money(request.amount)} · Awaiting cashier confirmation
+                  </p>
+                ))}
                 {(data.pos_payments ?? []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+                  pendingCash.data?.length ? null : <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
                 ) : (
-                  <ul className="space-y-2 text-sm">
-                    {data.pos_payments.map((p) => (
-                      <li key={p.id} className="flex items-start justify-between gap-2">
-                        <span className="min-w-0">
-                          {titleCase(p.method)}
-                          {p.external_reference ? ` · ${p.external_reference}` : ""}
-                          {p.verification_note ? (
-                            <span className="block text-xs text-muted-foreground">
-                              Manually confirmed — {p.verification_note}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          {money(p.amount)}
-                          <StatusPill
-                            tone={
-                              p.status === "confirmed"
-                                ? "success"
-                                : p.status === "failed"
-                                  ? "destructive"
-                                  : "warning"
-                            }
-                          >
-                            {titleCase(p.status)}
-                          </StatusPill>
-                          {canManualConfirm &&
-                            (p.status === "pending" || p.status === "initiated") ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                setConfirmPayment({
-                                  id: p.id,
-                                  amount: Number(p.amount),
-                                  method: p.method,
-                                })
-                              }
-                            >
-                              Confirm
-                            </Button>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {data.pos_payments.map((p) => {
+                      const review = receiptReviews.data?.find((r) => r.payment_id === p.id);
+                      const reviewing = review && [
+                        "pending_approval", "approved_pending_execution", "executing", "execution_failed",
+                      ].includes(review.status);
+                      const pending = ["pending", "initiated", "failed"].includes(p.status);
+                      return (
+                        <li key={p.id} className="rounded-xl border border-border p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{titleCase(p.method)} · {money(p.amount)}</p>
+                              {p.external_reference ? (
+                                <p className="break-all text-xs text-muted-foreground">{p.external_reference}</p>
+                              ) : null}
+                              {p.verification_note ? (
+                                <p className="mt-1 text-xs text-muted-foreground">{p.verification_note}</p>
+                              ) : null}
+                              {review ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Receipt {review.receipt}: {titleCase(review.status.replaceAll("_", " "))}
+                                </p>
+                              ) : null}
+                              {review?.execution_error ? (
+                                <p className="mt-1 text-xs text-destructive">{review.execution_error}</p>
+                              ) : null}
+                            </div>
+                            <StatusPill tone={p.status === "confirmed" ? "success" : p.status === "failed" ? "destructive" : "warning"}>
+                              {p.provider_status === "manager-reviewed" ? "Cashier / supervisor reviewed" : titleCase(p.status)}
+                            </StatusPill>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {p.method === "mpesa" && can("pos", "payments", "process")
+                              && (pending || p.provider_status === "manager-reviewed") ? (
+                              <MpesaPromptDialog sourceModule="pos_order" sourceRecordId={data.id}
+                                paymentId={p.id} recoveryOnly triggerLabel="Check Safaricom"
+                                balance={balance} initialAmount={Number(p.amount)}
+                                onSettled={() => void order.refetch()} />
+                            ) : null}
+                            {p.method === "mpesa" && pending && canSubmitReceipt && !reviewing && !roomTransfer.transferred ? (
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setConfirmNote(""); setConfirmReceipt("");
+                                setConfirmPayment({ id: p.id, amount: Number(p.amount), method: p.method });
+                              }}>
+                                Submit receipt for review
+                              </Button>
+                            ) : null}
+                            {p.method !== "mpesa" && canManualConfirm && !roomTransfer.transferred
+                              && ["pending", "initiated"].includes(p.status) ? (
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setConfirmNote(""); setConfirmReceipt("");
+                                setConfirmPayment({ id: p.id, amount: Number(p.amount), method: p.method });
+                              }}>Confirm</Button>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </SectionCard>
@@ -732,60 +832,107 @@ function OrderTerminal() {
 
       {data ? (
         <>
+          <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete draft order {data.order_number}?</DialogTitle>
+                <DialogDescription>
+                  Remove this unused draft from active orders. Its records and audit history are
+                  retained. Orders with payment, production or stock history require the controlled
+                  void or refund workflow.
+                </DialogDescription>
+              </DialogHeader>
+              <Label htmlFor="draft-removal-reason">Removal reason</Label>
+              <Textarea id="draft-removal-reason" value={removeReason} maxLength={500}
+                onChange={event => setRemoveReason(event.target.value)} />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRemoveOpen(false)}>Keep order</Button>
+                <Button variant="destructive" disabled={!removableDraft || !mayRemoveDraft || removeReason.trim().length < 3 || removeDraftOrder.isPending}
+                  onClick={() => removeDraftOrder.mutate({orderId: data.id, reason: removeReason}, {
+                    onSuccess: () => { setRemoveOpen(false); void navigate({to: "/pos/orders"}); },
+                  })}>
+                  Delete draft order
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <PaymentDialog
-            open={payOpen}
+            open={payOpen && roomTransfer.canCollect}
             onOpenChange={setPayOpen}
             orderId={data.id}
+            branchId={data.branch_id}
             balance={balance}
             shiftId={shift.data?.id ?? null}
           />
           <RoomChargeDialog
-            open={roomOpen}
+            open={roomOpen && canTransferRoom}
             onOpenChange={setRoomOpen}
             orderId={data.id}
+            branchId={data.branch_id}
             balance={balance}
+            eligible={canTransferRoom}
+            eligibilityReason={roomTransferReason}
           />
           <Dialog
-            open={Boolean(confirmPayment)}
-            onOpenChange={(o) => !o && setConfirmPayment(null)}
-          >
+            open={Boolean(confirmPayment) && !roomTransfer.transferred && (confirmPayment?.method === "mpesa" ? canSubmitReceipt : canManualConfirm)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setConfirmPayment(null); setConfirmNote(""); setConfirmReceipt("");
+              }
+            }}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Confirm payment manually</DialogTitle>
+                <DialogTitle>
+                  {confirmPayment?.method === "mpesa" ? "Submit M-Pesa receipt" : "Confirm payment manually"}
+                </DialogTitle>
                 <DialogDescription>
-                  {confirmPayment
-                    ? `${titleCase(confirmPayment.method)} · ${money(confirmPayment.amount)}. `
-                    : ""}
-                  The provider is not connected, so this confirmation is recorded against your name
-                  with the note below.
+                  {confirmPayment ? `${titleCase(confirmPayment.method)} · ${money(confirmPayment.amount)}. ` : ""}
+                  {confirmPayment?.method === "mpesa"
+                    ? "Enter the actual receipt and evidence for the cashier or authorized supervisor to check. Submission does not confirm money or send another prompt."
+                    : "Confirm only after verifying that the money was received. Your verification is recorded."}
                 </DialogDescription>
               </DialogHeader>
+              {confirmPayment?.method === "mpesa" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="confirm-receipt">Safaricom receipt code</Label>
+                  <Input id="confirm-receipt" value={confirmReceipt}
+                    maxLength={16} autoCapitalize="characters" autoComplete="off"
+                    onChange={(e) => setConfirmReceipt(e.target.value.toUpperCase())} />
+                </div>
+              ) : null}
               <div className="grid gap-2">
-                <Label htmlFor="confirm-note">Verification note</Label>
-                <Textarea
-                  id="confirm-note"
-                  value={confirmNote}
+                <Label htmlFor="confirm-note">
+                  {confirmPayment?.method === "mpesa" ? "Money evidence for review" : "Verification note"}
+                </Label>
+                <Textarea id="confirm-note" value={confirmNote} maxLength={1500}
                   onChange={(e) => setConfirmNote(e.target.value)}
-                  placeholder="How was this payment verified?"
-                />
+                  placeholder="Describe the receiving-account evidence to check." />
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!confirmNote.trim() || confirmManual.isPending}
+                  disabled={confirmPayment?.method === "mpesa"
+                    ? !canSubmitReceipt || !/^[A-Z0-9]{8,16}$/.test(confirmReceipt.trim())
+                      || confirmNote.trim().length < 10 || submitReceipt.isPending
+                    : !canManualConfirm || !confirmNote.trim() || confirmManual.isPending}
                   onClick={() => {
                     if (!confirmPayment) return;
-                    confirmManual.mutate(
-                      { paymentId: confirmPayment.id, note: confirmNote.trim() },
-                      {
-                        onSuccess: () => {
-                          setConfirmPayment(null);
-                          setConfirmNote("");
-                        },
-                      },
-                    );
-                  }}
-                >
-                  Confirm payment
+                    const close = () => {
+                      setConfirmPayment(null); setConfirmNote(""); setConfirmReceipt("");
+                    };
+                    if (confirmPayment.method === "mpesa") {
+                      if (!canSubmitReceipt) return;
+                      submitReceipt.mutate({
+                        paymentId: confirmPayment.id,
+                        receipt: confirmReceipt, evidence: confirmNote,
+                      }, { onSuccess: close });
+                    } else {
+                      if (!canManualConfirm) return;
+                      confirmManual.mutate({
+                        paymentId: confirmPayment.id, note: confirmNote.trim(),
+                      }, { onSuccess: close });
+                    }
+                  }}>
+                  {confirmPayment?.method === "mpesa" ? "Submit for cashier review" : "Confirm payment"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -809,19 +956,21 @@ function OrderTerminal() {
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!voidReason.trim()}
-                  onClick={() => {
-                    if (!voidItem) return;
-                    requestVoid.mutate({
+                  disabled={!voidReason.trim() || requestVoid.isPending}
+                  onClick={async () => {
+                    if (!voidItem || requestVoid.isPending) return;
+                    try {
+                    await requestVoid.mutateAsync({
                       orderId: data.id,
                       orderItemId: voidItem.id,
-                      kind: "item-void",
+                      kind: "item",
                       amount: voidItem.total,
                       reason: voidReason,
                       preparationStatus: voidItem.status,
                     });
                     setVoidReason("");
                     setVoidItem(null);
+                    } catch { /* Keep the reason and item visible for correction. */ }
                   }}
                 >
                   Send for approval
@@ -835,414 +984,24 @@ function OrderTerminal() {
   );
 }
 
-function PaymentDialog({
-  open,
-  onOpenChange,
-  orderId,
-  balance,
-  shiftId,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  orderId: string;
-  balance: number;
-  shiftId: string | null;
-}) {
-  const record = useRecordPayment();
-  // Cash never settles straight from the billing screen: it follows the same
-  // request → cashier confirmation path as folio billing, so the notes are
-  // always attributed to a named, open till.
-  const routeCash = useRequestPosCashPayment();
-  const till = useTillContext();
-  const { can } = useAuth();
-  const [method, setMethod] = useState("cash");
-  const [amount, setAmount] = useState(String(balance.toFixed(2)));
-  const [tendered, setTendered] = useState("");
-  const [reference, setReference] = useState("");
-  const [cardTerminal, setCardTerminal] = useState("");
-  const [cardNetwork, setCardNetwork] = useState<"Visa" | "Mastercard" | "Other" | "">("");
-  const [cardLast4, setCardLast4] = useState("");
-  const [manualConfirm, setManualConfirm] = useState(false);
-  const [note, setNote] = useState("");
-  // Where the money lands. Separate from the method, which is how it was paid.
-  const [account, setAccount] = useState<string | null>(null);
-  // One key per settlement attempt: a double-click can never charge twice, but a
-  // genuine second payment of the same amount still goes through.
-  const [attemptKey, setAttemptKey] = useState(() => crypto.randomUUID());
-  // A card terminal or QR app answers for itself: the request is opened here and
-  // the bill only settles when the processor's own answer arrives.
-  const openIntent = useOpenPaymentIntent();
-  const dispatchIntent = useDispatchPaymentIntent();
-  const [intentId, setIntentId] = useState<string | null>(null);
-  const [intentProblem, setIntentProblem] = useState<string | null>(null);
-  const [qr, setQr] = useState<{ payload: string | null; imageUrl: string | null } | null>(null);
-  const intent = usePaymentIntentStatus(intentId);
-  const definition = paymentMethod(method);
-  const providerBacked = definition?.kind === "provider";
-  const terminalMethod = method === "card-terminal" || method === "qr";
-  const external = Boolean(EXTERNAL_METHODS[method]);
-  const canManualConfirm = can("pos", "orders.approve");
-  const amountValue = Number(amount);
-  const overpaying = amountValue > balance + 0.005;
-  const isCash = method === "cash";
-  const isManualCard = method === "card";
-  const cardLast4Invalid = Boolean(cardLast4) && !/^[0-9]{4}$/.test(cardLast4);
-  const selfService = Boolean(till.data?.self_service);
-  const blocked =
-    !amountValue ||
-    amountValue <= 0 ||
-    overpaying ||
-    (isManualCard &&
-      (!cardTerminal.trim() ||
-        !cardNetwork ||
-        !reference.trim() ||
-        cardLast4Invalid)) ||
-    (manualConfirm && !note.trim()) ||
-    record.isPending ||
-    routeCash.isPending;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Take payment</DialogTitle>
-          <DialogDescription>Outstanding balance {money(balance)}</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <PaymentMethodPicker
-            methods={methodsFor([
-              "cash",
-              "card",
-              "card-terminal",
-              "mpesa",
-              "qr",
-              "bank-transfer",
-              "corporate-credit",
-              "voucher",
-              "ota-prepaid",
-            ])}
-            value={method}
-            onChange={(next) => {
-              setMethod(next);
-              setIntentId(null);
-              setIntentProblem(null);
-              setManualConfirm(false);
-              if (next !== "card") {
-                setCardTerminal("");
-                setCardNetwork("");
-                setCardLast4("");
-              }
-            }}
-          />
-          <div className="grid gap-1.5">
-            <Label htmlFor="pay-amount">Amount</Label>
-            <Input
-              id="pay-amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
-            />
-          </div>
-          {method === "cash" ? (
-            <div className="grid gap-1.5">
-              <Label htmlFor="pay-tendered">Cash tendered</Label>
-              <Input
-                id="pay-tendered"
-                value={tendered}
-                onChange={(e) => setTendered(e.target.value)}
-                inputMode="decimal"
-              />
-              {Number(tendered) > Number(amount) ? (
-                <p className="text-xs text-muted-foreground">
-                  Change due {money(Number(tendered) - Number(amount))}
-                </p>
-              ) : null}
-              <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                {selfService
-                  ? `Settles straight into your own open till${till.data?.my_shift_number ? ` (${till.data.my_shift_number})` : ""}, with a receipt and audit entry.`
-                  : "You do not hold an open till, so this is routed to an active cashier who confirms the cash physically received before the bill is settled."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-1.5">
-              <Label htmlFor="pay-ref">
-                {isManualCard
-                  ? "Approval / terminal reference"
-                  : terminalMethod
-                    ? "Your own reference (optional)"
-                    : "Reference"}
-              </Label>
-              <Input
-                id="pay-ref"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder={
-                  isManualCard
-                    ? "e.g. 123456 or terminal slip reference"
-                    : terminalMethod
-                      ? "The processor supplies its own reference"
-                      : "Slip, transfer or voucher number"
-                }
-              />
-              {!providerBacked ? (
-                <p className="text-xs text-muted-foreground">
-                  Recorded against this bill straight away and marked unverified until someone
-                  checks it against the slip or statement.
-                </p>
-              ) : null}
-            </div>
-          )}
-          {isManualCard ? (
-            <div className="grid gap-3 rounded-lg border border-border p-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="card-terminal-name">Terminal</Label>
-                <Input
-                  id="card-terminal-name"
-                  value={cardTerminal}
-                  onChange={(e) => setCardTerminal(e.target.value)}
-                  placeholder="e.g. ABSA POS 1"
-                  maxLength={80}
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="card-network">Card network</Label>
-                <Select
-                  value={cardNetwork}
-                  onValueChange={(value) =>
-                    setCardNetwork(value as "Visa" | "Mastercard" | "Other")
-                  }
-                >
-                  <SelectTrigger id="card-network">
-                    <SelectValue placeholder="Select network" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Visa">Visa</SelectItem>
-                    <SelectItem value="Mastercard">Mastercard</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="card-last4">Last 4 digits (optional)</Label>
-                <Input
-                  id="card-last4"
-                  value={cardLast4}
-                  onChange={(e) =>
-                    setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))
-                  }
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="e.g. 4242"
-                  maxLength={4}
-                />
-                {cardLast4Invalid ? (
-                  <p className="text-xs text-destructive">
-                    Enter exactly four digits or leave this blank.
-                  </p>
-                ) : null}
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Record only the terminal result. Never enter a full card number,
-                CVV, PIN or magnetic-stripe data.
-              </p>
-            </div>
-          ) : null}
-          {external ? (
-            <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
-              {EXTERNAL_METHODS[method]} confirms this payment itself. It is held as{" "}
-              <strong>awaiting confirmation</strong> until that answer arrives — nothing is marked
-              paid on trust.
-            </p>
-          ) : null}
-          {intentProblem ? (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">
-              {intentProblem}
-            </p>
-          ) : null}
-          {qr ? <QrPaymentPanel payload={qr.payload} imageUrl={qr.imageUrl} /> : null}
-          {intentId && intent.data?.ok ? (
-            <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs">
-              Request sent to the {titleCase(method.replace("-", " "))}. Current answer:{" "}
-              <strong>
-                {titleCase(String(intent.data.state ?? "requested").replace("_", " "))}
-              </strong>
-              . {intent.data.detail ?? ""}
-            </p>
-          ) : null}
-          {external && canManualConfirm ? (
-            <div className="grid gap-2 rounded-lg border border-border p-3">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={manualConfirm}
-                  onChange={(e) => setManualConfirm(e.target.checked)}
-                />
-                Manual confirmed (controlled testing)
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Confirms the payment without a provider response. Your name and note are stored with
-                the settlement.
-              </p>
-              {manualConfirm ? (
-                <Textarea
-                  aria-label="Verification note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="How was this payment verified?"
-                />
-              ) : null}
-            </div>
-          ) : null}
-          {isCash ? null : (
-            <ReceivingAccountSelect id="pos-receiving-account" value={account} onChange={setAccount} />
-          )}
-          {overpaying ? (
-            <p className="text-xs text-destructive">
-              The amount cannot exceed the outstanding balance of {money(balance)}.
-            </p>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button
-            disabled={blocked}
-            onClick={() => {
-              if (isCash) {
-                routeCash.mutate(
-                  {
-                    order: orderId,
-                    amount: amountValue,
-                    ...(reference ? { reference } : {}),
-                    idempotencyKey: `pos-cash:${orderId}:${attemptKey}`,
-                  },
-                  {
-                    onSuccess: (result) => {
-                      setAttemptKey(crypto.randomUUID());
-                      if (result.status !== "no_till") onOpenChange(false);
-                    },
-                  },
-                );
-                return;
-              }
-              const ownReference =
-                reference || (terminalMethod ? `REQ-${attemptKey.slice(0, 8).toUpperCase()}` : "");
-              record.mutate(
-                {
-                  orderId,
-                  amount: amountValue,
-                  method,
-                  ...(account ? { destinationAccountId: account } : {}),
-                  ...(Number(tendered) ? { tendered: Number(tendered) } : {}),
-                  ...(ownReference ? { externalReference: ownReference } : {}),
-                  ...(isManualCard
-                    ? {
-                      paymentMetadata: {
-                        terminal: cardTerminal.trim(),
-                        network: cardNetwork as "Visa" | "Mastercard" | "Other",
-                        ...(cardLast4 ? { last4: cardLast4 } : {}),
-                      },
-                    }
-                    : {}),
-                  shiftId,
-                  idempotencyKey: `pos-pay:${orderId}:${attemptKey}`,
-                  manualConfirm: manualConfirm && external,
-                  ...(manualConfirm && note.trim() ? { note: note.trim() } : {}),
-                },
-                {
-                  onSuccess: (result: unknown) => {
-                    setNote("");
-                    setManualConfirm(false);
-                    const paymentId = (result as { payment_id?: string } | null)?.payment_id;
-                    // A terminal or QR request stays on screen: the bill only
-                    // settles when the processor answers for itself.
-                    if (terminalMethod && !manualConfirm && paymentId) {
-                      openIntent.mutate(
-                        {
-                          module: "pos",
-                          sourceRecord: orderId,
-                          method,
-                          amount: amountValue,
-                          reference: ownReference,
-                          linkTable: "pos_payments",
-                          linkId: paymentId,
-                        },
-                        {
-                          onSuccess: (opened) => {
-                            if (opened.ok && opened.intent_id) {
-                              const id = opened.intent_id;
-                              setIntentId(id);
-                              setIntentProblem(null);
-                              dispatchIntent.mutate(
-                                { intentId: id },
-                                {
-                                  onSuccess: (sent) => {
-                                    if (sent.qrPayload || sent.qrImageUrl) {
-                                      setQr({
-                                        payload: sent.qrPayload ?? null,
-                                        imageUrl: sent.qrImageUrl ?? null,
-                                      });
-                                    }
-                                    if (!sent.ok) {
-                                      setIntentProblem(
-                                        sent.detail ??
-                                        "The request could not be sent to the processor, so this payment stays awaiting confirmation.",
-                                      );
-                                    }
-                                  },
-                                  onError: (e: Error) => setIntentProblem(e.message),
-                                },
-                              );
-                            } else {
-                              setIntentProblem(
-                                opened.detail ??
-                                "No processor is connected for this method, so the payment stays awaiting confirmation.",
-                              );
-                            }
-                          },
-                          onError: (e: Error) => setIntentProblem(e.message),
-                        },
-                      );
-                      setAttemptKey(crypto.randomUUID());
-                      return;
-                    }
-                    setAttemptKey(crypto.randomUUID());
-                    onOpenChange(false);
-                  },
-                },
-              );
-            }}
-          >
-            {isCash
-              ? selfService
-                ? "Confirm cash received"
-                : "Send to cashier"
-              : manualConfirm && external
-                ? "Record & confirm"
-                : terminalMethod
-                  ? "Send to terminal"
-                  : "Record payment"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function RoomChargeDialog({
   open,
   onOpenChange,
   orderId,
+  branchId,
   balance,
+  eligible,
+  eligibilityReason,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
+  branchId: string | null;
   balance: number;
+  eligible: boolean;
+  eligibilityReason: string | null;
 }) {
-  const stays = useCheckedInStays();
+  const stays = useCheckedInStays(branchId);
   const [stayId, setStayId] = useState<string>("");
   const folio = useOpenFolioForStay(stayId || undefined);
   const post = usePostRoomCharge();
@@ -1253,8 +1012,8 @@ function RoomChargeDialog({
         <DialogHeader>
           <DialogTitle>Charge to guest room</DialogTitle>
           <DialogDescription>
-            Only checked-in stays with an open folio can be charged. {money(balance)} will be posted
-            as a folio line.
+            Post the sale to a checked-in guest’s open folio and apply any confirmed POS receipts.
+            The amount added to the guest’s balance is {money(balance)}.
           </DialogDescription>
         </DialogHeader>
         {(stays.data ?? []).length === 0 ? (
@@ -1292,10 +1051,11 @@ function RoomChargeDialog({
           </div>
         )}
         <DialogFooter>
+          {!eligible && eligibilityReason ? <p role="alert" className="text-sm text-destructive">{eligibilityReason}</p> : null}
           <Button
-            disabled={!folio.data || post.isPending}
+            disabled={!eligible || !folio.data || post.isPending}
             onClick={() =>
-              post.mutate(
+              eligible && post.mutate(
                 { orderId, folioId: folio.data!.id },
                 { onSuccess: () => onOpenChange(false) },
               )

@@ -1,3 +1,4 @@
+import {RemoveMenuItemDialog} from "@/components/pos/RemoveMenuItemDialog";
 /**
  * Menu Management — reference implementation of the NEØ catalogue workspace.
  *
@@ -51,6 +52,7 @@ import { menusForBranch } from "@/lib/menu-scoping";
 import { MenuCatalogueSection, MenuItemFormDialog } from "@/components/pos/MenuCatalogueManager";
 import { MenuItemImage } from "@/components/pos/MenuImageField";
 import { MenuConsumptionCard } from "@/components/pos/MenuConsumptionCard";
+import { MenuSalesTaxCard } from "@/components/pos/MenuSalesTaxCard";
 
 import {
   menuConsumptionReady,
@@ -125,6 +127,7 @@ function MenuPage() {
   const saveGroup = useSaveRecord("modifier_groups");
   const saveOption = useSaveRecord("modifier_options");
 
+  const [removeItemOpen,setRemoveItemOpen]=useState(false);
   const [editingItem, setEditingItem] =
     useState<Parameters<typeof MenuItemFormDialog>[0]["item"]>(null);
   const [catDialog, setCatDialog] = useState(false);
@@ -771,6 +774,7 @@ function MenuPage() {
       </Tabs>
 
       {/* Inspector: the item's full record without leaving the catalogue. */}
+      {inspected ? <RemoveMenuItemDialog item={inspected} open={removeItemOpen} onOpenChange={setRemoveItemOpen} onRemoved={()=>{setRemoveItemOpen(false);}} /> : null}
       <InspectorSheet
         open={Boolean(inspected)}
         onOpenChange={(open) => {
@@ -810,6 +814,7 @@ function MenuPage() {
         footer={
           inspected && manage ? (
             <>
+              {can("restaurant","menu.delete") ? <Button variant="destructive" onClick={()=>setRemoveItemOpen(true)}>Remove item</Button> : null}
               {inspected.publish_status === "draft" ? (
                 <Button
                   variant="outline"
@@ -868,7 +873,8 @@ function MenuPage() {
                         </InspectorField>
                       </InspectorSection>
                       <InspectorSection title="Stock consumption">
-                        <MenuConsumptionCard item={inspected} manage={manage} />
+                        <MenuConsumptionCard key={inspected.id} item={inspected} manage={manage} />
+                        <MenuSalesTaxCard key={`tax-${inspected.id}`} itemId={inspected.id} currency={inspected.currency ?? "KES"} manage={manage} />
                       </InspectorSection>
                       <InspectorSection title="Sales channels">
 

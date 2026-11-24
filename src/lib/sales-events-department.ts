@@ -24,6 +24,7 @@ import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useScopedWorkerOptions } from "@/lib/scoped-options";
 import { applyStockNeedStatus } from "@/lib/stock-needs";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 
 // The banqueting trail spans several generated table types; call sites narrow.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,6 +250,7 @@ export function useMyBanquetTasks() {
   return useQuery({
     queryKey: ["sales-events", "my-tasks", organizationId, userId],
     enabled: Boolean(organizationId && userId),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       const { data, error } = await db
         .from("event_banquet_tasks")
@@ -267,6 +269,7 @@ export function useMyEventAssignments() {
   return useQuery({
     queryKey: ["sales-events", "my-assignments", organizationId, userId],
     enabled: Boolean(organizationId && userId),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       const { data, error } = await db
         .from("event_staff_assignments")
@@ -427,6 +430,7 @@ export function useReportEventStockNeed() {
   const { branchId } = useSalesEventsContext();
   return useMutation({
     mutationFn: async (input: {
+      bookingId: string;
       item: string;
       quantity: number;
       unit?: string;
@@ -434,15 +438,13 @@ export function useReportEventStockNeed() {
       notes?: string;
     }) => {
       if (!input.item.trim()) throw new Error("Name the item needed");
-      const { data, error } = await guardedRpc(db, "neo_department_stock_need_create", {
+      const { data, error } = await guardedRpc(db, "neo_event_stock_need_create", {
+        _booking: input.bookingId,
         _item: input.item.trim(),
         _quantity: input.quantity,
         _unit: input.unit ?? "unit",
         _priority: input.priority ?? "normal",
         _notes: input.notes ?? null,
-        _module: "events",
-        _department: null,
-        _branch: branchId ?? null,
       });
       if (error) throw new Error(error.message);
       return data as string;
@@ -463,12 +465,17 @@ export function useReviewEventStockNeed() {
       decision: "acknowledge" | "requisition" | "decline" | "close";
       notes?: string;
     }) => {
-      const { data, error } = await guardedRpc(db, "neo_department_stock_need_review", {
-        _need: input.needId,
-        _decision: input.decision,
-        _notes: input.notes ?? null,
-        _requisition: null,
-      });
+      const { data, error } =
+        input.decision === "requisition"
+          ? await guardedRpc(db, "neo_event_stock_need_to_requisition", {
+              _need: input.needId,
+            })
+          : await guardedRpc(db, "neo_department_stock_need_review", {
+              _need: input.needId,
+              _decision: input.decision,
+              _notes: input.notes ?? null,
+              _requisition: null,
+            });
       if (error) throw new Error(error.message);
       return (data ?? {}) as SevRow;
     },

@@ -25,6 +25,7 @@ const OUT_OF_SCOPE = [
   /^delivery\.\$/,
   /^rider\./,
   /^auth\./,
+  /^(privacy|terms)\.tsx$/,
   // A hotel's own branded staff sign-in entrance: a public sign-in surface
   // like /auth, not a staff application page.
   /^h\.\$propertySlug/,
@@ -96,7 +97,10 @@ export function listRouteFiles(): string[] {
 }
 
 export function isSpecialist(file: string): boolean {
-  return SPECIALIST.some((k) => file.includes(k));
+  return (
+    file === "station-screen.tsx" ||
+    SPECIALIST.some((key) => file.includes(key))
+  );
 }
 
 /** Delegated page bodies live in components; follow one hop so a thin route

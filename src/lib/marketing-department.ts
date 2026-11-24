@@ -1,3 +1,4 @@
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Marketing department layer.
  *
@@ -350,7 +351,7 @@ export function useCreateMarketingTask() {
     }) => {
       if (!organizationId) throw new Error("No organisation context");
       if (!input.title.trim()) throw new Error("Give the task a title");
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: department.data?.["id"] ? String(department.data["id"]) : null,
@@ -362,7 +363,7 @@ export function useCreateMarketingTask() {
         assignee_id: user?.id ?? null,
         created_by: user?.id ?? null,
       });
-      if (error) throw new Error(error.message);
+
     },
     onSuccess: () => {
       invalidate();
@@ -451,6 +452,33 @@ export function useReportMarketingStockNeed() {
   });
 }
 
+/** Convert an authorized Marketing need into one linked Stores requisition. */
+export function useCreateMarketingRequisition() {
+  const invalidate = useMktInvalidate();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (needId: string) => {
+      const { data, error } = await guardedRpc(db, "neo_marketing_need_to_requisition", {
+        _need: needId,
+      });
+      if (error) throw new Error(error.message);
+      const result = data as Record<string, unknown> | null;
+      if (!result || result["ok"] !== true || !result["requisition_id"]) {
+        throw new Error(String(result?.["message"] ?? "Requisition creation was not confirmed."));
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ["stores-department"] });
+      void qc.invalidateQueries({ queryKey: ["stock-needs"] });
+      toast.success(
+        `${result["already_exists"] ? "Existing" : "Created"} requisition ${String(result["request_number"] ?? "")}`,
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
 export function useReviewMarketingStockNeed() {
   const invalidate = useMktInvalidate();
   return useMutation({

@@ -21,8 +21,6 @@ export type AddItemChoice = {
   modifiers: {
     group_id: string;
     option_id: string;
-    group_name: string;
-    option_name: string;
     extra_charge: number;
   }[];
 };
@@ -70,8 +68,6 @@ export function AddItemDialog({
         out.push({
           group_id: g.id,
           option_id: option.id,
-          group_name: g.name,
-          option_name: option.name,
           extra_charge: Number(option.extra_charge ?? 0),
         });
       }
@@ -79,9 +75,12 @@ export function AddItemDialog({
     return out;
   }, [groups.data, picked]);
 
-  const missingRequired = (groups.data ?? []).filter(
-    (g) => g.required && (picked[g.id] ?? []).length === 0,
-  );
+  const missingRequired = (groups.data ?? []).filter((g) => {
+    const count = (picked[g.id] ?? []).length;
+    return count < Math.max(g.min_select ?? 0, g.required ? 1 : 0)
+      || ((g.max_select ?? 0) > 0 && count > (g.max_select ?? 0))
+      || (!g.multi_select && count > 1);
+  });
 
   const toggle = (group: { id: string; multi_select: boolean | null }, optionId: string) =>
     setPicked((prev) => {
@@ -98,7 +97,7 @@ export function AddItemDialog({
     });
 
   return (
-    <Dialog open={Boolean(item)} onOpenChange={onOpenChange}>
+    <Dialog open={Boolean(item)} onOpenChange={(open) => { if (!busy) onOpenChange(open); }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{item?.name ?? "Add item"}</DialogTitle>
@@ -107,7 +106,7 @@ export function AddItemDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <fieldset className="space-y-4" disabled={busy}>
           <div className="space-y-1.5">
             <Label htmlFor="add-item-quantity">Quantity</Label>
             <Input
@@ -168,17 +167,18 @@ export function AddItemDialog({
 
           {missingRequired.length ? (
             <p className="text-xs text-destructive">
-              Choose an option for {missingRequired.map((g) => g.name).join(", ")}.
+              Check the required choices and selection limits for {missingRequired.map((g) => g.name).join(", ")}.
             </p>
           ) : null}
-        </div>
+          {groups.isError ? <p role="alert" className="text-sm text-destructive">Item choices could not be loaded. Refresh before adding this item.</p> : null}
+        </fieldset>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            disabled={busy || missingRequired.length > 0}
+            disabled={busy || groups.isPending || groups.isError || missingRequired.length > 0 || !Number.isFinite(quantity) || quantity <= 0}
             onClick={() =>
               onConfirm({
                 quantity,

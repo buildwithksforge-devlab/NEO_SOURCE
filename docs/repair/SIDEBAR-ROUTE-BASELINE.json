@@ -1,0 +1,3067 @@
+{
+  "note": "Static route inventory only. Authorization, controls, business effects and live acceptance are unverified.",
+  "counts": {
+    "sidebarDestinations": 191,
+    "generatedRoutes": 406,
+    "directOrHiddenRoutes": 198,
+    "missingSidebarRoutes": 0
+  },
+  "missingSidebarRoutes": [],
+  "sidebar": [
+    {
+      "section": "Overview",
+      "label": "Dashboard",
+      "route": "/workspace",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Overview",
+      "label": "My Personal PIN",
+      "route": "/staff-display-code",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Overview",
+      "label": "Device Authorisation",
+      "route": "/device-authorisation",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Overview",
+      "label": "Staff Board",
+      "route": "/staff-board",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant",
+        "store",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Overview",
+      "label": "NEØ Intelligence",
+      "route": "/ai-insights",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Front Office",
+      "route": "/pms",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Reservations",
+      "route": "/pms/reservations",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Arrivals",
+      "route": "/pms/arrivals",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "In-house",
+      "route": "/pms/in-house",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Departures",
+      "route": "/pms/departures",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Availability",
+      "route": "/pms/availability",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Guest Stays",
+      "route": "/stays",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "housekeeping",
+        "waiter",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Room Rack",
+      "route": "/pms/rack",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Rooms & Types",
+      "route": "/pms/rooms",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Guest Requests",
+      "route": "/pms/requests",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Transport & Transfers",
+      "route": "/pms/transport",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Waitlist",
+      "route": "/pms/waitlist",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Groups & Blocks",
+      "route": "/pms/groups",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Folios",
+      "route": "/pms/folios",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Minibar",
+      "route": "/pms/minibar",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Desk Tasks",
+      "route": "/pms/tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Front Desk Supplies",
+      "route": "/pms/supplies",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Requisitions to Stores",
+      "route": "/pms/requisitions",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Front Office & PMS",
+      "label": "Front Office Intelligence",
+      "route": "/pms/reports",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Bar Dashboard",
+      "route": "/bar",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Bar Order Queue",
+      "route": "/bar/queue",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Sell at the Bar",
+      "route": "/bar/sell",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Bar Menu",
+      "route": "/bar/menu",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Bar Requisitions",
+      "route": "/bar/requisitions",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Bar Wastage",
+      "route": "/bar/wastage",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Bar",
+      "label": "Station Stock",
+      "route": "/station-stock",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Restaurant POS",
+      "route": "/pos",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Restaurant Floor",
+      "route": "/pos/floor",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Orders & Bills",
+      "route": "/pos/orders",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Menu Management",
+      "route": "/pos/menu",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Shift & Cash",
+      "route": "/pos/shifts",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "POS Approvals",
+      "route": "/pos/approvals",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Stores Requisitions",
+      "route": "/pos/requisitions",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Wastage Log",
+      "route": "/pos/wastage",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "POS Reports",
+      "route": "/pos/reports",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "POS Settings",
+      "route": "/pos/settings",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Kitchen Management",
+      "route": "/kitchen",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Shared Display Controls",
+      "route": "/production-displays",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Production Overview",
+      "route": "/production-overview",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Kitchen Queue",
+      "route": "/kitchen/queue",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Recipes & Standards",
+      "route": "/kitchen/recipes",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Pastry & Bakery",
+      "route": "/pastry",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Pastry Order Queue",
+      "route": "/pastry/queue",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Pastry Production",
+      "route": "/pastry/production",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Food & Beverage",
+      "label": "Custom Cakes",
+      "route": "/pastry/custom-cakes",
+      "roles": [
+        "owner",
+        "manager",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "My Deliveries",
+      "route": "/rider",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Dashboard",
+      "route": "/delivery",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Queue",
+      "route": "/delivery/queue",
+      "roles": [
+        "owner",
+        "manager",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Verification",
+      "route": "/delivery/verification",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Tasks",
+      "route": "/delivery/tasks",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Requisitions",
+      "route": "/delivery/requisitions",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Fleet Maintenance",
+      "route": "/delivery/maintenance",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Delivery",
+      "label": "Delivery Reports",
+      "route": "/delivery/reports",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Housekeeping",
+      "route": "/housekeeping",
+      "roles": [
+        "owner",
+        "manager",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Housekeeping Work",
+      "route": "/housekeeping/my-work",
+      "roles": [
+        "owner",
+        "manager",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Lost & Found",
+      "route": "/housekeeping/lost-found",
+      "roles": [
+        "owner",
+        "manager",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Cleaning History",
+      "route": "/housekeeping/history",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Laundry",
+      "route": "/laundry",
+      "roles": [
+        "owner",
+        "manager",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Laundry Work",
+      "route": "/laundry/my-work",
+      "roles": [
+        "owner",
+        "manager",
+        "housekeeping"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Maintenance",
+      "route": "/maintenance",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Maintenance Jobs",
+      "route": "/maintenance/my-jobs",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Grounds & Landscaping",
+      "route": "/maintenance/landscaping",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Grounds Work Board",
+      "route": "/maintenance/grounds",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Assets & Equipment",
+      "route": "/assets",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Grounds Tasks",
+      "route": "/maintenance/my-tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Security",
+      "route": "/security",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Post",
+      "route": "/security/my-post",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Security Incidents",
+      "route": "/security/incidents",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Visitor Access",
+      "route": "/security/visitors",
+      "roles": [
+        "owner",
+        "manager",
+        "maintenance",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Events & Conferences",
+      "route": "/events",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Banqueting",
+      "route": "/events/banqueting",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Banquet Service",
+      "route": "/events/service",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Banquet Payments",
+      "route": "/events/payments",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "Banquet Reconciliation",
+      "route": "/events/reconciliation",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Operations",
+      "label": "My Banqueting Tasks",
+      "route": "/events/my-tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Inventory & Stores",
+      "route": "/inventory",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Items, Groups & Stores",
+      "route": "/inventory/items",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Stock Levels",
+      "route": "/inventory/levels",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Stock by Store",
+      "route": "/inventory/by-store",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Live Stock",
+      "route": "/inventory/live",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Weekly Report",
+      "route": "/inventory/weekly-report",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Procurement",
+      "route": "/procurement",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Procurement Dashboard",
+      "route": "/procurement/dashboard",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Purchase Requests",
+      "route": "/procurement/requests",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Purchase Orders",
+      "route": "/procurement/orders",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Supplier Portal",
+      "route": "/procurement/supplier-portal",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Branch Procurement",
+      "route": "/procurement/branch",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "RFQs & Quotations",
+      "route": "/procurement/quotations",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Receiving Reconciliation",
+      "route": "/procurement/reconciliation",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Goods Receiving",
+      "route": "/inventory/receiving",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Department Requests",
+      "route": "/inventory/requisitions",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Stock Counts",
+      "route": "/inventory/counts",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Stores Tasks",
+      "route": "/inventory/tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Store Issues",
+      "route": "/inventory/issues",
+      "roles": [
+        "owner",
+        "manager",
+        "store",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Store Transfers",
+      "route": "/inventory/transfers",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Stock Needs",
+      "route": "/inventory/needs",
+      "roles": [
+        "owner",
+        "manager",
+        "store"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Supply Chain",
+      "label": "Complimentary Register",
+      "route": "/complimentary",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant",
+        "waiter",
+        "kitchen"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Finance",
+      "route": "/finance",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Cashier Till",
+      "route": "/finance/till",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Cashier Sessions",
+      "route": "/finance/sessions",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "End of Day",
+      "route": "/finance/eod",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Finance Posting",
+      "route": "/finance/posting",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Handoff Replay",
+      "route": "/finance/outbox",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Commerce Reconciliation",
+      "route": "/finance/commerce-check",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Till Reconciliation",
+      "route": "/finance/till-reconciliation",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Supplier Payables",
+      "route": "/finance/payables",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "AP Three-Way Matching",
+      "route": "/finance/ap-matching",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Cashier Queue",
+      "route": "/finance/queue",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Cashbook",
+      "route": "/finance/cashbook",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Transaction Register",
+      "route": "/finance/register",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Payment Register",
+      "route": "/finance/payments",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Revenue",
+      "route": "/finance/revenue",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Profit & Loss",
+      "route": "/finance/profit-loss",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Invoices & Receivables",
+      "route": "/finance/receivables",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Bank Accounts",
+      "route": "/finance/bank-accounts",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Payroll Journal",
+      "route": "/finance/payroll-journal",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "General Ledger",
+      "route": "/finance/general-ledger",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Deposit Reconciliation",
+      "route": "/finance/deposits",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Credit Accounts",
+      "route": "/credit-accounts",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "CRM Dashboard",
+      "route": "/crm",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Customer Directory",
+      "route": "/crm/customers",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office",
+        "waiter"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Corporate Accounts",
+      "route": "/crm/corporate",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Loyalty & Rewards",
+      "route": "/crm/loyalty",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Communications",
+      "route": "/crm/communications",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Feedback & Complaints",
+      "route": "/crm/feedback",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Segments",
+      "route": "/crm/segments",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "Duplicate Review",
+      "route": "/crm/duplicates",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Commercial",
+      "label": "CRM Settings",
+      "route": "/crm/settings",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Marketing Dashboard",
+      "route": "/marketing",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Leads",
+      "route": "/marketing/leads",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Lead Pipeline",
+      "route": "/marketing/pipeline",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Customer Segments",
+      "route": "/marketing/segments",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Campaigns",
+      "route": "/marketing/campaigns",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Marketing Calendar",
+      "route": "/marketing/calendar",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Content & Approvals",
+      "route": "/marketing/content",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Marketing Tasks",
+      "route": "/marketing/tasks",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Marketing Supplies",
+      "route": "/marketing/supplies",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Automations",
+      "route": "/marketing/automations",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Message Templates",
+      "route": "/marketing/templates",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Promotions & Vouchers",
+      "route": "/marketing/promotions",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Referrals",
+      "route": "/marketing/referrals",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Reviews & Reputation",
+      "route": "/marketing/reviews",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Service Recovery",
+      "route": "/marketing/recovery",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Feedback Analytics",
+      "route": "/marketing/feedback",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Audience Consent",
+      "route": "/marketing/consent",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Suppression Lists",
+      "route": "/marketing/suppression",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Campaign Reports",
+      "route": "/marketing/reports",
+      "roles": [
+        "owner",
+        "manager",
+        "marketing",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Marketing & CRM",
+      "label": "Marketing Settings",
+      "route": "/marketing/settings",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Customer Portal",
+      "label": "My Engagement",
+      "route": "/my-engagement",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Intelligence & Analytics",
+      "label": "Executive Analytics",
+      "route": "/analytics",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Intelligence & Analytics",
+      "label": "KPI Catalogue",
+      "route": "/analytics/catalogue",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Human Resources",
+      "route": "/hr",
+      "roles": [
+        "owner",
+        "manager",
+        "hr"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Approvals",
+      "route": "/approvals",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Reports & BI",
+      "route": "/reports",
+      "roles": [
+        "owner",
+        "manager",
+        "accountant"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Rates & Packages",
+      "route": "/rates",
+      "roles": [
+        "owner",
+        "manager",
+        "front-office"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "My Work",
+      "route": "/my-work",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Tasks",
+      "route": "/tasks",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Management",
+      "label": "Notifications",
+      "route": "/notifications",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Automation Dashboard",
+      "route": "/automation",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Workflows",
+      "route": "/automation/workflows",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Message Templates",
+      "route": "/automation/templates",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Communication Queue",
+      "route": "/automation/queue",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Event Log",
+      "route": "/automation/events",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Rules & Escalations",
+      "route": "/automation/rules",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Failed Workflows",
+      "route": "/automation/failures",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Providers",
+      "route": "/automation/providers",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Automation & Communications",
+      "label": "Automation Settings",
+      "route": "/automation/settings",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Users",
+      "route": "/users",
+      "roles": [
+        "owner",
+        "manager",
+        "hr"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Roles & Permissions",
+      "route": "/roles",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Departments",
+      "route": "/departments",
+      "roles": [
+        "owner",
+        "manager",
+        "hr"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Stations",
+      "route": "/stations",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Admin Audit Log",
+      "route": "/audit-logs",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Administration",
+      "label": "Configuration Centre",
+      "route": "/settings",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Go-Live Readiness",
+      "route": "/platform",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Integration Centre",
+      "route": "/platform/integrations",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "History & Tenant Migration",
+      "route": "/platform/data-lifecycle",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Environments & Flags",
+      "route": "/platform/environments",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Subscription",
+      "route": "/platform/subscription",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Data Migration",
+      "route": "/platform/migration",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Recovery Centre",
+      "route": "/platform/recovery",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Configuration Health",
+      "route": "/platform/configuration-health",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Testing & Defects",
+      "route": "/platform/quality",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Simulation Centre",
+      "route": "/platform/simulation",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Releases & Monitoring",
+      "route": "/platform/operations",
+      "roles": [
+        "owner"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Performance Monitor",
+      "route": "/platform/performance",
+      "roles": [
+        "owner",
+        "manager"
+      ],
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    },
+    {
+      "section": "Platform & Readiness",
+      "label": "Support & Knowledge",
+      "route": "/platform/support",
+      "roles": "ALL",
+      "source": "src/lib/navigation.ts",
+      "status": "ROUTE_PRESENT_ONLY"
+    }
+  ],
+  "directOrHidden": [
+    {
+      "route": "/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/auth",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/continue",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/onboarding",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/platform-console",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/session-expired",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/sitemap.xml",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/station-screen",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/unauthorized",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/front-office",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guests",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/profile",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/reservations",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/rooms",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/access-matrix",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/ai-provider",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/ai-simulator",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/app-branding",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/approval-limits",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/approval-routing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/asset-categories",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/branches",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/brand-identity",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/capability-map",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/communication",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/configuration",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/dashboard-appearance",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/dashboard-cards",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/delivery-settings",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/delivery-zones",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/documents",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/email-delivery",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/experience-studio",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/finance-periods",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/go-live",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/grounds-areas",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/hotel-information",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/housekeeping-standards",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/integrity",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/laundry-pricing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/linen-catalogue",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/maintenance-categories",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/meal-plans",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/menu-imports",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/neo-listing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/partner-access",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/partner-billing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/partner-messages",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/payments-mpesa",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/printers",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/procurement-policy",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/public-experience",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/regional",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/role-migration",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/role-testing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/self-approval-exceptions",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/stock-policy",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/suppliers",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/tax-etims",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/user-defaults",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/admin/workspace-preview",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/auth/forgot-password",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/auth/reset-password",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/auth/verify-email",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/h/$propertySlug",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/partner/$propertySlug",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/rider/active",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/rider/login",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/rider/profile",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/rider/support",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/start/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/start/$propertySlug",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/bar/display",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/coffee/display",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/dashboards/$key",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/billing",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/calendar",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/enquiries",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/feedback",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/packages",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/quotations",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/readiness",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/reports",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/resources",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/settings",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/site-visits",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/venues",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/banking",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/collections",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/journals",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/ledger",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/ota",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/packages",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/quickbooks",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/reconciliation",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/finance/tax",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/board",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/inspections",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/reports",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/requisitions",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/housekeeping/tasks",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/attendance",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/clock",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/documents",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/leave",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/me",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/movements",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/onboarding",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/payroll",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/payslips",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/performance",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/recruitment",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/relations",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/scheduling",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/settings",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/training",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/dashboard",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/display",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/my-station",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/needs",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/operations",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/production",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/quality",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/reconciliation",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/reorder",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/reports",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/settings",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/stewarding",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/stock-count",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/stores",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/kitchen/waste",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/laundry/batches",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/laundry/incidents",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/laundry/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/lpos/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/maintenance/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pastry/display",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pastry/my-production",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pastry/needs",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pastry/requisitions",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pastry/wastage",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/platform/printers",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pos/kds",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/procurement/supplies",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/procurement/tasks",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/security/handovers",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/security/needs",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/security/patrols",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/security/posts",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/internal/worker-push",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/staff-pin-login",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug/cart",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug/checkout",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug/orders",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/account",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/book",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/checkout",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/explore",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/favourites",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/folio",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/laundry",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/notifications",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/order",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/orders",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/profile",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/settings",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/signin",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/stay",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/track",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/transport",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/trips",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/automation/workflows/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/crm/customers/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/bookings/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/events/bookings/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/employees/",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/hr/employees/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pms/folios/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pms/reservations/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pms/reservations/new",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/pos/orders/$id",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/print-agent/$action",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/delivery/$hotelSlug/track/$orderReference",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/orders/$orderReference",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/guest/$hotelSlug/reservations/$reservationReference",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/delivery/callback/$token",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/delivery/simulator/courier",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/mpesa/callback/$token",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/payments/callback/$token",
+      "status": "DISCOVERY_PENDING"
+    },
+    {
+      "route": "/api/public/payments/simulator/terminal",
+      "status": "DISCOVERY_PENDING"
+    }
+  ]
+}

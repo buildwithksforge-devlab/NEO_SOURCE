@@ -1,0 +1,15 @@
+{
+  "diagnostic_version": "receiving-property-quantity-proof-v1",
+  "definitions_match": true,
+  "definition_checks": [
+    {
+      "signature": "public.inventory_post_receipt(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_stores_receive_goods(uuid,uuid,jsonb,uuid,text,text,text,text)",
+      "matches": true
+    }
+  ],
+  "evidence": "User Results JSON confirms both routines; no business actions executed by installer."
+}

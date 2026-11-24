@@ -1,0 +1,7 @@
+{
+  "apiBase": "https://neo-preview.neo-hospitality.workers.dev/api/public/print-agent",
+  "token": "neopc_REPLACE_WITH_THE_GENERATED_64_CHARACTER_SECRET",
+  "pollMilliseconds": 2500,
+  "refreshPrintersMilliseconds": 60000,
+  "printerIds": []
+}

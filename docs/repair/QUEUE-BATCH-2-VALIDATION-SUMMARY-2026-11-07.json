@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-07",
+  "targetedPosRosterAssertions": 44,
+  "agentDiscoveryChecks": 17,
+  "isolatedClosureChecks": 17,
+  "typecheck": "passed",
+  "productionBuildAndSmoke": "passed",
+  "closureInstallation": "user postcheck verified; eight neighbors unchanged",
+  "regressions": {
+    "validationMode": "Full suite plus focused rerun after test-only correction; application code unchanged between runs",
+    "initialFullRun": {
+      "passed": 3704,
+      "failed": 1,
+      "skipped": 155
+    },
+    "focusedRerun": true,
+    "baselinePassed": 3667,
+    "currentPassed": 3705,
+    "currentFailed": 0,
+    "currentSkipped": 155,
+    "previousPassedIdentities": 3667,
+    "retainedPreviousPasses": 3667,
+    "regressions": [],
+    "success": true
+  },
+  "appDeployment": "not performed",
+  "physicalPrint": "not performed; compatible device/paired agent gate open",
+  "queue": {
+    "baseline": 106,
+    "verifiedDone": 1,
+    "remaining": 105,
+    "queued": 67
+  }
+}

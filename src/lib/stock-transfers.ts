@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { requireTransferResult } from "@/lib/stock-transfer-result";
+import { resolveTransferActionResult } from "@/lib/supply-release-compat";
 
 // The transfer trail spans several generated table types; call sites narrow.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,12 +88,12 @@ export function useCreateTransfer() {
         _attempt: input.attemptKey,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+      return requireTransferResult(data, "create");
     },
     onSuccess: (data) => {
       invalidate();
       if (data["replayed"] === true)
-        toast.info("Already recorded — showing the original transfer.");
+        toast.info(`Already recorded — original transfer is ${String(data["status"])}. See transfer history.`);
       else
         toast.success(
           `Transfer ${String(data["transfer_number"] ?? "")} created — stock is in transit.`,
@@ -103,13 +105,14 @@ export function useCreateTransfer() {
 
 export function useReceiveTransfer() {
   const invalidate = useTransferInvalidate();
+  const { organizationId } = useAuth();
   return useMutation({
     mutationFn: async (transferId: string) => {
       const { data, error } = await guardedRpc(db, "neo_stores_transfer_receive", {
         _transfer: transferId,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+      return resolveTransferActionResult(data, "receive", transferId, () => savedTransferState(transferId, organizationId));
     },
     onSuccess: (data) => {
       invalidate();
@@ -122,6 +125,7 @@ export function useReceiveTransfer() {
 
 export function useCancelTransfer() {
   const invalidate = useTransferInvalidate();
+  const { organizationId } = useAuth();
   return useMutation({
     mutationFn: async ({ transferId, reason }: { transferId: string; reason: string }) => {
       const { data, error } = await guardedRpc(db, "neo_stores_transfer_cancel", {
@@ -129,7 +133,7 @@ export function useCancelTransfer() {
         _reason: reason,
       });
       if (error) throw new Error(error.message);
-      return (data ?? {}) as Record<string, unknown>;
+      return resolveTransferActionResult(data, "cancel", transferId, () => savedTransferState(transferId, organizationId));
     },
     onSuccess: () => {
       invalidate();
@@ -137,4 +141,12 @@ export function useCancelTransfer() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+}
+
+async function savedTransferState(id: string, organizationId: string | null) {
+  if (!organizationId) throw new Error("Organization required to verify the saved transfer.");
+  const { data, error } = await db.from("stock_transfers").select("id,status")
+    .eq("id", id).eq("organization_id", organizationId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as { id: string; status: string } | null;
 }

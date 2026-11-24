@@ -49,8 +49,10 @@ function fail(error: { message: string } | null) {
 }
 
 function useList(table: string, options?: { order?: string; ascending?: boolean; filters?: Row; limit?: number }) {
+  const { organizationId, user, phase, permissionsLoaded, permissions, access } = useAuth();
   return useQuery({
-    queryKey: [KEY, table, options ?? null],
+    queryKey: [KEY, table, options ?? null, organizationId, user?.id, [...permissions].sort(), access.accessScope, [...access.branchIds].sort(), [...access.departmentIds].sort()],
+    enabled: phase === "ready" && permissionsLoaded && Boolean(organizationId && user?.id),
     queryFn: async () => {
       let q = sb.from(table).select("*");
       for (const [k, v] of Object.entries(options?.filters ?? {})) {

@@ -10,7 +10,9 @@ const routeFiles = readdirSync(ROUTES, { recursive: true, encoding: "utf8" })
 
 describe("branded business documents", () => {
   it("never prints the screen — every printable output goes through the branded engine", () => {
-    const offenders = routeFiles.filter((file) => readFileSync(file, "utf8").includes("window.print("));
+    const offenders = routeFiles.filter((file) =>
+      readFileSync(file, "utf8").includes("window.print("),
+    );
     expect(offenders).toEqual([]);
   });
 
@@ -54,14 +56,30 @@ describe("branded business documents", () => {
 
   it("keeps posted GRN printing separate from blind receiving counts", () => {
     const lpo = readFileSync(join(ROUTES, "_shell.lpos.$id.tsx"), "utf8");
-    const receiving = readFileSync(
-      join(ROUTES, "_shell.inventory.receiving.tsx"), "utf8",
-    );
+    const receiving = readFileSync(join(ROUTES, "_shell.inventory.receiving.tsx"), "utf8");
 
     expect(lpo).toContain('type="goods_receipt"');
     expect(receiving).toContain("neo_submit_blind_receiving_count");
     expect(receiving).not.toContain('type="goods_receipt"');
     expect(receiving).not.toContain("neo_post_approved_blind_receiving");
+  });
+
+  it("keeps the LPO and each linked GRN downloadable with their original references", () => {
+    const lpo = readFileSync(join(ROUTES, "_shell.lpos.$id.tsx"), "utf8");
+    const trail = readFileSync(
+      "supabase/migrations/20260814153153_23d054b6-6c68-4481-a36b-466377793545.sql",
+      "utf8",
+    );
+    const documentPayload = readFileSync(
+      "supabase/migrations/20261110173000_scoped_waiter_receipt_printing.sql",
+      "utf8",
+    );
+
+    expect(lpo).toContain("Goods received notes");
+    expect(lpo).toContain('type="purchase_order"');
+    expect(lpo).toContain('type="goods_receipt"');
+    expect(trail).toContain("'receipts', (SELECT COALESCE(jsonb_agg(to_jsonb(g)");
+    expect(documentPayload).toContain("'Against ' || p.order_number");
   });
 
   it("prints the invoice already issued for an event instead of issuing a second one", () => {
@@ -77,8 +95,6 @@ describe("branded business documents", () => {
       expect(source).toMatch(/(invoiceByBooking\[r\.booking_id\]|eventInvoice\.data)\s*\?/);
     }
   });
-
-
 
   it("enforces scope and permission server-side, not in the button", () => {
     const fn = readFileSync("src/lib/document-pdf.functions.ts", "utf8");

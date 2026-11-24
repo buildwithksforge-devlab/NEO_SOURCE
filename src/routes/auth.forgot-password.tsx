@@ -12,9 +12,15 @@ export const Route = createFileRoute("/auth/forgot-password")({
   head: () => ({
     meta: [
       { title: "Reset your password — NEØ" },
-      { name: "description", content: "Request a secure password reset link for your staff account." },
+      {
+        name: "description",
+        content: "Request a secure password reset link for your staff account.",
+      },
       { property: "og:title", content: "Reset your password — NEØ" },
-      { property: "og:description", content: "Request a secure password reset link for your staff account." },
+      {
+        property: "og:description",
+        content: "Request a secure password reset link for your staff account.",
+      },
     ],
   }),
   component: ForgotPassword,
@@ -27,17 +33,23 @@ function ForgotPassword() {
 
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setSent(true);
+      toast.success("Reset request accepted. Check your inbox if the account exists.");
+    } catch {
+      toast.error("The reset service could not be reached. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    setSent(true);
-    toast.success("Reset link sent");
   }
 
   return (
@@ -55,7 +67,7 @@ function ForgotPassword() {
           <p className="font-medium">Check your inbox</p>
           <p className="mt-2 text-neo-steel">
             If an account exists for {email}, a password reset link is on its way. The link expires
-            after one hour.
+            according to the account security settings. Use the newest link.
           </p>
         </div>
       ) : (
@@ -70,7 +82,11 @@ function ForgotPassword() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <Button type="submit" className="h-12 w-full rounded-xl bg-neo-turquoise font-semibold text-neo-midnight hover:bg-neo-aqua hover:text-neo-white" disabled={busy}>
+          <Button
+            type="submit"
+            className="h-12 w-full rounded-xl bg-neo-turquoise font-semibold text-neo-midnight hover:bg-neo-aqua hover:text-neo-white"
+            disabled={busy}
+          >
             Send reset link
           </Button>
         </form>

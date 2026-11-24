@@ -1,0 +1,13 @@
+import {describe,it,expect,vi} from 'vitest';
+import {stationDepartment,displayStations,displayStationFromRow,invalidateStationReads} from '@/lib/production-displays';
+describe('new configured production stations',()=>{
+ it.each([['main-kitchen','kitchen'],['main_kitchen','kitchen'],['coffee','coffee'],['bar','bar'],['pastry','pastry']] as const)('uses department %s for an arbitrary production station name', (department_key,expected)=>expect(stationDepartment({id:'new',name:'P-004',station_type:'production',department_key})).toBe(expected));
+ it('uses explicit department identity before incidental station-name words',()=>expect(stationDepartment({id:'new',name:'Coffee collection pass',station_type:'production',department_key:'main-kitchen'})).toBe('kitchen'));
+ it('retains explicit legacy display types',()=>expect(stationDepartment({id:'new',name:'P-004',station_type:'bar',department_key:'main-kitchen'})).toBe('bar'));
+ it('does not route an unrelated department using a misleading label',()=>expect(stationDepartment({id:'new',name:'Coffee lobby',station_type:'production',department_key:'front-office'})).toBeNull());
+ it('does not invent a department for an unconfigured production station',()=>expect(stationDepartment({id:'new',name:'P-004',station_type:'production'})).toBeNull());
+ it.each(['service','support'])('does not treat %s as a production display',station_type=>{const station={id:'new',name:'Coffee',station_type,department_key:'coffee'};expect(stationDepartment(station)).toBeNull();expect(displayStations([station],'overview')).toEqual([])});
+ it('carries the configured department from the existing scoped relational read',()=>{const result=displayStationFromRow({id:'new',name:'P-004',station_type:'production',departments:{catalogue_key:'coffee'}});expect(result.department_key).toBe('coffee');expect(displayStations([result],'coffee').map(s=>s.id)).toEqual(['new'])});
+ it('retains legacy classification when department metadata is inaccessible',()=>expect(stationDepartment(displayStationFromRow({id:'old',name:'Coffee Station',station_type:'beverage',departments:null}))).toBe('coffee'));
+ it('refreshes the actual display, visible-station and scoped-option cache keys',async()=>{const invalidateQueries=vi.fn().mockResolvedValue(undefined);await invalidateStationReads({invalidateQueries});for(const queryKey of [['operational-stations'],['pos','stations'],['kitchen','stations'],['kitchen','scoped-stations'],['kitchen','visible-station-ids'],['scope','stations']])expect(invalidateQueries).toHaveBeenCalledWith({queryKey});expect(invalidateQueries).toHaveBeenCalledTimes(6)});
+});

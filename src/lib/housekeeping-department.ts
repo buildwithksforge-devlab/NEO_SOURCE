@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import { useScopedDepartmentByKey, useScopedWorkerOptions } from "@/lib/scoped-options";
 import { applyStockNeedStatus } from "@/lib/stock-needs";
+import { VISIBLE_VIEW_REFRESH } from "@/lib/view-freshness";
 
 // The housekeeping trail spans many generated table types; call sites narrow.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,6 +132,7 @@ export function useMyHousekeepingJobs(includeDone = false) {
   return useQuery({
     queryKey: ["housekeeping-department", "my-jobs", organizationId, branchId, user?.id, includeDone],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("housekeeping_jobs")
@@ -156,6 +158,7 @@ export function useMyHousekeepingTasks() {
   return useQuery({
     queryKey: ["housekeeping-department", "my-tasks", organizationId, branchId, user?.id],
     enabled: Boolean(organizationId) && Boolean(user?.id),
+    ...VISIBLE_VIEW_REFRESH,
     queryFn: async () => {
       let q = db
         .from("tasks")

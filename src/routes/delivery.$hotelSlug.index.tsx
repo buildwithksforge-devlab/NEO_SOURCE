@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Loader2, Search, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Bike, Loader2, Plus, Search, Store } from "lucide-react";
 import {
   BrandButton,
   PublicAppShell,
   PublicEmptyState,
   useWorkspace,
 } from "@/components/public/PublicAppShell";
-import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+import { DeliveryItemSheet } from "@/components/public/DeliveryItemSheet";
 import { Input } from "@/components/ui/input";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
@@ -17,10 +17,15 @@ import {
   useMyPublicCustomer,
   usePublicAddToCart,
   usePublicBranches,
+  usePublicDeliverySettings,
   usePublicMenu,
 } from "@/lib/public-delivery";
 
 export const Route = createFileRoute("/delivery/$hotelSlug/")({
+  validateSearch: (search): { item?: string; mode?: "delivery" | "pickup" } => ({
+    ...(typeof search["item"] === "string" ? { item: search["item"] } : {}),
+    ...(search["mode"] === "delivery" || search["mode"] === "pickup" ? { mode: search["mode"] } : {}),
+  }),
   component: DeliveryHome,
 });
 
@@ -29,6 +34,8 @@ type Row = Record<string, unknown>;
 function DeliveryHome() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
+  const { item: selectedItemId, mode } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { user, loading } = useCustomerSession();
   const customer = useMyPublicCustomer(ws.organization_id, user?.id);
   const customerId = customer.data?.["id"] as string | undefined;
@@ -37,12 +44,23 @@ function DeliveryHome() {
   const [branchId, setBranchId] = useState<string | null>(ws.branch_id);
   const activeBranch = branchId ?? (branches.data?.[0]?.["id"] as string | undefined) ?? null;
 
-  const menu = usePublicMenu(ws.organization_id, activeBranch);
   const cart = useMyPublicCart(ws.organization_id, customerId);
+  const settings = usePublicDeliverySettings(ws.organization_id, activeBranch);
+  const modes = (["delivery", "pickup"] as const).filter((option) => settings.data?.[option === "pickup" ? "pickup_enabled" : "delivery_enabled"] === true);
+  const cartCount = ((cart.data?.["cart_items"] as Row[] | undefined) ?? []).reduce(
+    (sum, line) => sum + Number(line["quantity"] ?? 0), 0,
+  );
+  const fulfilment = cartCount > 0 && cart.data?.["branch_id"] === activeBranch &&
+    (cart.data?.["fulfilment_type"] === "pickup" || cart.data?.["fulfilment_type"] === "delivery")
+    ? cart.data["fulfilment_type"] as "pickup" | "delivery"
+    : mode && modes.includes(mode) ? mode : modes[0] ?? mode ?? "delivery";
+  const menu = usePublicMenu(ws.organization_id, activeBranch, fulfilment);
   const addToCart = usePublicAddToCart(ws.organization_id, customerId);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const selectedItem = selectedItemId ? menu.data?.find((item) => item["id"] === selectedItemId) : undefined;
+  const changeSelectedItem = (item?: string) => void navigate({ search: { ...(item ? { item } : {}), mode: fulfilment }, replace: true, resetScroll: false });
 
   const categories = useMemo(() => ["All", ...new Set(((menu.data ?? []) as Row[]).map(
     (item) => String((item["menu_categories"] as Row | null)?.["name"] ?? "Menu"),
@@ -65,53 +83,35 @@ function DeliveryHome() {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [menu.data, query, category]);
 
-  const cartCount = ((cart.data?.["cart_items"] as Row[] | undefined) ?? []).reduce(
-    (sum, i) => sum + Number(i["quantity"] ?? 0),
-    0,
-  );
+  const roomServiceCart = cartCount > 0 && cart.data?.["fulfilment_type"] === "room-service";
+  const otherBranchCart = cartCount > 0 && Boolean(cart.data?.["branch_id"]) && cart.data?.["branch_id"] !== activeBranch;
+  const cannotAdd = loading || Boolean(user && !customerId) || cart.isLoading || cart.isError || roomServiceCart || otherBranchCart || !modes.includes(fulfilment);
 
   return (
     <PublicAppShell
       homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}
-      nav={
-        <div className="flex items-center gap-2">
-          <Link
-            to="/delivery/$hotelSlug/orders"
-            params={{ hotelSlug }}
-            className="text-sm font-medium"
-            style={{ color: brandFallback.steel }}
-          >
-            My orders
-          </Link>
-          <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }}>
-            <BrandButton>
-              <ShoppingBag className="size-4" />
-              {cartCount > 0 ? cartCount : "Cart"}
-            </BrandButton>
-          </Link>
-        </div>
-      }
+      cartCount={otherBranchCart || roomServiceCart ? 0 : cartCount}
     >
-      <section className="neo-commerce-hero relative overflow-hidden">
+      <section className="neo-commerce-hero neo-delivery-cover neo-delivery-menu-heading relative overflow-hidden">
+        {ws.hero_url ? <img src={ws.hero_url} alt="" fetchPriority="high" className="absolute inset-y-0 right-0 h-full w-full object-cover sm:w-3/5" /> : null}
+        {ws.hero_url ? <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/55 sm:to-slate-950/10" /> : null}
         <div className="relative z-10 max-w-2xl">
-        <p className="neo-commerce-eyebrow">Fresh from the kitchen</p>
         <h1 className="neo-commerce-title">
-          {ws.welcome_title || `Order from ${ws.hotel_name}`}
+          Order food
         </h1>
-        <p className="neo-commerce-copy mt-3">
-          {ws.welcome_message ||
-            "Browse the live kitchen menu, order for delivery or collection, and track it in real time."}
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-white/90">
-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Live menu</span>
-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Delivery & collection</span>
-          <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5">Track your order</span>
+        {modes.length ? <div className="neo-delivery-mode-switch" role="group" aria-label="Order fulfilment">
+          {modes.map((option) => {
+            const Icon = option === "pickup" ? Store : Bike;
+            return <button key={option} type="button" aria-pressed={option === fulfilment} disabled={cartCount > 0 && option !== fulfilment}
+              onClick={() => { setCategory("All"); void navigate({ search: { mode: option }, resetScroll: false }); }}>
+              <Icon className="size-4" aria-hidden /> {option === "pickup" ? "Collection" : "Delivery"}
+            </button>;
+          })}
+        </div> : null}
         </div>
-        </div>
-        <UtensilsCrossed className="pointer-events-none absolute -bottom-12 -right-8 size-56 rotate-12 text-white/[0.08]" aria-hidden />
       </section>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Find food">
+      <section className="mt-5 space-y-3" aria-label="Find food">
 
         {(branches.data?.length ?? 0) > 1 ? (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -123,10 +123,11 @@ function DeliveryHome() {
                   key={id}
                   type="button"
                   onClick={() => setBranchId(id)}
-                  className="rounded-full border px-3 py-1.5 text-sm"
+                  aria-pressed={active}
+                  className="min-h-11 rounded-full border px-3 py-1.5 text-sm"
                   style={{
                     borderColor: active ? ws.primary_color : brandFallback.mist,
-                    color: active ? ws.primary_color : brandFallback.steel,
+                    color: active ? "var(--pa-accent-ink)" : brandFallback.steel,
                     background: active ? `${ws.primary_color}14` : "transparent",
                   }}
                 >
@@ -139,7 +140,7 @@ function DeliveryHome() {
 
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2"
+            className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-600"
             style={{ color: brandFallback.steel }}
           />
           <Input
@@ -147,29 +148,33 @@ function DeliveryHome() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search the menu"
             aria-label="Search the menu"
-            className="pl-9"
+            type="search"
+            className="min-h-12 rounded-2xl border-0 bg-white pr-4 pl-11 text-base text-slate-950"
           />
         </div>
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="Menu categories">
+        <div className="neo-delivery-categories" role="group" aria-label="Menu categories">
           {categories.map((name) => (
             <button key={name} type="button" onClick={() => setCategory(name)}
               aria-pressed={category === name}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${category === name ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"}`}>
+              className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${category === name ? "border-transparent bg-[var(--pa-primary)] text-[var(--pa-on-primary)]" : "border-white/25 bg-white/10 text-white hover:bg-white/20"}`}>
               {name}
             </button>
           ))}
         </div>
       </section>
 
-      {!loading && !user ? (
-        <GuestSignInPrompt
-          hotelSlug={hotelSlug}
-          title="Sign in to place an order"
-          description="Browse freely, then sign in once so the property can confirm and track your order."
-        />
-      ) : null}
+      {roomServiceCart || otherBranchCart ? <div className="mt-5">
+        <PublicEmptyState title={roomServiceCart ? "You have a room-service basket" : "You have a basket at another branch"}
+          description="Finish or clear that basket before adding items from this menu."
+          action={roomServiceCart
+            ? <Link to="/guest/$hotelSlug/order" params={{ hotelSlug: ws.guest_slug ?? hotelSlug }} search={{ item: undefined }} className="neo-commerce-primary">Open room service</Link>
+            : <Link to="/delivery/$hotelSlug/cart" params={{ hotelSlug }} className="neo-commerce-primary">Review cart</Link>} />
+      </div> : null}
 
       <section className="mt-6 space-y-6">
+        {settings.isError ? <PublicEmptyState title="Ordering options couldn’t load" description="Refresh to check whether delivery or collection is available." action={<BrandButton onClick={() => void settings.refetch()}>Retry</BrandButton>} /> : null}
+        {settings.isSuccess && !modes.length ? <PublicEmptyState title="Ordering is closed" description="You can still browse the published menu." /> : null}
+        {selectedItemId && menu.isSuccess && !selectedItem ? <PublicEmptyState title="This dish is unavailable for this menu" description="Choose another fulfilment option or browse the menu." action={<BrandButton onClick={() => changeSelectedItem()}>Browse menu</BrandButton>} /> : null}
         {menu.isLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
@@ -177,7 +182,8 @@ function DeliveryHome() {
         ) : menu.isError ? (
           <PublicEmptyState
             title="Menu unavailable"
-            description="We could not load the menu right now. Please refresh in a moment."
+            description="We could not load the menu right now."
+            action={<BrandButton onClick={() => void menu.refetch()}>Retry menu</BrandButton>}
           />
         ) : grouped.length === 0 ? (
           <PublicEmptyState
@@ -188,67 +194,45 @@ function DeliveryHome() {
         ) : (
           grouped.map(([category, items]) => (
             <div key={category}>
-              <h2 className="mb-3 text-xl font-bold tracking-tight" style={{ color: brandFallback.secondary }}>
+              <h2 className="mb-3 text-xl font-bold tracking-tight text-white">
                 {category}
               </h2>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="neo-delivery-menu-grid">
                 {items.map((item) => {
                   const available = String(item["availability"] ?? "available") === "available";
                   return (
-                    <article
+                    <button
                       key={String(item["id"])}
-                      className="group flex min-w-0 gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                      type="button"
+                      aria-haspopup="dialog"
+                      disabled={!available}
+                      data-sold-out={!available}
+                      onClick={() => changeSelectedItem(String(item["id"]))}
+                      className="neo-delivery-dish neo-delivery-menu-item group"
                     >
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="break-words text-base font-bold leading-tight text-slate-950">
+                          {String(item["name"] ?? "")}
+                        </span>
+                        {item["description"] ? (
+                          <span className="mt-1 line-clamp-2 text-sm text-slate-600">
+                            {String(item["description"])}
+                          </span>
+                        ) : null}
+                        <span className="mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-3 text-sm font-semibold text-slate-900">
+                          <span>{money(item["base_price"], ws.currency ?? "KES")}</span>
+                          {available ? <span className="neo-delivery-item-add"><Plus className="size-4" aria-hidden /></span> : <span className="neo-sold-out-label">Out of stock</span>}
+                        </span>
+                      </span>
                       {item["image_url"] ? (
                         <img
                           src={String(item["image_url"])}
-                          alt={String(item["name"] ?? "Menu item")}
+                          alt=""
                           loading="lazy"
-                          className="size-24 shrink-0 rounded-xl object-cover sm:size-28"
+                          className="neo-delivery-menu-photo"
                         />
-                      ) : <div className="flex size-24 shrink-0 items-center justify-center rounded-xl bg-slate-100 sm:size-28" aria-hidden><UtensilsCrossed className="size-7 text-slate-400" /></div>}
-                      <div className="min-w-0 flex-1">
-                        <p
-                           className="break-words text-base font-bold"
-                          style={{ color: brandFallback.secondary }}
-                        >
-                          {String(item["name"] ?? "")}
-                        </p>
-                        {item["description"] ? (
-                          <p
-                            className="mt-1 line-clamp-2 text-xs"
-                            style={{ color: brandFallback.steel }}
-                          >
-                            {String(item["description"])}
-                          </p>
-                        ) : null}
-                        <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: brandFallback.secondary }}
-                          >
-                            {money(item["base_price"])}
-                          </span>
-                          {available ? (
-                            <BrandButton
-                              disabled={Boolean(customerId) && addToCart.isPending}
-                              onClick={() =>
-                                customerId ? addToCart.mutate({
-                                  branchId: activeBranch,
-                                  menuItemId: String(item["id"]),
-                                }) : window.location.assign(`/guest/${encodeURIComponent(hotelSlug)}/signin?next=${encodeURIComponent(`/delivery/${hotelSlug}`)}`)
-                              }
-                            >
-                              {customerId ? "Add" : <><span>Sign in to add</span><ArrowRight className="ml-1 size-4" aria-hidden /></>}
-                            </BrandButton>
-                          ) : (
-                            <span className="text-xs" style={{ color: brandFallback.steel }}>
-                              Unavailable
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </article>
+                      ) : null}
+                    </button>
                   );
                 })}
               </div>
@@ -256,6 +240,27 @@ function DeliveryHome() {
           ))
         )}
       </section>
+      {selectedItem ? <DeliveryItemSheet
+        key={String(selectedItem["id"])}
+        item={{
+          id: String(selectedItem["id"]), name: String(selectedItem["name"]),
+          description: String(selectedItem["description"] ?? ""), price: Number(selectedItem["base_price"]),
+          image: typeof selectedItem["image_url"] === "string" ? selectedItem["image_url"] : null,
+          currency: ws.currency ?? "KES",
+        }}
+        pending={addToCart.isPending}
+        disabled={cannotAdd}
+        available={String(selectedItem["availability"] ?? "available") === "available"}
+        onSignIn={!user && !loading ? () => {
+          const next = `/delivery/${encodeURIComponent(hotelSlug)}?${new URLSearchParams({ item: String(selectedItem["id"]), mode: fulfilment })}`;
+          void navigate({ to: "/guest/$hotelSlug/signin", params: { hotelSlug: ws.guest_slug ?? hotelSlug }, search: { next, mode: undefined } });
+        } : undefined}
+        onClose={() => changeSelectedItem()}
+        onAdd={(options) => addToCart.mutate({
+          ...options, branchId: activeBranch, menuItemId: String(selectedItem["id"]),
+          fulfilment,
+        }, { onSuccess: () => changeSelectedItem() })}
+      /> : null}
     </PublicAppShell>
   );
 }

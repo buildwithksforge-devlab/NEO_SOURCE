@@ -1,5 +1,5 @@
 import { navigation, type NavGroup } from "./navigation";
-import { capabilityForPath, pathPermitted, type Capability } from "./capabilities";
+import { capabilityForPath, isUniversalRoute, pathPermitted, type Capability } from "./capabilities";
 
 /**
  * Navigation authorization.
@@ -117,6 +117,7 @@ export function hasApprovalAuthority(can: CanFn): boolean {
 
 function surfacePermitted(can: CanFn, to: string): boolean {
   if (to === "/approvals") return hasApprovalAuthority(can);
+  if (to === "/inventory/receiving") return true;
   for (const gate of NAV_SURFACE_GATES) {
     const matches = gate.prefixes.some((p) => to === p || to.startsWith(`${p}/`));
     if (!matches) continue;
@@ -169,7 +170,7 @@ export function navigationForAccess(
     return staffGroups(navigation)
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => capabilityForPath(item.to) === null),
+        items: group.items.filter((item) => isUniversalRoute(item.to)),
       }))
       .filter((group) => group.items.length > 0);
   }

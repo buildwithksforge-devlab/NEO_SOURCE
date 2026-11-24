@@ -1,0 +1,39 @@
+{
+  "mode": "Full offline suite for batch 6 application source",
+  "passed": 3823,
+  "failed": 2,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousPasses": 3667,
+      "retained": 3665,
+      "regressions": [
+        {
+          "key": "c:/users/kelvin/downloads/neo_complete_2026-09-26/neo_source/src/lib/__tests__/enquiry-form-durability.test.tsx::enquiry form clears the draft once the record is saved",
+          "status": "failed"
+        },
+        {
+          "key": "c:/users/kelvin/downloads/neo_complete_2026-09-26/neo_source/src/lib/__tests__/narrow-viewport-containment.test.tsx::no staff route reintroduces an unbounded table every route rendering a table imports the shared scroll boundary",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "name": "previousBatch",
+      "previousPasses": 3777,
+      "retained": 3775,
+      "regressions": [
+        {
+          "key": "c:/users/kelvin/downloads/neo_complete_2026-09-26/neo_source/src/lib/__tests__/enquiry-form-durability.test.tsx::enquiry form clears the draft once the record is saved",
+          "status": "failed"
+        },
+        {
+          "key": "c:/users/kelvin/downloads/neo_complete_2026-09-26/neo_source/src/lib/__tests__/narrow-viewport-containment.test.tsx::no staff route reintroduces an unbounded table every route rendering a table imports the shared scroll boundary",
+          "status": "failed"
+        }
+      ]
+    }
+  ],
+  "success": false
+}

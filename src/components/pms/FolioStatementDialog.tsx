@@ -8,7 +8,6 @@
  */
 import { Receipt } from "lucide-react";
 import { DocumentPrintButton } from "@/components/common/DocumentPrintButton";
-import { SendToPrinterButton } from "@/components/common/SendToPrinterButton";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
 import {
   Dialog,
@@ -28,7 +27,9 @@ type LineRow = {
   description: string;
   category: string;
   quantity: number;
-  gross_amount: number;
+  net_amount: number;
+  status?: string | null;
+  line_type?: string | null;
   posting_date: string;
 };
 
@@ -49,8 +50,8 @@ export function FolioStatementBody({ folioId }: { folioId: string }) {
 
   return (
     <QueryState
-      isLoading={folio.isLoading || projection.isLoading}
-      error={folio.error ?? projection.error}
+      isLoading={folio.isLoading || lines.isLoading || projection.isLoading}
+      error={folio.error ?? lines.error ?? projection.error}
       isEmpty={!f || !projection.data?.found}
       empty={
         <EmptyState
@@ -97,17 +98,21 @@ export function FolioStatementBody({ folioId }: { folioId: string }) {
             { key: "qty", label: "Qty", align: "right" },
             { key: "amount", label: "Amount", align: "right" },
           ]}
-          rows={((lines.data ?? []) as unknown as LineRow[]).map((l) => ({
+          rows={((lines.data ?? []) as unknown as LineRow[]).filter((l) =>
+            !["void", "voided", "reversed"].includes(l.status ?? "posted") &&
+            !["payment", "deposit", "refund"].includes(l.line_type ?? "charge")
+          ).map((l) => ({
             date: formatDateTime(l.posting_date),
             description: l.description || "—",
             category: titleCase(l.category ?? ""),
             qty: String(Number(l.quantity ?? 0)),
-            amount: money(l.gross_amount, currency),
+            amount: money(l.net_amount, currency),
           }))}
           totals={[
             { label: "Net charges", value: money(projection.data?.netRevenue ?? 0, currency) },
-            { label: "VAT", value: money(projection.data?.tax ?? 0, currency) },
+            { label: "Taxes", value: money(projection.data?.tax ?? 0, currency) },
             { label: "Service charge", value: money(projection.data?.serviceCharge ?? 0, currency) },
+            ...(projection.data?.chargeComponents ?? []).map((charge) => ({ label: charge.label, value: money(charge.amount, currency) })),
             { label: "Gross billed", value: money(projection.data?.grossObligation ?? 0, currency) },
             { label: "Collected", value: money(projection.data?.collected ?? 0, currency) },
           ]}
@@ -145,12 +150,6 @@ export function FolioStatementDialog({
           <>
             <div className="flex justify-end gap-2">
               <DocumentPrintButton type="folio_statement" id={folioId} label="Print statement" />
-              <SendToPrinterButton
-                type="folio_statement"
-                id={folioId}
-                documentNumber={folioNumber ?? null}
-                role="front_office"
-              />
             </div>
             <FolioStatementBody folioId={folioId} />
           </>

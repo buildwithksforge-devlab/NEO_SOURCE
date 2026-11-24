@@ -35,12 +35,38 @@ const SYSTEM_PROMPT = [
   "Answer in at most four short sentences. State the period. Label anything beyond the given numbers as interpretation.",
 ].join("\n");
 
-/** Calls the workspace's configured AI provider. Returns a labelled result, never throws. */
+/** Formats authorised metrics locally unless the workspace explicitly configures an external provider. */
 export async function generateNarrative(
   input: NarrativeInput,
   organizationId: string | null = null,
 ): Promise<NarrativeResult> {
   const config = await resolveAiProvider(organizationId);
+  // External prose is opt-in: an ambient platform key must not turn reading
+  // authorised hotel metrics into a paid third-party request.
+  if (!config.enabled) {
+    return {
+      text: null,
+      provider: "none",
+      model: null,
+      status: "disabled",
+      detail: "AI is switched off for this workspace.",
+    };
+  }
+  if (config.source !== "workspace" || !config.apiKey) {
+    return {
+      text: [
+        `Reporting period: ${input.period.from} to ${input.period.to}.`,
+        ...input.metrics.map((metric) => `${metric.label}: ${metric.value}`),
+        ...(input.metrics.length
+          ? []
+          : ["No authorised metric values are available for this period."]),
+      ].join("\n"),
+      provider: "local",
+      model: null,
+      status: "ok",
+      detail: "Local summary of supplied figures; no AI model or external request was used.",
+    };
+  }
   const facts = input.metrics.map((m) => `- ${m.label}: ${m.value}`).join("\n");
   const userContent = [
     `Question (from an authorised staff user): ${input.question}`,
@@ -56,7 +82,7 @@ export async function generateNarrative(
 
   return {
     text: result.text,
-    provider: config.source === "none" ? "none" : config.provider,
+    provider: config.provider,
     model: config.model,
     status: result.status,
     ...(result.detail ? { detail: result.detail } : {}),

@@ -18,6 +18,8 @@ export const LOCKUP_CACHE_KEY = "neo.lockup.v1";
 export type CachedBrand = {
   primary: string;
   accent: string;
+  primaryForeground?: string;
+  accentForeground?: string;
   secondary: string;
   background: string;
   foreground: string;
@@ -73,6 +75,8 @@ export function preloadBrandImage(url: string | null | undefined) {
  * simply leaves the default theme in place.
  */
 export const BRAND_BOOT_SCRIPT = `(function(){try{
+var gp=JSON.parse(localStorage.getItem("neo.guest.display-preferences")||"null");
+if(gp&&(gp.appearance==="light"||gp.appearance==="dark"))document.documentElement.dataset.guestAppearance=gp.appearance;
 var r=JSON.parse(localStorage.getItem(${JSON.stringify(BRAND_CACHE_KEY)})||"null");
 if(!r)return;
 var k=r.theme==="dark"||(r.theme==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -80,6 +84,8 @@ document.documentElement.classList.toggle("dark",k);
 var d=[];
 if(r.primary)d.push("--brand:"+r.primary);
 if(r.accent)d.push("--brand-accent:"+r.accent);
+if(r.primaryForeground)d.push("--brand-foreground:"+r.primaryForeground);
+if(r.accentForeground)d.push("--brand-accent-foreground:"+r.accentForeground);
 if(r.font)d.push("--font-sans:"+r.font);
 if(!k){
 if(r.secondary)d.push("--secondary:"+r.secondary);

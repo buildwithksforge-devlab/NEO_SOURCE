@@ -14,6 +14,7 @@ import { SectionTabs, type SectionTab } from "@/components/common/SectionTabs";
 import { AccessDenied } from "@/components/platform/PlatformShared";
 import { useAuth } from "@/lib/auth";
 import { canAccessPath } from "@/lib/nav-permissions";
+import { AutomaticChecksStatus } from "@/components/platform/AutomaticChecksStatus";
 
 export const Route = createFileRoute("/_shell/platform")({
   head: () => ({
@@ -42,7 +43,7 @@ const TABS: readonly SectionTab[] = [
   { to: "/platform/integrations", label: "Integration Centre", icon: Plug },
   { to: "/platform/environments", label: "Environments & Flags", icon: Flag },
   { to: "/platform/subscription", label: "Subscription", icon: CreditCard },
-  { to: "/platform/printers", label: "Printers", icon: Plug },
+
   { to: "/platform/migration", label: "Data Migration", icon: Database },
   { to: "/platform/data-lifecycle", label: "History & Tenant Migration", icon: Database },
   { to: "/platform/recovery", label: "Recovery Centre", icon: ShieldCheck },
@@ -50,6 +51,7 @@ const TABS: readonly SectionTab[] = [
   { to: "/platform/quality", label: "Testing & Defects", icon: FlaskConical },
   { to: "/platform/simulation", label: "Simulation Centre", icon: FlaskConical },
   { to: "/platform/operations", label: "Releases & Monitoring", icon: Activity },
+  { to: "/platform/performance", label: "Performance Monitor", icon: Activity },
   { to: "/platform/support", label: "Support & Knowledge", icon: BookOpen },
 ];
 
@@ -78,6 +80,7 @@ function PlatformLayout() {
         description="Nothing on these screens simulates a provider. An integration is only shown as connected once credentials, sandbox testing, security review and production approval are all recorded."
       />
       <SectionTabs tabs={visible} rootPath="/platform" maxVisible={10} />
+      <AutomaticChecksStatus />
       <Outlet />
     </div>
   );

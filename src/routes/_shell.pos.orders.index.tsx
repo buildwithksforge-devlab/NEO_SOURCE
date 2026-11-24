@@ -1,3 +1,4 @@
+import {outstandingPaidBill} from '@/lib/pos-payment-display';
 import { Fragment, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ReceiptText } from "lucide-react";
@@ -214,6 +215,7 @@ function OrdersPage() {
                         <TableCell>{new Date(o.created_at).toLocaleString()}</TableCell>
                         <TableCell>
                           <OrderStatusBadge status={o.status} />
+                          {outstandingPaidBill(o) ? <p className="text-xs font-medium text-destructive">Payment outstanding</p> : null}
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">
                           {money(o.grand_total)}
@@ -298,3 +300,4 @@ function ChannelChip({
     </button>
   );
 }
+

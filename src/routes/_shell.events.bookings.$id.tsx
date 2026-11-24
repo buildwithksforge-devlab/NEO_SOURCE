@@ -1,3 +1,5 @@
+import {eventDepartmentChoices} from '@/lib/record-field-validation';
+import {usePropertyClock} from '@/lib/use-property-clock';
 import { useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, FileText, ShieldAlert } from "lucide-react";
@@ -81,11 +83,12 @@ export const Route = createFileRoute("/_shell/events/bookings/$id")({
 
 function Page() {
   const { id } = useParams({ from: "/_shell/events/bookings/$id" });
-  const { can } = useAuth();
+  const { can, organizationId } = useAuth();
   const { tenant } = useTenant();
   const symbol = tenant.regional.currencySymbol;
 
   const booking = useBooking(id);
+  const {timeZone} = usePropertyClock(booking.data?.["branch_id"] ? String(booking.data["branch_id"]) : null);
   const milestones = useMilestones(id);
   const requirements = useDepartmentRequirements(id);
   const beos = useBeos(id);
@@ -112,6 +115,7 @@ function Page() {
   const [overrideReason, setOverrideReason] = useState("");
 
   const b = booking.data;
+  const departmentChoices = eventDepartmentChoices((departments.data ?? []) as Row[], organizationId, b?.["branch_id"] ? String(b["branch_id"]) : null);
   const canFinancials = can("events", "financials");
 
   if (booking.isLoading) return <div className="h-64 animate-pulse rounded-xl bg-muted" />;
@@ -506,6 +510,8 @@ function Page() {
                   {(close) => (
                     <RecordForm
                       submitLabel="Add requirement"
+                      busy={addRequirement.isPending || !timeZone}
+                      timeZone={timeZone}
                       fields={[
                         {
                           name: "department_key",
@@ -518,7 +524,8 @@ function Page() {
                           name: "department_id",
                           label: "Link to configured department",
                           type: "select",
-                          options: ((departments.data ?? []) as Row[]).map((d) => ({
+                          required: true,
+                          options: departmentChoices.map((d) => ({
                             value: String(d["id"]),
                             label: String(d["name"]),
                           })),
@@ -527,12 +534,10 @@ function Page() {
                         { name: "detail", label: "Detail", type: "textarea", span: true },
                         { name: "required_by", label: "Required by", type: "datetime-local" },
                       ]}
-                      onSubmit={(values) =>
-                        addRequirement.mutate(
-                          { ...values, booking_id: id },
-                          { onSuccess: () => close() },
-                        )
-                      }
+                      onSubmit={async (values) => {
+                        await addRequirement.mutateAsync({ ...values, booking_id: id });
+                        close();
+                      }}
                     />
                   )}
                 </FormDialog>
@@ -634,6 +639,8 @@ function Page() {
                   {(close) => (
                     <RecordForm
                       submitLabel="Add menu"
+                      busy={addMenu.isPending || !timeZone}
+                      timeZone={timeZone}
                       fields={[
                         { name: "name", label: "Menu name", required: true, span: true },
                         {
@@ -647,9 +654,10 @@ function Page() {
                         { name: "price_per_person", label: "Price per person", type: "number" },
                         { name: "allergens", label: "Allergens", type: "textarea", span: true },
                       ]}
-                      onSubmit={(values) =>
-                        addMenu.mutate({ ...values, booking_id: id }, { onSuccess: () => close() })
-                      }
+                      onSubmit={async (values) => {
+                        await addMenu.mutateAsync({ ...values, booking_id: id });
+                        close();
+                      }}
                     />
                   )}
                 </FormDialog>
@@ -699,15 +707,18 @@ function Page() {
                   {(close) => (
                     <RecordForm
                       submitLabel="Add requirement"
+                      busy={addStock.isPending || !timeZone}
+                      timeZone={timeZone}
                       fields={[
                         { name: "description", label: "Item", required: true, span: true },
                         { name: "unit", label: "Unit" },
                         { name: "planned_qty", label: "Planned quantity", type: "number" },
                         { name: "required_at", label: "Required by", type: "datetime-local" },
                       ]}
-                      onSubmit={(values) =>
-                        addStock.mutate({ ...values, booking_id: id }, { onSuccess: () => close() })
-                      }
+                      onSubmit={async (values) => {
+                        await addStock.mutateAsync({ ...values, booking_id: id });
+                        close();
+                      }}
                     />
                   )}
                 </FormDialog>

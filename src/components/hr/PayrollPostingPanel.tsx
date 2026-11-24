@@ -96,6 +96,7 @@ export function PayrollPostingPanel({ period }: { period: Row | undefined }) {
 
   const readyStatus = status === "approved" || status === "locked";
   const blockers: string[] = [];
+  if (computation.error) blockers.push("Payroll calculation needs review before posting.");
   if (!readyStatus && !posted)
     blockers.push("The period must be approved or locked before it can be posted.");
   if (!computation.isLoading && rows.length === 0)

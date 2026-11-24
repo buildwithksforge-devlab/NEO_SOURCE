@@ -54,6 +54,7 @@ export const STORE_TYPE_OPTIONS = [
   { value: "food_dry", label: "Food / dry store" },
   { value: "beverage", label: "Beverage store" },
   { value: "bar", label: "Bar store" },
+  { value: "minibar", label: "Minibar store" },
   { value: "kitchen", label: "Kitchen store" },
   { value: "cold_room", label: "Cold room" },
   { value: "chiller", label: "Chiller (chilled storage)" },

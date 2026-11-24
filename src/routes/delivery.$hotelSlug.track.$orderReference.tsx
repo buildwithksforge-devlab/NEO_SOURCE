@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import { useState } from "react";
+import { deliveryPaymentLabel } from "@/lib/payment-methods";
 import { toast } from "sonner";
 import {
   BrandButton,
@@ -11,7 +12,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
+import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
+import { useCustomerSession } from "@/lib/public-session";
+import { useGuestOrderTracking } from "@/lib/guest-ordering";
 import { useMyOrderPin } from "@/lib/delivery-data";
+import { submitDeliveryMpesaReference } from "@/lib/delivery-mpesa-reference";
 import { STALE_LOCATION_SECONDS, locationAgeSeconds, useDeliveryLive } from "@/lib/delivery-live";
 import {
   money,
@@ -28,7 +33,9 @@ const DELIVERY_STEPS = [
   { key: "placed", label: "Order received" },
   { key: "confirmed", label: "Confirmed by restaurant" },
   { key: "in-preparation", label: "Being prepared" },
+  { key: "ready-for-pickup", label: "Ready for the rider" },
   { key: "rider-assigned", label: "Rider assigned" },
+  { key: "collected", label: "Picked up by rider" },
   { key: "out-for-delivery", label: "On the way" },
   { key: "delivered", label: "Delivered" },
 ];
@@ -41,66 +48,108 @@ const PICKUP_STEPS = [
   { key: "completed", label: "Collected" },
 ];
 
+const commonMilestones: Record<string, string> = {
+  draft: "placed",
+  "pending-payment": "placed",
+  "payment-pending": "placed",
+  "payment-verification": "placed",
+  accepted: "confirmed",
+  ready: "ready-for-pickup",
+  "awaiting-rider": "ready-for-pickup",
+  "en-route": "out-for-delivery",
+  arrived: "out-for-delivery",
+};
+
 function TrackPage() {
+  const { hotelSlug, orderReference } = Route.useParams();
+  const { user, loading } = useCustomerSession();
+  if (loading || !user) {
+    return (
+      <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+        {loading ? <p className="py-10 text-center" role="status">Checking your account…</p> : (
+          <GuestSignInPrompt hotelSlug={hotelSlug} title="Sign in to track your order"
+            description="Use the same account you used to place the order." />
+        )}
+      </PublicAppShell>
+    );
+  }
+  return <CustomerTracking key={JSON.stringify([user.id, hotelSlug, orderReference])} userId={user.id} />;
+}
+
+function CustomerTracking({ userId }: { userId: string }) {
   const ws = useWorkspace();
   const { hotelSlug, orderReference } = Route.useParams();
-  const order = usePublicOrderByReference(ws.organization_id, orderReference);
+  const order = usePublicOrderByReference(ws.organization_id, orderReference, ws.branch_id, userId);
+  const orderId = String(order.data?.["id"] ?? "");
 
   const status = String(order.data?.["order_status"] ?? "");
-  const steps = String(order.data?.["fulfilment_type"] ?? "delivery") === "pickup" ? PICKUP_STEPS : DELIVERY_STEPS;
-  const activeIndex = steps.findIndex((s) => s.key === status);
+  const isPickup = order.data?.["fulfilment_type"] === "pickup";
+  const steps = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
+  const milestone = status === "collected" ? (isPickup ? "completed" : "collected")
+    : status === "completed" || status === "delivered" ? (isPickup ? "completed" : "delivered")
+    : commonMilestones[status] ?? status;
+  const activeIndex = steps.findIndex((s) => s.key === milestone);
 
   const charge = useDeliveryMpesaCharge();
   const [retryPhone, setRetryPhone] = useState("");
+  const [tillReceiptCode, setTillReceiptCode] = useState("");
+  const [tillSubmitting, setTillSubmitting] = useState(false);
+  const [tillStatus, setTillStatus] = useState<"submitted" | "merchant_verified" | null>(null);
   const paymentMethod = String(order.data?.["payment_method"] ?? "");
   const paymentStatus = String(order.data?.["payment_status"] ?? "");
-  // An M-Pesa request that failed, was declined or never completed leaves the
-  // bill outstanding — the guest must be able to send the request again.
-  const canRetryPayment =
-    paymentMethod === "mpesa" &&
-    !["paid", "refunded", "voided"].includes(paymentStatus) &&
-    !["cancelled", "rejected", "delivered", "completed"].includes(status);
+  const paymentSettled = ["paid", "settled", "completed"].includes(paymentStatus);
+  const canSubmitPayment = paymentMethod === "mpesa" && !paymentSettled &&
+    !["refunded", "voided"].includes(paymentStatus) &&
+    !["cancelled", "rejected", "failed"].includes(status);
+  const receipt = useGuestOrderTracking(ws.organization_id, orderReference, paymentSettled ? orderId : undefined, userId);
+  const guestReceiptSlug = receipt.data?.receipt_number ? ws.guest_slug : undefined;
+  const canRetryPayment = canSubmitPayment && !["delivered", "completed"].includes(status);
 
   return (
-    <PublicAppShell homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
-      <h1 className="text-2xl font-semibold" style={{ color: brandFallback.secondary }}>
-        Order {orderReference}
-      </h1>
+    <PublicAppShell deliveryTab="orders" homeTo={{ to: "/delivery/$hotelSlug", params: { hotelSlug } }}>
+      <div className="neo-delivery-page-heading">
+        <div><h1 className="neo-commerce-title">Track your order</h1><p className="neo-commerce-copy">{orderReference}</p></div>
+      </div>
 
       {order.isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+        <div className="flex justify-center py-10" role="status">
+          <Loader2 className="size-5 motion-safe:animate-spin" style={{ color: brandFallback.steel }} aria-hidden />
+          <span className="sr-only">Loading order tracking</span>
         </div>
+      ) : order.isError ? (
+        <div className="mt-4"><PublicEmptyState title="Tracking couldn’t refresh" description="Use the same order reference when you retry."
+          action={<button className="neo-commerce-primary" onClick={() => void order.refetch()}>Retry tracking</button>} /></div>
       ) : !order.data ? (
         <div className="mt-4">
           <PublicEmptyState
             title="Order not found"
             description="We could not find this order reference. Sign in with the account used to order, or check the reference."
             action={
-              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }}>
-                <BrandButton>My orders</BrandButton>
+              <Link to="/delivery/$hotelSlug/orders" params={{ hotelSlug }} className="neo-commerce-primary">
+                My orders
               </Link>
             }
           />
         </div>
       ) : (
         <div className="mt-4 space-y-4">
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+          <section className="neo-delivery-progress rounded-2xl bg-white p-5">
+            <h2 className="text-lg font-semibold" style={{ color: brandFallback.secondary }}>
               {statusLabel(status)}
-            </p>
+            </h2>
             <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
               Placed {new Date(String(order.data["created_at"])).toLocaleString()}
               {order.data["estimated_delivery_at"]
                 ? ` · Expected ${new Date(String(order.data["estimated_delivery_at"])).toLocaleTimeString()}`
                 : ""}
             </p>
+            {canRetryPayment ? <a href="#delivery-payment" className="mt-3 inline-flex min-h-11 items-center rounded-full border border-slate-200 px-3 text-sm font-semibold text-slate-900">Payment options</a> : null}
 
-            <ol className="mt-5 space-y-3">
+            <ol aria-label="Order progress" className="mt-4">
               {steps.map((step, index) => {
                 const done = activeIndex >= 0 && index <= activeIndex;
                 return (
-                  <li key={step.key} className="flex items-center gap-3">
+                  <li key={step.key} aria-current={index === activeIndex ? "step" : undefined} data-reached={done} className="flex items-center gap-3">
                     <span
                       className="size-2.5 rounded-full"
                       style={{ background: done ? ws.primary_color : brandFallback.mist }}
@@ -117,11 +166,7 @@ function TrackPage() {
             </ol>
           </section>
 
-          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} />
-
-          <DeliveryPinCard orderId={String(order.data["id"] ?? "")} />
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm text-sm">
+          <section id="delivery-payment" className="rounded-2xl bg-white p-5 shadow-sm text-sm">
             <div className="flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Total</span>
               <span className="font-semibold" style={{ color: brandFallback.secondary }}>
@@ -130,10 +175,31 @@ function TrackPage() {
             </div>
             <div className="mt-2 flex items-center justify-between">
               <span style={{ color: brandFallback.steel }}>Payment</span>
-              <span style={{ color: brandFallback.secondary }}>
-                {String(order.data["payment_method"] ?? "—")} · {String(order.data["payment_status"] ?? "—")}
+              <span className="text-right" style={{ color: brandFallback.secondary }}>
+                {deliveryPaymentLabel(paymentMethod)} · {statusLabel(paymentStatus)}
               </span>
             </div>
+
+            {paymentSettled ? (
+              <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-emerald-950" role="status">
+                <p className="font-semibold">Payment confirmed</p>
+                {guestReceiptSlug ? (
+                  <>
+                    <p className="mt-1 break-words">Receipt {receipt.data?.receipt_number}</p>
+                    <Link to="/guest/$hotelSlug/orders/$orderReference"
+                      params={{ hotelSlug: guestReceiptSlug, orderReference }} search={{}}
+                      className="mt-1 inline-flex min-h-11 items-center font-semibold underline">View receipt details</Link>
+                  </>
+                ) : (
+                  <p className="mt-1">Use order {orderReference} when requesting your receipt.</p>
+                )}
+                {guestReceiptSlug ? null : ws.contact_email ? (
+                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`mailto:${ws.contact_email}?subject=${encodeURIComponent(`Receipt for ${orderReference}`)}`}>Request receipt from the property</a>
+                ) : ws.contact_phone ? (
+                  <a className="mt-1 inline-flex min-h-11 items-center font-semibold underline" href={`tel:${ws.contact_phone}`}>Call the property for a receipt</a>
+                ) : null}
+              </div>
+            ) : null}
 
             {canRetryPayment ? (
               <div className="mt-4 border-t border-black/5 pt-4">
@@ -178,7 +244,70 @@ function TrackPage() {
                 </BrandButton>
               </div>
             ) : null}
+
+            {canSubmitPayment ? (
+              <div className="mt-5 border-t border-black/10 pt-4">
+                <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                  Already paid to our M-PESA Till?
+                </p>
+
+                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                  If you paid the hotel's official Till directly, submit the M-PESA
+                  transaction code for verification. Submitting a code does not
+                  confirm payment.
+                </p>
+
+                <Label htmlFor="till-receipt" className="mt-3 block">
+                  M-PESA transaction code
+                </Label>
+
+                <Input
+                  id="till-receipt"
+                  className="mt-1"
+                  value={tillReceiptCode}
+                  onChange={(e) => setTillReceiptCode(e.target.value)}
+                  placeholder="Transaction code"
+                  autoComplete="off"
+                  disabled={tillSubmitting || tillStatus !== null}
+                />
+
+                <BrandButton
+                  className="mt-3 w-full"
+                  disabled={tillSubmitting || tillStatus !== null || !orderId || !tillReceiptCode.trim()}
+                  onClick={async () => {
+                    setTillSubmitting(true);
+                    try {
+                      const saved = await submitDeliveryMpesaReference(orderId, tillReceiptCode);
+                      setTillStatus(saved);
+                      toast.success(saved === "submitted" ? "Reference awaiting Finance verification." : "Finance verified this reference.");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not submit M-PESA reference."
+                      );
+                    } finally {
+                      setTillSubmitting(false);
+                      void order.refetch();
+                    }
+                  }}
+                >
+                  {tillSubmitting
+                    ? "Submitting reference..."
+                    : tillStatus === "merchant_verified"
+                      ? "Verified by Finance"
+                      : tillStatus === "submitted" ? "Awaiting Finance verification" : "Submit transaction code"}
+                </BrandButton>
+
+                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                  Keep your M-PESA confirmation message. The order remains
+                  unpaid until the hotel verifies the transaction.
+                </p>
+              </div>
+            ) : null}
           </section>
+          <LiveDeliveryCard organizationId={ws.organization_id} reference={orderReference} orderId={orderId} userId={userId} />
+          <DeliveryPinCard orderId={orderId} userId={userId} />
         </div>
       )}
     </PublicAppShell>
@@ -186,15 +315,20 @@ function TrackPage() {
 }
 
 /**
- * Where the order is going, who is bringing it and — while the run is live and
- * the property allows it — the courier's last known position. There is no map
+ * Where the order is going, who is bringing it and â€” while the run is live and
+ * the property allows it â€” the courier's last known position. There is no map
  * provider here: a position is shown as a place and an age, with a link the
  * guest's own phone can open.
  */
-function LiveDeliveryCard({ organizationId, reference }: { organizationId: string; reference: string }) {
-  const live = useDeliveryLive(organizationId, reference);
-  const data = live.data;
-  if (!data) return null;
+function LiveDeliveryCard({ organizationId, reference, orderId, userId }: { organizationId: string; reference: string; orderId: string; userId: string }) {
+  const live = useDeliveryLive(organizationId, reference, orderId, userId);
+  const data = live.isError ? null : live.data;
+  if (!data) return live.isError ? (
+    <section className="neo-commerce-surface p-5 text-sm text-slate-700">
+      <p>Live location couldn’t refresh. Follow the order progress above.</p>
+      <button className="mt-2 min-h-11 font-semibold underline" onClick={() => void live.refetch()}>Retry location</button>
+    </section>
+  ) : null;
 
   const destination = data.destination;
   const courier = data.courier;
@@ -234,7 +368,7 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
             {courier.display_name} is bringing your order
           </p>
           <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
-            {[courier.vehicle_type, courier.vehicle_registration].filter(Boolean).join(" · ") ||
+            {[courier.vehicle_type, courier.vehicle_registration].filter(Boolean).join(" Â· ") ||
               "Vehicle details not recorded"}
           </p>
           {courier.phone ? (
@@ -256,7 +390,8 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
               This property does not share rider locations. You will still see each step above as
               your order moves.
             </p>
-          ) : location ? (
+          ) : location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)
+            && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180 ? (
             <>
               <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
                 {stale ? "Last known position" : "Rider position"}
@@ -265,16 +400,15 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
                 {age !== null && age < 60
                   ? "Updated moments ago"
                   : `Updated ${Math.round((age ?? 0) / 60)} min ago`}
-                {stale ? " — the signal has dropped, so this may have moved." : ""}
+                {stale ? " â€” the signal has dropped, so this may have moved." : ""}
               </p>
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
+                href={`https://maps.apple.com/?ll=${location.latitude},${location.longitude}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-block text-sm font-medium"
-                style={{ color: brandFallback.primary }}
+                className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--pa-accent-ink)]"
               >
-                Open position in maps
+                <MapPin className="size-4" aria-hidden /> Open saved position in Maps
               </a>
             </>
           ) : (
@@ -290,11 +424,17 @@ function LiveDeliveryCard({ organizationId, reference }: { organizationId: strin
 
 /**
  * The collection PIN, shown only to the customer who placed this order.
- * Staff and riders cannot read it anywhere — the rider types it in and the
+ * Staff and riders cannot read it anywhere â€” the rider types it in and the
  * database checks it against a stored fingerprint.
  */
-function DeliveryPinCard({ orderId }: { orderId: string }) {
-  const pin = useMyOrderPin(orderId || undefined);
+function DeliveryPinCard({ orderId, userId }: { orderId: string; userId: string }) {
+  const pin = useMyOrderPin(orderId, userId);
+  if (pin.isError) {
+    return <section className="neo-commerce-surface p-5 text-sm text-slate-700">
+      <p>The collection PIN couldn’t load.</p>
+      <button type="button" className="mt-2 min-h-11 font-semibold underline" onClick={() => void pin.refetch()}>Retry PIN</button>
+    </section>;
+  }
   const data = pin.data;
   if (!data?.ok) return null;
 
@@ -317,7 +457,7 @@ function DeliveryPinCard({ orderId }: { orderId: string }) {
       ) : (
         <>
           <p className="mt-2 text-3xl font-semibold tracking-[0.35em]" style={{ color: brandFallback.secondary }}>
-            {data.pin ?? "——————"}
+            {data.pin ?? "â€”â€”â€”â€”â€”â€”"}
           </p>
           <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
             Give this to the rider when your order arrives. Do not share it with anyone else.
@@ -341,3 +481,4 @@ function DeliveryPinCard({ orderId }: { orderId: string }) {
     </section>
   );
 }
+

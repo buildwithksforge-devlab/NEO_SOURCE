@@ -1,0 +1,21 @@
+{
+  "mode": "Fresh full offline suite after task ownership changes and live-adapted SQL validation",
+  "passed": 4065,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousUniquePasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "priorApplication",
+      "previousUniquePasses": 4034,
+      "retained": 4034,
+      "regressions": []
+    }
+  ],
+  "success": true
+}

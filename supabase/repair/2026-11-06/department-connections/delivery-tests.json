@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 21,
+  "scope": "Isolated exported schema shape with actual fin_post_journal, payment controls and automatic posting triggers. No live invoice, receipt, journal or payment changed."
+}

@@ -46,10 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useScopedDepartments, useScopedStations } from "@/lib/scoped-options";
-import {
-  normaliseStaffAccountInput,
-  validateStaffAccountInput,
-} from "@/lib/staff-account-input";
+import { normaliseStaffAccountInput, validateStaffAccountInput } from "@/lib/staff-account-input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
@@ -448,16 +445,18 @@ function UsersPage() {
     const reason = input.reason.trim();
     try {
       switch (action.id) {
-        case "reset_password":
+        case "reset_password": {
           if (input.password.trim().length < 8) {
             toast.error("The temporary password must be at least 8 characters.");
             return;
           }
-          await resetPasswordFn({
+          const resetResult = await resetPasswordFn({
             data: { user_id: target.id, password: input.password.trim() },
           });
-          toast.success("Temporary password set. It must be changed at next sign-in.");
+          if (resetResult.warning) toast.warning(resetResult.warning);
+          else toast.success("Temporary password set. It must be changed at next sign-in.");
           break;
+        }
         case "require_password_change":
           await requirePasswordFn({ data: { user_id: target.id } });
           toast.success("Password change required at next sign-in");
@@ -466,12 +465,14 @@ function UsersPage() {
           await clearRequirementFn({ data: { user_id: target.id, reason } });
           toast.success("Password-change requirement cleared");
           break;
-        case "resend_invitation":
-          await resendInvitationFn({
+        case "resend_invitation": {
+          const invitationResult = await resendInvitationFn({
             data: { user_id: target.id, redirect_to: `${window.location.origin}/auth` },
           });
-          toast.success("Welcome / setup email re-issued");
+          if (invitationResult.warning) toast.warning(invitationResult.warning);
+          else toast.success("Setup email request accepted. Ask the user to check their inbox.");
           break;
+        }
         case "revoke_sessions":
           await revokeSessionsFn({ data: { user_id: target.id, reason } });
           toast.success("All active sessions revoked");
@@ -653,7 +654,11 @@ function UsersPage() {
         ) : filtered.length === 0 ? (
           <EmptyState
             inline
-            title={(usersQuery.data ?? []).length === 0 ? "No staff accounts yet" : "No staff match the current filters"}
+            title={
+              (usersQuery.data ?? []).length === 0
+                ? "No staff accounts yet"
+                : "No staff match the current filters"
+            }
             description={
               (usersQuery.data ?? []).length === 0
                 ? "Add your first team member to get started."
@@ -1759,7 +1764,6 @@ function AddUserDialog({
     role_ids: string[];
     reporting_manager_profile_id: string | null;
   }) => Promise<void>;
-
 }) {
   const [form, setForm] = useState({
     email: "",
@@ -1804,13 +1808,17 @@ function AddUserDialog({
     ],
     enabled: open && roleIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(supabase, "neo_reporting_candidates" as never, {
-        _user: null,
-        _branch: form.branch_id || null,
-        _department: form.department_id || null,
-        _station: null,
-        _role_ids: roleIds,
-      } as never);
+      const { data, error } = await guardedRpc(
+        supabase,
+        "neo_reporting_candidates" as never,
+        {
+          _user: null,
+          _branch: form.branch_id || null,
+          _department: form.department_id || null,
+          _station: null,
+          _role_ids: roleIds,
+        } as never,
+      );
       if (error) throw error;
       return (data ?? []) as unknown as {
         profile_id: string;
@@ -1886,7 +1894,6 @@ function AddUserDialog({
       setBusy(false);
     }
   }
-
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2087,8 +2094,6 @@ function AddUserDialog({
             )}
           </div>
 
-
-
           <DialogFooter className="sm:col-span-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -2213,7 +2218,8 @@ function EditAssignmentDialog({
     ],
     enabled: Boolean(open && current),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(supabase, 
+      const { data, error } = await guardedRpc(
+        supabase,
         "neo_reporting_candidates" as never,
         {
           _user: current!.user_id,
@@ -2247,7 +2253,6 @@ function EditAssignmentDialog({
   }, [selectedManagerId, managersLoading, managerStillEligible]);
 
   if (!current) return null;
-
 
   /**
    * A property change drops a department that belongs to another property, and
@@ -2446,8 +2451,8 @@ function EditAssignmentDialog({
             <p className="text-sm font-medium text-foreground">Assignment chain</p>
             <p className="text-xs text-muted-foreground">
               Organisation → Property → Department → Role → Station/Section → Reporting manager →
-              Record scope. The account only becomes operationally active once every required
-              step is complete.
+              Record scope. The account only becomes operationally active once every required step
+              is complete.
             </p>
             <ul className="mt-2 grid gap-1 sm:grid-cols-2">
               {chain.steps.map((s) => (

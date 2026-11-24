@@ -24,6 +24,28 @@ import { parseAvailabilitySearch } from "@/lib/availability-search";
 
 const availabilityCalls: Array<{ arrival: string; departure: string }> = [];
 
+vi.mock("@/components/common/PermittedLink", () => ({
+  usePagePermitted: () => () => true,
+  PermittedLink: ({
+    children,
+    to,
+    className,
+    "aria-current": ariaCurrent,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+    "aria-current"?: React.AriaAttributes["aria-current"];
+  }) => (
+    <a
+      href={to}
+      className={className}
+      aria-current={ariaCurrent}
+    >
+      {children}
+    </a>
+  ),
+}));
 vi.mock("@/lib/branch-filter", () => ({
   useActivePropertyFilter: () => ({ branchId: "branch-zawadi", applyTo: <T,>(q: T) => q }),
 }));

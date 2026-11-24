@@ -12,7 +12,7 @@ import { useRiderIdentity, useSetRiderAvailability } from "@/lib/delivery-data";
 import { removeAvatarObject, uploadAvatar, useAvatarUrl } from "@/lib/avatars";
 import { guardPreview, isPreviewMode } from "@/lib/preview-mode";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
-import { RiderTabBar } from "@/components/public/RiderTabBar";
+import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
 
 export const Route = createFileRoute("/rider/profile")({
   head: () => ({
@@ -36,6 +36,7 @@ function RiderProfilePage() {
   const setAvailability = useSetRiderAvailability();
   const preview = isPreviewMode();
   const rider = identity.data;
+  const brand = useRiderBrand(rider?.branch_id ?? null, user?.id);
   const avatar = useAvatarUrl(rider?.avatar_url ?? null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [saving, setSaving] = useState(false);
@@ -116,7 +117,7 @@ function RiderProfilePage() {
   const availability = rider.availability_status ?? "offline";
 
   return (
-     <div className="neo-rider-page">
+     <div className="neo-rider-page" style={brand.style}>
       <PreviewBanner experience="Rider" />
       <header className="px-4 py-4" style={{ background: brandFallback.navy }}>
         <div className="mx-auto flex w-full max-w-md items-center gap-3">

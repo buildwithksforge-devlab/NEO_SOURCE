@@ -1,0 +1,5 @@
+BEGIN READ ONLY;
+WITH code AS(SELECT signature,md5(pg_get_functiondef(to_regprocedure('public.'||signature)))=expected AS matches FROM(VALUES ('neo_cash_request_pos_payment(uuid,numeric,text,text,text,numeric)','e3f20676ebb812a4b1357c99a9b25038'),('neo_cash_settle_request(uuid)','5c963a249dbfb0d1f8cfb5c0c710a3c3'))v(signature,expected))
+SELECT jsonb_build_object('diagnostic_version','pos-cash-tender-install-v1','code_matches',(SELECT bool_and(coalesce(matches,false)) FROM code),'code',(SELECT jsonb_agg(to_jsonb(c)) FROM code c),'read_only',current_setting('transaction_read_only'),'anonymous_denied',CASE WHEN to_regprocedure('public.neo_cash_request_pos_payment(uuid,numeric,text,text,text,numeric)') IS NULL THEN false ELSE NOT has_function_privilege('anon',to_regprocedure('public.neo_cash_request_pos_payment(uuid,numeric,text,text,text,numeric)'),'execute') END,'scope','Code and nullable tender columns only; no existing payment, order, till or journal rewritten; fresh receipt and change acceptance remains separate.') AS diagnostic;
+COMMIT;
+

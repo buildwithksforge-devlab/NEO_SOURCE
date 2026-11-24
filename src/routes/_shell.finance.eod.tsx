@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NeoDatePicker } from "@/components/common/DatePicker";
 import { createFileRoute } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
@@ -63,6 +63,30 @@ function EndOfDayPage() {
   const closeDay = useCloseBusinessDay();
 
   const [date, setDate] = useState(today());
+  const manuallySelectedDate = useRef(false);
+  const selectedProperty = useRef<string | null>(null);
+
+  const openBusinessDate = (days.data ?? [])
+    .find((day) => day.branch_id === branchId && day.status === "open")
+    ?.business_date;
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    if (selectedProperty.current !== branchId) {
+      selectedProperty.current = branchId;
+      manuallySelectedDate.current = false;
+    }
+
+    if (!manuallySelectedDate.current && openBusinessDate) {
+      setDate(openBusinessDate);
+    }
+  }, [branchId, openBusinessDate]);
+
+  const selectBusinessDate = (value: string) => {
+    manuallySelectedDate.current = true;
+    setDate(value);
+  };
   const [note, setNote] = useState("");
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
 
@@ -254,7 +278,7 @@ function EndOfDayPage() {
               <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <div className="grid min-w-0 gap-1.5">
                   <Label htmlFor="eod-date">Business date</Label>
-                  <NeoDatePicker id="eod-date" value={date} onChange={setDate} />
+                  <NeoDatePicker id="eod-date" value={date} onChange={selectBusinessDate} />
                 </div>
                 <div className="grid min-w-0 gap-1.5">
                   <Label htmlFor="eod-note">{isOpen ? "Closing note (optional)" : "Opening note (optional)"}</Label>
