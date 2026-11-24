@@ -102,16 +102,16 @@ describe('thermal receipt actual PDF layout',()=>{
    expect(rendered.indexOf('Total tax')).toBeLessThan(rendered.indexOf('TOTAL'));
    expect(rendered.indexOf('Served by:')).toBeGreaterThan(rendered.indexOf('HOW TO PAY'));
    const pdf=await PDFDocument.load(Buffer.from(result.base64,'base64'));
-   expect(pdf.getPageCount()).toBeGreaterThan(2);
+   expect(pdf.getPageCount()).toBe(1);
    for (const page of pdf.getPages()) {
     expect(page.getWidth()).toBeCloseTo(226.77);
-    expect(page.getHeight()).toBeLessThanOrEqual(841.9);
+    expect(page.getHeight()).toBeGreaterThan(841.9);
    }
-   expect(rendered).toContain("Receipt LAYOUT-ONLY-001 · page 2");
+   expect(rendered).not.toContain("Receipt LAYOUT-ONLY-001 · page 2");
    const itemRows = texts.filter((entry) => /^Lunch item \d+ /.test(entry.text));
    expect(itemRows).toHaveLength(42);
    expect(new Set(itemRows.map((entry) => entry.size))).toEqual(new Set([8.5]));
-   expect(new Set(itemRows.map((entry) => entry.page)).size).toBeGreaterThan(1);
+   expect(new Set(itemRows.map((entry) => entry.page)).size).toBe(1);
    expect(pdf.catalog.getViewerPreferences()?.getPrintScaling()).toBe(PrintScaling.None);
   }
  });

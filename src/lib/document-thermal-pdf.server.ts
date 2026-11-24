@@ -416,20 +416,35 @@ export async function buildThermalReceiptPdf(
     return Math.max(1, descriptionLines.length) * itemLineHeight + detailHeight + noteHeight + 7;
   };
 
-  // Cap PDF page length at 297 mm so viewers and drivers don't try to
-  // compress an entire long receipt onto one printable sheet.
-  const paperHeight = 841.89;
+  // Reserve a single continuous thermal PDF page.
+  // Trim unused space after all receipt content has been drawn.
+  const estimatedItemHeight = lines.reduce(
+    (height, line) => height + estimateLineHeight(line) + 32,
+    0,
+  );
+
+  const paperHeight = Math.max(
+    841.89,
+    estimatedItemHeight + 2600,
+  );
+
+  if (paperHeight > 14000) {
+    throw new Error(
+      "Receipt exceeds the supported single-page PDF height.",
+    );
+  }
 
   let page = pdf.addPage([paperWidth, paperHeight]);
 
   let y = paperHeight - 15;
 
   const continueRoll = (space: number) => {
-    if (y - space >= 15) return false;
-    page = pdf.addPage([paperWidth, paperHeight]);
-    y = paperHeight - 15;
-    drawWrappedCentered(`Receipt ${documentNumber} · page ${pdf.getPageCount()}`, 8.5, bold, 12);
-    return true;
+    if (y - space < 15) {
+      throw new Error(
+        "Receipt content exceeded the calculated thermal page height.",
+      );
+    }
+    return false;
   };
 
   const drawLeft = (
@@ -859,7 +874,7 @@ export async function buildThermalReceiptPdf(
   const unusedPaper = Math.max(0, y - 14);
   if (unusedPaper > 0) {
     page.translateContent(0, -unusedPaper);
-    page.setSize(paperWidth, paperHeight - unusedPaper);
+    page.setSize(paperWidth, page.getHeight() - unusedPaper);
   }
 
   pdf.setTitle(`Receipt ${documentNumber}`);
