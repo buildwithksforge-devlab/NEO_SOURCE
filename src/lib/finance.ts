@@ -19,6 +19,7 @@ export const ACCOUNT_CATEGORIES = [
   "operating_expense",
   "other_income",
   "other_expense",
+  "income_tax_expense",
 ] as const;
 
 export const PERIOD_STATUSES = ["future", "open", "soft_closed", "closed", "locked"] as const;

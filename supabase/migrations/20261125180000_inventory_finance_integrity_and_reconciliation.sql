@@ -136,6 +136,21 @@ BEGIN
         );
     END IF;
 
+    IF e.status = 'reversed'
+       AND e.finance_posting_status IN (
+           'pending','failed','unverified'
+       )
+    THEN
+
+        RETURN jsonb_build_object(
+            'status','coordinated-recovery-required',
+            'event_id',e.id,
+            'detail',
+                'Original COGS and restoration accounting must be reconciled together.'
+        );
+
+    END IF;
+
     RETURN public.neo_inventory_post_consumption_finance(
         e.id
     );
@@ -215,7 +230,7 @@ TO authenticated;
 
 CREATE OR REPLACE FUNCTION
 public.neo_inventory_finance_exceptions(
-    _limit integer DEFAULT 100
+    _limit integer DEFAULT 100, _branch uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -241,6 +256,13 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 
+    IF _branch IS NOT NULL
+       AND public.neo_branch_in_scope(_branch) IS NOT TRUE
+    THEN
+        RAISE EXCEPTION 'Property outside authorised scope'
+            USING ERRCODE = '42501';
+    END IF;
+
     v_limit := greatest(
         1,
         least(coalesce(_limit,100),500)
@@ -262,6 +284,7 @@ BEGIN
                 AS valuation_status
         FROM public.inventory_posting_events e
         WHERE e.organization_id = v_org
+          AND (_branch IS NULL OR e.branch_id = _branch)
           AND public.neo_branch_in_scope(e.branch_id) IS TRUE
           AND e.finance_posting_status IN (
               'pending','failed','unverified'
@@ -287,6 +310,7 @@ BEGIN
             r.attempt_count AS attempts
         FROM public.neo_inventory_finance_reversals r
         WHERE r.organization_id = v_org
+          AND (_branch IS NULL OR r.branch_id = _branch)
           AND public.neo_branch_in_scope(r.branch_id) IS TRUE
           AND r.status IN (
               'pending','failed','unverified'
@@ -305,11 +329,11 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION
-public.neo_inventory_finance_exceptions(integer)
+public.neo_inventory_finance_exceptions(integer,uuid)
 FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION
-public.neo_inventory_finance_exceptions(integer)
+public.neo_inventory_finance_exceptions(integer,uuid)
 TO authenticated;
 
 -- ============================================================

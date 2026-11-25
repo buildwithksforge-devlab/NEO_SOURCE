@@ -53,6 +53,7 @@ function ProfitLossPage() {
       { key: "revenue", title: "Revenue", description: "Income recognised from posted journals." },
       { key: "other_income", title: "Other income", description: "Income outside the trading lines." },
       { key: "cost_of_sales", title: "Cost of sales", description: "Direct cost of what was sold." },
+      { key: "income_tax_expense", title: "Income tax expense", description: "Income tax expense recognised through posted journals." },
       {
         key: "operating_expense",
         title: "Operating expenses",
@@ -92,7 +93,9 @@ function ProfitLossPage() {
   const otherExpenses = totalFor("other_expense");
   const grossProfit = revenue - costOfSales;
   const operatingProfit = grossProfit - expenses;
-  const netResult = operatingProfit + otherIncome - otherExpenses;
+  const incomeTaxExpense = totalFor("income_tax_expense");
+  const profitBeforeTax = operatingProfit + otherIncome - otherExpenses;
+  const netResult = profitBeforeTax - incomeTaxExpense;
   const margin = revenue > 0 ? (netResult / revenue) * 100 : null;
 
   const nothingPosted = groups.every((g) => g.lines.length === 0);
@@ -110,6 +113,8 @@ function ProfitLossPage() {
     { id: "expenses", label: "Operating expenses", value: money(expenses) },
     { id: "operating-profit", label: "Operating result", value: money(operatingProfit) },
     { id: "other-expenses", label: "Other expenses", value: money(otherExpenses) },
+    { id: "profit-before-tax", label: "Profit before income tax", value: money(profitBeforeTax) },
+    { id: "income-tax-expense", label: "Posted income tax", value: money(incomeTaxExpense) },
     {
       id: "margin",
       label: "Net margin",
@@ -201,6 +206,14 @@ function ProfitLossPage() {
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-muted-foreground">Other expenses</dt>
                   <dd className="tabular-nums font-medium">{money(otherExpenses)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Profit before income tax</dt>
+                  <dd className="tabular-nums font-medium">{money(profitBeforeTax)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Posted income tax expense</dt>
+                  <dd className="tabular-nums font-medium">{money(incomeTaxExpense)}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <dt className="font-semibold">{netResult < 0 ? "Posted net loss" : "Posted net profit"}</dt>

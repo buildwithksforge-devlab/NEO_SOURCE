@@ -315,7 +315,37 @@ BEGIN
         $old$UPDATE inventory_posting_events SET status = 'reversed', updated_at = now()
    WHERE id = v_event.id;$old$,
 
-        $new$IF v_restoration_count > 0 THEN
+        $new$IF v_restoration_count > 0
+   AND NOT EXISTS (
+       SELECT 1
+       FROM public.stock_movements original
+       WHERE original.organization_id = NEW.organization_id
+         AND original.reference_type = 'pos_order_item'
+         AND original.reference_id = NEW.id
+         AND original.movement_type = 'consumption'
+         AND original.quantity < 0
+         AND NOT EXISTS (
+             SELECT 1
+             FROM public.stock_movements restored
+             WHERE restored.organization_id =
+                   original.organization_id
+               AND restored.reference_type =
+                   original.reference_type
+               AND restored.reference_id =
+                   original.reference_id
+               AND restored.stock_item_id =
+                   original.stock_item_id
+               AND restored.location_id =
+                   original.location_id
+               AND restored.movement_type = 'reversal'
+               AND restored.idempotency_key =
+                   'reverse:' || NEW.id::text ||
+                   ':' || original.id::text
+               AND restored.quantity =
+                   abs(original.quantity)
+         )
+   )
+THEN
 
       UPDATE public.inventory_posting_events
          SET status = 'reversed',

@@ -1675,6 +1675,19 @@ export function useSendOrder() {
         _attempt: stableIdempotencyUuid("pos", "send_to_kitchen", [orderId]),
       } as never);
       if (error) throw error;
+      if (
+        data &&
+        typeof data === "object" &&
+        !Array.isArray(data) &&
+        (data as Record<string, unknown>)["ok"] === false
+      ) {
+        const failure = data as Record<string, unknown>;
+        throw new Error(
+          typeof failure["message"] === "string"
+            ? failure["message"]
+            : "Production handoff failed. Supervisor review required."
+        );
+      }
       const saved = requireSavedRecord(data, ["order_id"], "Kitchen dispatch did not confirm the saved order.");
       if (saved["order_id"] !== orderId)
         throw new Error("Kitchen dispatch returned a different order.");

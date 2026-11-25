@@ -127,6 +127,7 @@ try {
         );
 
         CREATE TABLE public.inventory_posting_events (
+    status text NOT NULL DEFAULT 'posted',
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             organization_id uuid,
             branch_id uuid,

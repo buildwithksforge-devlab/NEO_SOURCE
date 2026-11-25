@@ -14,6 +14,12 @@
 export type RpcCaller = "anon" | "authenticated" | "service_role";
 
 export const RPC_MANIFEST: Record<string, RpcCaller> = {
+  neo_pos_handoff_recovery_queue: "authenticated",
+  neo_pos_handoff_full_investigation: "authenticated",
+  neo_pos_review_failed_handoff: "authenticated",
+  neo_inventory_finance_exceptions: "authenticated",
+  neo_retry_inventory_consumption_finance: "authenticated",
+  neo_retry_inventory_restoration_finance: "authenticated",
   neo_pos_my_order_history: "authenticated",
   neo_pos_consumption_exception_queue: "authenticated",
   neo_mpesa_receipt_review_request: "authenticated",
