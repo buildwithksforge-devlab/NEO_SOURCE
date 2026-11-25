@@ -58,6 +58,11 @@ function ProfitLossPage() {
         title: "Operating expenses",
         description: "Running cost posted into this period.",
       },
+      {
+        key: "other_expense",
+        title: "Other expenses",
+        description: "Other non-trading expenses posted into this period.",
+      },
     ];
     const rows = (trial.data ?? []) as Array<Record<string, unknown>>;
     return spec.map((g) => {
@@ -84,15 +89,17 @@ function ProfitLossPage() {
   const otherIncome = totalFor("other_income");
   const costOfSales = totalFor("cost_of_sales");
   const expenses = totalFor("operating_expense");
+  const otherExpenses = totalFor("other_expense");
   const grossProfit = revenue - costOfSales;
-  const netResult = revenue + otherIncome - costOfSales - expenses;
+  const operatingProfit = grossProfit - expenses;
+  const netResult = operatingProfit + otherIncome - otherExpenses;
   const margin = revenue > 0 ? (netResult / revenue) * 100 : null;
 
   const nothingPosted = groups.every((g) => g.lines.length === 0);
 
   const lead: SummaryFigure = {
     id: "net",
-    label: netResult < 0 ? "Net loss" : "Net profit",
+    label: netResult < 0 ? "Posted net loss" : "Posted net profit",
     value: money(netResult),
     hint: `${shortDate(from)} – ${shortDate(to)} · posted journals only`,
     tone: netResult < 0 ? "destructive" : "success",
@@ -101,6 +108,8 @@ function ProfitLossPage() {
     { id: "revenue", label: "Revenue", value: money(revenue) },
     { id: "gross", label: "Gross profit", value: money(grossProfit), hint: "Revenue less cost of sales" },
     { id: "expenses", label: "Operating expenses", value: money(expenses) },
+    { id: "operating-profit", label: "Operating result", value: money(operatingProfit) },
+    { id: "other-expenses", label: "Other expenses", value: money(otherExpenses) },
     {
       id: "margin",
       label: "Net margin",
@@ -186,7 +195,15 @@ function ProfitLossPage() {
                   <dd className="tabular-nums font-medium">{money(expenses)}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="font-semibold">{netResult < 0 ? "Net loss" : "Net profit"}</dt>
+                  <dt className="text-muted-foreground">Operating result</dt>
+                  <dd className="tabular-nums font-medium">{money(operatingProfit)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Other expenses</dt>
+                  <dd className="tabular-nums font-medium">{money(otherExpenses)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="font-semibold">{netResult < 0 ? "Posted net loss" : "Posted net profit"}</dt>
                   <dd className="tabular-nums font-semibold">{money(netResult)}</dd>
                 </div>
               </dl>
