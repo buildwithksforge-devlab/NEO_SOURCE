@@ -196,6 +196,23 @@ $patch$
         ''
     );
 
+    IF (
+        length(d)-length(
+            replace(
+                d,
+                'IF amount = 0 AND remainder = 0 THEN',
+                ''
+            )
+        )
+    ) <> length(
+        'IF amount = 0 AND remainder = 0 THEN'
+    ) THEN
+
+        RAISE EXCEPTION
+            'Cancellation recognition anchor missing or ambiguous';
+
+    END IF;
+
     d := replace(
         d,
         'IF amount = 0 AND remainder = 0 THEN',

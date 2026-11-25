@@ -186,43 +186,5 @@ public.neo_pos_secondary_station_evidence(uuid,uuid,uuid)
 FROM PUBLIC,anon,authenticated;
 
 
-DO $migration$
-DECLARE
-    d text;
-    anchor text := '''routing_verified'',false,';
-BEGIN
-
-    d := pg_get_functiondef(
-        'public.neo_pos_handoff_full_investigation(uuid)'
-        ::regprocedure
-    );
-
-    IF (
-        length(d)-length(replace(d,anchor,''))
-    ) / length(anchor) <> 1 THEN
-
-        RAISE EXCEPTION
-            'Secondary routing investigation anchor missing';
-
-    END IF;
-
-    d := replace(
-        d,
-        anchor,
-        $replacement$
-        'secondary_station_coverage',
-            public.neo_pos_secondary_station_evidence(
-                f.organization_id,
-                f.branch_id,
-                f.order_id
-            ),
-        'routing_verified',false,
-$replacement$
-    );
-
-    EXECUTE d;
-
-END;
-$migration$;
 
 COMMIT;

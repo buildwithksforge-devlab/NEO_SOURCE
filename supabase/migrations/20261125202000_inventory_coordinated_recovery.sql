@@ -126,6 +126,7 @@ BEGIN
 
     IF e.status = 'reversed'
        AND e.finance_journal_id IS NULL
+       AND e.finance_posting_status IS DISTINCT FROM 'zero-value'
     THEN
         RETURN jsonb_build_object(
             'status','coordinated-recovery-required',
@@ -158,10 +159,10 @@ BEGIN
 
     IF e.finance_journal_id IS NULL
        AND NOT (
-           e.cost_snapshot = 0
+           e.cost_snapshot >= 0 AND round(e.cost_snapshot,2) = 0
            AND e.payload->>'valuation_status' = 'verified'
            AND e.finance_posting_status IN (
-               'posted','zero-cost'
+               'zero-value'
            )
        ) IS TRUE
     THEN

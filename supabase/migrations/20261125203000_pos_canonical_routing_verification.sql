@@ -213,10 +213,14 @@ public.neo_pos_canonical_routing_evidence(uuid,uuid,uuid)
 FROM PUBLIC,anon,authenticated;
 
 
-DO $migration$
+
+DO $integration$
 DECLARE
     d text;
-    anchor text := '''routing_verified'',false,';
+    anchor text :=
+        '''routing_verified'',' || chr(10) ||
+        '            FALSE,';
+
 BEGIN
 
     d := pg_get_functiondef(
@@ -224,37 +228,41 @@ BEGIN
         ::regprocedure
     );
 
+    IF md5(d) <>
+       'dc9c7bf852bcb3f65c30a2923c026b98'
+    THEN
+        RAISE EXCEPTION
+            'Existing investigation source drift';
+    END IF;
+
     IF (
         length(d)-length(replace(d,anchor,''))
     ) / length(anchor) <> 1 THEN
+
         RAISE EXCEPTION
-            'Canonical routing verification anchor missing';
+            'Canonical evidence integration anchor missing';
+
     END IF;
 
     d := replace(
         d,
         anchor,
-        $patch$
+        $replacement$
         'canonical_routing_evidence',
             public.neo_pos_canonical_routing_evidence(
-                f.organization_id,
-                f.branch_id,
-                f.order_id
+                (v_investigation->>'organization_id')::uuid,
+                (v_investigation->>'branch_id')::uuid,
+                (v_investigation->>'order_id')::uuid
             ),
+
         'routing_verified',
-            (
-                public.neo_pos_canonical_routing_evidence(
-                    f.organization_id,
-                    f.branch_id,
-                    f.order_id
-                )->>'routing_verified'
-            )::boolean,
-$patch$
+            FALSE,
+$replacement$
     );
 
     EXECUTE d;
 
 END;
-$migration$;
+$integration$;
 
 COMMIT;
