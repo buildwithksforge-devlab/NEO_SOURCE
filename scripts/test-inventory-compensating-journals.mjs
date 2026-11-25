@@ -175,6 +175,16 @@ try {
     await db.exec(`
         CREATE ROLE anon;
         CREATE ROLE authenticated;
+        CREATE FUNCTION public.neo_fact_timezone(uuid,uuid)
+        RETURNS text
+        LANGUAGE sql STABLE
+        AS $$ SELECT 'Africa/Nairobi'::text $$;
+
+        CREATE FUNCTION public.neo_fact_currency(uuid,uuid)
+        RETURNS text
+        LANGUAGE sql STABLE
+        AS $$ SELECT 'KES'::text $$;
+
 
         CREATE FUNCTION current_org_id()
         RETURNS uuid LANGUAGE sql STABLE

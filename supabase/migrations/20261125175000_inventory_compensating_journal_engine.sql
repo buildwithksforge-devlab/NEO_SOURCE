@@ -103,7 +103,7 @@ BEGIN
         _restoration_movement_id,
         (v_movement->>'restored_quantity')::numeric,
         (v_movement->>'restored_value')::numeric,
-        (m.created_at AT TIME ZONE 'Africa/Nairobi')::date,
+        (m.created_at AT TIME ZONE public.neo_fact_timezone(e.organization_id,e.branch_id))::date,
         'pending'
     FROM public.stock_movements m
     WHERE m.id = _restoration_movement_id

@@ -9,7 +9,14 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { money } from "@/lib/pos";
-import { usePosCollectionEvidence } from "@/lib/pos-data";
+import {
+  usePosCollectionEvidence,
+  usePosStaffDisplayNames,
+} from "@/lib/pos-data";
+
+import {
+  posReportingErrorMessage,
+} from "@/lib/pos-reporting-errors";
 
 export function PosCollectionEvidenceCard({
   from,
@@ -20,6 +27,10 @@ export function PosCollectionEvidenceCard({
 }) {
   const query = usePosCollectionEvidence(from, to);
   const rows = query.data ?? [];
+
+  const staffNames = usePosStaffDisplayNames(
+    rows.map((row) => row.cashier_profile_id),
+  );
 
   const amount = (
     value: number | string | null | undefined,
@@ -49,9 +60,7 @@ export function PosCollectionEvidenceCard({
       ) : query.isError ? (
         <div role="alert" className="space-y-2">
           <p className="text-sm text-destructive">
-            Cashier collection evidence could not be loaded.
-            Check the reporting period, property access and
-            whether the database function has been installed.
+            {posReportingErrorMessage(query.error)}
           </p>
 
           <Button
@@ -116,7 +125,8 @@ export function PosCollectionEvidenceCard({
                   >
                     <TableCell className="text-xs">
                       {row.cashier_profile_id
-                        ? `Staff ${row.cashier_profile_id.slice(0, 8)}`
+                        ? staffNames.data?.[row.cashier_profile_id] ??
+                          `Staff ${row.cashier_profile_id.slice(0, 8)}`
                         : "Cashier not recorded"}
                     </TableCell>
 

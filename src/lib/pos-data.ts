@@ -747,6 +747,73 @@ export function usePosCollectionEvidence(
   });
 }
 
+
+/**
+ * Resolves names for identities already returned by
+ * authorized POS reporting functions.
+ *
+ * This uses the signed-in user's Supabase session and
+ * does not bypass profile row-level security.
+ */
+export function usePosStaffDisplayNames(
+  profileIds: readonly (string | null | undefined)[],
+) {
+  const { organizationId, user } = useAuth();
+
+  const ids = [
+    ...new Set(
+      profileIds.filter(
+        (id): id is string =>
+          typeof id === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+      ),
+    ),
+  ].sort();
+
+  const identityKey = ids.join(",");
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "authorized-staff-names",
+      organizationId,
+      user?.id,
+      identityKey,
+    ],
+
+    enabled: Boolean(
+      organizationId &&
+      user?.id &&
+      ids.length > 0,
+    ),
+
+    queryFn: async (): Promise<Record<string, string>> => {
+      const result: Record<string, string> = {};
+
+      for (let index = 0; index < ids.length; index += 100) {
+        const batch = ids.slice(index, index + 100);
+
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", batch);
+
+        if (error) throw error;
+
+        for (const profile of data ?? []) {
+          const name = profile.full_name?.trim();
+
+          if (name) {
+            result[profile.id] = name;
+          }
+        }
+      }
+
+      return result;
+    },
+  });
+}
+
 export function useTeamPosPerformance(from: string, to: string) {
   const { organizationId, user } = useAuth();
   const { branchId, filterKey } = useActivePropertyFilter();
@@ -933,6 +1000,66 @@ export function usePosOrderHistory(
   });
 }
 
+export type MyHandledPosOrder = {
+  order_id: string;
+  order_number: string;
+  branch_id: string | null;
+  order_status: string;
+  order_value: number | null;
+  created_at: string;
+  closed_at: string | null;
+  original_creator: boolean;
+  current_waiter: boolean;
+  previously_assigned: boolean;
+};
+
+export function useMyHandledPosOrders(
+  fromDate: string,
+  toDate: string,
+  closedOnly: boolean,
+  page = 0,
+) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "my-permanent-order-history",
+      organizationId,
+      user?.id,
+      filterKey,
+      fromDate,
+      toDate,
+      closedOnly,
+      page,
+    ],
+
+    enabled: Boolean(organizationId && user?.id),
+
+    queryFn: async (): Promise<MyHandledPosOrder[]> => {
+      const safePage = Math.max(0, Math.floor(page));
+
+      const { data, error } = await supabase.rpc(
+        "neo_pos_my_order_history" as never,
+        {
+          _from: fromDate || null,
+          _to: toDate || null,
+          _branch: branchId || null,
+          _closed_only: closedOnly,
+          _limit: 50,
+          _offset: safePage * 50,
+        } as never,
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as MyHandledPosOrder[];
+    },
+  });
+}
 export type PosAssignmentHistoryEvent = {
   id: string;
   order_id: string;
@@ -1762,6 +1889,52 @@ export type SettlementResult = {
   closed: boolean;
 };
 
+function explainPosPaymentFailure(error: Error): string {
+  const message = error.message || "Unknown payment processing error.";
+  const code = String(
+    (error as Error & { code?: string }).code ?? ""
+  ).toUpperCase();
+
+  if (
+    /NEO_STOCK_POSTING_REQUIRED|NEO_ORDER_SNAPSHOT_REQUIRED|stock posting|inventory consumption/i.test(message)
+  ) {
+    return (
+      "Inventory reconciliation requires attention. " +
+      "Check the order, saved receipts and stock exceptions before taking action. " +
+      "Do not collect payment again unless its status is verified. " +
+      `Details: ${message}`
+    );
+  }
+
+  if (
+    /INSUFFICIENT|STOCK_SHORTAGE|UNIT_CONVERSION|RECIPE|INGREDIENT/i.test(message)
+  ) {
+    return (
+      "An inventory or recipe validation failed. " +
+      "Check the departmental stock, recipe and original transaction. " +
+      "Verify payment status before retrying. " +
+      `Details: ${message}`
+    );
+  }
+
+  if (
+    /TIMEOUT|NETWORK|FETCH|CONNECTION|ABORT/i.test(message) ||
+    ["PGRST000", "PGRST001", "PGRST002", "PGRST003", "08000", "08003", "08006"].includes(code)
+  ) {
+    return (
+      "Payment confirmation could not be verified. " +
+      "The server may have processed the request. " +
+      "Refresh the bill and check saved payment evidence before trying again. " +
+      `Details: ${message}`
+    );
+  }
+
+  return (
+    "Payment operation was not confirmed. " +
+    "Check the bill and receipt history before retrying. " +
+    `Details: ${message}`
+  );
+}
 function settlementToast(r: SettlementResult) {
   if (r.finance && typeof r.finance === "object" && "ok" in r.finance && r.finance.ok === false) {
     toast.warning("Payment saved, but Finance posting needs attention. Check the saved receipt; do not collect the payment again.");
@@ -1788,7 +1961,10 @@ function settlementToast(r: SettlementResult) {
     : "";
 
   if (r.closed) {
-    toast.success(`Bill fully settled and closed.${receipt}`);
+    toast.success(
+      `Bill payment settled and order closed.${receipt} ` +
+      "Inventory consumption and Finance reconciliation are verified separately."
+    );
     return;
   }
 
@@ -1827,7 +2003,7 @@ export function useRecordPayment() {
       shiftId?: string | null;
       manualConfirm?: boolean;
       note?: string;
-      idempotencyKey?: string;
+      idempotencyKey: string;
       /** Which bank account the acquirer is expected to settle into later. */
       destinationAccountId?: string | null;
       /** Safe manual-terminal metadata only. Never PAN/CVV/PIN/track data. */
@@ -1837,6 +2013,15 @@ export function useRecordPayment() {
         last4?: string;
       };
     }) => {
+      const paymentKey = input.idempotencyKey?.trim();
+
+      if (!paymentKey) {
+        throw new Error(
+          "Payment identity is missing. No payment request was sent. " +
+          "Verify the bill before starting a collection attempt."
+        );
+      }
+
       const rpcArgs = input.paymentMetadata
         ? {
             _order_id: input.orderId,
@@ -1845,7 +2030,7 @@ export function useRecordPayment() {
             _tendered: input.tendered ?? null,
             _reference: input.externalReference ?? null,
             _shift_id: input.shiftId ?? null,
-            _idempotency_key: input.idempotencyKey ?? null,
+            _idempotency_key: paymentKey,
             _manual_confirm: Boolean(input.manualConfirm),
             _note: input.note ?? null,
             _account: input.destinationAccountId ?? null,
@@ -1860,7 +2045,7 @@ export function useRecordPayment() {
             ...(input.tendered === undefined ? {} : { _tendered: input.tendered }),
             ...(input.externalReference ? { _reference: input.externalReference } : {}),
             ...(input.shiftId ? { _shift_id: input.shiftId } : {}),
-            ...(input.idempotencyKey ? { _idempotency_key: input.idempotencyKey } : {}),
+            _idempotency_key: paymentKey,
             ...(input.note ? { _note: input.note } : {}),
           };
 
@@ -1876,7 +2061,10 @@ export function useRecordPayment() {
       settlementToast(r);
       void qc.invalidateQueries({ queryKey: ["pos"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(explainPosPaymentFailure(e));
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+    },
   });
 }
 
@@ -1913,7 +2101,10 @@ export function useConfirmManualPayment() {
       void qc.invalidateQueries({ queryKey: ["pos"] });
     },
 
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(explainPosPaymentFailure(e));
+      void qc.invalidateQueries({ queryKey: ["pos"] });
+    },
   });
 }
 

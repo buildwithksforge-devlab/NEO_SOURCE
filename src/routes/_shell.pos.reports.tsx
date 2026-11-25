@@ -1,3 +1,28 @@
+import { PosHandoffRecoveryCard } from "../components/pos/PosHandoffRecoveryCard";
+
+const neoHandoffRpc = async (
+  name: string,
+  args: Record<string, unknown>
+): Promise<{
+  data: unknown;
+  error: { message: string } | null;
+}> => {
+  const result = await supabase.rpc(
+    name as never,
+    args as never
+  );
+
+  return {
+    data: result.data,
+    error: result.error
+      ? { message: result.error.message }
+      : null,
+  };
+};
+
+import { supabase } from "@/integrations/supabase/client";
+import { PosConsumptionExceptionCard } from "@/components/pos/PosConsumptionExceptionCard";
+import { kenyaBusinessDate } from "@/lib/kenya-business-date";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader, SectionCard, TableScroll } from "@/components/common/DataDisplay";
@@ -16,7 +41,16 @@ import { money, titleCase } from "@/lib/pos";
 import {
   usePosCompletePeriodOrders,
   useTeamPosPerformance,
+  usePosStaffDisplayNames,
 } from "@/lib/pos-data";
+
+import {
+  unusualPosBillIds,
+} from "@/lib/pos-reporting-anomalies";
+
+import {
+  posReportingErrorMessage,
+} from "@/lib/pos-reporting-errors";
 import { NeoDatePicker } from "@/components/common/DatePicker";
 import { PosCollectionEvidenceCard } from "@/components/pos/PosCollectionEvidenceCard";
 import { PosFullPeriodFinancialCard } from "@/components/pos/PosFullPeriodFinancialCard";
@@ -39,13 +73,13 @@ import {
 export const Route = createFileRoute("/_shell/pos/reports")({
   head: () => ({
     meta: [
-      { title: "POS Reports — NEØ" },
+      { title: "POS Reports â€” NEÃ˜" },
       {
         name: "description",
         content:
           "Sales by outlet, order type and payment method, calculated only from finalised transactions.",
       },
-      { property: "og:title", content: "POS Reports — NEØ" },
+      { property: "og:title", content: "POS Reports â€” NEÃ˜" },
       {
         property: "og:description",
         content:
@@ -109,6 +143,10 @@ function TeamPosPerformanceCard({
 
   const rows = performance.data ?? [];
 
+  const staffNames = usePosStaffDisplayNames(
+    rows.map((row) => row.profile_id),
+  );
+
   const amount = (value: number | string | null | undefined) =>
     Number(value ?? 0);
 
@@ -129,7 +167,7 @@ function TeamPosPerformanceCard({
       ) : performance.error ? (
         <p role="alert" className="text-sm text-destructive">
           Employee performance is unavailable:{" "}
-          {performance.error.message}
+          {posReportingErrorMessage(performance.error)}
         </p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -154,7 +192,7 @@ function TeamPosPerformanceCard({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee profile</TableHead>
+                  <TableHead>Employee</TableHead>
                   <TableHead className="text-right">
                     Created
                   </TableHead>
@@ -190,7 +228,8 @@ function TeamPosPerformanceCard({
                   return (
                     <TableRow key={row.profile_id}>
                       <TableCell className="font-mono text-xs">
-                        {row.profile_id.slice(0, 8)}
+                        {staffNames.data?.[row.profile_id] ??
+                          `Staff ${row.profile_id.slice(0, 8)}`}
                       </TableCell>
                       <TableCell className="text-right">
                         {amount(row.orders_created)}
@@ -223,10 +262,10 @@ function TeamPosPerformanceCard({
           </TableScroll>
 
           <p className="mt-3 text-xs text-muted-foreground">
-            Employee identifiers are shown temporarily until
-            the authorized HR identity lookup is connected.
-            Only employees visible within the database reporting
-            scope are included.
+            Employee names are resolved from authorized profiles.
+            If a profile is not visible under database permissions,
+            its shortened identifier is shown instead.
+            Figures are operational activity, not certified revenue.
           </p>
         </>
       )}
@@ -236,7 +275,7 @@ function TeamPosPerformanceCard({
 
 function ReportsPage() {
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kenyaBusinessDate();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [sourcePage, setSourcePage] = useState(0);
@@ -311,7 +350,33 @@ function ReportsPage() {
     });
   }
 
-  const exceptions = useMemo(() => collectExceptions(rows, EXCEPTION_RULES), [rows]);
+  const unusualBillIds = useMemo(
+    () => unusualPosBillIds(rows),
+    [rows],
+  );
+
+  const exceptions = useMemo(
+    () =>
+      collectExceptions(
+        rows,
+        [
+          ...EXCEPTION_RULES,
+          {
+            id: "unusually-large-bill",
+            severity: "high",
+            when: (bill) => unusualBillIds.has(bill.id),
+            title: (bill) =>
+              `Unusually large bill ${bill.order_number}`,
+            detail: (bill) =>
+              `Finalized bill value ${money(
+                Number(bill.grand_total ?? 0),
+              )}. Review the source transaction; this flag does not establish fraud or an accounting error.`,
+            recordId: (bill) => bill.id,
+          },
+        ] satisfies ExceptionRule<SalesRow>[],
+      ),
+    [rows, unusualBillIds],
+  );
 
   const columns: ReportColumn<SalesRow>[] = [
     { key: "order", header: "Bill", value: (o) => o.order_number },
@@ -359,6 +424,14 @@ function ReportsPage() {
         </div>
         <div className="mt-4">
           <PosCollectionEvidenceCard from={from} to={to} />
+
+          {/* Production handoff recovery and investigation */}
+          <PosHandoffRecoveryCard
+            callRpc={neoHandoffRpc}
+          />
+        <div className="mt-6">
+          <PosConsumptionExceptionCard />
+        </div>
         </div>
       </div>
 
@@ -441,7 +514,7 @@ function ReportsPage() {
                 <TableRow>
                   <TableHead>Order type</TableHead>
                   <TableHead>Bills</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="text-right">Finalized bill value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -462,7 +535,7 @@ function ReportsPage() {
       <SectionCard
         className="mt-6"
         title="Source bills"
-        description="The exact records the figures above are built from — open any of them to verify."
+        description="The exact records the figures above are built from â€” open any of them to verify."
       >
         <QueryState
           isLoading={orders.isLoading}

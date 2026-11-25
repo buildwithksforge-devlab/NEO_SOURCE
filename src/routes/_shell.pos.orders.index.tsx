@@ -24,7 +24,7 @@ import {
 import { EmptyState, OrderStatusBadge, PosGuard, QueryState } from "@/components/pos/PosShared";
 import { RecordDialog } from "./_shell.pos.floor";
 import { MANUAL_ORDER_TYPES, ORDER_TYPES, money, titleCase } from "@/lib/pos";
-import { useCreateOrder, useMyPosPerformance, usePosOrderHistory, useRestaurantTables } from "@/lib/pos-data";
+import { useCreateOrder, useMyHandledPosOrders, useMyPosPerformance, usePosOrderHistory, useRestaurantTables } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/_shell/pos/orders/")({
   head: () => ({
@@ -169,6 +169,12 @@ function OrdersPage() {
     from: fromDate,
     to: toDate,
   });
+  const handledOrders = useMyHandledPosOrders(
+    fromDate,
+    toDate,
+    scope === "closed",
+    page,
+  );
   const tables = useRestaurantTables();
   const createOrder = useCreateOrder();
 
@@ -295,6 +301,80 @@ function OrdersPage() {
         />
       </div>
 
+      {ownership === "mine" && scope !== "open" && (
+        <SectionCard
+          title="My Permanent Order History"
+          description="Orders you created, handled or received through reassignment, including closed and transferred orders."
+        >
+          <QueryState
+            isLoading={handledOrders.isLoading}
+            error={handledOrders.error}
+            isEmpty={(handledOrders.data ?? []).length === 0}
+            empty={
+              <EmptyState
+                icon={ReceiptText}
+                title="No matching historical orders"
+                description="Try another date range or select All orders."
+              />
+            }
+          >
+            <TableScroll>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>My involvement</TableHead>
+                    <TableHead className="text-right">Bill value</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {(handledOrders.data ?? []).map((order) => (
+                    <TableRow key={order.order_id}>
+                      <TableCell className="font-mono text-xs">
+                        {order.order_number}
+                      </TableCell>
+
+                      <TableCell>
+                        {new Date(
+                          order.closed_at ?? order.created_at,
+                        ).toLocaleString("en-KE", {
+                          timeZone: "Africa/Nairobi",
+                        })}
+                      </TableCell>
+
+                      <TableCell>
+                        {titleCase(order.order_status)}
+                      </TableCell>
+
+                      <TableCell>
+                        {[
+                          order.original_creator && "Created",
+                          order.current_waiter && "Current waiter",
+                          order.previously_assigned && "Handled / assigned",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        {money(Number(order.order_value ?? 0))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableScroll>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Showing up to 50 records for this page.
+              The selected date range applies to this history.
+            </p>
+          </QueryState>
+        </SectionCard>
+      )}
       <SectionCard title="Orders" description="Select an order to open the service terminal.">
         <QueryState
           isLoading={orders.isLoading}

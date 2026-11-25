@@ -1,4 +1,6 @@
 import { DeleteIncorrectEmployeeButton } from "@/components/hr/DeleteIncorrectEmployeeButton";
+import { EmployeePosActivityCard } from "@/components/hr/EmployeePosActivityCard";
+import { EmployeeHousekeepingActivityCard } from "@/components/hr/EmployeeHousekeepingActivityCard";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, CalendarPlus } from "lucide-react";
@@ -218,6 +220,26 @@ function EmployeeProfile() {
                 </div>
               }
             />
+
+            {can("pos", "reports.view") ? (
+              <EmployeePosActivityCard
+                profileId={
+                  typeof e["profile_id"] === "string"
+                    ? e["profile_id"]
+                    : null
+                }
+              />
+            ) : null}
+
+            {can("housekeeping", "view") ? (
+              <EmployeeHousekeepingActivityCard
+                profileId={
+                  typeof e["profile_id"] === "string"
+                    ? e["profile_id"]
+                    : null
+                }
+              />
+            ) : null}
 
             <Tabs defaultValue="overview">
               <TabsList className="flex flex-wrap">

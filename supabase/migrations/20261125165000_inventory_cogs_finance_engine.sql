@@ -137,7 +137,7 @@ BEGIN
     -- Retries must not silently move costs into another period.
 
     v_date :=
-        (e.created_at AT TIME ZONE 'Africa/Nairobi')::date;
+        (e.created_at AT TIME ZONE public.neo_fact_timezone(e.organization_id,e.branch_id))::date;
 
     BEGIN
 
@@ -163,7 +163,7 @@ BEGIN
             e.id,
             'consumption_cogs',
             v_date,
-            'KES',
+            public.neo_fact_currency(e.organization_id,e.branch_id),
             'Inventory consumption cost',
             jsonb_build_array(
                 jsonb_build_object(
