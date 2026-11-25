@@ -1,3 +1,4 @@
+import { isValidPosReportingDate } from "@/lib/pos-reporting-dates";
 import { requireVoidResult } from "@/lib/pos-void-result";
 import { rejectBusinessFailure, requireSavedRecord, requirePosPaymentResult, requireMpesaReceiptReviewResult } from "@/lib/durable-command-result";
 import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
@@ -329,8 +330,7 @@ export function usePosCompletePeriodOrders(
     ),
 
     queryFn: async () => {
-      const validDate = (value: string) =>
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(value);
+      const validDate = isValidPosReportingDate;
 
       const dates = [
         from,
