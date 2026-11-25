@@ -1,4 +1,4 @@
-export type DisplayDepartment = "kitchen" | "bar" | "coffee" | "pastry" | "overview";
+﻿export type DisplayDepartment = "kitchen" | "bar" | "coffee" | "pastry" | "overview";
 export type DisplayStation = {
   id: string;
   name: string;
@@ -53,24 +53,89 @@ export function stationDepartment(
   station: DisplayStation,
 ): Exclude<DisplayDepartment, "overview"> | null {
   const type = (station.station_type ?? "").trim().toLowerCase();
+
+  // Service and support records must never enter production displays.
   if (type === "service" || type === "support") return null;
-  // Explicit display types win over incidental words in a station's label.
-  if (type === "coffee" || type === "pastry" || type === "bar" || type === "kitchen") return type;
-  const configuredDepartment = (station.department_key ?? "").trim().toLowerCase().replaceAll("_", "-");
-  if (configuredDepartment === "main-kitchen" || configuredDepartment === "kitchen") return "kitchen";
-  if (configuredDepartment === "bar" || configuredDepartment === "coffee" || configuredDepartment === "pastry") return configuredDepartment;
-  // An explicit unrelated department must not become a production display
-  // merely because its label happens to contain Coffee, Bar or Kitchen.
-  if (configuredDepartment) return null;
-  const label = `${station.code ?? ""} ${station.name}`.toLowerCase().replace(/[_-]+/g, " ");
-  // Legacy beverage stations include the existing Coffee Station configuration.
-  if (/\b(coffee|barista)\b/.test(label)) return "coffee";
-  if (/\b(pastry|bakery|dessert)\b/.test(label)) return "pastry";
-  if (type === "beverage" || /\b(bar|beverage)\b/.test(label)) return "bar";
-  if (/\b(kitchen|grill|larder|pizza|fry|salad)\b/.test(label)) return "kitchen";
+
+  // Explicit station identities are authoritative.
+  if (
+    type === "coffee" ||
+    type === "pastry" ||
+    type === "bar" ||
+    type === "kitchen"
+  ) {
+    return type;
+  }
+
+  const department = (station.department_key ?? "")
+    .trim()
+    .toLowerCase()
+    .replaceAll("_", "-");
+
+  const label = `${station.code ?? ""} ${station.name}`
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+
+  const isCoffee = /\b(coffee|barista)\b/.test(label);
+  const isPastry = /\b(pastry|bakery|dessert)\b/.test(label);
+
+  // Recognize the existing dedicated production departments.
+  if (
+    department === "pastry" ||
+    department === "pastry-and-bakery"
+  ) {
+    return "pastry";
+  }
+
+  if (department === "coffee") return "coffee";
+
+  // Existing coffee stations can belong to the Bar department.
+  // Their specific production identity takes precedence over
+  // the broader department classification.
+  if (department === "bar") {
+    return isCoffee ? "coffee" : "bar";
+  }
+
+  if (
+    department === "main-kitchen" ||
+    department === "kitchen"
+  ) {
+    return "kitchen";
+  }
+
+  // Existing coffee stations commonly belong to Food & Beverage.
+  // Identify the production station without treating every F&B
+  // service station as a production screen.
+  if (
+    department === "food-and-beverage" ||
+    department === "food-beverage"
+  ) {
+    if (isCoffee) return "coffee";
+    if (isPastry) return "pastry";
+
+    if (type === "beverage") return "bar";
+
+    return null;
+  }
+
+  // Do not infer production access from the name of a station
+  // explicitly assigned to an unrelated department.
+  if (department) return null;
+
+  // Legacy stations without canonical department metadata.
+  if (isCoffee) return "coffee";
+  if (isPastry) return "pastry";
+
+  if (type === "beverage" || /\b(bar|beverage)\b/.test(label)) {
+    return "bar";
+  }
+
+  if (/\b(kitchen|grill|larder|pizza|fry|salad)\b/.test(label)) {
+    return "kitchen";
+  }
+
   return null;
 }
-
 export function displayStations(stations: DisplayStation[], department: DisplayDepartment) {
   return department === "overview"
     ? stations.filter((s) => !["service", "support"].includes(s.station_type?.trim().toLowerCase() ?? ""))

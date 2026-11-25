@@ -54,6 +54,7 @@ import {
   useOpenFolioForStay,
   explainPosStatusError,
   usePosOrder,
+  usePosAssignmentHistory,
   useRefreshBillTotalsOnOpen,
   usePosStockAvailability,
   usePosOrderDiagnostics,
@@ -109,6 +110,182 @@ function SavedItemTaxes({ snapshot }: { snapshot: unknown }) {
         return <li key={`${tax.code}-${index}`}>{rate}{tax.name} · {money(tax.amount)} {tax.inclusive ? "included" : "added"}</li>;
       })}
     </ul>
+  );
+}
+
+
+function PosAssignmentHistoryCard({
+  orderId,
+}: {
+  orderId: string;
+}) {
+  const [page, setPage] = useState(0);
+  const history = usePosAssignmentHistory(orderId, page);
+
+  const events = history.data?.events ?? [];
+  const total = history.data?.total ?? 0;
+  const pageSize = 50;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(total / pageSize),
+  );
+
+  const person = (id: string | null) =>
+    id ? `Staff ${id.slice(0, 8)}` : "Not recorded";
+
+  const eventLabel = (event: string) => {
+    switch (event) {
+      case "baseline":
+        return "Historical baseline";
+      case "created":
+        return "Order created";
+      case "assigned":
+        return "Waiter assigned";
+      case "transferred":
+        return "Order transferred";
+      case "unassigned":
+        return "Waiter unassigned";
+      default:
+        return event;
+    }
+  };
+
+  const eventDate = (value: string) => {
+    const parsed = new Date(value);
+
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleString();
+  };
+
+  return (
+    <SectionCard
+      title="Assignment History"
+      description="Permanent record of order responsibility. Historical baselines show the assignment observed when tracking began, not earlier transfers."
+    >
+      {history.isPending ? (
+        <p className="text-sm text-muted-foreground">
+          Loading assignment history...
+        </p>
+      ) : history.isError ? (
+        <div role="alert" className="space-y-2">
+          <p className="text-sm text-destructive">
+            Assignment history could not be loaded.
+            The database migration may not yet be installed,
+            or access may be restricted.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void history.refetch()}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : events.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No assignment history was found for this order.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-3">
+            {events.map((event) => (
+              <div
+                key={event.id}
+                className="rounded-lg border border-border p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">
+                    {eventLabel(event.event_type)}
+                  </p>
+                  <time className="text-xs text-muted-foreground">
+                    {eventDate(event.event_at)}
+                  </time>
+                </div>
+
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">
+                      Previous waiter
+                    </dt>
+                    <dd>{person(event.previous_waiter_id)}</dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-muted-foreground">
+                      New waiter
+                    </dt>
+                    <dd>{person(event.new_waiter_id)}</dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-muted-foreground">
+                      Changed by
+                    </dt>
+                    <dd>{person(event.changed_by)}</dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-muted-foreground">
+                      Original creator
+                    </dt>
+                    <dd>{person(event.original_creator_id)}</dd>
+                  </div>
+                </dl>
+
+                {event.event_type === "baseline" ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Assignment observed when tracking began.
+                    Earlier transfer history is unavailable.
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            <p className="text-xs text-muted-foreground">
+              Page {page + 1} of {totalPages}
+              {" "}({total} recorded events)
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0 || history.isFetching}
+                onClick={() => setPage((value) => Math.max(0, value - 1))}
+              >
+                Previous
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  page + 1 >= totalPages ||
+                  history.isFetching
+                }
+                onClick={() => setPage((value) => value + 1)}
+              >
+                Next
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={history.isFetching}
+                onClick={() => void history.refetch()}
+              >
+                {history.isFetching
+                  ? "Refreshing..."
+                  : "Refresh history"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -746,6 +923,8 @@ function OrderTerminal() {
                   ) : null}
                 </div>
               </SectionCard>
+
+              <PosAssignmentHistoryCard orderId={data.id} />
 
               <SectionCard title="Payments"
                 description="Saved payment attempts and their receipt reviews. A submitted receipt remains unconfirmed until approved.">

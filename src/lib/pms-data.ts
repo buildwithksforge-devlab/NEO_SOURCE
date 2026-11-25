@@ -543,20 +543,42 @@ export function useCloseFolio() {
 
 export function usePostAccommodation() {
   const invalidate = useInvalidatePms();
+
   return useMutation({
-    mutationFn: async (operationalDate: string) => {
-      const { data, error } = await guardedRpc(supabase, "pms_post_accommodation", { _operational_date: operationalDate });
+    mutationFn: async (input: {
+      branch: string;
+      operationalDate: string;
+    }) => {
+      if (!input.branch || !input.operationalDate) {
+        throw new Error(
+          "Select a property with an open business day before posting accommodation",
+        );
+      }
+
+      const { data, error } = await guardedRpc(
+        supabase,
+        "pms_post_accommodation_scoped",
+        {
+          _branch: input.branch,
+          _operational_date: input.operationalDate,
+        },
+      );
+
       if (error) throw error;
+
       return data as number;
     },
     onSuccess: (count) => {
-      toast.success(count === 0 ? "Nothing to post — every in-house folio is already up to date" : `Posted ${count} accommodation charge(s)`);
+      toast.success(
+        count === 0
+          ? "Nothing to post — every eligible in-house folio is already up to date"
+          : `Posted ${count} accommodation charge(s)`,
+      );
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 /* ------------------------------------------------------------------ *
  * Settings
  * ------------------------------------------------------------------ */

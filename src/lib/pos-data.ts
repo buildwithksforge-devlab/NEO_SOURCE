@@ -270,6 +270,200 @@ export type ModifierGroupWithOptions = {
 
 
 
+
+export type PosCompletePeriodOrder = {
+  id: string;
+  order_number: string;
+  order_type: string;
+  status: string;
+  closed_at: string | null;
+  created_at: string;
+  grand_total: number | null;
+  discount_total: number | null;
+  subtotal: number | null;
+};
+
+/**
+ * Complete POS reporting source.
+ *
+ * Unlike usePosOrders(), this is not a terminal/order-list
+ * preview query. It retrieves all matching authorized rows.
+ *
+ * Access continues to be enforced by applyScope and database
+ * row-level security.
+ *
+ * The range includes the current and previous reporting
+ * periods so comparative KPIs use the same source.
+ *
+ * Kenya operational reporting uses UTC+03:00.
+ */
+export function usePosCompletePeriodOrders(
+  from: string,
+  to: string,
+  previousFrom: string,
+  previousTo: string,
+) {
+  const { applyScope, scopeKey } = useDataScope();
+  const { organizationId, user } = useAuth();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "complete-period-orders",
+      organizationId,
+      user?.id,
+      scopeKey,
+      from,
+      to,
+      previousFrom,
+      previousTo,
+    ],
+
+    enabled: Boolean(
+      organizationId &&
+      user?.id &&
+      from &&
+      to &&
+      previousFrom &&
+      previousTo,
+    ),
+
+    queryFn: async () => {
+      const validDate = (value: string) =>
+        /^\\d{4}-\\d{2}-\\d{2}$/.test(value);
+
+      const dates = [
+        from,
+        to,
+        previousFrom,
+        previousTo,
+      ];
+
+      if (!dates.every(validDate)) {
+        throw new Error(
+          "Invalid POS reporting date format.",
+        );
+      }
+
+      const earliest =
+        from < previousFrom ? from : previousFrom;
+
+      const latest =
+        to > previousTo ? to : previousTo;
+
+      if (earliest > latest) {
+        throw new Error(
+          "Invalid POS reporting period.",
+        );
+      }
+
+      const nextDay = new Date(
+        Date.parse(`${latest}T00:00:00Z`) +
+        86400000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+      const startAt = `${earliest}T00:00:00+03:00`;
+      const endBefore = `${nextDay}T00:00:00+03:00`;
+
+      const pageSize = 500;
+      const maximumRows = 50000;
+
+      const results: PosCompletePeriodOrder[] = [];
+      let expectedCount: number | null = null;
+
+      for (
+        let offset = 0;
+        offset <= maximumRows;
+        offset += pageSize
+      ) {
+        const query = applyScope(
+          supabase
+            .from("pos_orders")
+            .select(
+              "id, order_number, order_type, status, closed_at, created_at, grand_total, discount_total, subtotal",
+              { count: "exact" },
+            ),
+          "pos_orders",
+        )
+          .in("status", [
+            "paid",
+            "charged-to-room",
+            "credit",
+            "closed",
+          ])
+          .gte("closed_at", startAt)
+          .lt("closed_at", endBefore)
+          .order("closed_at", {
+            ascending: false,
+          })
+          .order("id", {
+            ascending: false,
+          })
+          .range(
+            offset,
+            offset + pageSize - 1,
+          );
+
+        const { data, error, count } = await query;
+
+        if (error) throw error;
+
+        if (count === null) {
+          throw new Error(
+            "POS reporting could not verify the record count.",
+          );
+        }
+
+        if (expectedCount === null) {
+          expectedCount = count;
+        } else if (count !== expectedCount) {
+          throw new Error(
+            "POS reporting records changed during pagination. " +
+            "Refresh the report.",
+          );
+        }
+
+        const batch = (
+          data ?? []
+        ) as PosCompletePeriodOrder[];
+
+        results.push(...batch);
+
+        if (results.length === expectedCount) {
+          return results;
+        }
+
+        if (
+          results.length > expectedCount ||
+          batch.length < pageSize
+        ) {
+          throw new Error(
+            "POS reporting received an incomplete page. " +
+            "The server may enforce a smaller row limit. " +
+            "Financial exports are unavailable.",
+          );
+        }
+
+        if (results.length >= maximumRows) {
+          throw new Error(
+            "POS reporting exceeds the verified " +
+            "50,000-row retrieval limit. " +
+            "Use database-side reporting or " +
+            "a streamed export for this period.",
+          );
+        }
+      }
+
+      throw new Error(
+        "POS reporting could not retrieve " +
+        "the complete selected period.",
+      );
+    },
+  });
+}
+
 export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
   // Self scope means a waiter sees only their own bills: `applyScope` narrows by
   // property, then department for a supervisor, then to own/assigned rows.
@@ -287,6 +481,512 @@ export function usePosOrders(scope: "open" | "all" | "closed" = "open") {
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+export type PosOrderHistoryFilters = {
+  ownership?: "mine" | "team";
+  search?: string;
+  from?: string;
+  to?: string;
+};
+
+
+export type EmployeePosPerformanceRow = {
+  profile_id: string;
+  employee_id: string | null;
+  orders_created: number | string;
+  orders_currently_assigned: number | string;
+  created_orders_finalized: number | string;
+  created_orders_cancelled: number | string;
+  created_orders_voided: number | string;
+  finalized_bill_value: number | string;
+  assigned_orders_finalized: number | string;
+};
+
+
+
+export type PosCollectionEvidenceRow = {
+  cashier_profile_id: string | null;
+  employee_id: string | null;
+  confirmed_payment_count: number | string;
+  confirmed_collection_amount: number | string;
+  processed_refund_count: number | string;
+  processed_refund_amount: number | string;
+};
+
+
+export type PosFullPeriodFinancialEvidence = {
+  finalized_order_count: number | string;
+  finalized_bill_value: number | string;
+  finalized_discount_value: number | string;
+  confirmed_payment_count: number | string;
+  confirmed_collection_value: number | string;
+  room_charge_payment_count: number | string;
+  room_charge_payment_value: number | string;
+  processed_refund_count: number | string;
+  processed_refund_value: number | string;
+};
+
+export function usePosFullPeriodFinancialEvidence(
+  from: string,
+  to: string,
+) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "full-period-financial-evidence",
+      organizationId,
+      user?.id,
+      filterKey,
+      from,
+      to,
+    ],
+    enabled: Boolean(
+      organizationId &&
+      user?.id &&
+      from &&
+      to,
+    ),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "neo_pos_full_period_financial_evidence" as never,
+        {
+          _from: from,
+          _to: to,
+          _branch: branchId ?? null,
+        } as never,
+      );
+
+      if (error) throw error;
+
+      const rows = (
+        data ?? []
+      ) as PosFullPeriodFinancialEvidence[];
+
+      if (rows.length !== 1) {
+        throw new Error(
+          "Financial reporting returned an unexpected result.",
+        );
+      }
+
+      return rows[0];
+    },
+  });
+}
+
+
+export type PosFinanceRoomTransferRow = {
+  order_id: string;
+  order_number: string;
+  branch_id: string | null;
+  currency: string;
+  bill_value: number | string;
+  room_transfer_paid_total: number | string;
+  folio_line_id: string | null;
+  folio_line_count: number;
+  folio_net_amount: number | string | null;
+  journal_id: string | null;
+  journal_count: number;
+  journal_debit: number | string | null;
+  journal_credit: number | string | null;
+  direct_pos_journal_count: number;
+  reconciliation_status: string;
+};
+
+export function usePosFinanceRoomTransferRegister(
+  from: string,
+  to: string,
+) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "finance-room-transfer-register",
+      organizationId,
+      user?.id,
+      filterKey,
+      from,
+      to,
+    ],
+
+    enabled: Boolean(
+      organizationId &&
+      user?.id &&
+      from &&
+      to &&
+      from <= to,
+    ),
+
+    queryFn: async () => {
+      const pageSize = 200;
+      const maximumRows = 20000;
+
+      const results: PosFinanceRoomTransferRow[] = [];
+      let expectedCount: number | null = null;
+
+      for (
+        let offset = 0;
+        offset <= maximumRows;
+        offset += pageSize
+      ) {
+        const { data, error, count } = await supabase
+          .rpc(
+            "neo_pos_finance_room_transfer_register" as never,
+            {
+              _from: from,
+              _to: to,
+              _branch: branchId ?? null,
+            } as never,
+            { count: "exact" },
+          )
+          .range(offset, offset + pageSize - 1);
+
+        if (error) throw error;
+
+        if (count === null) {
+          throw new Error(
+            "Reconciliation count could not be verified.",
+          );
+        }
+
+        if (expectedCount === null) {
+          expectedCount = count;
+
+          if (expectedCount > maximumRows) {
+            throw new Error(
+              "Reconciliation exceeds 20,000 records. " +
+              "Choose a shorter date range.",
+            );
+          }
+        } else if (count !== expectedCount) {
+          throw new Error(
+            "Reconciliation records changed during retrieval.",
+          );
+        }
+
+        const batch =
+          (data ?? []) as PosFinanceRoomTransferRow[];
+
+        results.push(...batch);
+
+        if (results.length === expectedCount) {
+          const ids = new Set(
+            results.map((row) => row.order_id),
+          );
+
+          if (ids.size !== results.length) {
+            throw new Error(
+              "Duplicate reconciliation records detected.",
+            );
+          }
+
+          return results;
+        }
+
+        if (
+          results.length > expectedCount ||
+          batch.length < pageSize
+        ) {
+          throw new Error(
+            "Reconciliation returned an incomplete page.",
+          );
+        }
+      }
+
+      throw new Error(
+        "Reconciliation retrieval exceeded its safe limit.",
+      );
+    },
+  });
+}
+
+export function usePosCollectionEvidence(
+  from: string,
+  to: string,
+) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "collection-evidence",
+      organizationId,
+      user?.id,
+      filterKey,
+      from,
+      to,
+    ],
+    enabled: Boolean(
+      organizationId &&
+      user?.id &&
+      from &&
+      to,
+    ),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "neo_employee_pos_collection_evidence" as never,
+        {
+          _from: from,
+          _to: to,
+          _branch: branchId ?? null,
+        } as never,
+      );
+
+      if (error) throw error;
+
+      return (data ?? []) as PosCollectionEvidenceRow[];
+    },
+  });
+}
+
+export function useTeamPosPerformance(from: string, to: string) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "orders",
+      "team-performance",
+      organizationId,
+      user?.id,
+      filterKey,
+      from,
+      to,
+    ],
+    enabled: Boolean(organizationId && user?.id && from && to),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "neo_employee_pos_performance" as never,
+        {
+          _from: from,
+          _to: to,
+          _branch: branchId ?? null,
+        } as never,
+      );
+
+      if (error) throw error;
+
+      return (data ?? []) as EmployeePosPerformanceRow[];
+    },
+  });
+}
+
+export function useMyPosPerformance(from: string, to: string) {
+  const { organizationId, user } = useAuth();
+  const { branchId, filterKey } = useActivePropertyFilter();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "orders",
+      "employee-performance",
+      organizationId,
+      user?.id,
+      filterKey,
+      from,
+      to,
+    ],
+    enabled: Boolean(organizationId && user?.id && from && to),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "neo_employee_pos_performance" as never,
+        {
+          _from: from,
+          _to: to,
+          _branch: branchId ?? null,
+        } as never,
+      );
+
+      if (error) throw error;
+
+      const rows = (data ?? []) as EmployeePosPerformanceRow[];
+
+      return (
+        rows.find((row) => row.profile_id === user?.id) ?? null
+      );
+    },
+  });
+}
+
+export function usePosOrderHistory(
+  scope: "open" | "closed" | "all",
+  page: number,
+  pageSize = 50,
+  filters: PosOrderHistoryFilters = {},
+) {
+  const { applyScope, scopeKey } = useDataScope();
+  const { organizationId, user } = useAuth();
+
+  const ownership = filters.ownership ?? "mine";
+  const search = filters.search?.trim().slice(0, 80) ?? "";
+  const fromDate = filters.from ?? "";
+  const toDate = filters.to ?? "";
+
+  function dateBoundary(value: string): string | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "orders",
+      "history",
+      organizationId,
+      scopeKey,
+      scope,
+      page,
+      pageSize,
+      ownership,
+      search,
+      fromDate,
+      toDate,
+      user?.id,
+    ],
+    enabled: Boolean(organizationId && user?.id),
+    queryFn: async () => {
+      const safePage = Math.max(0, Math.floor(page));
+      const safeSize = Math.min(100, Math.max(1, Math.floor(pageSize)));
+
+      const from = safePage * safeSize;
+      const to = from + safeSize - 1;
+
+      let query = applyScope(
+        supabase
+          .from("pos_orders")
+          .select(
+            "*, restaurant_tables(code, name), customers(full_name), profiles!pos_orders_waiter_id_fkey(full_name)",
+            { count: "exact" },
+          ),
+        "pos_orders",
+      )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+
+      if (scope === "open") {
+        query = query.or(POS_OPEN_FILTER);
+      }
+
+      if (scope === "closed") {
+        query = query.in("status", [
+          "paid",
+          "charged-to-room",
+          "credit",
+          "closed",
+          "voided",
+          "cancelled",
+        ]);
+      }
+
+      // RLS and applyScope remain authoritative.
+      // The personal filter can only narrow the authorised records.
+      if (ownership === "mine") {
+        const actor = user?.id;
+        if (!actor) {
+          return { rows: [], total: 0, page: safePage, pageSize: safeSize };
+        }
+
+        query = query.or(
+          `waiter_id.eq.${actor},created_by.eq.${actor}`,
+        );
+      }
+
+      // Search must happen before pagination.
+      if (search) {
+        query = query.ilike("order_number", `%${search}%`);
+      }
+
+      const lower = dateBoundary(fromDate);
+      const upper = dateBoundary(toDate);
+
+      if (lower) {
+        query = query.gte("created_at", lower);
+      }
+
+      if (upper) {
+        const exclusiveEnd = new Date(upper);
+        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+        query = query.lt("created_at", exclusiveEnd.toISOString());
+      }
+
+      const { data, count, error } = await query.range(from, to);
+
+      if (error) throw error;
+
+      return {
+        rows: data ?? [],
+        total: count ?? 0,
+        page: safePage,
+        pageSize: safeSize,
+      };
+    },
+  });
+}
+
+export type PosAssignmentHistoryEvent = {
+  id: string;
+  order_id: string;
+  event_type:
+    | "baseline"
+    | "created"
+    | "assigned"
+    | "transferred"
+    | "unassigned";
+  previous_waiter_id: string | null;
+  new_waiter_id: string | null;
+  original_creator_id: string | null;
+  changed_by: string | null;
+  event_at: string;
+};
+
+export function usePosAssignmentHistory(
+  orderId: string | undefined,
+  page = 0,
+) {
+  const { organizationId, user } = useAuth();
+
+  return useQuery({
+    queryKey: [
+      "pos",
+      "assignment-history",
+      organizationId,
+      user?.id,
+      orderId,
+      page,
+    ],
+    enabled: Boolean(
+      organizationId && user?.id && orderId,
+    ),
+    queryFn: async () => {
+      const { data, error, count } = await supabase
+        .from("pos_order_assignment_history" as never)
+        .select(
+          "id,order_id,event_type,previous_waiter_id,new_waiter_id,original_creator_id,changed_by,event_at",
+          { count: "exact" },
+        )
+        .eq("order_id", orderId!)
+        .order("event_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(page * 50, page * 50 + 49);
+
+      if (error) throw error;
+
+      return {
+        events: (data ?? []) as PosAssignmentHistoryEvent[],
+        total: count ?? 0,
+        page,
+        pageSize: 50,
+      };
     },
   });
 }
@@ -919,9 +1619,9 @@ export function explainPosStatusError(message: string) {
   if (!m) return message;
   const [, from, to] = m;
   const allowed = allowedTransitions(from);
-  return `Cannot move this order from “${titleCase(from)}” to “${titleCase(to)}”. Allowed from “${titleCase(
+  return `Cannot move this order from â€œ${titleCase(from)}â€ to â€œ${titleCase(to)}â€. Allowed from â€œ${titleCase(
     from,
-  )}”: ${allowed.length ? allowed.map(titleCase).join(", ") : "none"}.`;
+  )}â€: ${allowed.length ? allowed.map(titleCase).join(", ") : "none"}.`;
 }
 
 /**

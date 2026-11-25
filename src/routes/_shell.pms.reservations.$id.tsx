@@ -168,8 +168,8 @@ export function ReservationDetail() {
   const linkedFolios = (folios.data ?? []) as unknown as FolioWithLines[];
   const folio = selectReservationFolio(linkedFolios, selectedFolioId);
   const canonicalFolio = postedPosition.data?.folios.find(item => item.id === folio?.id);
-  const moneyReady = collections.isSuccess && !collections.isFetching && !collections.error && postedPosition.isSuccess
-    && !postedPosition.isFetching && !postedPosition.isError && !postedPosition.data?.mixedCurrency
+  const moneyReady = collections.isSuccess && !collections.error && postedPosition.isSuccess
+    && !postedPosition.isError && !postedPosition.data?.mixedCurrency
     && Boolean(canonicalFolio && canonicalFolio.currency === collections.data?.currency);
   const canWriteFolio = moneyReady && !folios.isLoading && !folios.isError && Boolean(folio && ["open", "under-review", "reopened"].includes(folio.status));
 

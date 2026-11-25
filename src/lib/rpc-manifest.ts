@@ -353,7 +353,7 @@ export const RPC_MANIFEST: Record<string, RpcCaller> = {
   neo_procurement_reconciliation: "authenticated",
   pms_check_out: "authenticated",
   pms_front_office_metrics: "authenticated",
-  pms_post_accommodation: "authenticated",
+  pms_post_accommodation_scoped: "authenticated",
   pms_post_room_charge: "authenticated",
   pms_quote_rate: "authenticated",
   pms_record_payment: "authenticated",

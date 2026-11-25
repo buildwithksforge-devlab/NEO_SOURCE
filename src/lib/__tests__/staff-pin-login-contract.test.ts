@@ -78,66 +78,107 @@ describe("staff PIN broker request/response behavior", () => {
     vi.clearAllMocks();
   });
 
-  it("resolves display PINs in the Worker without contacting the broker or issuing staff proof", async () => {
+  it("always uses Lovable when direct database credentials are configured", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
+
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        token_hash: "lovable-staff-proof",
+        branch_id: branch,
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetch);
+
+    const response = await handler({ request: request() });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      token_hash: "lovable-staff-proof",
+      branch_id: branch,
+    });
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![0]).toBe(
+      "https://horizon-prime-os.lovable.app/api/public/staff-pin-login",
+    );
+
+    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
+  });
+
+  it("never diverts staff PIN authentication through the bridge", async () => {
+    vi.stubEnv("NEO_BRIDGE_ORIGIN", "https://other.example.invalid");
+    vi.stubEnv("NEO_BRIDGE_SECRET", "a".repeat(64));
+
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        token_hash: "lovable-staff-proof",
+        branch_id: branch,
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetch);
+
+    const response = await handler({ request: request() });
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![0]).toBe(
+      "https://horizon-prime-os.lovable.app/api/public/staff-pin-login",
+    );
+
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
+  it("accepts a restricted display session returned by Lovable", async () => {
     const display = {
       kind: "display",
       branch_id: branch,
       display_token: "c".repeat(64),
       expires_at: new Date(Date.now() + 60_000).toISOString(),
     };
-    admin.rpc.mockResolvedValue({ data: { ok: true, ...display }, error: null });
-    const fetch = vi.fn();
+
+    const fetch = vi.fn().mockResolvedValue(Response.json(display));
+
     vi.stubGlobal("fetch", fetch);
-    const directRequest = Object.assign(request(), {
-      runtime: { cloudflare: { env: { SUPABASE_URL: "https://database.example.invalid", SUPABASE_SERVICE_ROLE_KEY: "fixture" } } },
-    });
-    const response = await handler({ request: directRequest });
+
+    const response = await handler({ request: request() });
+
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(display);
-    expect(admin.rpc).toHaveBeenCalledWith("neo_staff_pin_sign_in", {
-      _token_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
-      _pin: "123456",
-    });
-    expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
-  });
 
-  it("keeps a rejected direct PIN attempt out of the broker", async () => {
-    vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
-    admin.rpc.mockResolvedValue({ data: { ok: false, reason: "locked" }, error: null });
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    const response = await handler({ request: request() });
-    expect(response.status).toBe(429);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("uses the broker when the database gateway rejects the Worker credential", async () => {
-    vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
-    admin.rpc.mockResolvedValue({ data: null, error: { code: "PGRST301", message: "JWT rejected" } });
-    const fetch = vi.fn().mockResolvedValue(Response.json({ token_hash: "staff-proof", branch_id: branch }));
-    vi.stubGlobal("fetch", fetch);
-    const response = await handler({ request: request() });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ token_hash: "staff-proof", branch_id: branch });
     expect(fetch).toHaveBeenCalledOnce();
+    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
   });
 
-  it("issues a personal account proof for the worker resolved by the device", async () => {
+  it("preserves Lovable PIN rejection even when direct credentials exist", async () => {
     vi.stubEnv("SUPABASE_URL", "https://database.example.invalid");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "fixture");
-    const worker = "00000000-0000-4000-8000-000000000002";
-    admin.rpc.mockResolvedValue({ data: { ok: true, branch_id: branch, user_id: worker }, error: null });
-    admin.auth.admin.getUserById.mockResolvedValue({ data: { user: { email: "worker@example.invalid" } }, error: null });
-    admin.auth.admin.generateLink.mockResolvedValue({ data: { properties: { hashed_token: "staff-proof" } }, error: null });
-    const response = await handler({ request: request() });
-    expect(response.status).toBe(200);
-    expect(admin.auth.admin.getUserById).toHaveBeenCalledWith(worker);
-    expect(await response.json()).toEqual({ token_hash: "staff-proof", branch_id: branch });
-  });
 
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          error: "credentials",
+          message: "PIN not accepted",
+        },
+        { status: 401 },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetch);
+
+    const response = await handler({ request: request() });
+
+    expect(response.status).toBe(401);
+    expect((await response.json()).error).toBe("credentials");
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
   it("rejects missing device trust and malformed PINs before contacting a broker", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
