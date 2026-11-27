@@ -1,3 +1,4 @@
+import { SupplierAvailabilityHistory } from "@/components/procurement/SupplierAvailabilityHistory";
 import { useMemo, useState } from "react";
 import { NeoDatePicker } from "@/components/common/DatePicker";
 import { createFileRoute } from "@tanstack/react-router";
@@ -616,6 +617,10 @@ function RfqPanel({ requestId, mayManage }: { requestId: string; mayManage: bool
                       })}
                     </TableBody>
                   </Table>
+                  <SupplierAvailabilityHistory
+                    rfqId={String(rfq["id"])}
+                    invites={invites}
+                  />
                 </div>
               );
             })}

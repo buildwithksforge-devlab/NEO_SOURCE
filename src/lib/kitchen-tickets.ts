@@ -260,12 +260,17 @@ export function useKitchenTicketRealtime() {
     void qc.invalidateQueries({ queryKey: KITCHEN_TICKETS_QUERY_KEY });
     void qc.invalidateQueries({ queryKey: ["kitchen", "ops-metrics"] });
     void qc.invalidateQueries({ queryKey: ["kitchen", "ticket-audit"] });
+    void qc.invalidateQueries({ queryKey: ["pos"] });
+    void qc.invalidateQueries({ queryKey: ["bar"] });
+    void qc.invalidateQueries({ queryKey: ["reconciliation", "pos-kds"] });
   };
   useScopedRealtime("kitchen-tickets-live", [
     { table: "station_tickets", onChange: invalidate },
     { table: "station_ticket_items", onChange: invalidate },
     { table: "pos_order_items", onChange: invalidate },
     { table: "station_ticket_status_history", onChange: invalidate },
+    { table: "pos_void_requests", onChange: invalidate },
+    { table: "pos_orders", onChange: invalidate },
   ]);
 }
 
@@ -635,7 +640,7 @@ export function useScopedStations(propertyId?: string): ScopedStations {
     queryFn: async () => {
       let q = supabase
         .from("operational_stations")
-        .select("id, name, branch_id, code, station_type, departments(catalogue_key)")
+        .select("id, name, branch_id, code, station_type, departments(catalogue_key)").eq("status", "active")
         .eq("organization_id", organizationId as string)
         .eq("active", true)
         .order("sort_order")

@@ -1,3 +1,6 @@
+import { BillReopening } from "@/components/pos/BillReopening";
+import { ComplimentaryExecution } from "@/components/pos/ComplimentaryExecution";
+import { OrderProductionProgress } from "@/components/kitchen/OrderProductionProgress";
 import { PaymentDialog } from "@/components/pos/PosPaymentDialog";
 import {PosRefundPanel} from "@/components/pos/PosRefundPanel";
 import {outstandingPaidBill} from '@/lib/pos-payment-display';
@@ -427,7 +430,7 @@ function OrderTerminal() {
   const mayRemoveDraft = can("restaurant", "orders.void") || can("restaurant", "approvals.approve");
 
   return (
-    <div>
+    <><div>
       <PageHeader
         eyebrow="Restaurant & POS"
         title={data ? `Order ${data.order_number}` : "Order"}
@@ -509,6 +512,7 @@ function OrderTerminal() {
           ) : null
         }
       />
+      <OrderProductionProgress orderId={id} />
       {data ? <PosRefundPanel key={data.id} orderId={data.id}/> : null}
 
       <QueryState
@@ -666,8 +670,18 @@ function OrderTerminal() {
                     disabled={unsent.length === 0 || send.isPending || unroutable.length > 0}
                     onClick={() => { setStockIssue(null); send.mutate(data.id); }}
                   >
-                    <Send className="mr-2 size-4" /> Send{" "}
-                    {unsent.length ? `(${unsent.length})` : ""}
+                    <Send className="mr-2 size-4" />
+                    {send.isPending
+                      ? "Sending..."
+                      : lines.some(
+                          (line) =>
+                            !["draft", "cancelled", "voided"].includes(
+                              line.status,
+                            ),
+                        )
+                        ? "Send additional items"
+                        : "Send order"}
+                    {unsent.length ? ` (${unsent.length})` : ""}
                   </Button>
                 }
               >
@@ -759,14 +773,15 @@ function OrderTerminal() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() =>
+                              onClick={() => {
+                                setVoidReason("");
                                 setVoidItem({
                                   id: l.id,
                                   name: l.item_name,
                                   total: Number(l.line_total),
                                   status: l.status,
-                                })
-                              }
+                                });
+                              }}
                             >
                               Void
                             </Button>
@@ -1128,7 +1143,7 @@ function OrderTerminal() {
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!voidReason.trim() || requestVoid.isPending}
+                  disabled={voidReason.trim().length < 3 || requestVoid.isPending}
                   onClick={async () => {
                     if (!voidItem || requestVoid.isPending) return;
                     try {
@@ -1153,6 +1168,15 @@ function OrderTerminal() {
         </>
       ) : null}
     </div>
+  <ComplimentaryExecution
+    key={id}
+    orderId={id}
+  />
+    <BillReopening
+      key={`bill-reopening:${id}`}
+      orderId={id}
+    />
+</>
   );
 }
 

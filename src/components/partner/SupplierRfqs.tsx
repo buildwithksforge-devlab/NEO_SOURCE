@@ -1,3 +1,5 @@
+import { SupplierAvailabilityForm } from "@/components/partner/SupplierAvailabilityForm";
+import { SupplierRfqMessages } from "@/components/partner/SupplierRfqMessages";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { guardedRpc } from "@/lib/rpc-guard";
@@ -12,6 +14,8 @@ type SupplierRfq = {
   closes_at: string | null;
   currency: string | null;
   lines: RequestedLine[];
+  response_state?: string;
+  dispatch_state?: string;
   response: { number: string; total: number; status: string; submitted_at: string } | null;
 };
 type Price = { unit_price: string; tax_rate: string; lead_time_days: string; notes: string };
@@ -65,7 +69,24 @@ export function SupplierRfqs({ branchId, relationshipId }: { branchId: string; r
   if (rfqs.error) return <p role="alert" className="mt-4 text-sm text-white/80">Could not load invitations: {rfqs.error.message}</p>;
   if (!rfqs.data?.length) return <p className="mt-4 text-sm text-white/70">No RFQs have been addressed to your business at this property.</p>;
   return <div className="mt-4 space-y-4">{rfqs.data.map((rfq) =>
-    <SupplierRfqForm key={rfq.id} rfq={rfq} onSubmit={(prices, terms) => submit.mutateAsync({ rfq, prices, terms })} />
+    <div key={`${branchId}:${relationshipId}:${rfq.id}`}>
+          <SupplierRfqForm
+            rfq={rfq}
+            onSubmit={(prices, terms) =>
+              submit.mutateAsync({ rfq, prices, terms })
+            }
+          />
+          <SupplierAvailabilityForm
+            branchId={branchId}
+            relationshipId={relationshipId}
+            rfq={rfq}
+          />
+          <SupplierRfqMessages
+            rfqId={rfq.id}
+            branchId={branchId}
+            relationshipId={relationshipId}
+          />
+        </div>
   )}</div>;
 }
 

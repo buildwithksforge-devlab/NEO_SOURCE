@@ -159,6 +159,24 @@ if ($verify.keep_vars -ne $true) {
     throw "Runtime variable preservation disabled. Deployment blocked."
 }
 
+
+# NEO_PAYMENT_QUEUE_PROTECTED_BUILD_V1
+# Connect the payment Worker before the release artifact
+# is fingerprinted. Preparation never provisions queues.
+
+Invoke-NeoNode `
+    -Entry 'scripts/connect-payment-worker.mjs'
+
+$paymentWorkerConfig = Get-Content `
+    $configPath -Raw | ConvertFrom-Json
+
+if (
+    $paymentWorkerConfig.vars.NEO_PAYMENT_QUEUE_ENABLED -ne 'false' -or
+    $paymentWorkerConfig.vars.NEO_PAYMENT_QUEUE_DRAIN_ENABLED -ne 'false'
+) {
+    throw 'Payment queue activation during preparation is prohibited.'
+}
+
 $neoSourceAfterBuild = & $NodePath 'scripts/release-artifact-guard.mjs' fingerprint
 if ($LASTEXITCODE -ne 0 -or $neoSourceAfterBuild -ne $neoSourceBeforeBuild) {
     throw 'Source changed during build; rebuild before release.'
@@ -166,6 +184,14 @@ if ($LASTEXITCODE -ne 0 -or $neoSourceAfterBuild -ne $neoSourceBeforeBuild) {
 Invoke-NeoNode -Entry 'scripts/release-artifact-guard.mjs' -Arguments @('prepare')
 if ($PrepareOnly) { Write-Host 'Validated release prepared; live deployment waits for shared SQL verification.'; return }
 }
+
+
+# NEO_PAYMENT_INFRASTRUCTURE_RELEASE_GATE_V1
+# Deliberately block live deployment until queue
+# provisioning and managed settlement verification
+# are completed through the approved rollout.
+
+throw 'Payment infrastructure rollout verification pending. Prepared build only; live deployment blocked.'
 
 Invoke-NeoNode -Entry 'scripts/check-required-rollout-rpcs.mjs'
 Invoke-NeoNode -Entry 'scripts/release-artifact-guard.mjs' -Arguments @('verify')

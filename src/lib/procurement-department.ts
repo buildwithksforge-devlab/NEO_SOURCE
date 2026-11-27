@@ -62,9 +62,9 @@ export function useProcurementDepartment() {
  * ------------------------------------------------------------------ */
 
 export function useSupplierQuotations(requestId: string | null) {
-  const { organizationId } = useProcurementContext();
+  const { organizationId, branchId } = useProcurementContext();
   return useQuery({
-    queryKey: ["procurement-department", "quotations", organizationId, requestId],
+    queryKey: ["procurement-department", "quotations", organizationId, branchId, requestId],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = db
@@ -74,6 +74,8 @@ export function useSupplierQuotations(requestId: string | null) {
         )
         .order("created_at", { ascending: false })
         .limit(200);
+      q = q.eq("organization_id", organizationId);
+      if (branchId) q = q.eq("branch_id", branchId);
       if (requestId) q = q.eq("request_id", requestId);
       q = q.neq("status", "superseded");
       const { data, error } = await q;
@@ -194,9 +196,9 @@ export const RFQ_DISPATCH_STATES = {
 export type RfqDispatchState = keyof typeof RFQ_DISPATCH_STATES;
 
 export function useRfqs(requestId: string | null) {
-  const { organizationId } = useProcurementContext();
+  const { organizationId, branchId } = useProcurementContext();
   return useQuery({
-    queryKey: ["procurement-department", "rfqs", organizationId, requestId],
+    queryKey: ["procurement-department", "rfqs", organizationId, branchId, requestId],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = db
@@ -206,6 +208,8 @@ export function useRfqs(requestId: string | null) {
         )
         .order("created_at", { ascending: false })
         .limit(100);
+      q = q.eq("organization_id", organizationId);
+      if (branchId) q = q.eq("branch_id", branchId);
       if (requestId) q = q.eq("request_id", requestId);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
@@ -252,7 +256,7 @@ export function useCreateRfq() {
     onSuccess: (rfq) => {
       attempt.current = null;
       const refresh = invalidate();
-      toast.success(`${rfq.rfq_number} prepared — nothing is sent until you despatch it`);
+      toast.success(`${rfq.rfq_number} issued. Eligible invited suppliers can access it through their portal. External delivery is recorded separately.`);
       return refresh;
     },
     onError: (e: Error) => toast.error(e.message),

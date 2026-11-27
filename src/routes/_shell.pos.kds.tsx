@@ -1,3 +1,4 @@
+import { useEffect as useNeoSelectionEffect } from "react";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChefHat } from "lucide-react";
@@ -57,10 +58,61 @@ function KdsPage() {
   const [station, setStation] = useState(allowAll ? "all" : "");
   const effectiveStation = station || (allowAll ? "all" : (stations[0]?.id ?? "all"));
 
+  const [combinedStations, setCombinedStations] = useState<string[]>([]);
+
+  const allowedCombinedStations = combinedStations.filter(
+    (id) => stations.some((s) => s.id === id),
+  );
+
+  const combinedMode =
+    allowAll && effectiveStation === "all" &&
+    combinedStations.length > 0;
+
   const [selected, setSelected] = useState<string[]>([]);
   const [auditTicket, setAuditTicket] = useState<KitchenTicket | null>(null);
   useKitchenTicketRealtime();
   const queue = useKitchenTickets(effectiveStation, "live");
+
+  const visibleTickets = combinedMode
+    ? queue.tickets.filter(
+        (ticket) =>
+          ticket.station_id !== null &&
+          allowedCombinedStations.includes(ticket.station_id),
+      )
+    : queue.tickets;
+
+  // neoVisibleSelectionGuard
+
+  const neoVisibleSelectionIds = new Set(
+    visibleTickets.map(ticket => ticket.ticket_id)
+  );
+
+  const neoSafeSelected = selected.filter(
+    id => neoVisibleSelectionIds.has(id)
+  );
+
+  useNeoSelectionEffect(() => {
+
+    setSelected(previous => {
+
+      const next = previous.filter(
+        id => neoVisibleSelectionIds.has(id)
+      );
+
+      return next.length === previous.length
+        ? previous
+        : next;
+
+    });
+
+  }, [visibleTickets]);
+
+  useNeoSelectionEffect(() => {
+    setSelected([]);
+  }, [effectiveStation, combinedMode, JSON.stringify(combinedStations)]);
+
+
+
   const transition = useKitchenTicketTransition();
   const delay = useKitchenTicketDelay();
   const backfill = useKitchenTicketBackfill();
@@ -73,7 +125,10 @@ function KdsPage() {
         description="The same canonical production tickets the Kitchen Live Queue works from. Updates flow straight back to the waiter."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Select value={effectiveStation} onValueChange={setStation}>
+            <Select value={effectiveStation} onValueChange={(value) => {
+              setStation(value);
+              setSelected([]);
+            }}>
               <SelectTrigger className="w-56" aria-label="Station">
                 <SelectValue />
               </SelectTrigger>
@@ -97,10 +152,61 @@ function KdsPage() {
         }
       />
 
+
+      {allowAll && effectiveStation === "all" && stations.length > 1 && (
+        <div className="mb-4 rounded-lg border p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Combined station view</p>
+              <p className="text-xs text-muted-foreground">
+                Select any combination of production stations.
+                No selection displays all authorized stations.
+              </p>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCombinedStations([]);
+                setSelected([]);
+              }}
+            >
+              Show all stations
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {stations.map((s) => (
+              <Button
+                key={s.id}
+                size="sm"
+                variant={
+                  allowedCombinedStations.includes(s.id)
+                    ? "default"
+                    : "outline"
+                }
+                aria-pressed={allowedCombinedStations.includes(s.id)}
+                onClick={() => {
+                  setCombinedStations((previous) =>
+                    previous.includes(s.id)
+                      ? previous.filter((id) => id !== s.id)
+                      : [...previous, s.id],
+                  );
+                  setSelected([]);
+                }}
+              >
+                {s.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <QueryState
         isLoading={queue.isLoading}
         error={queue.error}
-        isEmpty={!queue.isLoading && !queue.error && queue.tickets.length === 0}
+        isEmpty={!queue.isLoading && !queue.error && visibleTickets.length === 0}
         empty={
           <EmptyState
             icon={ChefHat}
@@ -109,9 +215,9 @@ function KdsPage() {
           />
         }
       >
-        <BulkTicketBar tickets={queue.tickets} selected={selected} onSelectedChange={setSelected} />
+        <BulkTicketBar tickets={visibleTickets} selected={neoSafeSelected} onSelectedChange={setSelected} />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {queue.tickets.map((t) => (
+          {visibleTickets.map((t) => (
             <TicketCard
               key={t.ticket_id}
               ticket={t}
@@ -121,7 +227,7 @@ function KdsPage() {
                   : null
               }
               busy={delay.isPending && delay.variables?.ticketId === t.ticket_id}
-              selected={selected.includes(t.ticket_id)}
+              selected={neoSafeSelected.includes(t.ticket_id)}
               onSelectedChange={(next) =>
                 setSelected((prev) =>
                   next

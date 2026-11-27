@@ -1,4 +1,4 @@
-import { mpesaResultApplied } from "@/lib/mpesa-application-result";
+import { mpesaResultApplied, mpesaLateResult } from "@/lib/mpesa-application-result";
 /**
  * M-Pesa (Daraja) typed RPC.
  *
@@ -686,6 +686,40 @@ export const reconcileMpesaTransaction = createServerFn({ method: "POST" })
     if (!error && applied?.reason === "receipt_pending") {
       return { ok: false, status: "receipt-pending", detail: "Safaricom reports success, but its receipt metadata is not yet saved. Keep this attempt; do not send another prompt. The payment is awaiting reconciliation." };
     }
+    if (!error) {
+
+      const late = mpesaLateResult(applied, code);
+
+      if (late?.state === "overpayment-accounted") {
+
+        return {
+
+          ok: false,
+
+          status: "overpayment-accounted",
+
+          detail: "Additional M-Pesa funds were received and recorded as a customer liability. The original bill was not settled again. Do not initiate another payment; contact finance for reconciliation.",
+
+        };
+
+      }
+
+      if (late?.state === "awaiting-accounting") {
+
+        return {
+
+          ok: false,
+
+          status: "awaiting-accounting",
+
+          detail: "Additional M-Pesa funds were preserved and are awaiting financial reconciliation. Do not initiate another payment.",
+
+        };
+
+      }
+
+    }
+
     if (error || !mpesaResultApplied(applied, code)) return { ok: false, status: "apply-failed", detail: "The database did not confirm application of this provider result. Keep the existing transaction for reconciliation." };
     return {
       ok: true,

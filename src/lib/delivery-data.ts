@@ -190,7 +190,7 @@ export function useOnlineMenu(branchId?: string | null) {
         .select(
           "id, name, description, base_price, tax_rate, image_url, availability, available_delivery, available_takeaway, prep_minutes, category_id, station_id, branch_id, menu_categories(name)",
         )
-        .eq("available_delivery", true)
+        .eq("available_delivery", true).eq("availability", "available")
         .eq("publish_status", "published")
         .order("display_order")
         .order("name");

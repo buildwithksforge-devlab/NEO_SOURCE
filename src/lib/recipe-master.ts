@@ -1,3 +1,4 @@
+import { isOperationallyEnabled } from "@/lib/operational-record-eligibility";
 /**
  * Recipe master data: recipes (menu-item and batch/sub-recipe), their
  * components, and the link between a menu item and its recipe.
@@ -322,7 +323,7 @@ export function useAttachRecipeToMenuItem() {
         .maybeSingle();
       if (error) throw recipeCommandError(error);
       const original = data as unknown as Row | null;
-      if (!original || original["recipe_type"] !== "menu_item")
+      if (!original || !isOperationallyEnabled(original) || original["recipe_type"] !== "menu_item")
         throw new Error("Choose an existing menu-item recipe.");
       if (original["menu_item_id"] === menuItemId) return recipeId;
       const { data: menu, error: menuError } = await supabase

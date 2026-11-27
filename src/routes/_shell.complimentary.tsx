@@ -1,3 +1,7 @@
+import {
+  ComplimentaryRequestSelection,
+  type ComplimentaryOrderSelection,
+} from "@/components/pos/ComplimentaryRequestSelection";
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
@@ -85,8 +89,12 @@ function Page() {
     return { givenAway, realCost, charged, pending };
   }, [rows]);
 
+  const [posSelection, setPosSelection] =
+    useState<ComplimentaryOrderSelection | null>(null);
+
   const [form, setForm] = useState<Row>({
     item_name: "",
+    menu_item_id: "",
     category: "meal",
     pricing_type: "complimentary",
     beneficiary_type: "guest",
@@ -98,8 +106,35 @@ function Page() {
     reason: "",
   });
   const set = (key: string, value: unknown) => setForm((f) => ({ ...f, [key]: value }));
+  const isComplimentary = String(form["pricing_type"]) === "complimentary";
+  const menuReference = String(form["menu_item_id"] ?? "").trim();
+
+  const effectivePosSelection =
+    isComplimentary ? posSelection : null;
+
+  const validPosSelection =
+    !effectivePosSelection ||
+    (
+      String(form["menu_item_id"] ?? "") === effectivePosSelection.menuItemId &&
+      Number(form["quantity"]) === effectivePosSelection.quantity &&
+      Number(form["normal_selling_price"]) === effectivePosSelection.unitPrice &&
+      String(form["item_name"] ?? "").trim() === effectivePosSelection.itemName
+    );
+
+  const validMenuReference =
+    menuReference === "" ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(menuReference);
+
   const formValid =
-    String(form["item_name"]).trim().length > 1 && String(form["reason"]).trim().length > 4;
+    String(form["item_name"]).trim().length > 1 &&
+    String(form["beneficiary_name"]).trim().length > 0 &&
+    String(form["reason"]).trim().length > 4 &&
+    Number.isFinite(Number(form["quantity"])) &&
+    Number(form["quantity"]) > 0 &&
+    Number.isFinite(Number(form["normal_selling_price"])) &&
+    Number(form["normal_selling_price"]) >= 0 &&
+    validMenuReference &&
+    (!isComplimentary || Number(form["amount_charged"]) === 0);
 
   return (
     <div className="space-y-6">
@@ -199,6 +234,47 @@ function Page() {
               placeholder="e.g. Grilled tilapia"
             />
           </div>
+          {isComplimentary && (
+            <div className="sm:col-span-2">
+              <ComplimentaryRequestSelection
+                onSelect={selection=>{
+
+                  setPosSelection(selection);
+
+                  setForm(previous=>({
+                    ...previous,
+                    menu_item_id:selection.menuItemId,
+                    item_name:selection.itemName,
+                    quantity:selection.quantity,
+                    normal_selling_price:selection.unitPrice,
+                    amount_charged:0,
+                  }));
+                }}
+                onClear={()=>setPosSelection(null)}
+              />
+
+              {!validPosSelection && (
+                <p role="alert" className="mt-2 text-xs text-destructive">
+                  The request no longer matches the selected POS item.
+                  Select the original item again before submitting.
+                </p>
+              )}
+            </div>
+          )}
+
+          {String(form["pricing_type"]) === "complimentary" ? (
+            <div className="sm:col-span-2">
+              <Label className="text-xs">Approved menu item ID</Label>
+              <Input
+                value={String(form["menu_item_id"] ?? "")}
+                onChange={(e) => set("menu_item_id", e.target.value.trim())}
+                placeholder="Menu item UUID"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Required when this approval will be executed against a POS menu item.
+              </p>
+            </div>
+          ) : null}
           <div>
             <Label className="text-xs">Category</Label>
             <Select value={String(form["category"])} onValueChange={(v) => set("category", v)}>
@@ -312,7 +388,54 @@ function Page() {
           </p>
           <Button
             disabled={!formValid || save.isPending}
-            onClick={() => save.mutate(form, { onSuccess: () => set("item_name", "") })}
+            onClick={() =>
+              save.mutate(
+                {
+                  category: form["category"],
+                  pricing_type: form["pricing_type"],
+                  beneficiary_type: form["beneficiary_type"],
+                  beneficiary_name: form["beneficiary_name"],
+                  quantity: form["quantity"],
+                  normal_selling_price: form["normal_selling_price"],
+                  actual_cost: form["actual_cost"],
+                  reason: form["reason"],
+                  item_description: (() => {
+                    if (!validPosSelection) {
+                      throw new Error(
+                        "The complimentary request no longer matches the selected POS item."
+                      );
+                    }
+                    return String(form["item_name"]).trim();
+                  })(),
+                  menu_item_id: String(form["menu_item_id"] ?? "").trim() || null,
+                  amount_charged: isComplimentary ? 0 : form["amount_charged"],
+
+                  ...(effectivePosSelection ? {
+                    branch_id:effectivePosSelection.branchId,
+                    reference_type:"pos_order",
+                    reference_id:effectivePosSelection.orderId,
+                    customer_id:effectivePosSelection.customerId,
+                    employee_id:null,
+                  } : {}),
+                },
+                {
+                  onSuccess: () => {
+                    setPosSelection(null);
+                    setForm((previous) => ({
+                      ...previous,
+                      item_name: "",
+                      menu_item_id: "",
+                      beneficiary_name: "",
+                      reason: "",
+                      quantity: 1,
+                      normal_selling_price: 0,
+                      amount_charged: 0,
+                      actual_cost: 0,
+                    }));
+                  },
+                }
+              )
+            }
           >
             Record entry
           </Button>
@@ -352,7 +475,7 @@ function Page() {
                 {rows.map((r) => (
                   <tr key={String(r["id"])}>
                     <td className="py-2">
-                      <p className="font-medium">{String(r["item_name"] ?? "Item")}</p>
+                      <p className="font-medium">{String(r["item_description"] ?? r["item_name"] ?? "Item")}</p>
                       <p className="text-xs text-muted-foreground">{`${titleCase(String(r["category"] ?? ""))} · ${formatDateTime(r["created_at"])}`}</p>
                     </td>
                     <td>{titleCase(String(r["pricing_type"] ?? ""))}</td>
@@ -422,7 +545,7 @@ function exportCsv(rows: Row[], symbol: string) {
   ];
   const body = rows.map((r) => [
     formatDateTime(r["created_at"]),
-    r["item_name"] ?? "",
+    r["item_description"] ?? r["item_name"] ?? "",
     r["category"] ?? "",
     r["pricing_type"] ?? "",
     r["beneficiary_name"] ?? "",

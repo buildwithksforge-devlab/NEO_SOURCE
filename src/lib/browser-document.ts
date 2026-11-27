@@ -92,7 +92,36 @@ export function openDocumentPrintWindow() {
         // A fresh click can open the native PDF viewer on devices that block
         // popups opened before an asynchronous document request completes.
         viewer = window.open(url!, "_blank");
-        if (viewer) viewer.opener = null;
+        if (viewer) {
+          viewer.opener = null;
+          const printViewer = viewer;
+
+          const requestPrint = () => {
+            try {
+              if (printViewer.closed) return;
+              if (typeof printViewer.focus === "function") {
+                printViewer.focus();
+              }
+              if (typeof printViewer.print === "function") {
+                printViewer.print();
+              }
+            } catch {
+              // Keep the native PDF viewer available for manual printing.
+            }
+          };
+
+          try {
+            if (typeof printViewer.addEventListener === "function") {
+              printViewer.addEventListener(
+                "load",
+                requestPrint,
+                { once: true }
+              );
+            }
+          } catch {
+            // Some native PDF viewers restrict scripting.
+          }
+        }
         else {
           navigating = true;
           window.location.assign(url!);

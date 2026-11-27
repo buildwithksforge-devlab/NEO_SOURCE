@@ -1,3 +1,4 @@
+import { ProductionPrinterAssignments } from "@/components/inventory/ProductionPrinterAssignments";
 import { ErrorState, LoadingState } from "@/components/common/StateSystem";
 import { PageHeader } from "@/components/common/DataDisplay";
 import { PrinterDiscoveryPanel } from "@/components/settings/PrinterDiscoveryPanel";
@@ -260,6 +261,7 @@ export function PrintersPage() {
 
   return (
     <div className="space-y-6">
+      <ProductionPrinterAssignments />
       <PageHeader
         eyebrow="Configuration Centre · Integrations"
         title="Printers & Print Queue"

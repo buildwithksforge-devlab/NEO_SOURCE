@@ -26,6 +26,8 @@ import { useCustomerSession } from "@/lib/public-session";
 import { exportPartnerPurchaseOrder } from "@/lib/document-pdf.functions";
 import { downloadDocumentPdf } from "@/lib/browser-document";
 import { SupplierRfqs } from "@/components/partner/SupplierRfqs";
+import { SupplierLpoResponses } from "@/components/partner/SupplierLpoResponses";
+import { SupplierInvoiceSubmissions } from "@/components/partner/SupplierInvoiceSubmissions";
 
 export const Route = createFileRoute("/partner/$propertySlug")({
   ssr: false,
@@ -311,8 +313,29 @@ function PartnerPortal() {
       ) : null}
 
       {data && section === "orders" ? (
-        <PartnerRecordsList key={active} kind="orders" rows={data.purchase_orders ?? []} currency={currency} onAsk={askAbout}
-          onDownload={(number) => void downloadOrder(number)} downloading={downloadingOrder} />
+        <>
+          <PartnerRecordsList
+            key={active}
+            kind="orders"
+            rows={data.purchase_orders ?? []}
+            currency={currency}
+            onAsk={askAbout}
+            onDownload={(number) => void downloadOrder(number)}
+            downloading={downloadingOrder}
+          />
+
+          {active && branchId &&
+            relationships.find((rel) =>
+              rel.id === active
+            )?.supplier_id && (
+              <SupplierLpoResponses
+                key={`${user?.id}:${branchId}:${active}`}
+                branchId={branchId}
+                relationshipId={active}
+                orders={data.purchase_orders ?? []}
+              />
+            )}
+        </>
       ) : null}
       {section === "requests" && active && branchId && relationships.find((rel) => rel.id === active)?.supplier_id ? (
         <SupplierRfqs branchId={branchId} relationshipId={active} />
@@ -323,6 +346,18 @@ function PartnerPortal() {
       {data && section === "invoices" ? (
         <>
           <PartnerRecordsList key={active} kind="invoices" rows={data.invoices ?? []} currency={currency} onAsk={askAbout} />
+
+          {active && branchId &&
+            relationships.find((rel) =>
+              rel.id === active
+            )?.supplier_id && (
+              <SupplierInvoiceSubmissions
+                key={`${user?.id}:${branchId}:${active}`}
+                branchId={branchId}
+                relationshipId={active}
+                orders={data.purchase_orders ?? []}
+              />
+            )}
           <CreditInvoices key={active} branchId={branchId} relationshipId={active} onAsk={askAbout} />
         </>
       ) : null}

@@ -1,3 +1,4 @@
+import { SupplierInvoiceSubmissionRegister } from "@/components/procurement/SupplierInvoiceSubmissionRegister";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
@@ -246,6 +247,7 @@ function PayablesPage() {
         title="Accounts Payable"
         description="Supplier invoices are matched against the purchase order and goods received note before they can be scheduled or paid."
       />
+      <SupplierInvoiceSubmissionRegister />
 
       <SummaryStrip lead={lead} figures={figures} />
 

@@ -1,3 +1,5 @@
+import { CashierCollectionReport } from "@/components/finance/CashierCollectionReport";
+import { CashierOperationalWorkspace } from "@/components/finance/CashierOperationalWorkspace";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { OpsGuard } from "@/components/operations/OpsShared";
@@ -81,6 +83,8 @@ function TillPage() {
         title="Cashier Till"
         description="One open till per cashier. Expected cash is derived from posted payments less drops and paid-outs, so a difference can never be closed silently — it is declared, explained and reviewed independently."
       />
+      <CashierOperationalWorkspace />
+      <CashierCollectionReport />
 
       {session ? (
         <>

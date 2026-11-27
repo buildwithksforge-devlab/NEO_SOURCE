@@ -74,7 +74,7 @@ export function useStations() {
     queryFn: async () => {
       let q = supabase
         .from("operational_stations")
-        .select("id, name, code, station_type, department_id, branch_id, color, active")
+        .select("id, name, code, station_type, department_id, branch_id, color, active").eq("status", "active")
         .eq("active", true)
         .order("sort_order")
         .order("name");
@@ -1502,6 +1502,7 @@ export function useAddOrderItem() {
         organization_id: ctx.organization_id,
         order_id: input.orderId,
         menu_item_id: input.item.id,
+        status: "draft",
         station_id: input.item.station_id,
         item_name: input.item.name,
         item_description: input.item.description,
@@ -1696,6 +1697,12 @@ export function useSendOrder() {
         if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
           throw new Error("Kitchen dispatch did not return verified routing counts.");
       }
+      if (saved["unassigned_station"] !== 0) {
+        throw new Error(
+          "Production dispatch is incomplete. Review station routing before continuing."
+        );
+      }
+
       const r = saved as {
         tickets_created?: number;
         items_created?: number;
@@ -2209,7 +2216,12 @@ export function useRequestVoid() {
     },
     onSuccess: () => {
       toast.success("Void request saved for approval.");
-      return qc.invalidateQueries({ queryKey: ["pos"] });
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ["pos"] }),
+        qc.invalidateQueries({ queryKey: ["kitchen"] }),
+        qc.invalidateQueries({ queryKey: ["bar"] }),
+        qc.invalidateQueries({ queryKey: ["reconciliation", "pos-kds"] }),
+      ]);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -2225,7 +2237,13 @@ export function useDecideVoid() {
       if (error) throw error;
       return requireVoidResult(data, { requestId: id, approve });
     },
-    onSuccess: () => invalidateSupplyViews(qc, ["pos", "kitchen", "bar"]),
+    onSettled: () =>
+      Promise.all([
+        invalidateSupplyViews(qc, ["pos", "kitchen", "bar"]),
+        qc.invalidateQueries({ queryKey: ["inventory"] }),
+        qc.invalidateQueries({ queryKey: ["finance"] }),
+        qc.invalidateQueries({ queryKey: ["reconciliation", "pos-kds"] }),
+      ]),
     onError: (e: Error) => toast.error(e.message),
   });
 }

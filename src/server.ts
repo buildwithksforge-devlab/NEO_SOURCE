@@ -1,3 +1,13 @@
+import {
+  handleWorkerPaymentQueue,
+  handleWorkerPaymentSchedule,
+  type NamedPaymentBatch,
+} from "@/lib/payment-worker-handlers.server";
+
+import {
+  handlePaymentQueueIngress,
+} from "@/lib/payment-queue-runtime.server";
+
 import { protectDynamicResponse } from "./lib/web-response-policy";
 import { forwardManagedMpesaCallback } from "./lib/mpesa-callback-relay";
 import { forwardManagedPrintRequest } from "./lib/managed-print-relay";
@@ -191,7 +201,74 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+
+export const neoPaymentWorkerEvents = {
+
+  async fetch(
+    request: Request,
+    env: Record<string, unknown>,
+  ): Promise<Response | null> {
+
+    return handlePaymentQueueIngress(
+      request,
+      env,
+    );
+
+  },
+
+
+  // NEO_PAYMENT_INTERNAL_QUEUE_V1
+
+  async queue(
+    batch: NamedPaymentBatch,
+    env: Record<string, unknown>,
+  ) {
+
+    return handleWorkerPaymentQueue(
+      batch,
+      env,
+    );
+
+  },
+
+  async scheduled(
+    env: Record<string, unknown>,
+  ) {
+
+    return handleWorkerPaymentSchedule(env);
+
+  },
+
+};
+
 export default {
+
+  async scheduled(
+    _controller: unknown,
+    env: unknown,
+    _ctx: unknown,
+  ) {
+
+    const runtime =
+      env && typeof env === "object"
+        ? env as Record<string, unknown>
+        : {};
+
+    const { runConfiguredPaymentScheduler } =
+      await import("./lib/payment-callback-scheduler.server");
+
+    const result = await runConfiguredPaymentScheduler(runtime);
+
+    // Structured infrastructure metrics only.
+    // Never log payment payloads or callback tokens.
+
+    console.info(
+      "NEO payment scheduler",
+      JSON.stringify(result),
+    );
+
+  },
+
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
     if (url.origin === "http://neo-preview.neo-hospitality.workers.dev") {
@@ -206,6 +283,17 @@ export default {
         env && typeof env === "object" ? (env as Record<string, unknown>) : {},
       );
       if (print) return print;
+
+    // NEO_PAYMENT_WORKER_INGRESS_V1
+    const queuedPaymentResponse = await handlePaymentQueueIngress(
+      request,
+      (env ?? {}) as Record<string, unknown>,
+    );
+
+    if (queuedPaymentResponse) {
+      return queuedPaymentResponse;
+    }
+
       const callback = await forwardManagedMpesaCallback(
         request,
         env && typeof env === "object" ? (env as Record<string, unknown>) : {},

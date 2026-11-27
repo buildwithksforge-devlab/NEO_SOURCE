@@ -116,6 +116,7 @@ function ScopedDisplay({
       department={department}
       stationId={selected.id}
       stations={stations}
+      pairableStations={displayStations(scope.stations, "overview")}
       propertyName={property.name}
       requestedProperty={requestedProperty}
     />
@@ -126,12 +127,14 @@ function DisplayBoard({
   department,
   stationId,
   stations,
+  pairableStations,
   propertyName,
   requestedProperty,
 }: {
   department: DisplayDepartment;
   stationId: string;
   stations: { id: string; name: string }[];
+  pairableStations: { id: string; name: string }[];
   propertyName: string;
   requestedProperty?: string | undefined;
 }) {
@@ -139,6 +142,16 @@ function DisplayBoard({
   const { user, can, canExact } = useAuth();
   const { branchId } = useActivePropertyFilter();
   const [pairing, setPairing] = useState(false);
+  const [pairStationIds, setPairStationIds] =
+    useState<string[]>([stationId]);
+
+  const permittedPairStationIds = pairStationIds.filter(
+    (id) => pairableStations.some((station) => station.id === id),
+  );
+
+  const selectedPairStations = pairableStations.filter(
+    (station) => permittedPairStationIds.includes(station.id),
+  );
   const canPair =
     canExact("kitchen", "production.manage") ||
     canExact("kitchen", "chef.assign") ||
@@ -195,15 +208,34 @@ function DisplayBoard({
                   Shared screen controls
                 </Link>
                 <Button
-                  disabled={pairing || !branchId}
+                  disabled={
+                    pairing ||
+                    !branchId ||
+                    (
+                      department !== "overview" &&
+                      permittedPairStationIds.length === 0
+                    )
+                  }
                   onClick={async () => {
                     if (!branchId) return;
+
+                    if (
+                      department !== "overview" &&
+                      permittedPairStationIds.length === 0
+                    ) {
+                      toast.error("Select at least one production station.");
+                      return;
+                    }
                     setPairing(true);
                     try {
                       await pairSharedDisplay(
                         branchId,
-                        [stationId],
-                        `${propertyName} · ${DISPLAY_LABELS[department]}`,
+                        department === "overview"
+                          ? [stationId]
+                          : permittedPairStationIds,
+                        department === "overview"
+                          ? `${propertyName} - Production Overview`
+                          : `${propertyName} - ${selectedPairStations.map((station) => station.name).join(" + ")}`,
                         department === "overview",
                       );
                     } catch (error) {
@@ -245,6 +277,79 @@ function DisplayBoard({
           </div>
         }
       />
+
+      {canPair && !readOnly && (
+        <section className="rounded-lg border p-4 space-y-3">
+          <div>
+            <h3 className="font-medium">Shared production screen configuration</h3>
+            <p className="text-sm text-muted-foreground">
+              Select the production stations that this PIN-operated screen
+              should display. Staff retain their individual station permissions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {pairableStations.map((station) => (
+              <Button
+                key={station.id}
+                type="button"
+                size="sm"
+                disabled={pairing}
+                variant={
+                  permittedPairStationIds.includes(station.id)
+                    ? "default"
+                    : "outline"
+                }
+                aria-pressed={permittedPairStationIds.includes(station.id)}
+                onClick={() => {
+                  setPairStationIds((previous) =>
+                    previous.includes(station.id)
+                      ? previous.filter((id) => id !== station.id)
+                      : [...previous, station.id],
+                  );
+                }}
+              >
+                {station.name}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pairing}
+              onClick={() => setPairStationIds([stationId])}
+            >
+              This station only
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pairing}
+              onClick={() =>
+                setPairStationIds(
+                  pairableStations.map((station) => station.id),
+                )
+              }
+            >
+              All permitted production stations
+            </Button>
+          </div>
+
+          <p className="text-sm">
+            Selected stations: {
+              selectedPairStations.length
+                ? selectedPairStations.map((station) => station.name).join(", ")
+                : "None selected"
+            }
+          </p>
+        </section>
+      )}
+
       {fullscreenError ? (
         <p role="status" className="text-sm">
           {fullscreenError}
