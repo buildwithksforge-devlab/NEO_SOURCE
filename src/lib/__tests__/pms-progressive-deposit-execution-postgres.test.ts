@@ -338,6 +338,10 @@ describe("actual progressive deposit PostgreSQL execution", () => {
         : undefined
     ));
 
+    await db.exec(section(
+      "-- NEO_PROGRESSIVE_DEPOSIT_FINANCIAL_POSITION_V1"
+    ));
+
     // Confirm the production migration defaults to disabled.
     const enabled = await db.query<{ enabled: boolean }>(
       `SELECT public.neo_progressive_deposit_execution_enabled()
@@ -689,6 +693,140 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     );
 
     expect(result.rows[0]!.allowed).toBe(false);
+  });
+
+  async function financialPosition() {
+    const result = await db.query<{
+      result: {
+        received: number;
+        applied: number;
+        refunded: number;
+        reserved_refund: number;
+        remaining_liability: number;
+        available_for_allocation: number;
+      };
+    }>(
+      `SELECT public.neo_progressive_deposit_financial_position($1)
+       AS result`,
+      [deposit]
+    );
+
+    return result.rows[0]!.result;
+  }
+
+  it("reports the original deposit and remaining liability separately", async () => {
+    await allocate(await addNight(1));
+
+    expect(await financialPosition()).toMatchObject({
+      received:50000,
+      applied:19000,
+      refunded:0,
+      reserved_refund:0,
+      remaining_liability:31000,
+      available_for_allocation:31000
+    });
+  });
+
+  it("does not reduce liability merely because a refund is approved", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,10000,'approved')`,
+      [org,receipt]
+    );
+
+    expect(await financialPosition()).toMatchObject({
+      received:50000,
+      applied:19000,
+      refunded:0,
+      reserved_refund:10000,
+      remaining_liability:31000,
+      available_for_allocation:21000
+    });
+  });
+
+  it("reduces liability after a verified settled refund", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,10000,'settled')`,
+      [org,receipt]
+    );
+
+    expect(await financialPosition()).toMatchObject({
+      received:50000,
+      applied:19000,
+      refunded:10000,
+      reserved_refund:0,
+      remaining_liability:21000,
+      available_for_allocation:21000
+    });
+  });
+
+  it("restores allocation availability after a refund is rejected", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,10000,'rejected')`,
+      [org,receipt]
+    );
+
+    expect(await financialPosition()).toMatchObject({
+      remaining_liability:31000,
+      reserved_refund:0,
+      available_for_allocation:31000
+    });
+  });
+
+  it("rejects refund reservations exceeding unused deposits", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,32000,'approved')`,
+      [org,receipt]
+    );
+
+    await expect(financialPosition()).rejects.toThrow(
+      /exceed|reconcil/i
+    );
+  });
+
+  it("reconciles the final three-night deposit liability", async () => {
+    await allocate(await addNight(1));
+    await allocate(await addNight(2));
+    await allocate(await addNight(3));
+
+    expect(await financialPosition()).toMatchObject({
+      received:50000,
+      applied:50000,
+      refunded:0,
+      reserved_refund:0,
+      remaining_liability:0,
+      available_for_allocation:0
+    });
+
+    expect(await position()).toEqual({
+      balance:7000,payments:50000
+    });
+
+    await db.query(
+      `UPDATE public.folios
+       SET balance=balance+3000
+       WHERE id=$1`,
+      [folio]
+    );
+
+    expect(await position()).toEqual({
+      balance:10000,payments:50000
+    });
   });
 
   it("rejects allocation when execution is disabled", async () => {

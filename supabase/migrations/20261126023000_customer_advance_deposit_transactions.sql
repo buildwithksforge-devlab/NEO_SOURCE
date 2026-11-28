@@ -6236,3 +6236,198 @@ END;
 $progressive_refund_boundary$;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_DEPOSIT_FINANCIAL_POSITION_V1
+--
+-- Separate received money, applied money, settled refunds,
+-- reserved refunds and available deposit liability.
+
+CREATE OR REPLACE FUNCTION
+public.neo_progressive_deposit_financial_position(
+    _deposit uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+    d public.reservation_deposits;
+
+    v_received numeric;
+    v_net numeric;
+    v_applied numeric;
+    v_refunded numeric;
+    v_reserved numeric;
+    v_liability numeric;
+    v_available numeric;
+
+BEGIN
+
+    SELECT *
+    INTO d
+    FROM public.reservation_deposits
+    WHERE id = _deposit
+      AND organization_id = public.current_org_id();
+
+    IF d.id IS NULL
+       OR public.neo_branch_in_scope(d.branch_id) IS NOT TRUE
+    THEN
+        RAISE EXCEPTION 'Deposit is outside the active property scope'
+          USING ERRCODE='42501';
+    END IF;
+
+    v_received := d.amount;
+
+    IF v_received IS NULL
+       OR v_received <= 0
+       OR v_received::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR v_received <> round(v_received,2)
+    THEN
+        RAISE EXCEPTION 'Invalid original deposit receipt';
+    END IF;
+
+    IF d.status NOT IN ('held','applied')
+       OR d.status IS NULL
+    THEN
+        RAISE EXCEPTION 'Deposit lifecycle requires reconciliation';
+    END IF;
+
+    v_net := public.neo_deposit_net_amount(d.id);
+
+    IF v_net IS NULL
+       OR v_net < 0
+       OR v_net > v_received
+       OR v_net::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR v_net <> round(v_net,2)
+    THEN
+        RAISE EXCEPTION 'Invalid net deposit receipt balance';
+    END IF;
+
+    v_refunded := v_received-v_net;
+
+    SELECT coalesce(sum(a.amount),0)
+    INTO v_applied
+    FROM public.neo_reservation_deposit_allocations a
+    WHERE a.deposit_id = d.id
+      AND a.organization_id = d.organization_id
+      AND a.branch_id = d.branch_id;
+
+    -- Preserve historical full applications.
+
+    IF d.status = 'applied' AND v_applied = 0 THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'deposit_id',d.id,
+            'currency',d.currency,
+            'accounting_policy','legacy-full-application',
+            'received',v_received,
+            'applied_net',v_net,
+            'refunded',v_refunded,
+            'remaining_liability',0,
+            'available_for_allocation',0
+        );
+
+    END IF;
+
+    IF EXISTS (
+
+        SELECT 1
+
+        FROM public.cash_refund_requests r
+
+        WHERE r.organization_id = d.organization_id
+          AND r.payment_id = d.payment_id
+
+          AND r.status IN (
+              'pending_approval','approved'
+          )
+
+          AND (
+              r.amount IS NULL
+              OR r.amount <= 0
+              OR r.amount::text IN (
+                  'NaN','Infinity','-Infinity'
+              )
+              OR r.amount <> round(r.amount,2)
+          )
+
+    ) THEN
+
+        RAISE EXCEPTION 'Invalid reserved refund evidence';
+
+    END IF;
+
+    SELECT coalesce(sum(r.amount),0)
+    INTO v_reserved
+
+    FROM public.cash_refund_requests r
+
+    WHERE r.organization_id = d.organization_id
+      AND r.payment_id = d.payment_id
+
+      AND r.status IN (
+          'pending_approval','approved'
+      );
+
+    v_liability := v_net-v_applied;
+
+    -- Reuse the canonical allocation evidence guard.
+
+    v_available :=
+        public.neo_reservation_deposit_remaining(d.id);
+
+    IF v_applied < 0
+       OR v_liability < 0
+       OR v_reserved < 0
+       OR v_reserved > v_liability
+
+       OR v_available IS DISTINCT FROM
+          v_liability-v_reserved
+
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive deposit financial position does not reconcile';
+
+    END IF;
+
+    RETURN jsonb_build_object(
+
+        'ok',true,
+
+        'deposit_id',d.id,
+
+        'reservation_id',d.reservation_id,
+
+        'currency',d.currency,
+
+        'received',v_received,
+
+        'applied',v_applied,
+
+        'refunded',v_refunded,
+
+        'reserved_refund',v_reserved,
+
+        'remaining_liability',v_liability,
+
+        'available_for_allocation',v_available
+
+    );
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_progressive_deposit_financial_position(uuid)
+FROM PUBLIC,anon,authenticated;
+
+NOTIFY pgrst,'reload schema';
