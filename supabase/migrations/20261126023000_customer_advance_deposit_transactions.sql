@@ -7444,3 +7444,176 @@ END;
 $scheduled_accounting_context$;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_AUTOMATIC_ALLOCATION_V1
+--
+-- Connect scheduled accommodation posting to progressive
+-- deposit accounting.
+--
+-- Production activation remains disabled.
+-- Existing legacy deposit accounting remains unchanged.
+
+DO $automatic_progressive_allocation$
+DECLARE
+
+    d text;
+
+    anchor text;
+
+    start_at integer;
+
+    end_at integer;
+
+    tail text;
+
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_pms_post_accommodation_job(uuid,uuid,date)'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_automatic_progressive_allocation_v1'
+    ) > 0 THEN
+
+        RETURN;
+
+    END IF;
+
+    -- Replace the temporary progressive scheduled
+    -- posting restriction with a verified execution gate.
+
+    start_at := strpos(
+        d,'-- neo_scheduled_progressive_boundary_v1'
+    );
+
+    IF start_at=0 THEN
+
+        RAISE EXCEPTION
+          'Existing scheduled progressive boundary missing';
+
+    END IF;
+
+    tail := substr(d,start_at);
+
+    end_at := strpos(
+        tail,
+        'IF _r.tax_treatment = ''exclusive'' THEN'
+    );
+
+    IF end_at=0 THEN
+
+        RAISE EXCEPTION
+          'Scheduled accommodation calculation boundary missing';
+
+    END IF;
+
+    d := overlay(
+
+        d placing
+
+        $guard$
+
+    -- neo_automatic_progressive_allocation_v1
+
+    IF public.neo_reservation_deposit_policy(
+        _org,
+        _r.branch_id,
+        _r.reservation_id
+    ) = 'progressive-accommodation'
+    THEN
+
+        IF public.neo_progressive_deposit_execution_enabled()
+           IS NOT TRUE
+        THEN
+
+            RAISE EXCEPTION
+              'Progressive deposit execution is disabled';
+
+        END IF;
+
+        IF auth.uid() IS NOT NULL
+
+           OR public.neo_system_posting()
+              IS NOT TRUE
+
+           OR public.neo_progressive_accounting_property_allowed(
+               _org,
+               _r.branch_id,
+               _operational_date
+           ) IS NOT TRUE
+
+           OR public.current_org_id()
+              IS DISTINCT FROM _org
+
+           OR public.neo_branch_in_scope(_r.branch_id)
+              IS NOT TRUE
+
+        THEN
+
+            RAISE EXCEPTION
+              'Scheduled progressive accounting context unavailable'
+              USING ERRCODE='42501';
+
+        END IF;
+
+    END IF;
+
+$guard$
+
+        from start_at
+
+        for end_at-1
+
+    );
+
+    -- Allocate deposits only after the accommodation
+    -- charge, folio totals and package allocation exist.
+
+    anchor :=
+      'PERFORM public.pkg_allocate_folio_line(_line, ''night-audit'');';
+
+    IF (
+        length(d)-length(replace(d,anchor,''))
+    ) / length(anchor) <> 1 THEN
+
+        RAISE EXCEPTION
+          'Scheduled accommodation allocation boundary differs';
+
+    END IF;
+
+    d := replace(
+
+        d,
+
+        anchor,
+
+        anchor || chr(10) ||
+
+        $connection$
+
+      IF public.neo_reservation_deposit_policy(
+          _org,
+          _r.branch_id,
+          _r.reservation_id
+      ) = 'progressive-accommodation'
+      THEN
+
+          PERFORM public.neo_connect_accommodation_deposit(
+              _line
+          );
+
+      END IF;
+
+$connection$
+
+    );
+
+    EXECUTE d;
+
+END;
+$automatic_progressive_allocation$;
+
+NOTIFY pgrst,'reload schema';
