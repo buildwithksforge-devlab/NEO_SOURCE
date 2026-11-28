@@ -5138,3 +5138,669 @@ END;
 $progressive_deposit_boundary$;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_DEPOSIT_EXECUTION_V1
+--
+-- Internal progressive accommodation allocation.
+-- The original deposit receipt remains unchanged.
+-- No employee-facing execution privilege is introduced.
+-- The existing activation lock remains closed.
+
+CREATE OR REPLACE FUNCTION
+public.neo_allocate_reservation_deposit_to_charge(
+    _charge uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+
+    org uuid := public.current_org_id();
+
+    charge public.folio_lines;
+
+    target public.folios;
+
+    booking public.reservations;
+
+    d public.reservation_deposits;
+
+    v_existing numeric;
+
+    v_outstanding numeric;
+
+    v_available numeric;
+
+    v_take numeric;
+
+    v_total numeric := 0;
+
+    v_allocation uuid;
+
+    v_application uuid;
+
+    v_journal uuid;
+
+    v_post jsonb;
+
+    v_count integer := 0;
+
+    v_before_balance numeric;
+
+    v_before_payments numeric;
+
+BEGIN
+
+    IF public.neo_progressive_deposit_execution_enabled()
+       IS NOT TRUE
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive deposit execution is disabled';
+
+    END IF;
+
+    IF org IS NULL THEN
+
+        RAISE EXCEPTION
+          'Verified organization context required';
+
+    END IF;
+
+    SELECT *
+    INTO charge
+
+    FROM public.folio_lines
+
+    WHERE id = _charge
+      AND organization_id = org;
+
+    IF charge.id IS NULL
+       OR charge.reservation_id IS NULL
+       OR charge.branch_id IS NULL
+       OR public.neo_branch_in_scope(charge.branch_id)
+          IS NOT TRUE
+    THEN
+
+        RAISE EXCEPTION
+          'Accommodation charge is unavailable'
+          USING ERRCODE='42501';
+
+    END IF;
+
+    IF public.neo_reservation_deposit_policy(
+        org,
+        charge.branch_id,
+        charge.reservation_id
+    ) IS DISTINCT FROM 'progressive-accommodation'
+    THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'reason','legacy_policy',
+            'allocated',0
+        );
+
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended(
+            org::text ||
+            ':reservation-collection:' ||
+            charge.reservation_id::text,
+            0
+        )
+    );
+
+    SELECT *
+    INTO booking
+
+    FROM public.reservations
+
+    WHERE id = charge.reservation_id
+      AND organization_id = org
+      AND branch_id = charge.branch_id
+
+    FOR UPDATE;
+
+    IF booking.id IS NULL THEN
+        RAISE EXCEPTION 'Reservation unavailable';
+    END IF;
+
+    SELECT *
+    INTO target
+
+    FROM public.folios
+
+    WHERE id = charge.folio_id
+      AND organization_id = org
+      AND branch_id = charge.branch_id
+      AND reservation_id = booking.id
+
+    FOR UPDATE;
+
+    IF target.id IS NULL
+       OR target.status IS DISTINCT FROM 'open'
+       OR target.folio_type IS DISTINCT FROM 'guest'
+       OR target.currency IS DISTINCT FROM
+          public.neo_fact_currency(org,charge.branch_id)
+    THEN
+
+        RAISE EXCEPTION
+          'An open matching guest folio is required';
+
+    END IF;
+
+    SELECT *
+    INTO charge
+
+    FROM public.folio_lines
+
+    WHERE id = _charge
+      AND organization_id = org
+      AND branch_id = target.branch_id
+      AND reservation_id = booking.id
+      AND folio_id = target.id
+
+    FOR UPDATE;
+
+    IF charge.id IS NULL
+       OR charge.category IS DISTINCT FROM 'accommodation'
+       OR charge.line_type IS DISTINCT FROM 'charge'
+       OR charge.status IS DISTINCT FROM 'posted'
+       OR charge.operational_date IS NULL
+       OR charge.net_amount IS NULL
+       OR charge.net_amount < 0
+       OR charge.net_amount::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR charge.net_amount <> round(charge.net_amount,2)
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid accommodation charge evidence';
+
+    END IF;
+
+    IF charge.net_amount = 0 THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'allocated',0,
+            'reason','zero_charge'
+        );
+
+    END IF;
+
+    -- Revenue must already have its posted journal.
+    -- Applying a deposit never creates a second sale.
+
+    IF NOT EXISTS (
+
+        SELECT 1
+
+        FROM public.journal_entries j
+
+        WHERE public.neo_connection_journal_matches(
+            j.id,
+            org,
+            target.branch_id,
+            target.currency,
+            charge.net_amount,
+            'folio_charge:revenue',
+            charge.id
+        ) IS TRUE
+
+    ) THEN
+
+        RAISE EXCEPTION
+          'Accommodation revenue journal must post before deposit allocation';
+
+    END IF;
+
+    SELECT coalesce(sum(a.amount),0)
+    INTO v_existing
+
+    FROM public.neo_reservation_deposit_allocations a
+
+    WHERE a.organization_id = org
+      AND a.charge_line_id = charge.id;
+
+    IF v_existing < 0
+       OR v_existing > charge.net_amount
+       OR v_existing::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+
+        RAISE EXCEPTION
+          'Existing charge allocations require reconciliation';
+
+    END IF;
+
+    v_outstanding := charge.net_amount-v_existing;
+
+    IF target.balance IS NULL
+       OR target.balance::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR target.total_payments IS NULL
+       OR target.total_payments::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+
+        RAISE EXCEPTION
+          'Guest folio balance requires reconciliation';
+
+    END IF;
+
+    v_outstanding := least(
+        v_outstanding,
+        greatest(target.balance,0)
+    );
+
+    FOR d IN
+
+        SELECT rd.*
+
+        FROM public.reservation_deposits rd
+
+        WHERE rd.organization_id = org
+          AND rd.branch_id = target.branch_id
+          AND rd.reservation_id = booking.id
+          AND rd.status = 'held'
+
+        ORDER BY rd.received_at NULLS LAST,rd.id
+
+        FOR UPDATE
+
+    LOOP
+
+        EXIT WHEN v_outstanding <= 0;
+
+        IF d.currency IS DISTINCT FROM target.currency
+
+           OR d.applied_folio_id IS NOT NULL
+
+           OR d.applied_folio_line_id IS NOT NULL
+
+        THEN
+
+            RAISE EXCEPTION
+              'Deposit property, currency or legacy application requires review';
+
+        END IF;
+
+        IF EXISTS (
+
+            SELECT 1
+
+            FROM public.neo_reservation_deposit_allocations a
+
+            WHERE a.organization_id = org
+              AND a.deposit_id = d.id
+              AND a.charge_line_id = charge.id
+
+        ) THEN
+
+            CONTINUE;
+
+        END IF;
+
+        v_available :=
+            public.neo_reservation_deposit_remaining(d.id);
+
+        IF v_available <= 0 THEN
+            CONTINUE;
+        END IF;
+
+        IF NOT EXISTS (
+
+            SELECT 1
+
+            FROM public.journal_entries j
+
+            WHERE public.neo_connection_journal_matches(
+                j.id,
+                org,
+                target.branch_id,
+                target.currency,
+                d.amount,
+                'reservation_deposit:deposit',
+                d.id
+            ) IS TRUE
+
+        ) THEN
+
+            RAISE EXCEPTION
+              'Original deposit liability journal is unavailable';
+
+        END IF;
+
+        v_take := least(
+            v_outstanding,
+            v_available
+        );
+
+        IF v_take <= 0
+           OR v_take::text IN (
+               'NaN','Infinity','-Infinity'
+           )
+           OR v_take <> round(v_take,2)
+        THEN
+
+            RAISE EXCEPTION
+              'Invalid progressive allocation amount';
+
+        END IF;
+
+        v_allocation := gen_random_uuid();
+
+        v_post := public.neo_gl_post(
+
+            org,
+
+            target.branch_id,
+
+            'pms',
+
+            'reservation_deposit_allocation',
+
+            v_allocation,
+
+            'application',
+
+            charge.operational_date,
+
+            target.currency,
+
+            'Progressive accommodation deposit application',
+
+            jsonb_build_array(
+
+                jsonb_build_object(
+                    'code','2020',
+                    'debit',v_take,
+                    'credit',0,
+                    'description','Release guest deposit liability'
+                ),
+
+                jsonb_build_object(
+                    'code','1060',
+                    'debit',0,
+                    'credit',v_take,
+                    'description','Settle earned accommodation'
+                )
+
+            ),
+
+            booking.customer_id,
+
+            NULL
+
+        );
+
+        v_journal :=
+            nullif(v_post->>'journal_id','')::uuid;
+
+        IF v_post->>'ok' IS DISTINCT FROM 'true'
+
+           OR v_journal IS NULL
+
+           OR public.neo_connection_journal_matches(
+               v_journal,
+               org,
+               target.branch_id,
+               target.currency,
+               v_take,
+               'reservation_deposit_allocation:application',
+               v_allocation
+           ) IS NOT TRUE
+
+        THEN
+
+            RAISE EXCEPTION
+              'Progressive deposit journal failed verification';
+
+        END IF;
+
+        -- Verify actual ledger allocation, not merely
+        -- balanced debit and credit totals.
+
+        IF EXISTS (
+
+            WITH expected(code,debit,credit) AS (
+
+                VALUES
+                    ('2020',v_take,0::numeric),
+                    ('1060',0::numeric,v_take)
+
+            ),
+
+            actual AS (
+
+                SELECT
+                    a.code,
+                    sum(l.debit) AS debit,
+                    sum(l.credit) AS credit
+
+                FROM public.journal_entry_lines l
+
+                JOIN public.chart_of_accounts a
+                  ON a.id = l.account_id
+                 AND a.organization_id = org
+
+                WHERE l.journal_id = v_journal
+
+                GROUP BY a.code
+
+            )
+
+            SELECT 1
+
+            FROM expected e
+
+            FULL JOIN actual a USING(code)
+
+            WHERE coalesce(e.debit,0)
+                  IS DISTINCT FROM coalesce(a.debit,0)
+
+               OR coalesce(e.credit,0)
+                  IS DISTINCT FROM coalesce(a.credit,0)
+
+        ) THEN
+
+            RAISE EXCEPTION
+              'Progressive allocation ledger accounts do not reconcile';
+
+        END IF;
+
+        SELECT balance,total_payments
+
+        INTO v_before_balance,v_before_payments
+
+        FROM public.folios
+
+        WHERE id = target.id
+          AND organization_id = org;
+
+        INSERT INTO public.folio_lines (
+
+            organization_id,
+            branch_id,
+            folio_id,
+            reservation_id,
+            customer_id,
+            line_type,
+            category,
+            source_module,
+            source_record_id,
+            source_record_uuid,
+            idempotency_key,
+            description,
+            operational_date,
+            quantity,
+            unit_price,
+            gross_amount,
+            net_amount,
+            posted_by,
+            status
+
+        )
+
+        VALUES (
+
+            org,
+            target.branch_id,
+            target.id,
+            booking.id,
+            booking.customer_id,
+            'payment',
+            'payment',
+            'pms',
+            v_allocation::text,
+            v_allocation,
+            'reservation-deposit-allocation:' ||
+                v_allocation::text,
+            'Deposit applied to accommodation - ' ||
+                charge.operational_date::text,
+            charge.operational_date,
+            1,
+            v_take,
+            v_take,
+            v_take,
+            auth.uid(),
+            'posted'
+
+        )
+
+        RETURNING id INTO v_application;
+
+        INSERT INTO public.neo_reservation_deposit_allocations (
+
+            id,
+            organization_id,
+            branch_id,
+            reservation_id,
+            deposit_id,
+            folio_id,
+            charge_line_id,
+            application_line_id,
+            journal_id,
+            currency,
+            amount,
+            operational_date,
+            allocated_by
+
+        )
+
+        VALUES (
+
+            v_allocation,
+            org,
+            target.branch_id,
+            booking.id,
+            d.id,
+            target.id,
+            charge.id,
+            v_application,
+            v_journal,
+            target.currency,
+            v_take,
+            charge.operational_date,
+            auth.uid()
+
+        );
+
+        UPDATE public.folios
+
+        SET total_payments = total_payments+v_take,
+
+            balance = balance-v_take,
+
+            updated_at = now()
+
+        WHERE id = target.id
+
+          AND organization_id = org
+
+          AND branch_id = target.branch_id
+
+          AND balance IS NOT DISTINCT FROM v_before_balance
+
+          AND total_payments IS NOT DISTINCT FROM
+              v_before_payments;
+
+        IF NOT FOUND THEN
+
+            RAISE EXCEPTION
+              'Guest folio changed during deposit application';
+
+        END IF;
+
+        IF NOT EXISTS (
+
+            SELECT 1
+
+            FROM public.folios f
+
+            WHERE f.id = target.id
+              AND f.organization_id = org
+
+              AND f.balance IS NOT DISTINCT FROM
+                  v_before_balance-v_take
+
+              AND f.total_payments IS NOT DISTINCT FROM
+                  v_before_payments+v_take
+
+        ) THEN
+
+            RAISE EXCEPTION
+              'Progressive deposit folio reconciliation failed';
+
+        END IF;
+
+        PERFORM public.neo_reservation_deposit_remaining(d.id);
+
+        v_total := v_total+v_take;
+
+        v_outstanding := v_outstanding-v_take;
+
+        v_count := v_count+1;
+
+    END LOOP;
+
+    RETURN jsonb_build_object(
+
+        'ok',true,
+
+        'reservation_id',booking.id,
+
+        'folio_id',target.id,
+
+        'charge_line_id',charge.id,
+
+        'allocated',v_total,
+
+        'previously_allocated',v_existing,
+
+        'allocation_count',v_count,
+
+        'remaining_charge',
+            charge.net_amount-v_existing-v_total
+
+    );
+
+END;
+
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_allocate_reservation_deposit_to_charge(uuid)
+FROM PUBLIC,anon,authenticated;
+
+NOTIFY pgrst,'reload schema';
