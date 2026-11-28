@@ -1457,6 +1457,303 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     expect(await remaining()).toBe(50000);
   });
 
+
+  // CANONICAL_PROGRESSIVE_GL_V1
+  //
+  // Install canonical journal functions in the isolated
+  // progressive deposit fixture. Restore the fixture
+  // definitions after each integrated acceptance test.
+
+  async function withCanonicalFinance(
+    action: () => Promise<void>
+  ) {
+    await db.exec("BEGIN");
+
+    try {
+      await db.exec(`
+        ALTER TABLE public.journal_entries
+          ADD COLUMN IF NOT EXISTS journal_number text,
+          ADD COLUMN IF NOT EXISTS journal_type text,
+          ADD COLUMN IF NOT EXISTS accounting_date date,
+          ADD COLUMN IF NOT EXISTS period_id uuid,
+          ADD COLUMN IF NOT EXISTS source_module text,
+          ADD COLUMN IF NOT EXISTS idempotency_key text,
+          ADD COLUMN IF NOT EXISTS description text,
+          ADD COLUMN IF NOT EXISTS created_by uuid,
+          ADD COLUMN IF NOT EXISTS posted_by uuid,
+          ADD COLUMN IF NOT EXISTS posted_at timestamptz,
+          ADD COLUMN IF NOT EXISTS created_at timestamptz
+            DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS reverses_journal_id uuid;
+
+        ALTER TABLE public.journal_entry_lines
+          ADD COLUMN IF NOT EXISTS line_number integer,
+          ADD COLUMN IF NOT EXISTS description text,
+          ADD COLUMN IF NOT EXISTS customer_id uuid;
+
+        ALTER TABLE public.chart_of_accounts
+          ADD COLUMN IF NOT EXISTS active boolean
+            DEFAULT true,
+          ADD COLUMN IF NOT EXISTS postable boolean
+            DEFAULT true,
+          ADD COLUMN IF NOT EXISTS is_header boolean
+            DEFAULT false;
+
+        CREATE TABLE IF NOT EXISTS public.accounting_periods (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id uuid NOT NULL,
+          name text NOT NULL,
+          status text NOT NULL
+        );
+
+        INSERT INTO public.accounting_periods (
+          organization_id,name,status
+        )
+        VALUES (
+          public.current_org_id(),
+          'Integrated test period',
+          'open'
+        );
+
+        CREATE OR REPLACE FUNCTION
+        public.neo_system_posting()
+        RETURNS boolean LANGUAGE sql STABLE AS $$
+          SELECT coalesce(
+            current_setting('neo.system_posting',true),
+            'off'
+          )='on'
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.current_access_scope()
+        RETURNS text LANGUAGE sql STABLE AS $$
+          SELECT 'branch'::text
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.has_permission(text,text)
+        RETURNS boolean LANGUAGE sql STABLE AS $$
+          SELECT false
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.is_org_admin()
+        RETURNS boolean LANGUAGE sql STABLE AS $$
+          SELECT false
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.neo_gl_acct(uuid,text)
+        RETURNS uuid LANGUAGE sql STABLE AS $$
+          SELECT id
+          FROM public.chart_of_accounts
+          WHERE organization_id=$1
+            AND code=$2
+            AND active
+            AND postable
+            AND NOT is_header
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.neo_gl_period(uuid,date)
+        RETURNS uuid LANGUAGE sql STABLE AS $$
+          SELECT id
+          FROM public.accounting_periods
+          WHERE organization_id=$1
+          LIMIT 1
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.fin_period_for(uuid,date)
+        RETURNS SETOF public.accounting_periods
+        LANGUAGE sql STABLE AS $$
+          SELECT *
+          FROM public.accounting_periods
+          WHERE organization_id=$1
+          LIMIT 1
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.next_document_number(text,text,uuid)
+        RETURNS text LANGUAGE sql AS $$
+          SELECT 'JV-'||gen_random_uuid()::text
+        $$;
+      `);
+
+      // Replacing the fixture function can require
+      // different parameter names. Keep this inside
+      // the rollback-protected isolated transaction.
+
+      await db.exec(`
+        DROP FUNCTION public.neo_gl_post(
+          uuid,uuid,text,text,uuid,text,date,text,
+          text,jsonb,uuid,uuid
+        );
+      `);
+
+      const canonical = Buffer.from(
+        "Q1JFQVRFIE9SIFJFUExBQ0UgRlVOQ1RJT04gcHVibGljLmZpbl9wb3N0X2pvdXJuYWwoX2pvdXJuYWwgdXVpZCkKIFJFVFVSTlMganNvbmIKIExBTkdVQUdFIHBscGdzcWwKIFNFQ1VSSVRZIERFRklORVIKIFNFVCBzZWFyY2hfcGF0aCBUTyAncHVibGljJwpBUyAkZnVuY3Rpb24kCkRFQ0xBUkUgaiBwdWJsaWMuam91cm5hbF9lbnRyaWVzOyBwIHB1YmxpYy5hY2NvdW50aW5nX3BlcmlvZHM7IGQgbnVtZXJpYzsgYyBudW1lcmljOyBiYWQgaW50OwpCRUdJTgogIFNFTEVDVCAqIElOVE8gaiBGUk9NIHB1YmxpYy5qb3VybmFsX2VudHJpZXMgV0hFUkUgaWQgPSBfam91cm5hbAogICAgICBBTkQgb3JnYW5pemF0aW9uX2lkID0gcHVibGljLmN1cnJlbnRfb3JnX2lkKCkKICAgICAgRk9SIFVQREFURTsKICBJRiBqLmlkIElTIE5VTEwgVEhFTiBSQUlTRSBFWENFUFRJT04gJ0pvdXJuYWwgbm90IGZvdW5kJzsgRU5EIElGOwogIElGIGoub3JnYW5pemF0aW9uX2lkIDw+IGN1cnJlbnRfb3JnX2lkKCkgVEhFTiBSQUlTRSBFWENFUFRJT04gJ05vdCBwZXJtaXR0ZWQnOyBFTkQgSUY7CiAgSUYgTk9UIChwdWJsaWMubmVvX3N5c3RlbV9wb3N0aW5nKCkgT1IgaGFzX3Blcm1pc3Npb24oJ2ZpbmFuY2UnLCdhcHByb3ZlJykgT1IgaXNfb3JnX2FkbWluKCkpIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnWW91IGRvIG5vdCBoYXZlIHBlcm1pc3Npb24gdG8gcG9zdCBqb3VybmFscyc7CiAgRU5EIElGOwogIElGIHB1YmxpYy5uZW9fYnJhbmNoX2luX3Njb3BlKGouYnJhbmNoX2lkKQogICAgICAgSVMgTk9UIFRSVUUgVEhFTgogICAgICAgIFJBSVNFIEVYQ0VQVElPTiAnSm91cm5hbCBvdXRzaWRlIGF1dGhvcmlzZWQgcHJvcGVydHkgc2NvcGUnCiAgICAgICAgICBVU0lORyBFUlJDT0RFID0gJzQyNTAxJzsKICAgIEVORCBJRjsKCiAgICBJRiBwdWJsaWMubmVvX3N5c3RlbV9wb3N0aW5nKCkgSVMgTk9UIFRSVUUKICAgICAgIEFORCBqLmJyYW5jaF9pZCBJUyBOVUxMCiAgICAgICBBTkQgKHB1YmxpYy5jdXJyZW50X2FjY2Vzc19zY29wZSgpIElOICgnb3JnYW5pc2F0aW9uJywndGVjaG5pY2FsJykpIElTIE5PVCBUUlVFIFRIRU4KICAgICAgICBSQUlTRSBFWENFUFRJT04gJ09yZ2FuaXNhdGlvbi13aWRlIGpvdXJuYWwgcmVxdWlyZXMgb3JnYW5pc2F0aW9uIHNjb3BlJwogICAgICAgICAgVVNJTkcgRVJSQ09ERSA9ICc0MjUwMSc7CiAgICBFTkQgSUY7CgogICAgSUYgRVhJU1RTICgKICAgICAgICBTRUxFQ1QgMQogICAgICAgIEZST00gcHVibGljLmpvdXJuYWxfZW50cnlfbGluZXMgbAogICAgICAgIExFRlQgSk9JTiBwdWJsaWMuY2hhcnRfb2ZfYWNjb3VudHMgYQogICAgICAgICAgT04gYS5pZCA9IGwuYWNjb3VudF9pZAogICAgICAgIFdIRVJFIGwuam91cm5hbF9pZCA9IGouaWQKICAgICAgICAgIEFORCBhLm9yZ2FuaXphdGlvbl9pZCBJUyBESVNUSU5DVCBGUk9NIGoub3JnYW5pemF0aW9uX2lkCiAgICApIFRIRU4KICAgICAgICBSQUlTRSBFWENFUFRJT04gJ0pvdXJuYWwgYWNjb3VudCBiZWxvbmdzIHRvIGFub3RoZXIgb3JnYW5pc2F0aW9uJwogICAgICAgICAgVVNJTkcgRVJSQ09ERSA9ICc0MjUwMSc7CiAgICBFTkQgSUY7CgogICAgSUYgRVhJU1RTICgKICAgICAgICBTRUxFQ1QgMQogICAgICAgIEZST00gcHVibGljLmpvdXJuYWxfZW50cnlfbGluZXMgbAogICAgICAgIFdIRVJFIGwuam91cm5hbF9pZCA9IGouaWQKICAgICAgICAgIEFORCAoCiAgICAgICAgICAgIGwub3JnYW5pemF0aW9uX2lkIElTIERJU1RJTkNUIEZST00gai5vcmdhbml6YXRpb25faWQKICAgICAgICAgICAgT1IgcHVibGljLm5lb19icmFuY2hfaW5fc2NvcGUoCiAgICAgICAgICAgICAgICBDT0FMRVNDRShsLmJyYW5jaF9pZCwgai5icmFuY2hfaWQpCiAgICAgICAgICAgICkgSVMgTk9UIFRSVUUKICAgICAgICAgICkKICAgICkgVEhFTgogICAgICAgIFJBSVNFIEVYQ0VQVElPTiAnSm91cm5hbCBsaW5lcyBvdXRzaWRlIGF1dGhvcmlzZWQgc2NvcGUnCiAgICAgICAgICBVU0lORyBFUlJDT0RFID0gJzQyNTAxJzsKICAgIEVORCBJRjsKCiAgICBJRiBqLnN0YXR1cyA9ICdwb3N0ZWQnIFRIRU4gUkVUVVJOIGpzb25iX2J1aWxkX29iamVjdCgnb2snLCB0cnVlLCAnYWxyZWFkeV9wb3N0ZWQnLCB0cnVlLCAnam91cm5hbF9pZCcsIGouaWQpOyBFTkQgSUY7CiAgSUYgai5zdGF0dXMgTk9UIElOICgnZHJhZnQnLCdhcHByb3ZlZCcpIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdKb3VybmFsIGNhbm5vdCBiZSBwb3N0ZWQgZnJvbSBzdGF0dXMgJScsIGouc3RhdHVzOyBFTkQgSUY7CgogIFNFTEVDVCBDT0FMRVNDRShzdW0oZGViaXQpLDApLCBDT0FMRVNDRShzdW0oY3JlZGl0KSwwKSBJTlRPIGQsIGMKICAgIEZST00gcHVibGljLmpvdXJuYWxfZW50cnlfbGluZXMgV0hFUkUgam91cm5hbF9pZCA9IGouaWQ7CiAgSUYgZCA9IDAgQU5EIGMgPSAwIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdKb3VybmFsIGhhcyBubyBsaW5lcyc7IEVORCBJRjsKICBJRiBkIDw+IGMgVEhFTiBSQUlTRSBFWENFUFRJT04gJ0pvdXJuYWwgaXMgbm90IGJhbGFuY2VkIChkZWJpdCAlIHZzIGNyZWRpdCAlKScsIGQsIGM7IEVORCBJRjsKCiAgU0VMRUNUIGNvdW50KCopIElOVE8gYmFkIEZST00gcHVibGljLmpvdXJuYWxfZW50cnlfbGluZXMgbAogICAgSk9JTiBwdWJsaWMuY2hhcnRfb2ZfYWNjb3VudHMgYSBPTiBhLmlkID0gbC5hY2NvdW50X2lkCiAgICBXSEVSRSBsLmpvdXJuYWxfaWQgPSBqLmlkIEFORCAoYS5hY3RpdmUgPSBmYWxzZSBPUiBhLnBvc3RhYmxlID0gZmFsc2UgT1IgYS5pc19oZWFkZXIgPSB0cnVlKTsKICBJRiBiYWQgPiAwIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdKb3VybmFsIHJlZmVyZW5jZXMgaW5hY3RpdmUgb3Igbm9uLXBvc3RhYmxlIGFjY291bnRzJzsgRU5EIElGOwoKICBTRUxFQ1QgKiBJTlRPIHAgRlJPTSBwdWJsaWMuZmluX3BlcmlvZF9mb3Ioai5vcmdhbml6YXRpb25faWQsIGouYWNjb3VudGluZ19kYXRlKTsKICBJRiBwLmlkIElTIE5VTEwgVEhFTiBSQUlTRSBFWENFUFRJT04gJ05vIGFjY291bnRpbmcgcGVyaW9kIGNvdmVycyAlJywgai5hY2NvdW50aW5nX2RhdGU7IEVORCBJRjsKICBJRiBwLnN0YXR1cyBOT1QgSU4gKCdvcGVuJykgQU5EIE5PVCAocC5zdGF0dXMgPSAnc29mdF9jbG9zZWQnIEFORCBqLmpvdXJuYWxfdHlwZSA9ICdhZGp1c3RtZW50JykgVEhFTgogICAgUkFJU0UgRVhDRVBUSU9OICdBY2NvdW50aW5nIHBlcmlvZCAlIGlzICUnLCBwLm5hbWUsIHAuc3RhdHVzOwogIEVORCBJRjsKCiAgSUYgai5qb3VybmFsX3R5cGUgPD4gJ3JldmVyc2FsJyBBTkQgai5zb3VyY2VfZG9jdW1lbnRfaWQgSVMgTk9UIE5VTEwgQU5EIEVYSVNUUyAoCiAgICAgIFNFTEVDVCAxIEZST00gcHVibGljLmpvdXJuYWxfZW50cmllcyB4CiAgICAgIFdIRVJFIHgub3JnYW5pemF0aW9uX2lkID0gai5vcmdhbml6YXRpb25faWQgQU5EIHguaWQgPD4gai5pZAogICAgICAgIEFORCB4LnNvdXJjZV9kb2N1bWVudF90eXBlID0gai5zb3VyY2VfZG9jdW1lbnRfdHlwZQogICAgICAgIEFORCB4LnNvdXJjZV9kb2N1bWVudF9pZCA9IGouc291cmNlX2RvY3VtZW50X2lkCiAgICAgICAgQU5EIHguc3RhdHVzID0gJ3Bvc3RlZCcgQU5EIHguam91cm5hbF90eXBlIDw+ICdyZXZlcnNhbCcKICAgICAgICBBTkQgeC5yZXZlcnNlZF9ieV9qb3VybmFsX2lkIElTIE5VTEwpIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnVGhpcyBzb3VyY2UgZG9jdW1lbnQgaGFzIGFscmVhZHkgYmVlbiBwb3N0ZWQnOwogIEVORCBJRjsKCiAgVVBEQVRFIHB1YmxpYy5qb3VybmFsX2VudHJpZXMKICAgIFNFVCBzdGF0dXM9J3Bvc3RlZCcsIHRvdGFsX2RlYml0PWQsIHRvdGFsX2NyZWRpdD1jLCBwZXJpb2RfaWQ9cC5pZCwKICAgICAgICBwb3N0ZWRfYnk9YXV0aC51aWQoKSwgcG9zdGVkX2F0PW5vdygpCiAgICBXSEVSRSBpZCA9IGouaWQ7CgogIFJFVFVSTiBqc29uYl9idWlsZF9vYmplY3QoJ29rJywgdHJ1ZSwgJ2pvdXJuYWxfaWQnLCBqLmlkLCAndG90YWwnLCBkLCAncGVyaW9kJywgcC5uYW1lKTsKRU5EICRmdW5jdGlvbiQ7CkNSRUFURSBPUiBSRVBMQUNFIEZVTkNUSU9OIHB1YmxpYy5uZW9fZ2xfcG9zdChfb3JnIHV1aWQsIF9icmFuY2ggdXVpZCwgX21vZHVsZSB0ZXh0LCBfc291cmNlX3R5cGUgdGV4dCwgX3NvdXJjZV9pZCB1dWlkLCBfcG9zdGluZ190eXBlIHRleHQsIF9kYXRlIGRhdGUsIF9jdXJyZW5jeSB0ZXh0LCBfZGVzYyB0ZXh0LCBfbGluZXMganNvbmIsIF9jdXN0b21lciB1dWlkIERFRkFVTFQgTlVMTDo6dXVpZCwgX3JldmVyc2VzIHV1aWQgREVGQVVMVCBOVUxMOjp1dWlkKQogUkVUVVJOUyBqc29uYgogTEFOR1VBR0UgcGxwZ3NxbAogU0VDVVJJVFkgREVGSU5FUgogU0VUIHNlYXJjaF9wYXRoIFRPICdwdWJsaWMnCkFTICRmdW5jdGlvbiQKREVDTEFSRSBrZXkgdGV4dCA6PSBfc291cmNlX3R5cGUgfHwgJzonIHx8IF9zb3VyY2VfaWQ6OnRleHQgfHwgJzonIHx8IF9wb3N0aW5nX3R5cGU7CiAgICAgICAgaiB1dWlkOyBsbiBqc29uYjsgaSBpbnQgOj0gMDsgdGQgbnVtZXJpYyA6PSAwOyB0YyBudW1lcmljIDo9IDA7IGFjY3QgdXVpZDsKICAgICAgICBkIG51bWVyaWM7IGMgbnVtZXJpYzsgcHJpb3IgdGV4dDsgZXhpc3RpbmcgcHVibGljLmpvdXJuYWxfZW50cmllczsKQkVHSU4KICAgIElGIHB1YmxpYy5jdXJyZW50X29yZ19pZCgpIElTIERJU1RJTkNUIEZST00gX29yZyBPUiBOT1QgY29hbGVzY2UocHVibGljLm5lb19icmFuY2hfaW5fc2NvcGUoX2JyYW5jaCksZmFsc2UpIFRIRU4KICAgICAgUkFJU0UgRVhDRVBUSU9OICdQb3N0aW5nIGlzIG91dHNpZGUgdGhlIGN1cnJlbnQgb3JnYW5pemF0aW9uIG9yIHByb3BlcnR5IHNjb3BlJyBVU0lORyBFUlJDT0RFPSc0MjUwMSc7CiAgICBFTkQgSUY7CiAgICBJRiBfc291cmNlX2lkIElTIE5VTEwgT1IgbnVsbGlmKGJ0cmltKF9zb3VyY2VfdHlwZSksJycpIElTIE5VTEwgT1IgbnVsbGlmKGJ0cmltKF9wb3N0aW5nX3R5cGUpLCcnKSBJUyBOVUxMIFRIRU4KICAgICAgUkFJU0UgRVhDRVBUSU9OICdQb3N0aW5nIHNvdXJjZSBhbmQgdHlwZSBhcmUgcmVxdWlyZWQnIFVTSU5HIEVSUkNPREU9JzIyMDIzJzsKICAgIEVORCBJRjsKICAgIElGIF9saW5lcyBJUyBOVUxMIE9SIGpzb25iX3R5cGVvZihfbGluZXMpPD4nYXJyYXknIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdQb3N0aW5nIGxpbmVzIG11c3QgYmUgYW4gYXJyYXknOyBFTkQgSUY7CiAgICBJRiBqc29uYl9hcnJheV9sZW5ndGgoX2xpbmVzKT0wIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdub3RoaW5nX3RvX3Bvc3QnOyBFTkQgSUY7CiAgICBGT1IgbG4gSU4gU0VMRUNUICogRlJPTSBqc29uYl9hcnJheV9lbGVtZW50cyhfbGluZXMpIExPT1AKICAgICAgZDo9Y29hbGVzY2UoKGxuLT4+J2RlYml0Jyk6Om51bWVyaWMsMCk7Yzo9Y29hbGVzY2UoKGxuLT4+J2NyZWRpdCcpOjpudW1lcmljLDApOwogICAgICBJRiBkPDAgT1IgYzwwIE9SIGQ6OnRleHQgSU4gKCdOYU4nLCdJbmZpbml0eScsJy1JbmZpbml0eScpIE9SIGM6OnRleHQgSU4gKCdOYU4nLCdJbmZpbml0eScsJy1JbmZpbml0eScpIE9SIChkPjAgQU5EIGM+MCkgVEhFTgogICAgICAgIFJBSVNFIEVYQ0VQVElPTiAnUG9zdGluZyBhbW91bnRzIG11c3QgYmUgZmluaXRlIG5vbm5lZ2F0aXZlIGFuZCBvbmUtc2lkZWQnIFVTSU5HIEVSUkNPREU9JzIyMDIzJzsKICAgICAgRU5EIElGOwogICAgRU5EIExPT1A7CiAgICBQRVJGT1JNIHBnX2Fkdmlzb3J5X3hhY3RfbG9jayhoYXNodGV4dGV4dGVuZGVkKCdnbDonfHxfb3JnOjp0ZXh0fHwnOid8fGtleSwwKSk7CiAgU0VMRUNUIGlkIElOVE8gaiBGUk9NIHB1YmxpYy5qb3VybmFsX2VudHJpZXMKICAgV0hFUkUgb3JnYW5pemF0aW9uX2lkID0gX29yZwogICAgIEFORCAoaWRlbXBvdGVuY3lfa2V5ID0ga2V5IE9SIGxlZnQoaWRlbXBvdGVuY3lfa2V5LGxlbmd0aChrZXl8fCc6Y29ycmVjdGlvbjonKSk9a2V5fHwnOmNvcnJlY3Rpb246JykKICAgICBBTkQgcmV2ZXJzZWRfYnlfam91cm5hbF9pZCBJUyBOVUxMCiAgIE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCAxOwogIElGIGogSVMgTk9UIE5VTEwgVEhFTgogICAgICBTRUxFQ1QgKiBJTlRPIGV4aXN0aW5nIEZST00gcHVibGljLmpvdXJuYWxfZW50cmllcyBXSEVSRSBpZD1qIEZPUiBVUERBVEU7CiAgICAgIElGIGV4aXN0aW5nLmJyYW5jaF9pZCBJUyBESVNUSU5DVCBGUk9NIF9icmFuY2ggT1IgZXhpc3RpbmcuY3VycmVuY3kgSVMgRElTVElOQ1QgRlJPTSBjb2FsZXNjZShfY3VycmVuY3ksJ0tFUycpCiAgICAgICAgIE9SIGV4aXN0aW5nLmFjY291bnRpbmdfZGF0ZSBJUyBESVNUSU5DVCBGUk9NIF9kYXRlCiAgICAgICAgIE9SIGV4aXN0aW5nLnNvdXJjZV9kb2N1bWVudF9pZCBJUyBESVNUSU5DVCBGUk9NIF9zb3VyY2VfaWQgT1IgZXhpc3Rpbmcuc291cmNlX2RvY3VtZW50X3R5cGUgSVMgRElTVElOQ1QgRlJPTSBfc291cmNlX3R5cGV8fCc6J3x8X3Bvc3RpbmdfdHlwZSBUSEVOCiAgICAgICAgUkFJU0UgRVhDRVBUSU9OICdFeGlzdGluZyBqb3VybmFsIHNvdXJjZSwgcHJvcGVydHkgb3IgY3VycmVuY3kgZGlmZmVycyc7CiAgICAgIEVORCBJRjsKICAgICAgSUYgZXhpc3Rpbmcuc3RhdHVzIElTIE5VTEwgT1IgZXhpc3Rpbmcuc3RhdHVzIE5PVCBJTiAoJ3Bvc3RlZCcsJ2RyYWZ0JywnYXBwcm92ZWQnKSBUSEVOIFJBSVNFIEVYQ0VQVElPTiAnRXhpc3Rpbmcgam91cm5hbCBjYW5ub3QgYmUgcmV1c2VkIGZyb20gc3RhdHVzICUnLGV4aXN0aW5nLnN0YXR1czsgRU5EIElGOwogICAgICBTRUxFQ1QgY29hbGVzY2Uoc3VtKGRlYml0KSwwKSxjb2FsZXNjZShzdW0oY3JlZGl0KSwwKSBJTlRPIHRkLHRjIEZST00gcHVibGljLmpvdXJuYWxfZW50cnlfbGluZXMgV0hFUkUgam91cm5hbF9pZD1qOwogICAgICBJRiB0ZDw9MCBPUiB0ZDw+dGMgT1IgdGQ6OnRleHQgSU4gKCdOYU4nLCdJbmZpbml0eScsJy1JbmZpbml0eScpIE9SIHRjOjp0ZXh0IElOICgnTmFOJywnSW5maW5pdHknLCctSW5maW5pdHknKQogICAgICAgICBPUiBFWElTVFMoU0VMRUNUIDEgRlJPTSBwdWJsaWMuam91cm5hbF9lbnRyeV9saW5lcyBsIExFRlQgSk9JTiBwdWJsaWMuY2hhcnRfb2ZfYWNjb3VudHMgYSBPTiBhLmlkPWwuYWNjb3VudF9pZAogICAgICAgICAgICAgV0hFUkUgbC5qb3VybmFsX2lkPWogQU5EIChsLm9yZ2FuaXphdGlvbl9pZCBJUyBESVNUSU5DVCBGUk9NIF9vcmcgT1IgYS5vcmdhbml6YXRpb25faWQgSVMgRElTVElOQ1QgRlJPTSBfb3JnCiAgICAgICAgICAgICAgIE9SIGwuZGViaXQgSVMgTlVMTCBPUiBsLmNyZWRpdCBJUyBOVUxMIE9SIGwuZGViaXQ8MCBPUiBsLmNyZWRpdDwwIE9SIChsLmRlYml0PjAgQU5EIGwuY3JlZGl0PjApKSkgVEhFTgogICAgICAgIFJBSVNFIEVYQ0VQVElPTiAnRXhpc3Rpbmcgam91cm5hbCBoYXMgaW52YWxpZCBvciB1bmJhbGFuY2VkIGxpbmVzJzsKICAgICAgRU5EIElGOwogICAgICBJRiBleGlzdGluZy5zdGF0dXM9J3Bvc3RlZCcgVEhFTgogICAgICAgIElGIGV4aXN0aW5nLnRvdGFsX2RlYml0IElTIERJU1RJTkNUIEZST00gdGQgT1IgZXhpc3RpbmcudG90YWxfY3JlZGl0IElTIERJU1RJTkNUIEZST00gdGMgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1Bvc3RlZCBqb3VybmFsIHRvdGFscyBkaXNhZ3JlZSB3aXRoIGl0cyBsaW5lcyc7IEVORCBJRjsKICAgICAgRUxTRQogICAgICAgIElGIEVYSVNUUyhXSVRIIHdhbnRlZCBBUyAoCiAgICAgICAgICBTRUxFQ1QgcmVxdWVzdGVkLnZhbHVlLT4+J2NvZGUnIEFTIGNvZGUsc3VtKHJvdW5kKGNvYWxlc2NlKChyZXF1ZXN0ZWQudmFsdWUtPj4nZGViaXQnKTo6bnVtZXJpYywwKSwyKSkgQVMgZCxzdW0ocm91bmQoY29hbGVzY2UoKHJlcXVlc3RlZC52YWx1ZS0+PidjcmVkaXQnKTo6bnVtZXJpYywwKSwyKSkgQVMgYwogICAgICAgICAgRlJPTSBqc29uYl9hcnJheV9lbGVtZW50cyhfbGluZXMpIEFTIHJlcXVlc3RlZCh2YWx1ZSkgR1JPVVAgQlkgMQogICAgICAgICksIGFjdHVhbCBBUyAoCiAgICAgICAgICBTRUxFQ1QgYS5jb2RlLHN1bShsLmRlYml0KSBBUyBkLHN1bShsLmNyZWRpdCkgQVMgYyBGUk9NIHB1YmxpYy5qb3VybmFsX2VudHJ5X2xpbmVzIGwgSk9JTiBwdWJsaWMuY2hhcnRfb2ZfYWNjb3VudHMgYSBPTiBhLmlkPWwuYWNjb3VudF9pZAogICAgICAgICAgV0hFUkUgbC5qb3VybmFsX2lkPWogR1JPVVAgQlkgYS5jb2RlCiAgICAgICAgKSBTRUxFQ1QgMSBGUk9NIHdhbnRlZCB3IEZVTEwgSk9JTiBhY3R1YWwgYSBPTiBhLmNvZGU9dy5jb2RlCiAgICAgICAgICBXSEVSRSBjb2FsZXNjZSh3LmQsMCk8PmNvYWxlc2NlKGEuZCwwKSBPUiBjb2FsZXNjZSh3LmMsMCk8PmNvYWxlc2NlKGEuYywwKSkgVEhFTgogICAgICAgICAgUkFJU0UgRVhDRVBUSU9OICdFeGlzdGluZyBkcmFmdCBsaW5lcyBkaWZmZXIgZnJvbSB0aGUgcmVxdWVzdGVkIHBvc3RpbmcnOwogICAgICAgIEVORCBJRjsKICAgICAgICBwcmlvcjo9Y29hbGVzY2UoY3VycmVudF9zZXR0aW5nKCduZW8uc3lzdGVtX3Bvc3RpbmcnLHRydWUpLCdvZmYnKTsKICAgICAgICBCRUdJTgogICAgICAgICAgUEVSRk9STSBzZXRfY29uZmlnKCduZW8uc3lzdGVtX3Bvc3RpbmcnLCdvbicsdHJ1ZSk7CiAgICAgICAgICBQRVJGT1JNIHB1YmxpYy5maW5fcG9zdF9qb3VybmFsKGopOwogICAgICAgICAgUEVSRk9STSBzZXRfY29uZmlnKCduZW8uc3lzdGVtX3Bvc3RpbmcnLHByaW9yLHRydWUpOwogICAgICAgIEVYQ0VQVElPTiBXSEVOIE9USEVSUyBUSEVOCiAgICAgICAgICBQRVJGT1JNIHNldF9jb25maWcoJ25lby5zeXN0ZW1fcG9zdGluZycscHJpb3IsdHJ1ZSk7UkFJU0U7CiAgICAgICAgRU5EOwogICAgICAgIElGIE5PVCBFWElTVFMoU0VMRUNUIDEgRlJPTSBwdWJsaWMuam91cm5hbF9lbnRyaWVzIFdIRVJFIGlkPWogQU5EIHN0YXR1cz0ncG9zdGVkJykgVEhFTiBSQUlTRSBFWENFUFRJT04gJ0V4aXN0aW5nIGpvdXJuYWwgZGlkIG5vdCByZWFjaCBwb3N0ZWQgc3RhdHVzJzsgRU5EIElGOwogICAgICBFTkQgSUY7CiAgICBSRVRVUk4ganNvbmJfYnVpbGRfb2JqZWN0KCdvaycsIHRydWUsICdqb3VybmFsX2lkJywgaiwgJ2R1cGxpY2F0ZV9wcmV2ZW50ZWQnLCB0cnVlKTsKICBFTkQgSUY7CiAgSUYgRVhJU1RTIChTRUxFQ1QgMSBGUk9NIHB1YmxpYy5qb3VybmFsX2VudHJpZXMKICAgICAgICAgICAgIFdIRVJFIG9yZ2FuaXphdGlvbl9pZCA9IF9vcmcgQU5EIGlkZW1wb3RlbmN5X2tleSA9IGtleQogICAgICAgICAgICAgICBBTkQgcmV2ZXJzZWRfYnlfam91cm5hbF9pZCBJUyBOT1QgTlVMTCkgVEhFTgogICAga2V5IDo9IGtleSB8fCAnOmNvcnJlY3Rpb246JyB8fCAoMSArIChTRUxFQ1QgY291bnQoKikgRlJPTSBwdWJsaWMuam91cm5hbF9lbnRyaWVzCiAgICAgIFdIRVJFIG9yZ2FuaXphdGlvbl9pZCA9IF9vcmcgQU5EIGxlZnQoaWRlbXBvdGVuY3lfa2V5LGxlbmd0aChrZXl8fCc6Y29ycmVjdGlvbjonKSk9a2V5fHwnOmNvcnJlY3Rpb246JykpOjp0ZXh0OwogIEVORCBJRjsKCiAgSU5TRVJUIElOVE8gcHVibGljLmpvdXJuYWxfZW50cmllcwogICAgKG9yZ2FuaXphdGlvbl9pZCwgYnJhbmNoX2lkLCBqb3VybmFsX251bWJlciwgam91cm5hbF90eXBlLCBhY2NvdW50aW5nX2RhdGUsCiAgICAgcGVyaW9kX2lkLCBzb3VyY2VfbW9kdWxlLCBzb3VyY2VfZG9jdW1lbnRfdHlwZSwgc291cmNlX2RvY3VtZW50X2lkLAogICAgIGlkZW1wb3RlbmN5X2tleSwgZGVzY3JpcHRpb24sIGN1cnJlbmN5LCBzdGF0dXMsIGNyZWF0ZWRfYnksIHJldmVyc2VzX2pvdXJuYWxfaWQpCiAgVkFMVUVTIChfb3JnLCBfYnJhbmNoLCBwdWJsaWMubmV4dF9kb2N1bWVudF9udW1iZXIoJ2pvdXJuYWwnLCdKVicsX2JyYW5jaCksCiAgICAgICAgICBDQVNFIFdIRU4gX3JldmVyc2VzIElTIE5VTEwgVEhFTiAnYXV0b21hdGljJyBFTFNFICdyZXZlcnNhbCcgRU5ELCBfZGF0ZSwKICAgICAgICAgIHB1YmxpYy5uZW9fZ2xfcGVyaW9kKF9vcmcsIF9kYXRlKSwgX21vZHVsZSwKICAgICAgICAgIF9zb3VyY2VfdHlwZSB8fCAnOicgfHwgX3Bvc3RpbmdfdHlwZSwgX3NvdXJjZV9pZCwga2V5LCBfZGVzYywKICAgICAgICAgIGNvYWxlc2NlKF9jdXJyZW5jeSwnS0VTJyksICdkcmFmdCcsIGF1dGgudWlkKCksIF9yZXZlcnNlcykKICBSRVRVUk5JTkcgaWQgSU5UTyBqOwoKICBGT1IgbG4gSU4gU0VMRUNUICogRlJPTSBqc29uYl9hcnJheV9lbGVtZW50cyhfbGluZXMpIExPT1AKICAgIGQgOj0gcm91bmQoY29hbGVzY2UoKGxuLT4+J2RlYml0Jyk6Om51bWVyaWMsIDApLCAyKTsKICAgIGMgOj0gcm91bmQoY29hbGVzY2UoKGxuLT4+J2NyZWRpdCcpOjpudW1lcmljLCAwKSwgMik7CiAgICBDT05USU5VRSBXSEVOIGQgPSAwIEFORCBjID0gMDsKICAgIGFjY3QgOj0gcHVibGljLm5lb19nbF9hY2N0KF9vcmcsIGxuLT4+J2NvZGUnKTsKICAgIElGIGFjY3QgSVMgTlVMTCBUSEVOCiAgICAgIFJBSVNFIEVYQ0VQVElPTiAnY2hhcnRfb2ZfYWNjb3VudHMgaXMgbWlzc2luZyBwb3N0YWJsZSBhY2NvdW50ICUnLCBsbi0+Pidjb2RlJzsKICAgIEVORCBJRjsKICAgIGkgOj0gaSArIDE7CiAgICBJTlNFUlQgSU5UTyBwdWJsaWMuam91cm5hbF9lbnRyeV9saW5lcwogICAgICAob3JnYW5pemF0aW9uX2lkLCBqb3VybmFsX2lkLCBsaW5lX251bWJlciwgYWNjb3VudF9pZCwgZGVzY3JpcHRpb24sIGRlYml0LCBjcmVkaXQsCiAgICAgICBicmFuY2hfaWQsIGN1c3RvbWVyX2lkKQogICAgVkFMVUVTIChfb3JnLCBqLCBpLCBhY2N0LCBjb2FsZXNjZShsbi0+PidkZXNjcmlwdGlvbicsIF9kZXNjKSwgZCwgYywgX2JyYW5jaCwgX2N1c3RvbWVyKTsKICAgIHRkIDo9IHRkICsgZDsgdGMgOj0gdGMgKyBjOwogIEVORCBMT09QOwoKICBJRiBpID0gMCBUSEVOIFJBSVNFIEVYQ0VQVElPTiAnbm90aGluZ190b19wb3N0JzsgRU5EIElGOwogIElGIHJvdW5kKHRkLDIpIDw+IHJvdW5kKHRjLDIpIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnSm91cm5hbCBkb2VzIG5vdCBiYWxhbmNlOiBkZWJpdHMgJSB2cyBjcmVkaXRzICUnLCB0ZCwgdGM7CiAgRU5EIElGOwoKICBVUERBVEUgcHVibGljLmpvdXJuYWxfZW50cmllcwogICAgIFNFVCB0b3RhbF9kZWJpdCA9IHJvdW5kKHRkLDIpLCB0b3RhbF9jcmVkaXQgPSByb3VuZCh0YywyKQogICBXSEVSRSBpZCA9IGo7CgogIC0tIEF1dG9tYXRpYyBtb2R1bGUgcG9zdGluZ3MgYXJlIHN5c3RlbSBwb3N0aW5nczogdGhlIG9wZXJhdGlvbmFsIGF1dGhvcml0eSB3YXMKICAtLSBhbHJlYWR5IHZlcmlmaWVkIHVwc3RyZWFtLCBzbyB0aGUgY2FsbGVyIGRvZXMgbm90IG5lZWQgbWFudWFsIGpvdXJuYWwgcmlnaHRzLgogIHByaW9yIDo9IGNvYWxlc2NlKGN1cnJlbnRfc2V0dGluZygnbmVvLnN5c3RlbV9wb3N0aW5nJywgdHJ1ZSksICdvZmYnKTsKICBQRVJGT1JNIHNldF9jb25maWcoJ25lby5zeXN0ZW1fcG9zdGluZycsICdvbicsIHRydWUpOwogIFBFUkZPUk0gcHVibGljLmZpbl9wb3N0X2pvdXJuYWwoaik7CiAgUEVSRk9STSBzZXRfY29uZmlnKCduZW8uc3lzdGVtX3Bvc3RpbmcnLCBwcmlvciwgdHJ1ZSk7CiAgUkVUVVJOIGpzb25iX2J1aWxkX29iamVjdCgnb2snLCB0cnVlLCAnam91cm5hbF9pZCcsIGosICdkdXBsaWNhdGVfcHJldmVudGVkJywgZmFsc2UpOwpFTkQ7CiRmdW5jdGlvbiQ7Cg==",
+        "base64"
+      ).toString("utf8");
+
+      await db.exec(canonical);
+
+      const rollout = readFileSync(
+        "supabase/migrations/20261126023000_customer_advance_deposit_transactions.sql",
+        "utf8"
+      );
+
+      const replayPatch = rollout.match(
+        /DO \$canonical_posted_journal_replay\$[\s\S]*?\$canonical_posted_journal_replay\$;/
+      )?.[0];
+
+      if (!replayPatch) {
+        throw new Error("Canonical replay migration missing");
+      }
+
+      await db.exec(replayPatch);
+
+      await action();
+
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  }
+
+  async function integratedAccountBalance(code: string) {
+    const result = await db.query<{
+      balance: number;
+    }>(
+      `SELECT coalesce(
+         sum(l.debit-l.credit),0
+       )::float8 AS balance
+       FROM public.journal_entry_lines l
+       JOIN public.chart_of_accounts a
+         ON a.id=l.account_id
+       JOIN public.journal_entries j
+         ON j.id=l.journal_id
+       WHERE a.code=$1
+         AND j.organization_id=public.current_org_id()
+         AND j.status='posted'
+         AND j.reversed_by_journal_id IS NULL`,
+      [code]
+    );
+
+    return result.rows[0]!.balance;
+  }
+
+  it("integrates progressive deposit allocation with canonical Finance journals", async () => {
+    await withCanonicalFinance(async () => {
+      const first = await addNight(1);
+
+      await removeFixtureRevenueJournal(first);
+
+      expect(
+        await connectedAccommodationCharge(first)
+      ).toMatchObject({
+        ok:true,
+        allocated:19000
+      });
+
+      expect(await remaining()).toBe(31000);
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-31000);
+
+      expect(
+        await integratedAccountBalance("1060")
+      ).toBe(0);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+    });
+  });
+
+  it("reconciles three nights using the actual progressive allocator and canonical journal functions", async () => {
+    await withCanonicalFinance(async () => {
+      const expected = [
+        {night:1,applied:19000,remaining:31000},
+        {night:2,applied:19000,remaining:12000},
+        {night:3,applied:12000,remaining:0}
+      ];
+
+      for (const entry of expected) {
+        const charge = await addNight(entry.night);
+
+        await removeFixtureRevenueJournal(charge);
+
+        expect(
+          (await connectedAccommodationCharge(charge)).allocated
+        ).toBe(entry.applied);
+
+        expect(await remaining()).toBe(
+          entry.remaining
+        );
+      }
+
+      expect(await position()).toEqual({
+        balance:7000,
+        payments:50000
+      });
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(0);
+
+      expect(
+        await integratedAccountBalance("1060")
+      ).toBe(7000);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-57000);
+
+      expect(
+        await integratedAccountBalance("1010")
+      ).toBe(50000);
+    });
+  });
+
+  it("does not duplicate canonical financial postings during accommodation replay", async () => {
+    await withCanonicalFinance(async () => {
+      const charge = await addNight(1);
+
+      await removeFixtureRevenueJournal(charge);
+
+      await connectedAccommodationCharge(charge);
+      await connectedAccommodationCharge(charge);
+
+      expect(await remaining()).toBe(31000);
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-31000);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+
+      expect(
+        await integratedAccountBalance("1060")
+      ).toBe(0);
+
+      const result = await db.query<{
+        n: number;
+      }>(
+        `SELECT count(*)::integer AS n
+         FROM public.journal_entries
+         WHERE source_document_id=$1
+           AND source_document_type='folio_charge:revenue'
+           AND status='posted'`,
+        [charge]
+      );
+
+      expect(result.rows[0]!.n).toBe(1);
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 
