@@ -6679,3 +6679,347 @@ public.neo_guard_progressive_deposit_refund_reservation()
 FROM PUBLIC,anon,authenticated;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_REFUND_SETTLEMENT_V1
+--
+-- Unused progressive deposits remain guest liabilities.
+-- Refunds release unused liability, not earned revenue.
+-- Existing refund settlement authority remains unchanged.
+
+CREATE OR REPLACE FUNCTION
+public.neo_validate_progressive_deposit_refund(
+    _refund uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+
+    org uuid := public.current_org_id();
+
+    r public.cash_refund_requests;
+
+    d public.reservation_deposits;
+
+    v_position jsonb;
+
+    v_liability numeric;
+
+    v_reserved numeric;
+
+    v_available numeric;
+
+BEGIN
+
+    IF org IS NULL THEN
+        RAISE EXCEPTION
+          'Verified refund organization required';
+    END IF;
+
+    SELECT *
+    INTO r
+
+    FROM public.cash_refund_requests
+
+    WHERE id = _refund
+      AND organization_id = org;
+
+    IF r.id IS NULL THEN
+
+        RAISE EXCEPTION
+          'Refund request unavailable';
+
+    END IF;
+
+    SELECT rd.*
+    INTO d
+
+    FROM public.reservation_deposits rd
+
+    JOIN public.neo_reservation_deposit_policies policy
+      ON policy.reservation_id = rd.reservation_id
+     AND policy.organization_id = rd.organization_id
+     AND policy.branch_id = rd.branch_id
+
+    WHERE rd.organization_id = org
+      AND rd.payment_id = r.payment_id
+      AND policy.accounting_policy =
+          'progressive-accommodation';
+
+    IF d.id IS NULL THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'progressive',false
+        );
+
+    END IF;
+
+    IF public.neo_progressive_deposit_execution_enabled()
+       IS NOT TRUE
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive deposit execution is disabled';
+
+    END IF;
+
+    IF public.neo_branch_in_scope(d.branch_id)
+       IS NOT TRUE
+    THEN
+
+        RAISE EXCEPTION
+          'Refund property unavailable'
+          USING ERRCODE='42501';
+
+    END IF;
+
+    IF (
+        SELECT count(*)
+        FROM public.reservation_deposits rd
+        WHERE rd.organization_id = org
+          AND rd.payment_id = r.payment_id
+    ) <> 1 THEN
+
+        RAISE EXCEPTION
+          'Ambiguous progressive deposit receipt';
+
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended(
+            org::text ||
+            ':reservation-collection:' ||
+            d.reservation_id::text,
+            0
+        )
+    );
+
+    PERFORM 1
+
+    FROM public.reservations
+
+    WHERE id = d.reservation_id
+      AND organization_id = org
+      AND branch_id = d.branch_id
+
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+
+        RAISE EXCEPTION
+          'Progressive refund reservation unavailable';
+
+    END IF;
+
+    SELECT rd.*
+    INTO d
+
+    FROM public.reservation_deposits rd
+
+    WHERE rd.id = d.id
+      AND rd.organization_id = org
+
+    FOR UPDATE;
+
+    SELECT rr.*
+    INTO r
+
+    FROM public.cash_refund_requests rr
+
+    WHERE rr.id = _refund
+      AND rr.organization_id = org
+
+    FOR UPDATE;
+
+    IF d.id IS NULL
+       OR r.id IS NULL
+       OR r.payment_id IS DISTINCT FROM d.payment_id
+       OR r.pos_payment_id IS NOT NULL
+       OR r.branch_id IS DISTINCT FROM d.branch_id
+       OR r.currency IS DISTINCT FROM d.currency
+       OR d.status IS DISTINCT FROM 'held'
+       OR d.applied_folio_id IS NOT NULL
+       OR d.applied_folio_line_id IS NOT NULL
+       OR r.folio_id IS NOT NULL
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive refund source requires reconciliation';
+
+    END IF;
+
+    IF r.amount IS NULL
+       OR r.amount <= 0
+       OR r.amount::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR r.amount <> round(r.amount,2)
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid progressive refund amount';
+
+    END IF;
+
+    IF r.status = 'settled' THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'progressive',true,
+            'already_settled',true,
+            'deposit_id',d.id
+        );
+
+    END IF;
+
+    IF r.status IS DISTINCT FROM 'approved' THEN
+
+        RAISE EXCEPTION
+          'Progressive refund must be approved';
+
+    END IF;
+
+    v_position :=
+        public.neo_progressive_deposit_financial_position(
+            d.id
+        );
+
+    v_liability :=
+        (v_position->>'remaining_liability')::numeric;
+
+    v_reserved :=
+        (v_position->>'reserved_refund')::numeric;
+
+    v_available :=
+        (v_position->>'available_for_allocation')::numeric;
+
+    IF v_liability IS NULL
+       OR v_reserved IS NULL
+       OR v_available IS NULL
+       OR v_reserved < r.amount
+       OR v_available < 0
+       OR r.amount > v_liability
+       OR v_available+r.amount > v_liability
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive refund exceeds verified unused liability';
+
+    END IF;
+
+    RETURN jsonb_build_object(
+
+        'ok',true,
+
+        'progressive',true,
+
+        'deposit_id',d.id,
+
+        'refund_id',r.id,
+
+        'refund_amount',r.amount,
+
+        'remaining_liability_before',v_liability,
+
+        'remaining_liability_after',
+            v_liability-r.amount,
+
+        'debit_account','2020',
+
+        'folio_effect',0
+
+    );
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_validate_progressive_deposit_refund(uuid)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Replace the temporary refund restriction with
+-- allocation-aware validation.
+-- Keep canonical refund authority, tender checks,
+-- journal posting and payout verification intact.
+
+DO $progressive_refund_connection$
+DECLARE
+
+    d text;
+
+    start_at integer;
+
+    end_at integer;
+
+    tail text;
+
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_refund_settle_internal(uuid,boolean,text,uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_progressive_refund_settlement_v1'
+    ) > 0 THEN
+
+        RETURN;
+
+    END IF;
+
+    start_at := strpos(
+        d,'-- neo_progressive_refund_boundary_v1'
+    );
+
+    IF start_at=0 THEN
+
+        RAISE EXCEPTION
+          'Existing progressive refund restriction missing';
+
+    END IF;
+
+    tail := substr(d,start_at);
+
+    end_at := strpos(
+        tail,'method:=p->>''method'';'
+    );
+
+    IF end_at=0 THEN
+
+        RAISE EXCEPTION
+          'Refund settlement connection boundary differs';
+
+    END IF;
+
+    d := overlay(
+
+        d placing
+
+        $connection$
+
+ -- neo_progressive_refund_settlement_v1
+
+ PERFORM public.neo_validate_progressive_deposit_refund(
+     _refund
+ );
+
+$connection$
+
+        from start_at
+
+        for end_at-1
+
+    );
+
+    EXECUTE d;
+
+END;
+$progressive_refund_connection$;
+
+NOTIFY pgrst,'reload schema';

@@ -346,7 +346,34 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     const refundGuardStart =
       "-- NEO_PROGRESSIVE_REFUND_RESERVATION_GUARD_V1";
 
-    await db.exec(section(refundGuardStart));
+    await db.exec(section(
+      refundGuardStart,
+      "-- NEO_PROGRESSIVE_REFUND_SETTLEMENT_V1"
+    ));
+
+    await db.exec(`
+      ALTER TABLE public.cash_refund_requests
+        ADD COLUMN branch_id uuid DEFAULT '${branch}',
+        ADD COLUMN currency text DEFAULT 'KES',
+        ADD COLUMN folio_id uuid,
+        ADD COLUMN pos_payment_id uuid;
+    `);
+
+    const settlementSql = section(
+      "-- NEO_PROGRESSIVE_REFUND_SETTLEMENT_V1"
+    );
+
+    const connectionBoundary = settlementSql.indexOf(
+      "DO $progressive_refund_connection$"
+    );
+
+    if (connectionBoundary < 0) {
+      throw new Error("Refund connection boundary missing");
+    }
+
+    await db.exec(
+      settlementSql.slice(0,connectionBoundary)
+    );
 
     // Confirm the production migration defaults to disabled.
     const enabled = await db.query<{ enabled: boolean }>(
@@ -947,6 +974,168 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     expect(await position()).toEqual({
       balance:8000,payments:30000
     });
+  });
+
+  async function createRefund(
+    amount: number,
+    status = "approved"
+  ) {
+    const result = await db.query<{ id: string }>(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,$3,$4)
+      RETURNING id`,
+      [org,receipt,amount,status]
+    );
+
+    return result.rows[0]!.id;
+  }
+
+  async function validateRefund(refund: string) {
+    const result = await db.query<{
+      result: {
+        ok: boolean;
+        progressive: boolean;
+        refund_amount?: number;
+        remaining_liability_before?: number;
+        remaining_liability_after?: number;
+        debit_account?: string;
+        folio_effect?: number;
+      };
+    }>(
+      `SELECT public.neo_validate_progressive_deposit_refund($1)
+       AS result`,
+      [refund]
+    );
+
+    return result.rows[0]!.result;
+  }
+
+  it("validates refunds only against unused progressive liability", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(10000);
+
+    expect(await validateRefund(refund)).toMatchObject({
+      ok:true,
+      progressive:true,
+      refund_amount:10000,
+      remaining_liability_before:31000,
+      remaining_liability_after:21000,
+      debit_account:"2020",
+      folio_effect:0
+    });
+
+    expect(await position()).toEqual({
+      balance:0,payments:19000
+    });
+  });
+
+  it("requires refund approval before progressive payout", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(
+      10000,"pending_approval"
+    );
+
+    await expect(validateRefund(refund)).rejects.toThrow(
+      /approved/i
+    );
+  });
+
+  it("rejects progressive refunds linked to the accommodation folio", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(10000);
+
+    await db.query(
+      `UPDATE public.cash_refund_requests
+       SET folio_id=$2
+       WHERE id=$1`,
+      [refund,folio]
+    );
+
+    await expect(validateRefund(refund)).rejects.toThrow(
+      /reconciliation/i
+    );
+  });
+
+  it("rejects a progressive refund with mismatched property", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(10000);
+
+    await db.query(
+      `UPDATE public.cash_refund_requests
+       SET branch_id=$2
+       WHERE id=$1`,
+      [refund,id(999)]
+    );
+
+    await expect(validateRefund(refund)).rejects.toThrow(
+      /reconciliation/i
+    );
+  });
+
+  it("rejects a progressive refund with mismatched currency", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(10000);
+
+    await db.query(
+      `UPDATE public.cash_refund_requests
+       SET currency='USD'
+       WHERE id=$1`,
+      [refund]
+    );
+
+    await expect(validateRefund(refund)).rejects.toThrow(
+      /reconciliation/i
+    );
+  });
+
+  it("retains accommodation payments when unused deposits are refunded", async () => {
+    await allocate(await addNight(1));
+
+    const refund = await createRefund(10000);
+
+    await validateRefund(refund);
+
+    // Simulate a separately verified completed refund.
+    // The actual payout command is tested separately.
+
+    await db.query(
+      `UPDATE public.cash_refund_requests
+       SET status='settled'
+       WHERE id=$1`,
+      [refund]
+    );
+
+    expect(await financialPosition()).toMatchObject({
+      received:50000,
+      applied:19000,
+      refunded:10000,
+      remaining_liability:21000,
+      available_for_allocation:21000
+    });
+
+    expect(await position()).toEqual({
+      balance:0,payments:19000
+    });
+
+    expect(
+      (await allocate(await addNight(2))).allocated
+    ).toBe(19000);
+
+    expect(
+      (await allocate(await addNight(3))).allocated
+    ).toBe(2000);
+
+    expect(await position()).toEqual({
+      balance:17000,payments:40000
+    });
+
+    expect(await remaining()).toBe(0);
   });
 
   it("rejects allocation when execution is disabled", async () => {
