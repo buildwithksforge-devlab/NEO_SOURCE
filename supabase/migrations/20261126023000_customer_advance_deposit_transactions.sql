@@ -3772,3 +3772,176 @@ TO authenticated;
 NOTIFY pgrst,'reload schema';
 
 COMMIT;
+
+-- NEO_COLLECTION_PROPERTY_INTEGRITY_V1
+-- Preserve existing payment and refund execution infrastructure.
+-- Do not grant new financial permissions or modify existing balances.
+
+DO $folio_scope$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_pms_collection_headroom(uuid,uuid,uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_folio_collection_property_scope_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'IF source.reservation_id IS NOT NULL THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Canonical folio collection boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+ -- neo_folio_collection_property_scope_v1
+
+ IF auth.uid() IS NULL
+    OR public.current_org_id() IS NULL
+    OR public.neo_branch_in_scope(source.branch_id) IS NOT TRUE
+ THEN
+     RAISE EXCEPTION
+       'Folio is outside the authorized collection scope'
+       USING ERRCODE='42501';
+ END IF;
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$folio_scope$;
+
+
+-- Preserve current collection permission classes.
+-- Require an authenticated organization context.
+
+CREATE OR REPLACE FUNCTION public.neo_pos_can_take_payment()
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $function$
+
+ SELECT auth.uid() IS NOT NULL
+
+    AND public.current_org_id() IS NOT NULL
+
+    AND (
+
+        public.has_permission(
+            'pos','payments','process'
+        ) IS TRUE
+
+        OR public.has_permission(
+            'finance','collections','collect_payment'
+        ) IS TRUE
+
+        OR public.has_permission(
+            'finance','collections','settle_bill'
+        ) IS TRUE
+
+        OR public.has_permission(
+            'finance','collections','issue_receipt'
+        ) IS TRUE
+
+        OR public.has_permission(
+            'finance','payments','create'
+        ) IS TRUE
+
+        OR public.has_permission(
+            'finance','till','confirm_cash'
+        ) IS TRUE
+
+    );
+
+$function$;
+
+
+-- Guard the existing external refund settlement entry point.
+-- The underlying refund engine retains responsibility
+-- for settlement authorization and journal posting.
+
+DO $refund_scope$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_pos_refund_settle(uuid,text,uuid,boolean)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_external_refund_property_scope_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'p:=public.neo_refund_receipt_lock(r.payment_id);';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Canonical external refund boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+ -- neo_external_refund_property_scope_v1
+
+ IF auth.uid() IS NULL
+    OR org IS NULL
+    OR NOT EXISTS (
+
+        SELECT 1
+
+        FROM public.pos_payments payment
+
+        JOIN public.pos_orders orders
+          ON orders.id = payment.order_id
+         AND orders.organization_id =
+             payment.organization_id
+
+        WHERE payment.id = r.payment_id
+          AND payment.organization_id = org
+
+          AND public.neo_branch_in_scope(
+              orders.branch_id
+          ) IS TRUE
+
+    )
+ THEN
+     RAISE EXCEPTION
+       'Refund is outside the authorized property'
+       USING ERRCODE='42501';
+ END IF;
+
+ IF nullif(btrim(coalesce(_reference,'')),'') IS NULL
+ THEN
+     RAISE EXCEPTION
+       'A completed external refund reference is required'
+       USING ERRCODE='22023';
+ END IF;
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$refund_scope$;
