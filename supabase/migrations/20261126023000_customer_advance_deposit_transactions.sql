@@ -7023,3 +7023,397 @@ END;
 $progressive_refund_connection$;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_SCHEDULED_ACCOUNTING_V1
+--
+-- Restrict automated progressive accommodation posting
+-- to an active, verified property accounting job.
+--
+-- Do not modify global employee authentication,
+-- access scope or PIN authentication.
+
+CREATE OR REPLACE FUNCTION
+public.neo_progressive_accounting_property_allowed(
+    _org uuid,
+    _branch uuid,
+    _date date
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+
+    v_run uuid;
+    v_raw text;
+
+BEGIN
+
+    IF _org IS NULL
+       OR _branch IS NULL
+       OR _date IS NULL
+    THEN
+
+        RETURN false;
+
+    END IF;
+
+    -- Normal authenticated employees retain their
+    -- existing organization and property permissions.
+
+    IF auth.uid() IS NOT NULL THEN
+
+        RETURN (
+            public.current_org_id() = _org
+
+            AND public.neo_branch_in_scope(_branch)
+                IS TRUE
+        ) IS TRUE;
+
+    END IF;
+
+    -- Scheduled posting must have a verified job run.
+
+    IF public.current_org_id()
+       IS DISTINCT FROM _org
+    THEN
+
+        RETURN false;
+
+    END IF;
+
+    v_raw := nullif(
+        current_setting(
+            'neo.pms_accommodation_job_run_id',
+            true
+        ),
+        ''
+    );
+
+    IF v_raw IS NULL THEN
+
+        RETURN false;
+
+    END IF;
+
+    BEGIN
+
+        v_run := v_raw::uuid;
+
+    EXCEPTION WHEN invalid_text_representation THEN
+
+        RETURN false;
+
+    END;
+
+    RETURN EXISTS (
+
+        SELECT 1
+
+        FROM public.neo_pms_accommodation_job_runs r
+
+        JOIN public.branches b
+          ON b.id = r.branch_id
+         AND b.organization_id = r.organization_id
+
+        JOIN public.business_days bd
+          ON bd.organization_id = r.organization_id
+         AND bd.branch_id = r.branch_id
+         AND bd.business_date = r.business_date
+
+        JOIN public.neo_pms_accommodation_automation_settings cfg
+          ON cfg.organization_id = r.organization_id
+         AND cfg.branch_id = r.branch_id
+
+        WHERE r.id = v_run
+
+          AND r.organization_id = _org
+
+          AND r.branch_id = _branch
+
+          AND r.business_date = _date
+
+          AND r.status = 'running'
+
+          AND bd.status = 'open'
+
+          AND cfg.enabled IS TRUE
+
+          AND cfg.activation_date IS NOT NULL
+
+          AND _date >= cfg.activation_date
+
+          AND _date BETWEEN
+              (now() AT TIME ZONE 'Africa/Nairobi')::date - 1
+              AND
+              (now() AT TIME ZONE 'Africa/Nairobi')::date
+
+    );
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_progressive_accounting_property_allowed(uuid,uuid,date)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Establish the existing system organization context
+-- only for the restricted accommodation scheduler.
+--
+-- Restore every modified context value on success
+-- and failure.
+
+CREATE OR REPLACE FUNCTION
+public.neo_run_accommodation_accounting_context(
+    _org uuid,
+    _branch uuid,
+    _date date
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+
+    v_previous_org text;
+
+    v_previous_generation text;
+
+    v_previous_posting text;
+
+    v_previous_cached_org text;
+
+    v_previous_cached_scope text;
+
+    v_previous_cached_branches text;
+
+    v_posted integer;
+
+BEGIN
+
+    IF auth.uid() IS NOT NULL THEN
+
+        RAISE EXCEPTION
+          'Scheduled accounting requires a service execution context';
+
+    END IF;
+
+    IF _org IS NULL
+       OR _branch IS NULL
+       OR _date IS NULL
+    THEN
+
+        RAISE EXCEPTION
+          'Scheduled accounting context is incomplete';
+
+    END IF;
+
+    v_previous_org :=
+        current_setting('neo.system_org',true);
+
+    v_previous_generation :=
+        current_setting('neo.ctx.gen',true);
+
+    v_previous_posting :=
+        current_setting('neo.system_posting',true);
+
+    v_previous_cached_org :=
+        current_setting('neo.ctx.org',true);
+
+    v_previous_cached_scope :=
+        current_setting('neo.ctx.scope',true);
+
+    v_previous_cached_branches :=
+        current_setting('neo.ctx.branches',true);
+
+    BEGIN
+
+        PERFORM set_config(
+            'neo.system_org',
+            _org::text,
+            true
+        );
+
+        PERFORM set_config(
+            'neo.ctx.gen',
+            gen_random_uuid()::text,
+            true
+        );
+
+        IF public.neo_progressive_accounting_property_allowed(
+            _org,
+            _branch,
+            _date
+        ) IS NOT TRUE
+        THEN
+
+            RAISE EXCEPTION
+              'Scheduled accounting job property could not be verified';
+
+        END IF;
+
+        PERFORM set_config(
+            'neo.system_posting',
+            'on',
+            true
+        );
+
+        v_posted :=
+            public.neo_pms_post_accommodation_job(
+                _org,
+                _branch,
+                _date
+            );
+
+    EXCEPTION WHEN OTHERS THEN
+
+        PERFORM set_config(
+            'neo.system_org',
+            coalesce(v_previous_org,''),
+            true
+        );
+
+        PERFORM set_config(
+            'neo.ctx.gen',
+            coalesce(v_previous_generation,''),
+            true
+        );
+
+        PERFORM set_config(
+            'neo.system_posting',
+            coalesce(v_previous_posting,''),
+            true
+        );
+
+        PERFORM set_config(
+            'neo.ctx.org',
+            coalesce(v_previous_cached_org,''),
+            true
+        );
+
+        PERFORM set_config(
+            'neo.ctx.scope',
+            coalesce(v_previous_cached_scope,''),
+            true
+        );
+
+        PERFORM set_config(
+            'neo.ctx.branches',
+            coalesce(v_previous_cached_branches,''),
+            true
+        );
+
+        RAISE;
+
+    END;
+
+    PERFORM set_config(
+        'neo.system_org',
+        coalesce(v_previous_org,''),
+        true
+    );
+
+    PERFORM set_config(
+        'neo.ctx.gen',
+        coalesce(v_previous_generation,''),
+        true
+    );
+
+    PERFORM set_config(
+        'neo.system_posting',
+        coalesce(v_previous_posting,''),
+        true
+    );
+
+    PERFORM set_config(
+        'neo.ctx.org',
+        coalesce(v_previous_cached_org,''),
+        true
+    );
+
+    PERFORM set_config(
+        'neo.ctx.scope',
+        coalesce(v_previous_cached_scope,''),
+        true
+    );
+
+    PERFORM set_config(
+        'neo.ctx.branches',
+        coalesce(v_previous_cached_branches,''),
+        true
+    );
+
+    RETURN v_posted;
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_run_accommodation_accounting_context(uuid,uuid,date)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Connect the existing scheduler to the restricted
+-- service context.
+--
+-- Retain existing automation settings, job history,
+-- exception handling and property business-day locks.
+
+DO $scheduled_accounting_context$
+DECLARE
+
+    d text;
+
+    anchor text;
+
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_pms_post_accommodation_scheduled(boolean)'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_run_accommodation_accounting_context('
+    ) > 0 THEN
+
+        RETURN;
+
+    END IF;
+
+    anchor :=
+      'public.neo_pms_post_accommodation_job(';
+
+    IF strpos(d,anchor)=0 THEN
+
+        RAISE EXCEPTION
+          'Scheduled accommodation execution boundary differs';
+
+    END IF;
+
+    IF (
+        length(d)-length(replace(d,anchor,''))
+    ) / length(anchor) <> 1 THEN
+
+        RAISE EXCEPTION
+          'Scheduled accommodation execution boundary is ambiguous';
+
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        'public.neo_run_accommodation_accounting_context('
+    );
+
+    EXECUTE d;
+
+END;
+$scheduled_accounting_context$;
+
+NOTIFY pgrst,'reload schema';
