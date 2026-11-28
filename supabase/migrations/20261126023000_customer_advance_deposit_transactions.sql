@@ -4593,3 +4593,251 @@ $replacement$
 
 END;
 $checkin_integrity$;
+
+
+-- NEO_PROGRESSIVE_RESERVATION_DEPOSIT_LEDGER_V1
+-- Preserve original reservation receipts and historical applications.
+-- Progressive allocations have their own financial identities.
+
+CREATE TABLE IF NOT EXISTS
+public.neo_reservation_deposit_allocations (
+
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organization_id uuid NOT NULL,
+
+    branch_id uuid NOT NULL,
+
+    reservation_id uuid NOT NULL
+        REFERENCES public.reservations(id)
+        ON DELETE RESTRICT,
+
+    deposit_id uuid NOT NULL
+        REFERENCES public.reservation_deposits(id)
+        ON DELETE RESTRICT,
+
+    folio_id uuid NOT NULL
+        REFERENCES public.folios(id)
+        ON DELETE RESTRICT,
+
+    charge_line_id uuid NOT NULL
+        REFERENCES public.folio_lines(id)
+        ON DELETE RESTRICT,
+
+    application_line_id uuid NOT NULL UNIQUE
+        REFERENCES public.folio_lines(id)
+        ON DELETE RESTRICT,
+
+    journal_id uuid NOT NULL UNIQUE
+        REFERENCES public.journal_entries(id)
+        ON DELETE RESTRICT,
+
+    currency text NOT NULL,
+
+    amount numeric(18,2) NOT NULL
+        CHECK (
+            amount > 0
+            AND amount::text NOT IN (
+                'NaN','Infinity','-Infinity'
+            )
+        ),
+
+    operational_date date NOT NULL,
+
+    allocated_by uuid,
+
+    allocated_at timestamptz NOT NULL DEFAULT now(),
+
+    UNIQUE (
+        organization_id,
+        deposit_id,
+        charge_line_id
+    )
+
+);
+
+ALTER TABLE public.neo_reservation_deposit_allocations
+ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON
+public.neo_reservation_deposit_allocations
+FROM PUBLIC,anon,authenticated;
+
+CREATE INDEX IF NOT EXISTS
+neo_reservation_deposit_allocations_deposit_idx
+ON public.neo_reservation_deposit_allocations (
+    organization_id,
+    branch_id,
+    deposit_id
+);
+
+CREATE INDEX IF NOT EXISTS
+neo_reservation_deposit_allocations_charge_idx
+ON public.neo_reservation_deposit_allocations (
+    organization_id,
+    charge_line_id
+);
+
+
+-- Original deposits and individual allocations are separate evidence.
+-- Historical fully applied deposits are not reinterpreted.
+
+CREATE OR REPLACE FUNCTION
+public.neo_reservation_deposit_remaining(
+    _deposit uuid
+)
+RETURNS numeric
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+    d public.reservation_deposits;
+    v_allocated numeric;
+    v_refunded numeric;
+    v_reserved numeric;
+    v_remaining numeric;
+BEGIN
+
+    SELECT *
+    INTO d
+    FROM public.reservation_deposits
+    WHERE id = _deposit
+      AND organization_id = public.current_org_id();
+
+    IF d.id IS NULL
+       OR public.neo_branch_in_scope(d.branch_id) IS NOT TRUE
+    THEN
+        RAISE EXCEPTION 'Deposit unavailable'
+          USING ERRCODE='42501';
+    END IF;
+
+    IF d.amount IS NULL
+       OR d.amount <= 0
+       OR d.amount::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+        RAISE EXCEPTION 'Invalid original deposit amount';
+    END IF;
+
+    IF d.status NOT IN ('held','applied') THEN
+        RETURN 0;
+    END IF;
+
+    SELECT coalesce(sum(a.amount),0)
+    INTO v_allocated
+    FROM public.neo_reservation_deposit_allocations a
+    WHERE a.deposit_id = d.id
+      AND a.organization_id = d.organization_id
+      AND a.branch_id = d.branch_id;
+
+    -- A legacy applied deposit has already been transferred
+    -- in full to its original folio.
+
+    IF d.status = 'applied' AND v_allocated = 0 THEN
+        RETURN 0;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM public.neo_reservation_deposit_allocations a
+        LEFT JOIN public.journal_entries j
+          ON j.id = a.journal_id
+        WHERE a.deposit_id = d.id
+          AND (
+              a.organization_id IS DISTINCT FROM d.organization_id
+              OR a.branch_id IS DISTINCT FROM d.branch_id
+              OR a.reservation_id IS DISTINCT FROM d.reservation_id
+              OR a.currency IS DISTINCT FROM d.currency
+              OR j.id IS NULL
+              OR j.organization_id IS DISTINCT FROM a.organization_id
+              OR j.branch_id IS DISTINCT FROM a.branch_id
+              OR j.currency IS DISTINCT FROM a.currency
+              OR j.status IS DISTINCT FROM 'posted'
+              OR j.reversed_by_journal_id IS NOT NULL
+              OR j.total_debit IS DISTINCT FROM a.amount
+              OR j.total_credit IS DISTINCT FROM a.amount
+          )
+    ) THEN
+        RAISE EXCEPTION
+          'Deposit allocation accounting requires reconciliation';
+    END IF;
+
+    -- Existing canonical function verifies settled refunds.
+
+    v_refunded :=
+        d.amount - public.neo_deposit_net_amount(d.id);
+
+    SELECT coalesce(sum(r.amount),0)
+    INTO v_reserved
+    FROM public.cash_refund_requests r
+    WHERE r.organization_id = d.organization_id
+      AND r.payment_id = d.payment_id
+      AND r.status IN ('pending_approval','approved');
+
+    IF v_reserved < 0
+       OR v_reserved::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+        RAISE EXCEPTION 'Invalid reserved refund balance';
+    END IF;
+
+    v_remaining :=
+        d.amount-v_allocated-v_refunded-v_reserved;
+
+    IF v_remaining < 0
+       OR v_remaining::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+        RAISE EXCEPTION
+          'Deposit allocations and refunds exceed original receipt';
+    END IF;
+
+    RETURN v_remaining;
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_reservation_deposit_remaining(uuid)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Allocation history must not be silently edited or deleted.
+
+CREATE OR REPLACE FUNCTION
+public.neo_reservation_deposit_allocation_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO pg_catalog,public
+AS $function$
+BEGIN
+
+    RAISE EXCEPTION
+      'Posted deposit allocation history is immutable'
+      USING ERRCODE='42501';
+
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS
+neo_reservation_deposit_allocation_immutable
+ON public.neo_reservation_deposit_allocations;
+
+CREATE TRIGGER
+neo_reservation_deposit_allocation_immutable
+BEFORE UPDATE OR DELETE
+ON public.neo_reservation_deposit_allocations
+FOR EACH ROW
+EXECUTE FUNCTION
+public.neo_reservation_deposit_allocation_immutable();
+
+REVOKE ALL ON FUNCTION
+public.neo_reservation_deposit_allocation_immutable()
+FROM PUBLIC,anon,authenticated;
+
+NOTIFY pgrst,'reload schema';
