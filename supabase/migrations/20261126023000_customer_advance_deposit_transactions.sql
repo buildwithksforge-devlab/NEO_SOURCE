@@ -3945,3 +3945,340 @@ $guard$ || anchor
 
 END;
 $refund_scope$;
+
+
+-- NEO_INTEGRATED_COLLECTION_EXECUTION_V1
+-- Preserve current financial permissions, original receipt
+-- ownership and existing operational balances.
+
+DO $cash_collection_authority$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_cash_request_pos_payment(uuid,numeric,text,text,text,numeric)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_cash_collection_authority_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'OR public.is_org_admin()) THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Canonical cash collection permission boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+          OR public.neo_pos_can_take_payment() IS TRUE
+          OR public.is_org_admin()) THEN
+
+$replacement$
+    );
+
+    anchor := '  IF _amount IS NULL OR _amount <= 0 THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Canonical cash amount boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+  -- neo_cash_collection_authority_v1
+
+  IF auth.uid() IS NULL OR _org IS NULL THEN
+      RAISE EXCEPTION
+        'An authenticated collection operator is required'
+        USING ERRCODE='42501';
+  END IF;
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$cash_collection_authority$;
+
+
+-- Legacy cash requests must use the canonical six-argument
+-- workflow, including tender and stable transaction identity.
+
+CREATE OR REPLACE FUNCTION public.neo_cash_request_pos_payment(
+    _order uuid,
+    _amount numeric,
+    _reference text DEFAULT NULL,
+    _notes text DEFAULT '',
+    _idempotency_key text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $function$
+BEGIN
+
+    IF nullif(btrim(coalesce(_idempotency_key,'')),'') IS NULL THEN
+        RAISE EXCEPTION
+          'A stable cash collection identity is required'
+          USING ERRCODE='22023';
+    END IF;
+
+    RETURN public.neo_cash_request_pos_payment(
+        _order,
+        _amount,
+        _reference,
+        _notes,
+        _idempotency_key,
+        _amount
+    );
+
+END;
+$function$;
+
+
+-- Protect reservation-level collection calculations.
+
+DO $reservation_collection_scope$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_reservation_collection_facts(uuid,uuid,uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_reservation_collection_scope_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'cur:=public.neo_fact_currency(booking.organization_id,booking.branch_id);';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Reservation collection currency boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+ -- neo_reservation_collection_scope_v1
+
+ IF public.neo_branch_in_scope(booking.branch_id) IS NOT TRUE THEN
+     RAISE EXCEPTION
+       'Reservation is outside the authorized property'
+       USING ERRCODE='42501';
+ END IF;
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$reservation_collection_scope$;
+
+
+-- Strengthen the existing accommodation charge command.
+-- Do not change the underlying room-rate calculation.
+
+DO $room_charge_integrity$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.pms_post_room_charge(uuid,text,text,numeric,numeric,numeric,text,text,text)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_room_charge_integrity_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      '  IF _f.status <> ''open'' THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Legacy room-charge lifecycle boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+  -- neo_room_charge_integrity_v1
+
+  IF auth.uid() IS NULL
+     OR _org IS NULL
+     OR public.neo_branch_in_scope(_f.branch_id) IS NOT TRUE
+  THEN
+      RAISE EXCEPTION
+        'Room charge is outside the authorized property'
+        USING ERRCODE='42501';
+  END IF;
+
+  IF _quantity IS NULL
+     OR _quantity <= 0
+     OR _quantity::text IN ('NaN','Infinity','-Infinity')
+     OR _unit_price IS NULL
+     OR _unit_price < 0
+     OR _unit_price::text IN ('NaN','Infinity','-Infinity')
+     OR coalesce(_tax,0) < 0
+     OR coalesce(_tax,0)::text IN ('NaN','Infinity','-Infinity')
+  THEN
+      RAISE EXCEPTION
+        'Room charge quantities and amounts must be valid'
+        USING ERRCODE='22023';
+  END IF;
+
+  IF nullif(btrim(coalesce(_description,'')),'') IS NULL
+     OR nullif(btrim(coalesce(_category,'')),'') IS NULL
+     OR nullif(btrim(coalesce(_idempotency_key,'')),'') IS NULL
+  THEN
+      RAISE EXCEPTION
+        'Room charge description, category and identity are required'
+        USING ERRCODE='22023';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+      hashtextextended(
+          _org::text || ':folio-charge:' || _idempotency_key,
+          0
+      )
+  );
+
+$guard$ || anchor
+    );
+
+    anchor := '  IF _id IS NOT NULL THEN RETURN _id; END IF;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Room charge replay boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+  IF _id IS NOT NULL THEN
+
+      IF NOT EXISTS (
+
+          SELECT 1
+          FROM public.folio_lines l
+
+          WHERE l.id = _id
+            AND l.organization_id = _org
+            AND l.branch_id = _f.branch_id
+            AND l.folio_id = _folio
+            AND l.line_type = 'charge'
+            AND l.category IS NOT DISTINCT FROM _category
+            AND l.source_module IS NOT DISTINCT FROM _source_module
+            AND l.source_record_id IS NOT DISTINCT FROM _source_record_id
+            AND l.quantity IS NOT DISTINCT FROM _quantity
+            AND l.unit_price IS NOT DISTINCT FROM _unit_price
+            AND l.tax_amount IS NOT DISTINCT FROM coalesce(_tax,0)
+            AND l.net_amount IS NOT DISTINCT FROM
+                round(_quantity * _unit_price,2) + coalesce(_tax,0)
+
+            AND coalesce(l.status,'posted') NOT IN (
+                'void','voided','cancelled','reversed'
+            )
+      ) THEN
+
+          RAISE EXCEPTION
+            'Saved room charge differs from this transaction'
+            USING ERRCODE='23514';
+
+      END IF;
+
+      RETURN _id;
+
+  END IF;
+
+$replacement$
+    );
+
+    EXECUTE d;
+
+END;
+$room_charge_integrity$;
+
+
+-- Protect property-specific business-day closure.
+
+DO $business_day_scope$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_close_business_day(uuid,date,text)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_business_day_scope_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      ' IF EXISTS(SELECT 1 FROM public.business_days';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Business-day closure boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+ -- neo_business_day_scope_v1
+
+ IF auth.uid() IS NULL
+    OR _branch IS NULL
+    OR public.neo_branch_in_scope(_branch) IS NOT TRUE
+    OR NOT EXISTS (
+        SELECT 1 FROM public.branches b
+        WHERE b.id = _branch
+          AND b.organization_id = org
+    )
+ THEN
+     RAISE EXCEPTION
+       'Business-day closure is outside the authorized property'
+       USING ERRCODE='42501';
+ END IF;
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$business_day_scope$;
