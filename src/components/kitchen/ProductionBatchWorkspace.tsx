@@ -54,11 +54,13 @@ export function ProductionBatchWorkspace({
   );
 
   const eligibleRecipes = ((recipes.data ?? []) as Row[]).filter(
-    (r) => department !== "coffee" ||
-      (
-        r["status"] === "active" &&
-        stationIds.has(String(r["station_id"] ?? ""))
-      )
+    (r) =>
+      r["status"] === "active" &&
+      Number.isFinite(Number(r["yield_quantity"])) &&
+      Number(r["yield_quantity"]) > 0 &&
+      Boolean(String(r["yield_unit"] ?? "").trim()) &&
+      (department !== "coffee" ||
+        stationIds.has(String(r["station_id"] ?? "")))
   );
 
   const isCoffee = department === "coffee";
@@ -71,7 +73,7 @@ export function ProductionBatchWorkspace({
       required: true,
       options: eligibleRecipes.map((r) => ({
         value: String(r["id"]),
-        label: `${r["name"] ?? r["menu_items"]?.name ?? "Recipe"} · v${r["version"] ?? 1}`,
+        label: `${r["name"] ?? r["menu_items"]?.name ?? "Recipe"} · v${r["version"] ?? 1} / ${r["yield_unit"]}`,
       })),
     },
     {
@@ -85,28 +87,20 @@ export function ProductionBatchWorkspace({
     },
     {
       name: "planned_quantity",
-      label: "Planned quantity",
+      label: "Planned quantity (recipe yield unit)",
       type: "number" as const,
       required: true,
     },
-    { name: "actual_quantity", label: "Gross quantity produced", type: "number" as const },
-    { name: "unit", label: "Unit", placeholder: "portions, kg, litres" },
+    { name: "actual_quantity", label: "Gross quantity produced (recipe yield unit)", type: "number" as const },
+
     { name: "prepared_at", label: "Prepared at", type: "datetime-local" as const },
     { name: "use_by", label: "Use by", type: "datetime-local" as const },
-    { name: "waste_quantity", label: "Waste quantity", type: "number" as const },
+    { name: "waste_quantity", label: "Waste quantity (recipe yield unit)", type: "number" as const },
     {
       name: "status",
       label: "Status",
       type: "select" as const,
-      options: [
-        "planned",
-        "in-preparation",
-        "completed",
-        "partially-used",
-        "fully-used",
-        "discarded",
-        "closed",
-      ].map((s) => ({
+      options: ["planned", "in-preparation"].map((s) => ({
         value: s,
         label: titleCase(s.replace(/-/g, " ")),
       })),
@@ -156,8 +150,42 @@ export function ProductionBatchWorkspace({
                     }
                   }
 
+                                    const selectedRecipe = eligibleRecipes.find(
+                    (r) => String(r["id"]) === String(values["recipe_id"])
+                  );
+
+                  if (!selectedRecipe) {
+                    return Promise.reject(
+                      new Error("Select an active recipe with a valid yield.")
+                    );
+                  }
+
+                  const recipeUnit = String(
+                    selectedRecipe["yield_unit"] ?? ""
+                  ).trim();
+
+                  const selectedStation = String(
+                    values["station_id"] ?? ""
+                  );
+
+                  const recipeStation = String(
+                    selectedRecipe["station_id"] ?? ""
+                  );
+
+                  if (
+                    selectedStation &&
+                    recipeStation &&
+                    selectedStation !== recipeStation
+                  ) {
+                    return Promise.reject(
+                      new Error("The recipe belongs to a different production station.")
+                    );
+                  }
+
                   return saveBatch.mutateAsync({
                     ...values,
+                                        unit: recipeUnit,
+                    station_id: selectedStation || recipeStation || null,
                     status: values["status"] ?? "planned",
                   });
                 }
@@ -173,7 +201,7 @@ export function ProductionBatchWorkspace({
       />
       <SectionCard
         title={isCoffee ? "Beverage & juice production" : "Production batches"}
-        description="Records captured by your kitchen team. Nothing here is simulated."
+        description={isCoffee ? "Beverage preparation and available batch quantities." : "Kitchen production and available batch quantities."}
       >
         <QueryState
           isLoading={query.isLoading || (isCoffee && stations.isLoading)}

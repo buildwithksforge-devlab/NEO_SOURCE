@@ -823,3 +823,87 @@ $patch$;
 
 END;
 $batch_recipe_configuration$;
+
+
+-- NEO_PRODUCTION_RECIPE_UNIT_GUARD_V1
+
+DO $production_recipe_unit$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_production_batch_post(uuid,uuid)'
+        ::regprocedure
+    );
+
+    anchor := '  v_available :=';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Canonical production quantity anchor differs';
+    END IF;
+
+    IF strpos(d,'neo_production_recipe_unit_guard_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $patch$
+  -- neo_production_recipe_unit_guard_v1
+
+  IF v_recipe.status IS DISTINCT FROM 'active'
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','inactive_recipe'
+    );
+  END IF;
+
+  IF v_recipe.yield_quantity IS NULL
+     OR v_recipe.yield_quantity <= 0
+     OR v_recipe.yield_quantity::text IN (
+       'NaN','Infinity','-Infinity'
+     )
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','bad_yield'
+    );
+  END IF;
+
+  IF nullif(btrim(coalesce(v_recipe.yield_unit,'')),'') IS NULL
+     OR nullif(btrim(coalesce(v_b.unit,'')),'') IS NULL
+     OR lower(btrim(v_b.unit))
+        IS DISTINCT FROM
+        lower(btrim(v_recipe.yield_unit))
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','recipe_unit_mismatch'
+    );
+  END IF;
+
+  IF v_recipe.station_id IS NOT NULL
+     AND v_b.station_id IS DISTINCT FROM v_recipe.station_id
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','recipe_station_mismatch'
+    );
+  END IF;
+
+  IF v_b.status IS NULL
+     OR v_b.status NOT IN ('planned','in-preparation','completed')
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','invalid_batch_status'
+    );
+  END IF;
+
+$patch$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$production_recipe_unit$;

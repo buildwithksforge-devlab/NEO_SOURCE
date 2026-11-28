@@ -666,6 +666,16 @@ export function useSaveBatch() {
         throw new Error("Planned quantity must be greater than zero.");
       }
 
+            if (!["planned", "in-preparation"].includes(status)) {
+        throw new Error(
+          "Final batch statuses must be assigned by the production posting workflow."
+        );
+      }
+
+      if (!String(row["unit"] ?? "").trim()) {
+        throw new Error("The approved recipe must have a yield unit.");
+      }
+
       if (waste > produced) {
         throw new Error("Waste quantity cannot be greater than the gross quantity produced.");
       }
