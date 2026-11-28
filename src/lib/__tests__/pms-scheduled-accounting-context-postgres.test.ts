@@ -142,10 +142,66 @@ describe("actual scheduled accommodation accounting context", () => {
       END;
       $$;
 
+      CREATE FUNCTION public.current_access_scope()
+      RETURNS text LANGUAGE plpgsql STABLE AS $$
+      DECLARE
+        c text;
+        v text;
+      BEGIN
+        c := public.neo_ctx_read('scope');
+
+        IF c IS NOT NULL THEN
+          RETURN substr(c,2);
+        END IF;
+
+        v := CASE
+          WHEN auth.uid() IS NOT NULL THEN 'branch'
+          ELSE 'self'
+        END;
+
+        PERFORM public.neo_ctx_write(
+          'scope','v'||v
+        );
+
+        RETURN v;
+      END;
+      $$;
+
+      CREATE FUNCTION public.current_branch_ids()
+      RETURNS uuid[] LANGUAGE plpgsql STABLE AS $$
+      DECLARE
+        c text;
+        v uuid[];
+      BEGIN
+        c := public.neo_ctx_read('branches');
+
+        IF c IS NOT NULL THEN
+          RETURN substr(c,2)::uuid[];
+        END IF;
+
+        v := CASE
+          WHEN auth.uid() IS NOT NULL
+            THEN ARRAY['${branch}'::uuid]
+          ELSE '{}'::uuid[]
+        END;
+
+        PERFORM public.neo_ctx_write(
+          'branches','v'||v::text
+        );
+
+        RETURN v;
+      END;
+      $$;
+
       CREATE FUNCTION public.neo_branch_in_scope(uuid)
       RETURNS boolean LANGUAGE sql STABLE AS $$
-        SELECT auth.uid() IS NOT NULL
-          AND $1='${branch}'::uuid
+        SELECT CASE
+          WHEN public.current_access_scope()
+            IN ('organisation','technical')
+          THEN true
+          ELSE $1 IS NULL
+            OR $1=ANY(public.current_branch_ids())
+        END
       $$;
 
       CREATE TABLE public.branches (
@@ -190,6 +246,15 @@ describe("actual scheduled accommodation accounting context", () => {
         reject_posting boolean
       );
 
+      CREATE TABLE public.test_finance_scope_evidence (
+        organization_id uuid,
+        branch_id uuid,
+        scope text,
+        authorized_branches uuid[],
+        own_property_allowed boolean,
+        other_property_allowed boolean
+      );
+
       INSERT INTO public.test_controls VALUES(false);
 
       CREATE FUNCTION public.neo_pms_post_accommodation_job(
@@ -199,6 +264,28 @@ describe("actual scheduled accommodation accounting context", () => {
       )
       RETURNS integer LANGUAGE plpgsql AS $$
       BEGIN
+
+        INSERT INTO public.test_finance_scope_evidence
+        VALUES (
+          public.current_org_id(),
+          _branch,
+          public.current_access_scope(),
+          public.current_branch_ids(),
+          public.neo_branch_in_scope(_branch),
+          public.neo_branch_in_scope(
+            '${otherBranch}'::uuid
+          )
+        );
+
+        IF public.current_org_id()
+           IS DISTINCT FROM _org
+
+           OR public.neo_branch_in_scope(_branch)
+              IS NOT TRUE
+        THEN
+          RAISE EXCEPTION
+            'Simulated Finance property authorization failed';
+        END IF;
 
         INSERT INTO public.test_execution_evidence
         VALUES (
@@ -259,6 +346,7 @@ describe("actual scheduled accommodation accounting context", () => {
   beforeEach(async () => {
     await db.exec(`
       TRUNCATE
+        public.test_finance_scope_evidence,
         public.test_execution_evidence,
         public.neo_pms_accommodation_job_runs,
         public.neo_pms_accommodation_automation_settings,
@@ -583,6 +671,119 @@ describe("actual scheduled accommodation accounting context", () => {
         organization:otherOrg,
         generation:"before-failure",
         posting:"off"
+      });
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  });
+
+  it("authorizes Finance only within the active scheduled property", async () => {
+    expect(await execute()).toBe(1);
+
+    const result = await db.query<{
+      organization_id: string;
+      branch_id: string;
+      scope: string;
+      authorized_branches: string[];
+      own_property_allowed: boolean;
+      other_property_allowed: boolean;
+    }>(`
+      SELECT *
+      FROM public.test_finance_scope_evidence
+    `);
+
+    expect(result.rows[0]).toEqual({
+      organization_id:org,
+      branch_id:branch,
+      scope:"branch",
+      authorized_branches:[branch],
+      own_property_allowed:true,
+      other_property_allowed:false
+    });
+  });
+
+  it("does not retain scheduled property authorization after execution", async () => {
+    await db.exec("BEGIN");
+
+    try {
+      expect(await execute()).toBe(1);
+
+      const result = await db.query<{
+        scope: string;
+        branches: string[];
+        authorized: boolean;
+      }>(`
+        SELECT
+          public.current_access_scope() AS scope,
+          public.current_branch_ids() AS branches,
+          public.neo_branch_in_scope(
+            '${branch}'::uuid
+          ) AS authorized
+      `);
+
+      expect(result.rows[0]).toEqual({
+        scope:"self",
+        branches:[],
+        authorized:false
+      });
+    } finally {
+      await db.exec("ROLLBACK");
+    }
+  });
+
+  it("does not retain temporary Finance authorization after failure", async () => {
+    await db.exec(`
+      UPDATE public.test_controls
+      SET reject_posting=true
+    `);
+
+    await db.exec("BEGIN");
+
+    try {
+      await db.exec(`
+        DO $test$
+        BEGIN
+          BEGIN
+            PERFORM public.neo_run_accommodation_accounting_context(
+              '${org}',
+              '${branch}',
+              (now() AT TIME ZONE 'Africa/Nairobi')::date
+            );
+
+            RAISE EXCEPTION 'Expected posting failure';
+
+          EXCEPTION WHEN OTHERS THEN
+            IF SQLERRM <> 'Simulated posting failure' THEN
+              RAISE;
+            END IF;
+          END;
+        END;
+        $test$;
+      `);
+
+      const result = await db.query<{
+        scope: string;
+        branches: string[];
+        authorized: boolean;
+        evidence: number;
+      }>(`
+        SELECT
+          public.current_access_scope() AS scope,
+          public.current_branch_ids() AS branches,
+          public.neo_branch_in_scope(
+            '${branch}'::uuid
+          ) AS authorized,
+          (
+            SELECT count(*)::integer
+            FROM public.test_finance_scope_evidence
+          ) AS evidence
+      `);
+
+      expect(result.rows[0]).toEqual({
+        scope:"self",
+        branches:[],
+        authorized:false,
+        evidence:0
       });
     } finally {
       await db.exec("ROLLBACK");

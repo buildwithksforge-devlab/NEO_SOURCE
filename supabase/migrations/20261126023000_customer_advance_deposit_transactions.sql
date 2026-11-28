@@ -7263,6 +7263,33 @@ BEGIN
             true
         );
 
+        -- neo_scheduled_finance_property_context_v1
+        --
+        -- Use only the verified job property.
+        -- Never assign organisation-wide or technical scope.
+
+        PERFORM public.neo_ctx_write(
+            'scope',
+            'vbranch'
+        );
+
+        PERFORM public.neo_ctx_write(
+            'branches',
+            'v' || ARRAY[_branch]::uuid[]::text
+        );
+
+        IF public.current_org_id()
+           IS DISTINCT FROM _org
+
+           OR public.neo_branch_in_scope(_branch)
+              IS NOT TRUE
+        THEN
+
+            RAISE EXCEPTION
+              'Scheduled Finance property context failed';
+
+        END IF;
+
         v_posted :=
             public.neo_pms_post_accommodation_job(
                 _org,
