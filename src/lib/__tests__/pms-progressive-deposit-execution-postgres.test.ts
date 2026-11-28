@@ -339,8 +339,14 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     ));
 
     await db.exec(section(
-      "-- NEO_PROGRESSIVE_DEPOSIT_FINANCIAL_POSITION_V1"
+      "-- NEO_PROGRESSIVE_DEPOSIT_FINANCIAL_POSITION_V1",
+      "-- NEO_PROGRESSIVE_REFUND_RESERVATION_GUARD_V1"
     ));
+
+    const refundGuardStart =
+      "-- NEO_PROGRESSIVE_REFUND_RESERVATION_GUARD_V1";
+
+    await db.exec(section(refundGuardStart));
 
     // Confirm the production migration defaults to disabled.
     const enabled = await db.query<{ enabled: boolean }>(
@@ -787,16 +793,18 @@ describe("actual progressive deposit PostgreSQL execution", () => {
   it("rejects refund reservations exceeding unused deposits", async () => {
     await allocate(await addNight(1));
 
-    await db.query(
+    await expect(db.query(
       `INSERT INTO public.cash_refund_requests (
         organization_id,payment_id,amount,status
       ) VALUES ($1,$2,32000,'approved')`,
       [org,receipt]
-    );
+    )).rejects.toThrow(/exceed/i);
 
-    await expect(financialPosition()).rejects.toThrow(
-      /exceed|reconcil/i
-    );
+    expect(await financialPosition()).toMatchObject({
+      remaining_liability:31000,
+      reserved_refund:0,
+      available_for_allocation:31000
+    });
   });
 
   it("reconciles the final three-night deposit liability", async () => {
@@ -826,6 +834,118 @@ describe("actual progressive deposit PostgreSQL execution", () => {
 
     expect(await position()).toEqual({
       balance:10000,payments:50000
+    });
+  });
+
+  it("rejects cumulative refunds exceeding remaining liability", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,10000,'approved')`,
+      [org,receipt]
+    );
+
+    await expect(db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,22000,'pending_approval')`,
+      [org,receipt]
+    )).rejects.toThrow(/exceed/i);
+
+    expect(await financialPosition()).toMatchObject({
+      remaining_liability:31000,
+      reserved_refund:10000,
+      available_for_allocation:21000
+    });
+  });
+
+  it("allows refund approval without counting the same request twice", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,31000,'pending_approval')`,
+      [org,receipt]
+    );
+
+    await db.query(
+      `UPDATE public.cash_refund_requests
+       SET status='approved'
+       WHERE payment_id=$1`,
+      [receipt]
+    );
+
+    expect(await financialPosition()).toMatchObject({
+      remaining_liability:31000,
+      reserved_refund:31000,
+      available_for_allocation:0
+    });
+  });
+
+  it("rejects any additional refund after the deposit is exhausted", async () => {
+    await allocate(await addNight(1));
+    await allocate(await addNight(2));
+    await allocate(await addNight(3));
+
+    await expect(db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,1,'approved')`,
+      [org,receipt]
+    )).rejects.toThrow(/exceed/i);
+
+    expect(await remaining()).toBe(0);
+  });
+
+  it("rejects increasing an approved refund above its available liability", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,10000,'approved')`,
+      [org,receipt]
+    );
+
+    await expect(db.query(
+      `UPDATE public.cash_refund_requests
+       SET amount=32000
+       WHERE payment_id=$1`,
+      [receipt]
+    )).rejects.toThrow(/exceed/i);
+
+    expect(await financialPosition()).toMatchObject({
+      reserved_refund:10000,
+      available_for_allocation:21000
+    });
+  });
+
+  it("allows accommodation allocation only from unreserved liability", async () => {
+    await allocate(await addNight(1));
+
+    await db.query(
+      `INSERT INTO public.cash_refund_requests (
+        organization_id,payment_id,amount,status
+      ) VALUES ($1,$2,20000,'approved')`,
+      [org,receipt]
+    );
+
+    expect(
+      (await allocate(await addNight(2))).allocated
+    ).toBe(11000);
+
+    expect(await financialPosition()).toMatchObject({
+      applied:30000,
+      remaining_liability:20000,
+      reserved_refund:20000,
+      available_for_allocation:0
+    });
+
+    expect(await position()).toEqual({
+      balance:8000,payments:30000
     });
   });
 

@@ -6431,3 +6431,251 @@ public.neo_progressive_deposit_financial_position(uuid)
 FROM PUBLIC,anon,authenticated;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_REFUND_RESERVATION_GUARD_V1
+--
+-- Protect unused deposit liability against excessive
+-- refund reservations.
+--
+-- Allocation and refund requests share the existing
+-- reservation collection transaction lock.
+
+CREATE OR REPLACE FUNCTION
+public.neo_guard_progressive_deposit_refund_reservation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+    d public.reservation_deposits;
+
+    v_net numeric;
+    v_applied numeric;
+    v_reserved numeric;
+    v_available numeric;
+
+    v_exclude uuid;
+
+BEGIN
+
+    IF NEW.status NOT IN (
+        'pending_approval','approved'
+    ) THEN
+
+        RETURN NEW;
+
+    END IF;
+
+    SELECT rd.*
+    INTO d
+    FROM public.reservation_deposits rd
+
+    JOIN public.neo_reservation_deposit_policies policy
+      ON policy.reservation_id = rd.reservation_id
+     AND policy.organization_id = rd.organization_id
+     AND policy.branch_id = rd.branch_id
+
+    WHERE rd.payment_id = NEW.payment_id
+      AND rd.organization_id = NEW.organization_id
+      AND policy.accounting_policy =
+          'progressive-accommodation';
+
+    IF d.id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF (
+        SELECT count(*)
+        FROM public.reservation_deposits rd
+        WHERE rd.payment_id = NEW.payment_id
+          AND rd.organization_id = NEW.organization_id
+    ) <> 1 THEN
+
+        RAISE EXCEPTION
+          'Ambiguous progressive deposit receipt';
+
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+
+        IF NEW.payment_id IS DISTINCT FROM OLD.payment_id
+           OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
+        THEN
+
+            RAISE EXCEPTION
+              'Progressive refund receipt identity cannot change';
+
+        END IF;
+
+        v_exclude := OLD.id;
+
+    END IF;
+
+    IF public.current_org_id()
+       IS DISTINCT FROM d.organization_id
+
+       OR public.neo_branch_in_scope(d.branch_id)
+          IS NOT TRUE
+
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive refund property is unavailable'
+          USING ERRCODE='42501';
+
+    END IF;
+
+    IF NEW.amount IS NULL
+       OR NEW.amount <= 0
+       OR NEW.amount::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR NEW.amount <> round(NEW.amount,2)
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid progressive refund amount';
+
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended(
+            d.organization_id::text ||
+            ':reservation-collection:' ||
+            d.reservation_id::text,
+            0
+        )
+    );
+
+    PERFORM 1
+
+    FROM public.reservations
+
+    WHERE id = d.reservation_id
+      AND organization_id = d.organization_id
+      AND branch_id = d.branch_id
+
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+
+        RAISE EXCEPTION
+          'Refund reservation scope is invalid';
+
+    END IF;
+
+    SELECT *
+
+    INTO d
+
+    FROM public.reservation_deposits
+
+    WHERE id = d.id
+      AND organization_id = NEW.organization_id
+      AND payment_id = NEW.payment_id
+
+    FOR UPDATE;
+
+    IF d.id IS NULL
+       OR d.status IS DISTINCT FROM 'held'
+       OR d.applied_folio_id IS NOT NULL
+       OR d.applied_folio_line_id IS NOT NULL
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive refund deposit requires reconciliation';
+
+    END IF;
+
+    v_net := public.neo_deposit_net_amount(d.id);
+
+    IF v_net IS NULL
+       OR v_net < 0
+       OR v_net > d.amount
+       OR v_net::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid original deposit balance';
+
+    END IF;
+
+    SELECT coalesce(sum(a.amount),0)
+
+    INTO v_applied
+
+    FROM public.neo_reservation_deposit_allocations a
+
+    WHERE a.deposit_id = d.id
+      AND a.organization_id = d.organization_id
+      AND a.branch_id = d.branch_id;
+
+    SELECT coalesce(sum(r.amount),0)
+
+    INTO v_reserved
+
+    FROM public.cash_refund_requests r
+
+    WHERE r.organization_id = d.organization_id
+      AND r.payment_id = d.payment_id
+      AND r.id IS DISTINCT FROM v_exclude
+      AND r.status IN (
+          'pending_approval','approved'
+      );
+
+    IF v_reserved < 0
+       OR v_reserved::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid existing refund reservations';
+
+    END IF;
+
+    v_available :=
+        v_net-v_applied-v_reserved;
+
+    IF v_available < 0
+       OR NEW.amount > v_available
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive refund exceeds unused deposit liability: available %, requested %',
+          v_available,
+          NEW.amount;
+
+    END IF;
+
+    RETURN NEW;
+
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS
+neo_guard_progressive_deposit_refund_reservation
+
+ON public.cash_refund_requests;
+
+CREATE TRIGGER
+neo_guard_progressive_deposit_refund_reservation
+
+BEFORE INSERT OR UPDATE
+
+ON public.cash_refund_requests
+
+FOR EACH ROW
+
+EXECUTE FUNCTION
+public.neo_guard_progressive_deposit_refund_reservation();
+
+REVOKE ALL ON FUNCTION
+public.neo_guard_progressive_deposit_refund_reservation()
+FROM PUBLIC,anon,authenticated;
+
+NOTIFY pgrst,'reload schema';
