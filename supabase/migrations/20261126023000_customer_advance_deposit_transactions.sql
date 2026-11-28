@@ -7617,3 +7617,154 @@ END;
 $automatic_progressive_allocation$;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_CANONICAL_POSTED_JOURNAL_REPLAY_V1
+--
+-- A posted journal may be reused only when its
+-- saved account allocations match the requested posting.
+--
+-- Existing journal records are never rewritten.
+
+DO $canonical_posted_journal_replay$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+      'public.neo_gl_post(uuid,uuid,text,text,uuid,text,date,text,text,jsonb,uuid,uuid)'
+      ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_canonical_posted_journal_replay_v1'
+    ) > 0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'IF existing.status=''posted'' THEN';
+
+    IF (
+        length(d)-length(replace(d,anchor,''))
+    ) / length(anchor) <> 1 THEN
+
+        RAISE EXCEPTION
+          'Canonical posted journal replay boundary differs';
+
+    END IF;
+
+    d := replace(
+
+        d,
+
+        anchor,
+
+        anchor || chr(10) ||
+
+        $guard$
+
+        -- neo_canonical_posted_journal_replay_v1
+
+        IF EXISTS (
+            SELECT 1
+            FROM public.journal_entry_lines l
+            LEFT JOIN public.chart_of_accounts a
+              ON a.id=l.account_id
+            WHERE l.journal_id=j
+              AND (
+                l.organization_id IS DISTINCT FROM _org
+                OR l.branch_id IS DISTINCT FROM _branch
+                OR a.organization_id IS DISTINCT FROM _org
+                OR l.debit IS NULL
+                OR l.credit IS NULL
+                OR l.debit::text IN (
+                    'NaN','Infinity','-Infinity'
+                )
+                OR l.credit::text IN (
+                    'NaN','Infinity','-Infinity'
+                )
+              )
+        ) THEN
+
+            RAISE EXCEPTION
+              'Posted journal scope or account evidence differs';
+
+        END IF;
+
+        IF EXISTS (
+
+            WITH wanted AS (
+
+                SELECT
+                    requested.value->>'code' AS code,
+
+                    sum(round(coalesce(
+                        (requested.value->>'debit')::numeric,
+                        0
+                    ),2)) AS d,
+
+                    sum(round(coalesce(
+                        (requested.value->>'credit')::numeric,
+                        0
+                    ),2)) AS c
+
+                FROM jsonb_array_elements(_lines)
+                  AS requested(value)
+
+                GROUP BY 1
+
+            ),
+
+            actual AS (
+
+                SELECT
+                    a.code,
+
+                    sum(l.debit) AS d,
+
+                    sum(l.credit) AS c
+
+                FROM public.journal_entry_lines l
+
+                JOIN public.chart_of_accounts a
+                  ON a.id=l.account_id
+
+                WHERE l.journal_id=j
+
+                GROUP BY a.code
+
+            )
+
+            SELECT 1
+
+            FROM wanted w
+
+            FULL JOIN actual a
+              ON a.code=w.code
+
+            WHERE coalesce(w.d,0)
+                  <> coalesce(a.d,0)
+
+               OR coalesce(w.c,0)
+                  <> coalesce(a.c,0)
+
+        ) THEN
+
+            RAISE EXCEPTION
+              'Posted journal differs from the requested account allocation; reconcile before replay'
+              USING ERRCODE='23514';
+
+        END IF;
+
+$guard$
+
+    );
+
+    EXECUTE d;
+
+END;
+$canonical_posted_journal_replay$;
+
+NOTIFY pgrst,'reload schema';

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import {
   afterAll,
@@ -178,6 +179,23 @@ describe("canonical accommodation Finance journal execution", () => {
     // not substitute posting implementations.
 
     await db.exec(canonicalSQL);
+
+    const rollout = readFileSync(
+      "supabase/migrations/20261126023000_customer_advance_deposit_transactions.sql",
+      "utf8"
+    );
+
+    const replayPatch = rollout.match(
+      /DO \$canonical_posted_journal_replay\$[\s\S]*?\$canonical_posted_journal_replay\$;/
+    )?.[0];
+
+    if (!replayPatch) {
+      throw new Error(
+        "Canonical journal replay migration missing"
+      );
+    }
+
+    await db.exec(replayPatch);
   },60000);
 
   beforeEach(async () => {
@@ -438,6 +456,139 @@ describe("canonical accommodation Finance journal execution", () => {
 
     expect(await journalCount()).toBe(1);
     expect(await accountBalance("2020")).toBe(-50000);
+  });
+
+  it("rejects replay with a conflicting deposit amount", async () => {
+    const original = await deposit(50000);
+
+    await expect(
+      deposit(51000)
+    ).rejects.toThrow(
+      /differs from the requested account allocation/i
+    );
+
+    expect(await journalCount()).toBe(1);
+    expect(await accountBalance("1010")).toBe(50000);
+    expect(await accountBalance("2020")).toBe(-50000);
+
+    const replay = await deposit(50000);
+
+    expect(replay.journal_id).toBe(
+      original.journal_id
+    );
+  });
+
+  it("rejects replay against a different revenue account", async () => {
+    const sourceId = id(1290);
+
+    await post(
+      "folio_charge",
+      sourceId,
+      "revenue",
+      [
+        {code:"1060",debit:19000},
+        {code:"4010",credit:19000}
+      ]
+    );
+
+    await expect(
+      post(
+        "folio_charge",
+        sourceId,
+        "revenue",
+        [
+          {code:"1060",debit:19000},
+          {code:"2020",credit:19000}
+        ]
+      )
+    ).rejects.toThrow(
+      /differs from the requested account allocation/i
+    );
+
+    expect(await journalCount()).toBe(1);
+    expect(await accountBalance("4010")).toBe(-19000);
+    expect(await accountBalance("2020")).toBe(0);
+  });
+
+  it("rejects replay when saved journal line property differs", async () => {
+    const original = await deposit();
+
+    // Deliberately corrupt only the isolated fixture.
+    await db.query(
+      `UPDATE public.journal_entry_lines
+       SET branch_id=$1
+       WHERE journal_id=$2`,
+      [otherBranch,original.journal_id]
+    );
+
+    await expect(
+      deposit()
+    ).rejects.toThrow(
+      /scope or account evidence differs/i
+    );
+
+    expect(await journalCount()).toBe(1);
+  });
+
+  it("allows equivalent account allocations in a different order", async () => {
+    const original = await deposit();
+
+    const replay = await post(
+      "reservation_deposit",
+      id(1250),
+      "deposit",
+      [
+        {code:"2020",credit:50000},
+        {code:"1010",debit:50000}
+      ]
+    );
+
+    expect(replay).toMatchObject({
+      ok:true,
+      journal_id:original.journal_id,
+      duplicate_prevented:true
+    });
+
+    expect(await journalCount()).toBe(1);
+  });
+
+  it("allows equivalent split journal instructions", async () => {
+    const original = await deposit();
+
+    const replay = await post(
+      "reservation_deposit",
+      id(1250),
+      "deposit",
+      [
+        {code:"1010",debit:30000},
+        {code:"1010",debit:20000},
+        {code:"2020",credit:50000}
+      ]
+    );
+
+    expect(replay.journal_id).toBe(
+      original.journal_id
+    );
+
+    expect(await journalCount()).toBe(1);
+  });
+
+  it("rejects a conflicting progressive deposit application replay", async () => {
+    await deposit();
+    await accommodation(1);
+
+    await application(1,19000);
+
+    await expect(
+      application(1,18000)
+    ).rejects.toThrow(
+      /differs from the requested account allocation/i
+    );
+
+    expect(await accountBalance("2020")).toBe(-31000);
+    expect(await accountBalance("1060")).toBe(0);
+    expect(await accountBalance("4010")).toBe(-19000);
+    expect(await journalCount()).toBe(3);
   });
 
   it("rejects posting outside the authorized property", async () => {
