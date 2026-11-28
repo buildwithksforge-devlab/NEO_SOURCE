@@ -341,6 +341,76 @@ describe("actual scheduled accommodation accounting context", () => {
     for (const statement of revocations) {
       await db.exec(statement);
     }
+
+    // Install a controlled scheduler entry point so the
+    // actual migration connection can be executed.
+
+    await db.exec(`
+      CREATE FUNCTION
+      public.neo_pms_post_accommodation_scheduled(
+        _execute boolean DEFAULT false
+      )
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      AS $scheduler$
+      DECLARE
+        job record;
+        posted integer;
+      BEGIN
+
+        IF _execute IS NOT TRUE THEN
+          RETURN jsonb_build_object(
+            'status','dry_run',
+            'posted',0
+          );
+        END IF;
+
+        SELECT *
+        INTO job
+        FROM public.neo_pms_accommodation_job_runs
+        WHERE id=nullif(
+          current_setting(
+            'neo.pms_accommodation_job_run_id',
+            true
+          ),''
+        )::uuid;
+
+        IF job.id IS NULL THEN
+          RAISE EXCEPTION 'Missing scheduler job';
+        END IF;
+
+        posted :=
+          public.neo_pms_post_accommodation_job(
+            job.organization_id,
+            job.branch_id,
+            job.business_date
+          );
+
+        RETURN jsonb_build_object(
+          'status','completed',
+          'posted',posted
+        );
+
+      END;
+      $scheduler$;
+
+      REVOKE ALL ON FUNCTION
+      public.neo_pms_post_accommodation_scheduled(boolean)
+      FROM PUBLIC,anon,authenticated,service_role;
+    `);
+
+    const schedulerConnection = migration.match(
+      /DO \$scheduled_accounting_context\$[\s\S]*?\$scheduled_accounting_context\$;/
+    )?.[0];
+
+    if (!schedulerConnection) {
+      throw new Error(
+        "Actual scheduler connection migration missing"
+      );
+    }
+
+    await db.exec(schedulerConnection);
   },60000);
 
   beforeEach(async () => {
@@ -788,6 +858,144 @@ describe("actual scheduled accommodation accounting context", () => {
     } finally {
       await db.exec("ROLLBACK");
     }
+  });
+
+  async function actualSchedulerConnection(
+    executeJob = true
+  ) {
+    const result = await db.query<{
+      result: {
+        status: string;
+        posted: number;
+      };
+    }>(
+      `SELECT
+        public.neo_pms_post_accommodation_scheduled($1)
+        AS result`,
+      [executeJob]
+    );
+
+    return result.rows[0]!.result;
+  }
+
+  it("installs the actual scheduler context connection", async () => {
+    const result = await db.query<{
+      definition: string;
+    }>(`
+      SELECT pg_get_functiondef(
+        'public.neo_pms_post_accommodation_scheduled(boolean)'
+        ::regprocedure
+      ) AS definition
+    `);
+
+    expect(
+      result.rows[0]!.definition
+    ).toContain(
+      "public.neo_run_accommodation_accounting_context("
+    );
+
+    expect(
+      result.rows[0]!.definition
+    ).not.toContain(
+      "public.neo_pms_post_accommodation_job("
+    );
+  });
+
+  it("executes through the connected scheduler entry point", async () => {
+    expect(
+      await actualSchedulerConnection()
+    ).toEqual({
+      status:"completed",
+      posted:1
+    });
+
+    expect(await evidenceCount()).toBe(1);
+  });
+
+  it("preserves the scheduler dry-run boundary", async () => {
+    expect(
+      await actualSchedulerConnection(false)
+    ).toEqual({
+      status:"dry_run",
+      posted:0
+    });
+
+    expect(await evidenceCount()).toBe(0);
+  });
+
+  it("rejects employee execution through the connected scheduler", async () => {
+    await db.query(
+      `SELECT set_config('test.actor',$1,false)`,
+      [actor]
+    );
+
+    await expect(
+      actualSchedulerConnection()
+    ).rejects.toThrow(
+      /service execution context/i
+    );
+
+    expect(await evidenceCount()).toBe(0);
+  });
+
+  it("does not execute a closed property business day through the scheduler", async () => {
+    await db.exec(`
+      UPDATE public.business_days
+      SET status='closed'
+    `);
+
+    await expect(
+      actualSchedulerConnection()
+    ).rejects.toThrow(
+      /could not be verified/i
+    );
+
+    expect(await evidenceCount()).toBe(0);
+  });
+
+  it("rolls back a failed connected scheduler transaction", async () => {
+    await db.exec(`
+      UPDATE public.test_controls
+      SET reject_posting=true
+    `);
+
+    await expect(
+      actualSchedulerConnection()
+    ).rejects.toThrow(
+      /Simulated posting failure/i
+    );
+
+    expect(await evidenceCount()).toBe(0);
+
+    const result = await db.query<{
+      count: number;
+    }>(`
+      SELECT count(*)::integer AS count
+      FROM public.test_finance_scope_evidence
+    `);
+
+    expect(result.rows[0]!.count).toBe(0);
+  });
+
+  it("retains scheduler execution privilege restrictions after migration", async () => {
+    const result = await db.query<{
+      allowed: boolean;
+    }>(`
+      SELECT has_function_privilege(
+        role_name,
+        'public.neo_pms_post_accommodation_scheduled(boolean)',
+        'EXECUTE'
+      ) AS allowed
+      FROM unnest(
+        ARRAY['anon','authenticated','service_role']
+      ) AS roles(role_name)
+    `);
+
+    expect(result.rows).toHaveLength(3);
+
+    expect(
+      result.rows.every(row => row.allowed===false)
+    ).toBe(true);
   });
 
   it("does not grant execution to employee or API service roles", async () => {
