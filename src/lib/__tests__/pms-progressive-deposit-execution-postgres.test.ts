@@ -323,8 +323,19 @@ describe("actual progressive deposit PostgreSQL execution", () => {
       "-- NEO_PROGRESSIVE_DEPOSIT_EXECUTION_V1"
     ));
 
+    // Execute only the standalone progressive allocation engine.
+    // Later lifecycle integration requires its own database fixtures.
+    const executionStart =
+      "-- NEO_PROGRESSIVE_DEPOSIT_EXECUTION_V1";
+
+    const connectionStart =
+      "-- NEO_PROGRESSIVE_ACCOMMODATION_CONNECTION_V1";
+
     await db.exec(section(
-      "-- NEO_PROGRESSIVE_DEPOSIT_EXECUTION_V1"
+      executionStart,
+      migration.includes(connectionStart)
+        ? connectionStart
+        : undefined
     ));
 
     // Confirm the production migration defaults to disabled.
