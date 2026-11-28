@@ -6,6 +6,7 @@ import { KitchenGuard, QueryState } from "@/components/kitchen/KitchenShared";
 import { RecordDialog } from "@/components/kitchen/RecordDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { productionYield, productionCanBeMadeAvailable } from "@/lib/production-yield";
 import { titleCase, type Row } from "@/lib/kitchen";
 import {
   useKitchenStations,
@@ -147,6 +148,25 @@ function Page() {
               const id = String(r["id"]);
               const posted = Boolean(r["posted_at"]);
               const produced = Number(r["actual_quantity"] ?? 0);
+              const planned = Number(r["planned_quantity"] ?? 0);
+              const waste = Number(r["waste_quantity"] ?? 0);
+              const unit = String(r["unit"] ?? "");
+              let measurement = null;
+              try {
+                measurement = productionYield({
+                  planned, gross: produced, waste,
+                });
+              } catch {
+                // Historical invalid measurements remain visible.
+              }
+              const canMakeAvailable = productionCanBeMadeAvailable({
+                posted,
+                planned,
+                gross: produced,
+                waste,
+                useBy: r["use_by"] ? String(r["use_by"]) : null,
+                now: Date.now(),
+              });
               return (
                 <li
                   key={id}
@@ -154,6 +174,30 @@ function Page() {
                 >
                   <div>
                     <p className="font-medium">{r["batch_number"] ?? "Batch"}</p>
+                    {measurement ? (
+                      <div className="my-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                        <div>
+                          <span className="text-muted-foreground">Gross</span>
+                          <p className="font-medium">{measurement.gross.toFixed(3)} {unit}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Waste</span>
+                          <p className="font-medium">{measurement.waste.toFixed(3)} {unit}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Usable output</span>
+                          <p className="font-medium">{measurement.available.toFixed(3)} {unit}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Yield vs plan</span>
+                          <p className="font-medium">{measurement.yieldPercent.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-destructive">
+                        Production measurements require review.
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {`${r["recipes"]?.menu_items?.name ?? "Item"} · planned ${r["planned_quantity"] ?? 0} · produced ${produced} ${r["unit"] ?? ""}`}
                     </p>
@@ -169,7 +213,7 @@ function Page() {
                     <StatusPill tone={posted ? "success" : String(r["status"]) === "completed" ? "info" : "default"}>
                       {titleCase(String(r["status"] ?? (posted ? "completed" : "planned")))}
                     </StatusPill>
-                    {canPost && !posted && produced > 0 ? (
+                    {canPost && canMakeAvailable ? (
                       <Button
                         size="sm"
                         disabled={postBatch.isPending}

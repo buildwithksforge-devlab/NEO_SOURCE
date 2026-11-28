@@ -608,3 +608,167 @@ $patch$
 
 END;
 $inventory_context$;
+
+-- NEO_PRODUCTION_MEASUREMENT_INTEGRITY_V1
+-- Preserve the existing operational batch inventory policy.
+-- No historical stock movements or recipe data are modified.
+
+DO $production_measurement$
+DECLARE
+    d text;
+    signature regprocedure;
+    anchor text;
+BEGIN
+    signature := to_regprocedure(
+        'public.neo_production_batch_post(uuid,uuid)'
+    );
+
+    IF signature IS NULL THEN
+        RAISE EXCEPTION 'Canonical production posting function missing';
+    END IF;
+
+    d := pg_get_functiondef(signature);
+
+    IF strpos(d,'neo_production_measurement_integrity_v1')=0 THEN
+
+        anchor :=
+            '  SELECT *'
+            || chr(10)
+            || '    INTO v_recipe';
+
+        IF strpos(d,anchor)=0 THEN
+            RAISE EXCEPTION 'Production recipe selection anchor differs';
+        END IF;
+
+        d := replace(
+            d,
+            anchor,
+            $patch$
+  -- neo_production_measurement_integrity_v1
+
+  IF v_b.planned_quantity IS NULL
+     OR v_b.planned_quantity <= 0
+     OR v_b.planned_quantity::text IN (
+       'NaN','Infinity','-Infinity'
+     )
+  THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','invalid_planned_quantity'
+    );
+  END IF;
+
+  IF v_b.status IN ('discarded','closed','fully-used') THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','invalid_batch_status'
+    );
+  END IF;
+
+  IF v_b.use_by IS NOT NULL AND v_b.use_by < now() THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','expired_batch'
+    );
+  END IF;
+
+  IF v_b.prepared_at IS NOT NULL
+     AND v_b.use_by IS NOT NULL
+     AND v_b.use_by <= v_b.prepared_at THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','invalid_production_dates'
+    );
+  END IF;
+
+  IF v_b.actual_quantity - coalesce(v_b.waste_quantity,0) <= 0 THEN
+    RETURN jsonb_build_object(
+      'ok',false,'reason','no_usable_output'
+    );
+  END IF;
+
+$patch$ || anchor
+        );
+
+        anchor := '         remaining_quantity = v_available,';
+
+        IF strpos(d,anchor)=0 THEN
+            RAISE EXCEPTION 'Production output update anchor differs';
+        END IF;
+
+        d := replace(
+            d,
+            anchor,
+            anchor || chr(10) ||
+            '         yield_variance = v_available - v_b.planned_quantity,'
+        );
+
+        EXECUTE d;
+
+    END IF;
+END;
+$production_measurement$;
+
+
+-- Protect finalized production measurements without preventing
+-- the canonical allocation engine from updating remaining stock.
+
+CREATE OR REPLACE FUNCTION public.neo_production_measurement_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public,pg_temp
+AS $function$
+BEGIN
+
+    IF OLD.posted_at IS NULL THEN
+
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+
+        RETURN NEW;
+
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION
+          'Posted production history cannot be deleted'
+          USING ERRCODE='23514';
+    END IF;
+
+    IF NEW.organization_id IS DISTINCT FROM OLD.organization_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR NEW.station_id IS DISTINCT FROM OLD.station_id
+       OR NEW.recipe_id IS DISTINCT FROM OLD.recipe_id
+       OR NEW.batch_number IS DISTINCT FROM OLD.batch_number
+       OR NEW.planned_quantity IS DISTINCT FROM OLD.planned_quantity
+       OR NEW.actual_quantity IS DISTINCT FROM OLD.actual_quantity
+       OR NEW.waste_quantity IS DISTINCT FROM OLD.waste_quantity
+       OR NEW.unit IS DISTINCT FROM OLD.unit
+       OR NEW.prepared_at IS DISTINCT FROM OLD.prepared_at
+       OR NEW.use_by IS DISTINCT FROM OLD.use_by
+       OR NEW.posted_at IS DISTINCT FROM OLD.posted_at
+       OR NEW.posted_by IS DISTINCT FROM OLD.posted_by
+       OR NEW.created_by IS DISTINCT FROM OLD.created_by
+       OR NEW.output_location_id IS DISTINCT FROM OLD.output_location_id
+       OR NEW.yield_variance IS DISTINCT FROM OLD.yield_variance
+       OR NEW.posted_cost IS DISTINCT FROM OLD.posted_cost
+    THEN
+        RAISE EXCEPTION
+          'Posted production measurements are immutable'
+          USING ERRCODE='23514';
+    END IF;
+
+    RETURN NEW;
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+ public.neo_production_measurement_immutable()
+ FROM PUBLIC,anon,authenticated;
+
+DROP TRIGGER IF EXISTS
+ neo_production_measurement_immutable
+ ON public.production_batches;
+
+CREATE TRIGGER neo_production_measurement_immutable
+BEFORE UPDATE OR DELETE ON public.production_batches
+FOR EACH ROW EXECUTE FUNCTION
+ public.neo_production_measurement_immutable();
