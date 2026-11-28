@@ -2197,6 +2197,530 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
   });
 
+
+  // CANONICAL_ACCOMMODATION_LIFECYCLE_V1
+  //
+  // Actual scoped accommodation posting function
+  // connected to canonical Finance and progressive
+  // deposit allocation in the isolated fixture.
+
+  async function installAccommodationLifecycle() {
+
+    await db.exec(`
+      ALTER TABLE public.reservations
+        ADD COLUMN IF NOT EXISTS status text,
+        ADD COLUMN IF NOT EXISTS arrival_date date,
+        ADD COLUMN IF NOT EXISTS departure_date date,
+        ADD COLUMN IF NOT EXISTS nightly_rate numeric,
+        ADD COLUMN IF NOT EXISTS rate_plan_id uuid,
+        ADD COLUMN IF NOT EXISTS room_id uuid,
+        ADD COLUMN IF NOT EXISTS room_type_id uuid,
+        ADD COLUMN IF NOT EXISTS adults integer DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS children integer DEFAULT 0;
+
+      ALTER TABLE public.folios
+        ADD COLUMN IF NOT EXISTS stay_id uuid,
+        ADD COLUMN IF NOT EXISTS total_charges numeric DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_taxes numeric DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_discounts numeric DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS public.branches (
+        id uuid PRIMARY KEY,
+        organization_id uuid NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS public.business_days (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        business_date date NOT NULL,
+        status text NOT NULL,
+        UNIQUE(
+          organization_id,
+          branch_id,
+          business_date
+        )
+      );
+
+      CREATE TABLE IF NOT EXISTS public.rooms (
+        id uuid PRIMARY KEY,
+        organization_id uuid,
+        branch_id uuid,
+        room_number text,
+        room_type_id uuid
+      );
+
+      CREATE TABLE IF NOT EXISTS public.rate_plans (
+        id uuid PRIMARY KEY,
+        organization_id uuid,
+        branch_id uuid,
+        tax_rate numeric DEFAULT 0,
+        service_charge_rate numeric DEFAULT 0,
+        tax_treatment text DEFAULT 'inclusive'
+      );
+
+      CREATE TABLE IF NOT EXISTS public.stays (
+        id uuid PRIMARY KEY,
+        organization_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        reservation_id uuid NOT NULL,
+        room_id uuid,
+        status text,
+        arrival_date date,
+        departure_date date,
+        check_in_at timestamptz DEFAULT now(),
+        check_out_at timestamptz
+      );
+
+      CREATE TABLE public.test_package_posting_evidence (
+        folio_line_id uuid PRIMARY KEY,
+        source text NOT NULL
+      );
+
+      CREATE OR REPLACE FUNCTION
+      public.pkg_allocate_folio_line(
+        _line uuid,
+        _source text DEFAULT 'manual'
+      )
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $package$
+      BEGIN
+
+        INSERT INTO
+          public.test_package_posting_evidence
+        VALUES (
+          _line,
+          _source
+        )
+        ON CONFLICT DO NOTHING;
+
+        RETURN jsonb_build_object(
+          'allocated',1,
+          'balanced',true
+        );
+
+      END;
+      $package$;
+
+      CREATE OR REPLACE FUNCTION
+      public.has_permission(text,text)
+      RETURNS boolean LANGUAGE sql STABLE AS $$
+        SELECT $1='pms'
+          AND $2='folios.post_charge'
+      $$;
+
+      INSERT INTO public.branches (
+        id,organization_id
+      )
+      SELECT DISTINCT
+        branch_id,organization_id
+      FROM public.reservations
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO public.business_days (
+        organization_id,
+        branch_id,
+        business_date,
+        status
+      )
+      SELECT DISTINCT
+        r.organization_id,
+        r.branch_id,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date,
+        'open'
+      FROM public.reservations r
+      ON CONFLICT DO NOTHING;
+
+      UPDATE public.reservations
+      SET
+        status='checked-in',
+        nightly_rate=19000,
+        arrival_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date-2,
+        departure_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date+1;
+
+      INSERT INTO public.rooms (
+        id,organization_id,branch_id,room_number
+      )
+      SELECT
+        gen_random_uuid(),
+        organization_id,
+        branch_id,
+        'TEST-ROOM'
+      FROM public.reservations;
+
+      UPDATE public.reservations r
+      SET room_id=(
+        SELECT rm.id
+        FROM public.rooms rm
+        WHERE rm.organization_id=r.organization_id
+          AND rm.branch_id=r.branch_id
+        LIMIT 1
+      );
+
+      INSERT INTO public.rate_plans (
+        id,organization_id,branch_id,
+        tax_rate,service_charge_rate,tax_treatment
+      )
+      SELECT
+        gen_random_uuid(),
+        organization_id,
+        branch_id,
+        0,0,'inclusive'
+      FROM public.reservations;
+
+      UPDATE public.reservations r
+      SET rate_plan_id=(
+        SELECT rp.id
+        FROM public.rate_plans rp
+        WHERE rp.organization_id=r.organization_id
+          AND rp.branch_id=r.branch_id
+        LIMIT 1
+      );
+
+      INSERT INTO public.stays (
+        id,
+        organization_id,
+        branch_id,
+        reservation_id,
+        room_id,
+        status,
+        arrival_date,
+        departure_date
+      )
+      SELECT
+        gen_random_uuid(),
+        organization_id,
+        branch_id,
+        id,
+        room_id,
+        'in-house',
+        arrival_date,
+        departure_date
+      FROM public.reservations;
+
+      UPDATE public.folios f
+      SET stay_id=(
+        SELECT s.id
+        FROM public.stays s
+        WHERE s.reservation_id=f.reservation_id
+          AND s.organization_id=f.organization_id
+          AND s.branch_id=f.branch_id
+        LIMIT 1
+      );
+    `);
+
+    const accommodationSQL = Buffer.from(
+      "Q1JFQVRFIE9SIFJFUExBQ0UgRlVOQ1RJT04gcHVibGljLnBtc19wb3N0X2FjY29tbW9kYXRpb25fc2NvcGVkKF9icmFuY2ggdXVpZCwgX29wZXJhdGlvbmFsX2RhdGUgZGF0ZSBERUZBVUxUIENVUlJFTlRfREFURSkKIFJFVFVSTlMgaW50ZWdlcgogTEFOR1VBR0UgcGxwZ3NxbAogU0VDVVJJVFkgREVGSU5FUgogU0VUIHNlYXJjaF9wYXRoIFRPICdwdWJsaWMnCkFTICRmdW5jdGlvbiQKREVDTEFSRSBfb3JnIHV1aWQgOj0gcHVibGljLmN1cnJlbnRfb3JnX2lkKCk7IF9yIHJlY29yZDsgX24gaW50ZWdlciA6PSAwOyBfdGF4IG51bWVyaWM7IF9zdmMgbnVtZXJpYzsgX2xpbmUgdXVpZDsKQkVHSU4KICAKICBJRiBhdXRoLnVpZCgpIElTIE5VTEwgT1IgX29yZyBJUyBOVUxMIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnQXV0aGVudGljYXRlZCB3b3Jrc3BhY2UgcmVxdWlyZWQnCiAgICAgIFVTSU5HIEVSUkNPREU9JzQyNTAxJzsKICBFTkQgSUY7CgogIElGIF9icmFuY2ggSVMgTlVMTCBPUiBfb3BlcmF0aW9uYWxfZGF0ZSBJUyBOVUxMIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnUHJvcGVydHkgYW5kIG9wZXJhdGlvbmFsIGRhdGUgYXJlIHJlcXVpcmVkJzsKICBFTkQgSUY7CgogIElGIHB1YmxpYy5oYXNfcGVybWlzc2lvbigKICAgICAgJ3BtcycsJ2ZvbGlvcy5wb3N0X2NoYXJnZScKICApIElTIE5PVCBUUlVFIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnTm90IHBlcm1pdHRlZCB0byBwb3N0IGFjY29tbW9kYXRpb24nCiAgICAgIFVTSU5HIEVSUkNPREU9JzQyNTAxJzsKICBFTkQgSUY7CgogIElGIE5PVCBFWElTVFMgKAogICAgU0VMRUNUIDEKICAgIEZST00gcHVibGljLmJyYW5jaGVzIGIKICAgIFdIRVJFIGIuaWQ9X2JyYW5jaAogICAgICBBTkQgYi5vcmdhbml6YXRpb25faWQ9X29yZwogICkgVEhFTgogICAgUkFJU0UgRVhDRVBUSU9OICdVbmtub3duIHByb3BlcnR5JwogICAgICBVU0lORyBFUlJDT0RFPSc0MjUwMSc7CiAgRU5EIElGOwoKICBJRiBwdWJsaWMubmVvX2JyYW5jaF9pbl9zY29wZShfYnJhbmNoKSBJUyBOT1QgVFJVRQogICAgIEFORCBwdWJsaWMuaXNfb3JnX2FkbWluKCkgSVMgTk9UIFRSVUUgVEhFTgogICAgUkFJU0UgRVhDRVBUSU9OICdQcm9wZXJ0eSBvdXRzaWRlIHBlcm1pdHRlZCBzY29wZScKICAgICAgVVNJTkcgRVJSQ09ERT0nNDI1MDEnOwogIEVORCBJRjsKCiAgLS0gS2VueWEtbG9jYWwgY2FsZW5kYXIgZ3VhcmQuIFZlcmlmeSBwcm9wZXJ0eSB0aW1lem9uZSBwb2xpY3kKICAtLSBiZWZvcmUgZW5hYmxpbmcgdGhpcyBvcGVyYXRpb24gZm9yIG90aGVyIHRpbWV6b25lcy4KICBJRiBfb3BlcmF0aW9uYWxfZGF0ZSA+CiAgICAgKG5vdygpIEFUIFRJTUUgWk9ORSAnQWZyaWNhL05haXJvYmknKTo6ZGF0ZSBUSEVOCiAgICBSQUlTRSBFWENFUFRJT04gJ0Z1dHVyZSBhY2NvbW1vZGF0aW9uIHBvc3RpbmcgaXMgcHJvaGliaXRlZCc7CiAgRU5EIElGOwoKICAtLSBUaGUgcmVxdWVzdGVkIGRhdGUgbXVzdCBiZSB0aGUgcHJvcGVydHkncyBvcGVuIGJ1c2luZXNzIGRheS4KICBJRiBOT1QgRVhJU1RTICgKICAgIFNFTEVDVCAxCiAgICBGUk9NIHB1YmxpYy5idXNpbmVzc19kYXlzIGJkCiAgICBXSEVSRSBiZC5vcmdhbml6YXRpb25faWQ9X29yZwogICAgICBBTkQgYmQuYnJhbmNoX2lkPV9icmFuY2gKICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGU9X29wZXJhdGlvbmFsX2RhdGUKICAgICAgQU5EIGJkLnN0YXR1cz0nb3BlbicKICApIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTgogICAgICAnQWNjb21tb2RhdGlvbiBwb3N0aW5nIHJlcXVpcmVzIHRoZSBvcGVuIHByb3BlcnR5IGJ1c2luZXNzIGRheSc7CiAgRU5EIElGOwoKICAtLSBDb29yZGluYXRlIHdpdGggbmVvX2Nsb3NlX2J1c2luZXNzX2RheSBhbmQgbmVvX29wZW5fYnVzaW5lc3NfZGF5LgogIC0tIEFjcXVpcmUgdGhlIHNoYXJlZCBidXNpbmVzcy1kYXkgbG9jayBiZWZvcmUgdGhlIGFjY29tbW9kYXRpb24gbG9jay4KICBQRVJGT1JNIHBnX2Fkdmlzb3J5X3hhY3RfbG9jaygKICAgIGhhc2h0ZXh0ZXh0ZW5kZWQoCiAgICAgICdidXNpbmVzcy1kYXk6JyB8fCBfb3JnOjp0ZXh0IHx8ICc6JyB8fCBfYnJhbmNoOjp0ZXh0LAogICAgICAwCiAgICApCiAgKTsKCiAgLS0gU2VyaWFsaXplIGFsbCByZXF1ZXN0cyBmb3IgdGhlIHNhbWUgcHJvcGVydHkgYW5kIG5pZ2h0LgogIFBFUkZPUk0gcGdfYWR2aXNvcnlfeGFjdF9sb2NrKAogICAgaGFzaHRleHRleHRlbmRlZCgKICAgICAgX29yZzo6dGV4dCB8fCAnOmFjY29tbW9kYXRpb246JyB8fAogICAgICBfYnJhbmNoOjp0ZXh0IHx8ICc6JyB8fAogICAgICBfb3BlcmF0aW9uYWxfZGF0ZTo6dGV4dCwKICAgICAgMAogICAgKQogICk7CgogIC0tIFJlY2hlY2sgdW5kZXIgc2VyaWFsaXphdGlvbi4KICBJRiBOT1QgRVhJU1RTICgKICAgIFNFTEVDVCAxCiAgICBGUk9NIHB1YmxpYy5idXNpbmVzc19kYXlzIGJkCiAgICBXSEVSRSBiZC5vcmdhbml6YXRpb25faWQ9X29yZwogICAgICBBTkQgYmQuYnJhbmNoX2lkPV9icmFuY2gKICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGU9X29wZXJhdGlvbmFsX2RhdGUKICAgICAgQU5EIGJkLnN0YXR1cz0nb3BlbicKICAgIEZPUiBVUERBVEUKICApIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnQnVzaW5lc3MgZGF5IGNoYW5nZWQgZHVyaW5nIHBvc3RpbmcnOwogIEVORCBJRjsKCiAgSUYgTk9UIHB1YmxpYy5oYXNfcGVybWlzc2lvbigncG1zJywnZm9saW9zLnBvc3RfY2hhcmdlJykgVEhFTiBSQUlTRSBFWENFUFRJT04gJ05vdCBwZXJtaXR0ZWQgdG8gcG9zdCBjaGFyZ2VzJzsgRU5EIElGOwogIEZPUiBfciBJTgogICAgU0VMRUNUIHMuaWQgQVMgc3RheV9pZCwgcy5yZXNlcnZhdGlvbl9pZCwgZi5pZCBBUyBmb2xpb19pZCwgZi5icmFuY2hfaWQsIHJlcy5uaWdodGx5X3JhdGUsCiAgICAgICAgICAgQ09BTEVTQ0UocnAudGF4X3JhdGUsMCkgQVMgdGF4X3JhdGUsCiAgICAgICAgICAgIENPQUxFU0NFKHJwLnNlcnZpY2VfY2hhcmdlX3JhdGUsMCkgQVMgc2VydmljZV9jaGFyZ2VfcmF0ZSwKICAgICAgICAgICAgQ09BTEVTQ0UocnAudGF4X3RyZWF0bWVudCwnZXhjbHVzaXZlJykgQVMgdGF4X3RyZWF0bWVudCwKICAgICAgICAgICAgcm0ucm9vbV9udW1iZXIKICAgIEZST00gcHVibGljLnN0YXlzIHMKICAgIEpPSU4gcHVibGljLnJlc2VydmF0aW9ucyByZXMKICAgICAgICBPTiByZXMuaWQgPSBzLnJlc2VydmF0aW9uX2lkCiAgICAgICBBTkQgcmVzLm9yZ2FuaXphdGlvbl9pZCA9IHMub3JnYW5pemF0aW9uX2lkCiAgICAgICBBTkQgcmVzLmJyYW5jaF9pZCA9IHMuYnJhbmNoX2lkCiAgICBKT0lOIHB1YmxpYy5mb2xpb3MgZgogICAgICAgIE9OIGYuc3RheV9pZCA9IHMuaWQKICAgICAgIEFORCBmLm9yZ2FuaXphdGlvbl9pZCA9IHMub3JnYW5pemF0aW9uX2lkCiAgICAgICBBTkQgZi5icmFuY2hfaWQgPSBzLmJyYW5jaF9pZAogICAgICAgQU5EIGYucmVzZXJ2YXRpb25faWQgPSByZXMuaWQKICAgICAgIEFORCBmLmZvbGlvX3R5cGU9J2d1ZXN0JwogICAgICAgQU5EIGYuc3RhdHVzPSdvcGVuJwogICAgTEVGVCBKT0lOIHB1YmxpYy5yYXRlX3BsYW5zIHJwCiAgICAgICAgT04gcnAuaWQgPSByZXMucmF0ZV9wbGFuX2lkCiAgICAgICBBTkQgcnAub3JnYW5pemF0aW9uX2lkID0gcy5vcmdhbml6YXRpb25faWQKICAgICAgIEFORCAocnAuYnJhbmNoX2lkIElTIE5VTEwgT1IgcnAuYnJhbmNoX2lkID0gcy5icmFuY2hfaWQpCiAgICBKT0lOIHB1YmxpYy5yb29tcyBybQogICAgICAgIE9OIHJtLmlkID0gcy5yb29tX2lkCiAgICAgICBBTkQgcm0ub3JnYW5pemF0aW9uX2lkID0gcy5vcmdhbml6YXRpb25faWQKICAgICAgIEFORCBybS5icmFuY2hfaWQgPSBzLmJyYW5jaF9pZAogICAgV0hFUkUgcy5vcmdhbml6YXRpb25faWQ9X29yZyBBTkQgcy5icmFuY2hfaWQ9X2JyYW5jaAogICAgICAgIEFORCBzLnN0YXR1cz0naW4taG91c2UnCiAgICAgICAgQU5EIChyZXMucmF0ZV9wbGFuX2lkIElTIE5VTEwgT1IgcnAuaWQgSVMgTk9UIE5VTEwpCiAgICAgIEFORCBfb3BlcmF0aW9uYWxfZGF0ZSA+PSByZXMuYXJyaXZhbF9kYXRlIEFORCBfb3BlcmF0aW9uYWxfZGF0ZSA8IHJlcy5kZXBhcnR1cmVfZGF0ZQogIExPT1AKICAgIElGIF9yLnRheF90cmVhdG1lbnQgPSAnZXhjbHVzaXZlJyBUSEVOCiAgICAgIF9zdmMgOj0gcm91bmQoX3IubmlnaHRseV9yYXRlICogX3Iuc2VydmljZV9jaGFyZ2VfcmF0ZSAvIDEwMC4wLCAyKTsKICAgICAgX3RheCA6PSByb3VuZCgoX3IubmlnaHRseV9yYXRlICsgX3N2YykgKiBfci50YXhfcmF0ZSAvIDEwMC4wLCAyKTsKICAgIEVMU0UKICAgICAgX3N2YyA6PSAwOwogICAgICBfdGF4IDo9IDA7CiAgICBFTkQgSUY7CiAgICBCRUdJTgogICAgICBJTlNFUlQgSU5UTyBwdWJsaWMuZm9saW9fbGluZXMgKG9yZ2FuaXphdGlvbl9pZCwgYnJhbmNoX2lkLCBmb2xpb19pZCwgcmVzZXJ2YXRpb25faWQsIGxpbmVfdHlwZSwKICAgICAgICBjYXRlZ29yeSwgc291cmNlX21vZHVsZSwgZGVzY3JpcHRpb24sIG9wZXJhdGlvbmFsX2RhdGUsIHF1YW50aXR5LCB1bml0X3ByaWNlLAogICAgICAgIGdyb3NzX2Ftb3VudCwgdGF4X2Ftb3VudCwgc2VydmljZV9jaGFyZ2VfYW1vdW50LCBuZXRfYW1vdW50LCBwb3N0ZWRfYnkpCiAgICAgIFZBTFVFUyAoX29yZywgX3IuYnJhbmNoX2lkLCBfci5mb2xpb19pZCwgX3IucmVzZXJ2YXRpb25faWQsICdjaGFyZ2UnLCAnYWNjb21tb2RhdGlvbicsICdwbXMnLAogICAgICAgICdBY2NvbW1vZGF0aW9uIOKAlCByb29tICcgfHwgQ09BTEVTQ0UoX3Iucm9vbV9udW1iZXIsJycpIHx8ICcgwrcgJyB8fCBfb3BlcmF0aW9uYWxfZGF0ZTo6dGV4dCwKICAgICAgICBfb3BlcmF0aW9uYWxfZGF0ZSwgMSwgX3IubmlnaHRseV9yYXRlLCBfci5uaWdodGx5X3JhdGUsIF90YXgsIF9zdmMsCiAgICAgICAgX3IubmlnaHRseV9yYXRlICsgX3RheCArIF9zdmMsIGF1dGgudWlkKCkpCiAgICAgIFJFVFVSTklORyBpZCBJTlRPIF9saW5lOwogICAgICBVUERBVEUgcHVibGljLmZvbGlvcyBTRVQgdG90YWxfY2hhcmdlcyA9IHRvdGFsX2NoYXJnZXMgKyBfci5uaWdodGx5X3JhdGUsCiAgICAgICAgdG90YWxfdGF4ZXMgPSB0b3RhbF90YXhlcyArIF90YXgsCiAgICAgICAgYmFsYW5jZSA9IGJhbGFuY2UgKyBfci5uaWdodGx5X3JhdGUgKyBfdGF4ICsgX3N2YywKICAgICAgICB1cGRhdGVkX2F0PW5vdygpCiAgICAgIFdIRVJFIGlkPV9yLmZvbGlvX2lkOwogICAgICBQRVJGT1JNIHB1YmxpYy5wa2dfYWxsb2NhdGVfZm9saW9fbGluZShfbGluZSwgJ25pZ2h0LWF1ZGl0Jyk7CiAgICAgIF9uIDo9IF9uICsgMTsKICAgIEVYQ0VQVElPTiBXSEVOIHVuaXF1ZV92aW9sYXRpb24gVEhFTgogICAgICBOVUxMOwogICAgRU5EOwogIEVORCBMT09QOwogIFJFVFVSTiBfbjsKRU5EOyAkZnVuY3Rpb24kOwo=",
+      "base64"
+    ).toString("utf8");
+
+    await db.exec(accommodationSQL);
+
+    // Apply the production connection to the actual
+    // scoped function without manufacturing a second
+    // accommodation posting implementation.
+
+    const definition = await db.query<{
+      definition: string;
+    }>(`
+      SELECT pg_get_functiondef(
+        'public.pms_post_accommodation_scoped(uuid,date)'
+        ::regprocedure
+      ) AS definition
+    `);
+
+    const current = definition.rows[0]!.definition;
+
+    const anchor =
+      "PERFORM public.pkg_allocate_folio_line(_line, 'night-audit');";
+
+    if (current.split(anchor).length !== 2) {
+      throw new Error(
+        "Actual scoped accommodation connection boundary differs"
+      );
+    }
+
+    const connected = current.replace(
+      anchor,
+      anchor + "\n" +
+      "PERFORM public.neo_connect_accommodation_deposit(_line);"
+    );
+
+    await db.exec(connected);
+
+    // ACCOMMODATION_LIFECYCLE_REPLAY_V3
+    //
+    // Install both actual accommodation functions
+    // before executing the shared integrity migration.
+
+    const scheduledJobSQL = Buffer.from(
+      "Q1JFQVRFIE9SIFJFUExBQ0UgRlVOQ1RJT04gcHVibGljLm5lb19wbXNfcG9zdF9hY2NvbW1vZGF0aW9uX2pvYihfc2VydmljZV9vcmcgdXVpZCwgX2JyYW5jaCB1dWlkLCBfb3BlcmF0aW9uYWxfZGF0ZSBkYXRlIERFRkFVTFQgQ1VSUkVOVF9EQVRFKQogUkVUVVJOUyBpbnRlZ2VyCiBMQU5HVUFHRSBwbHBnc3FsCiBTRUNVUklUWSBERUZJTkVSCiBTRVQgc2VhcmNoX3BhdGggVE8gJ3B1YmxpYycKQVMgJGZ1bmN0aW9uJApERUNMQVJFIF9vcmcgdXVpZCA6PSBfc2VydmljZV9vcmc7IF9yIHJlY29yZDsgX24gaW50ZWdlciA6PSAwOyBfdGF4IG51bWVyaWM7IF9zdmMgbnVtZXJpYzsgX2xpbmUgdXVpZDsKQkVHSU4KICAKICAKICAtLSBUaGlzIGZ1bmN0aW9uIGlzIG5vdCBhbiBlbXBsb3llZS1mYWNpbmcgUlBDLgogIC0tIEl0cyBFWEVDVVRFIHByaXZpbGVnZSBpcyByZXN0cmljdGVkIHRvIHRoZSBkYXRhYmFzZSBvd25lci4KICBJRiBfc2VydmljZV9vcmcgSVMgTlVMTCBPUiBfYnJhbmNoIElTIE5VTEwKICAgICBPUiBfb3BlcmF0aW9uYWxfZGF0ZSBJUyBOVUxMIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnU2NoZWR1bGVkIHBvc3RpbmcgcmVxdWlyZXMgb3JnYW5pc2F0aW9uLCBwcm9wZXJ0eSBhbmQgZGF0ZSc7CiAgRU5EIElGOwoKICBJRiBOT1QgRVhJU1RTICgKICAgIFNFTEVDVCAxCiAgICBGUk9NIHB1YmxpYy5icmFuY2hlcyBiCiAgICBXSEVSRSBiLmlkID0gX2JyYW5jaAogICAgICBBTkQgYi5vcmdhbml6YXRpb25faWQgPSBfc2VydmljZV9vcmcKICApIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnU2NoZWR1bGVkIHBvc3RpbmcgcHJvcGVydHkgaXMgb3V0c2lkZSBpdHMgb3JnYW5pc2F0aW9uJzsKICBFTkQgSUY7CgogIElGIF9vcGVyYXRpb25hbF9kYXRlID4KICAgICAobm93KCkgQVQgVElNRSBaT05FICdBZnJpY2EvTmFpcm9iaScpOjpkYXRlIFRIRU4KICAgIFJBSVNFIEVYQ0VQVElPTiAnRnV0dXJlIHNjaGVkdWxlZCBhY2NvbW1vZGF0aW9uIHBvc3RpbmcgaXMgcHJvaGliaXRlZCc7CiAgRU5EIElGOwoKICAtLSBDb29yZGluYXRlIHdpdGggbm9ybWFsIGFjY29tbW9kYXRpb24gcG9zdGluZyBhbmQgZGF5IGNsb3N1cmUuCiAgUEVSRk9STSBwZ19hZHZpc29yeV94YWN0X2xvY2soCiAgICBoYXNodGV4dGV4dGVuZGVkKAogICAgICAnYnVzaW5lc3MtZGF5OicgfHwgX3NlcnZpY2Vfb3JnOjp0ZXh0IHx8ICc6JyB8fCBfYnJhbmNoOjp0ZXh0LAogICAgICAwCiAgICApCiAgKTsKCiAgUEVSRk9STSBwZ19hZHZpc29yeV94YWN0X2xvY2soCiAgICBoYXNodGV4dGV4dGVuZGVkKAogICAgICBfc2VydmljZV9vcmc6OnRleHQgfHwgJzphY2NvbW1vZGF0aW9uOicgfHwKICAgICAgX2JyYW5jaDo6dGV4dCB8fCAnOicgfHwgX29wZXJhdGlvbmFsX2RhdGU6OnRleHQsCiAgICAgIDAKICAgICkKICApOwoKICBJRiBOT1QgRVhJU1RTICgKICAgIFNFTEVDVCAxCiAgICBGUk9NIHB1YmxpYy5idXNpbmVzc19kYXlzIGJkCiAgICBXSEVSRSBiZC5vcmdhbml6YXRpb25faWQgPSBfc2VydmljZV9vcmcKICAgICAgQU5EIGJkLmJyYW5jaF9pZCA9IF9icmFuY2gKICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGUgPSBfb3BlcmF0aW9uYWxfZGF0ZQogICAgICBBTkQgYmQuc3RhdHVzID0gJ29wZW4nCiAgICBGT1IgVVBEQVRFCiAgKSBUSEVOCiAgICBSQUlTRSBFWENFUFRJT04gJ1NjaGVkdWxlZCBhY2NvbW1vZGF0aW9uIHJlcXVpcmVzIGFuIG9wZW4gYnVzaW5lc3MgZGF5JzsKICBFTkQgSUY7CgogIEZPUiBfciBJTgogICAgU0VMRUNUIHMuaWQgQVMgc3RheV9pZCwgcy5yZXNlcnZhdGlvbl9pZCwgZi5pZCBBUyBmb2xpb19pZCwgZi5icmFuY2hfaWQsIHJlcy5uaWdodGx5X3JhdGUsCiAgICAgICAgICAgQ09BTEVTQ0UocnAudGF4X3JhdGUsMCkgQVMgdGF4X3JhdGUsCiAgICAgICAgICAgIENPQUxFU0NFKHJwLnNlcnZpY2VfY2hhcmdlX3JhdGUsMCkgQVMgc2VydmljZV9jaGFyZ2VfcmF0ZSwKICAgICAgICAgICAgQ09BTEVTQ0UocnAudGF4X3RyZWF0bWVudCwnZXhjbHVzaXZlJykgQVMgdGF4X3RyZWF0bWVudCwKICAgICAgICAgICAgcm0ucm9vbV9udW1iZXIKICAgIEZST00gcHVibGljLnN0YXlzIHMKICAgIEpPSU4gcHVibGljLnJlc2VydmF0aW9ucyByZXMKICAgICAgICBPTiByZXMuaWQgPSBzLnJlc2VydmF0aW9uX2lkCiAgICAgICBBTkQgcmVzLm9yZ2FuaXphdGlvbl9pZCA9IHMub3JnYW5pemF0aW9uX2lkCiAgICAgICBBTkQgcmVzLmJyYW5jaF9pZCA9IHMuYnJhbmNoX2lkCiAgICBKT0lOIHB1YmxpYy5mb2xpb3MgZgogICAgICAgIE9OIGYuc3RheV9pZCA9IHMuaWQKICAgICAgIEFORCBmLm9yZ2FuaXphdGlvbl9pZCA9IHMub3JnYW5pemF0aW9uX2lkCiAgICAgICBBTkQgZi5icmFuY2hfaWQgPSBzLmJyYW5jaF9pZAogICAgICAgQU5EIGYucmVzZXJ2YXRpb25faWQgPSByZXMuaWQKICAgICAgIEFORCBmLmZvbGlvX3R5cGU9J2d1ZXN0JwogICAgICAgQU5EIGYuc3RhdHVzPSdvcGVuJwogICAgTEVGVCBKT0lOIHB1YmxpYy5yYXRlX3BsYW5zIHJwCiAgICAgICAgT04gcnAuaWQgPSByZXMucmF0ZV9wbGFuX2lkCiAgICAgICBBTkQgcnAub3JnYW5pemF0aW9uX2lkID0gcy5vcmdhbml6YXRpb25faWQKICAgICAgIEFORCAocnAuYnJhbmNoX2lkIElTIE5VTEwgT1IgcnAuYnJhbmNoX2lkID0gcy5icmFuY2hfaWQpCiAgICBKT0lOIHB1YmxpYy5yb29tcyBybQogICAgICAgIE9OIHJtLmlkID0gcy5yb29tX2lkCiAgICAgICBBTkQgcm0ub3JnYW5pemF0aW9uX2lkID0gcy5vcmdhbml6YXRpb25faWQKICAgICAgIEFORCBybS5icmFuY2hfaWQgPSBzLmJyYW5jaF9pZAogICAgV0hFUkUgcy5vcmdhbml6YXRpb25faWQ9X29yZyBBTkQgcy5icmFuY2hfaWQ9X2JyYW5jaAogICAgICAgIEFORCBzLnN0YXR1cz0naW4taG91c2UnCiAgICAgICAgQU5EIChyZXMucmF0ZV9wbGFuX2lkIElTIE5VTEwgT1IgcnAuaWQgSVMgTk9UIE5VTEwpCiAgICAgIEFORCBfb3BlcmF0aW9uYWxfZGF0ZSA+PSByZXMuYXJyaXZhbF9kYXRlIEFORCBfb3BlcmF0aW9uYWxfZGF0ZSA8IHJlcy5kZXBhcnR1cmVfZGF0ZQogIExPT1AKICAgIElGIF9yLnRheF90cmVhdG1lbnQgPSAnZXhjbHVzaXZlJyBUSEVOCiAgICAgIF9zdmMgOj0gcm91bmQoX3IubmlnaHRseV9yYXRlICogX3Iuc2VydmljZV9jaGFyZ2VfcmF0ZSAvIDEwMC4wLCAyKTsKICAgICAgX3RheCA6PSByb3VuZCgoX3IubmlnaHRseV9yYXRlICsgX3N2YykgKiBfci50YXhfcmF0ZSAvIDEwMC4wLCAyKTsKICAgIEVMU0UKICAgICAgX3N2YyA6PSAwOwogICAgICBfdGF4IDo9IDA7CiAgICBFTkQgSUY7CiAgICBCRUdJTgogICAgICBJTlNFUlQgSU5UTyBwdWJsaWMuZm9saW9fbGluZXMgKG9yZ2FuaXphdGlvbl9pZCwgYnJhbmNoX2lkLCBmb2xpb19pZCwgcmVzZXJ2YXRpb25faWQsIGxpbmVfdHlwZSwKICAgICAgICBjYXRlZ29yeSwgc291cmNlX21vZHVsZSwgZGVzY3JpcHRpb24sIG9wZXJhdGlvbmFsX2RhdGUsIHF1YW50aXR5LCB1bml0X3ByaWNlLAogICAgICAgIGdyb3NzX2Ftb3VudCwgdGF4X2Ftb3VudCwgc2VydmljZV9jaGFyZ2VfYW1vdW50LCBuZXRfYW1vdW50LCBwb3N0ZWRfYnkpCiAgICAgIFZBTFVFUyAoX29yZywgX3IuYnJhbmNoX2lkLCBfci5mb2xpb19pZCwgX3IucmVzZXJ2YXRpb25faWQsICdjaGFyZ2UnLCAnYWNjb21tb2RhdGlvbicsICdwbXMnLAogICAgICAgICdBY2NvbW1vZGF0aW9uIOKAlCByb29tICcgfHwgQ09BTEVTQ0UoX3Iucm9vbV9udW1iZXIsJycpIHx8ICcgwrcgJyB8fCBfb3BlcmF0aW9uYWxfZGF0ZTo6dGV4dCwKICAgICAgICBfb3BlcmF0aW9uYWxfZGF0ZSwgMSwgX3IubmlnaHRseV9yYXRlLCBfci5uaWdodGx5X3JhdGUsIF90YXgsIF9zdmMsCiAgICAgICAgX3IubmlnaHRseV9yYXRlICsgX3RheCArIF9zdmMsIE5VTEw6OnV1aWQpCiAgICAgIFJFVFVSTklORyBpZCBJTlRPIF9saW5lOwogICAgICBVUERBVEUgcHVibGljLmZvbGlvcyBTRVQgdG90YWxfY2hhcmdlcyA9IHRvdGFsX2NoYXJnZXMgKyBfci5uaWdodGx5X3JhdGUsCiAgICAgICAgdG90YWxfdGF4ZXMgPSB0b3RhbF90YXhlcyArIF90YXgsCiAgICAgICAgYmFsYW5jZSA9IGJhbGFuY2UgKyBfci5uaWdodGx5X3JhdGUgKyBfdGF4ICsgX3N2YywKICAgICAgICB1cGRhdGVkX2F0PW5vdygpCiAgICAgIFdIRVJFIGlkPV9yLmZvbGlvX2lkOwogICAgICBQRVJGT1JNIHB1YmxpYy5wa2dfYWxsb2NhdGVfZm9saW9fbGluZShfbGluZSwgJ25pZ2h0LWF1ZGl0Jyk7CiAgICAgIF9uIDo9IF9uICsgMTsKICAgIEVYQ0VQVElPTiBXSEVOIHVuaXF1ZV92aW9sYXRpb24gVEhFTgogICAgICBOVUxMOwogICAgRU5EOwogIEVORCBMT09QOwogIFJFVFVSTiBfbjsKRU5EOyAkZnVuY3Rpb24kOwo=",
+      "base64"
+    ).toString("utf8");
+
+    await db.exec(scheduledJobSQL);
+
+    const rollout = readFileSync(
+      "supabase/migrations/20261126023000_customer_advance_deposit_transactions.sql",
+      "utf8"
+    );
+
+    const integritySQL = rollout.match(
+      /DO \$accommodation_integrity\$[\s\S]*?\$accommodation_integrity\$;/
+    )?.[0];
+
+    if (!integritySQL) {
+      throw new Error(
+        "Production accommodation integrity migration missing"
+      );
+    }
+
+    await db.exec(integritySQL);
+
+    const integrityEvidence = await db.query<{
+      scoped: string;
+      scheduled: string;
+    }>(`
+      SELECT
+        pg_get_functiondef(
+          'public.pms_post_accommodation_scoped(uuid,date)'
+          ::regprocedure
+        ) AS scoped,
+
+        pg_get_functiondef(
+          'public.neo_pms_post_accommodation_job(uuid,uuid,date)'
+          ::regprocedure
+        ) AS scheduled
+    `);
+
+    expect(
+      integrityEvidence.rows[0]!.scoped
+    ).toContain(
+      "neo_accommodation_execution_integrity_v1"
+    );
+
+    expect(
+      integrityEvidence.rows[0]!.scheduled
+    ).toContain(
+      "neo_accommodation_execution_integrity_v1"
+    );
+  }
+
+  async function executeActualAccommodation() {
+
+    const result = await db.query<{
+      result: number;
+    }>(`
+      SELECT public.pms_post_accommodation_scoped(
+        (
+          SELECT branch_id
+          FROM public.reservations
+          LIMIT 1
+        ),
+        (now() AT TIME ZONE 'Africa/Nairobi')::date
+      ) AS result
+    `);
+
+    return result.rows[0]!.result;
+  }
+
+  it("posts actual accommodation charges and applies progressive deposits through canonical Finance", async () => {
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+      await installAccommodationLifecycle();
+
+      expect(
+        await executeActualAccommodation()
+      ).toBe(1);
+
+      expect(await remaining()).toBe(31000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:19000
+      });
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-31000);
+
+      expect(
+        await integratedAccountBalance("1060")
+      ).toBe(0);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+
+      const evidence = await db.query<{
+        charges: number;
+        journals: number;
+        packages: number;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM public.folio_lines
+            WHERE category='accommodation'
+              AND line_type='charge'
+          ) AS charges,
+          (
+            SELECT count(*)::int
+            FROM public.journal_entries
+            WHERE source_document_type='folio_charge:revenue'
+              AND status='posted'
+          ) AS journals,
+          (
+            SELECT count(*)::int
+            FROM public.test_package_posting_evidence
+          ) AS packages
+      `);
+
+      expect(evidence.rows[0]).toEqual({
+        charges:1,
+        journals:1,
+        packages:1
+      });
+    });
+  });
+
+  it("does not duplicate actual nightly accommodation posting", async () => {
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+      await installAccommodationLifecycle();
+
+      expect(
+        await executeActualAccommodation()
+      ).toBe(1);
+
+      expect(
+        await executeActualAccommodation()
+      ).toBe(0);
+
+      expect(await remaining()).toBe(31000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:19000
+      });
+
+      const evidence = await db.query<{
+        charges: number;
+        journals: number;
+        packages: number;
+        allocations: number;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM public.folio_lines
+            WHERE category='accommodation'
+              AND line_type='charge'
+          ) AS charges,
+          (
+            SELECT count(*)::int
+            FROM public.journal_entries
+            WHERE source_document_type='folio_charge:revenue'
+              AND status='posted'
+          ) AS journals,
+          (
+            SELECT count(*)::int
+            FROM public.test_package_posting_evidence
+          ) AS packages,
+          (
+            SELECT count(*)::int
+            FROM public.neo_reservation_deposit_allocations
+          ) AS allocations
+      `);
+
+      expect(evidence.rows[0]).toEqual({
+        charges:1,
+        journals:1,
+        packages:1,
+        allocations:1
+      });
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-31000);
+    });
+  });
+
+  it("rolls back actual accommodation posting when Finance rejects the accounting period", async () => {
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+      await installAccommodationLifecycle();
+
+      await db.exec(`
+        UPDATE public.accounting_periods
+        SET status='closed'
+      `);
+
+      await db.exec("SAVEPOINT lifecycle_rejection");
+
+      try {
+
+        await expect(
+          executeActualAccommodation()
+        ).rejects.toThrow(
+          /accounting period.*closed/i
+        );
+
+      } finally {
+
+        await db.exec(
+          "ROLLBACK TO SAVEPOINT lifecycle_rejection"
+        );
+      }
+
+      expect(await remaining()).toBe(50000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:0
+      });
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-50000);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(0);
+
+      const result = await db.query<{
+        charges: number;
+        packages: number;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM public.folio_lines
+            WHERE category='accommodation'
+          ) AS charges,
+          (
+            SELECT count(*)::int
+            FROM public.test_package_posting_evidence
+          ) AS packages
+      `);
+
+      expect(result.rows[0]).toEqual({
+        charges:0,
+        packages:0
+      });
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 
