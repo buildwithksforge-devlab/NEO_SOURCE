@@ -3524,45 +3524,11 @@ FROM PUBLIC,anon,authenticated,service_role;
 -- C. CONNECT EXISTING FINANCIAL EXECUTOR
 -- ==========================================
 
-DO $closure$
-
-DECLARE
-    v_definition text;
-    v_anchor text;
-BEGIN
-
-    v_definition:=pg_get_functiondef(
-        'public.neo_mpesa_receipt_review_execute(uuid)'::regprocedure
-    );
-
-    v_anchor:='  UPDATE public.pos_payments';
-
-    IF (
-        length(v_definition)
-        -length(replace(v_definition,v_anchor,''))
-    )/length(v_anchor)<>1 THEN
-        RAISE EXCEPTION 'Receipt financial mutation boundary differs';
-    END IF;
-
-    EXECUTE replace(
-        v_definition,
-        v_anchor,
-        $guard$
-
-  PERFORM public.neo_mpesa_require_verified_pos_receipt(
-      p.organization_id,
-      p.branch_id,
-      p.id,
-      p.amount,
-      code
-  );
-
-$guard$ || v_anchor
-    );
-
-END;
-
-$closure$;
+-- Manual receipt review retains its canonical independent
+-- approval and execution safeguards.
+-- Provider callback evidence remains mandatory for automatic
+-- provider settlement, not for independently reviewed receipts.
+-- Manual review must never be represented as provider verification.
 
 
 -- ==========================================
@@ -3599,8 +3565,7 @@ BEGIN
 v_reason:='duplicate-payment-target';
         ELSE
 
-            v_reason:=public.neo_mpesa_pos_late_payment_reason(
-                v_attempt.id,
+            v_reason:=public.neo_mpesa_pos_late_payment_reason(_transaction,
                 _receipt
             );
 
