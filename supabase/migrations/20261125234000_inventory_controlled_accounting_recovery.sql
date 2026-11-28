@@ -907,3 +907,84 @@ $patch$ || anchor
 
 END;
 $production_recipe_unit$;
+
+
+-- NEO_BATCH_CONSUMPTION_MODE_INTEGRITY_V1
+--
+-- Preserve explicitly configured prepared-batch consumption.
+-- Frozen standard recipe snapshots must not silently redirect
+-- batch or direct-stock products into ordinary recipe mode.
+
+DO $batch_mode_integrity$
+DECLARE
+    d text;
+    marker_position integer;
+    section_end integer;
+    section_text text;
+    corrected_section text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.inventory_consume_order_item_core(uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_batch_consumption_mode_integrity_v1') > 0 THEN
+        RETURN;
+    END IF;
+
+    marker_position := strpos(
+        d,
+        '-- neo_batch6c_frozen_recipe_identity'
+    );
+
+    IF marker_position = 0 THEN
+        RAISE EXCEPTION
+            'Frozen recipe identity section missing';
+    END IF;
+
+    section_end := strpos(
+        substring(d FROM marker_position),
+        'IF v_mode NOT IN'
+    );
+
+    IF section_end = 0 THEN
+        RAISE EXCEPTION
+            'Consumption mode validation boundary missing';
+    END IF;
+
+    section_text := substring(
+        d FROM marker_position FOR section_end - 1
+    );
+
+    IF strpos(section_text,'IF EXISTS (') = 0
+       OR strpos(section_text,'v_mode := ''recipe'';') = 0
+    THEN
+        RAISE EXCEPTION
+            'Frozen recipe identity implementation differs';
+    END IF;
+
+    corrected_section := replace(
+        section_text,
+        'IF EXISTS (',
+        'IF v_mode IN (''none'',''recipe'') AND EXISTS ('
+    );
+
+    d := overlay(
+        d PLACING corrected_section
+        FROM marker_position
+        FOR length(section_text)
+    );
+
+    d := replace(
+        d,
+        '-- neo_batch6c_frozen_recipe_identity',
+        '-- neo_batch_consumption_mode_integrity_v1'
+        || chr(10)
+        || '    -- neo_batch6c_frozen_recipe_identity'
+    );
+
+    EXECUTE d;
+
+END;
+$batch_mode_integrity$;
