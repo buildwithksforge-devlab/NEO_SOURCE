@@ -988,3 +988,277 @@ BEGIN
 
 END;
 $batch_mode_integrity$;
+
+
+-- NEO_PREPARED_BATCH_ALLOCATION_INTEGRITY_V1
+--
+-- Preserve the current sale-based ingredient accounting policy.
+-- Do not rewrite historical production or inventory transactions.
+
+DO $allocation_integrity$
+DECLARE
+    d text;
+    anchor text;
+    start_position integer;
+    end_position integer;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_consume_prepared_batch(uuid,uuid,numeric,text,uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_prepared_batch_allocation_integrity_v1') > 0 THEN
+        RETURN;
+    END IF;
+
+    anchor := '  v_sale_org uuid;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Batch allocation declaration differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        anchor || chr(10) ||
+        '  v_prior jsonb;' || chr(10) ||
+        '  v_prior_count integer;' || chr(10) ||
+        '  -- neo_prepared_batch_allocation_integrity_v1'
+    );
+
+    start_position := strpos(
+        d,
+        '-- Idempotency: if this order line already allocated batch quantity,'
+    );
+
+    IF start_position=0 THEN
+        RAISE EXCEPTION 'Batch allocation replay section missing';
+    END IF;
+
+    end_position := strpos(
+        substring(d FROM start_position),
+        'FOR v_batch IN'
+    );
+
+    IF end_position=0 THEN
+        RAISE EXCEPTION 'Batch allocation iteration boundary missing';
+    END IF;
+
+    d := overlay(
+        d PLACING $replacement$
+
+  SELECT count(*)::integer
+    INTO v_prior_count
+    FROM public.audit_logs a
+   WHERE a.organization_id = v_sale_org
+     AND a.action = 'batch.operational.consumed'
+     AND a.record_id = _order_item::text;
+
+  IF v_prior_count > 1 THEN
+    RAISE EXCEPTION
+      'Multiple historical batch allocations require reconciliation'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF v_prior_count = 1 THEN
+
+    SELECT a.new_value
+      INTO v_prior
+      FROM public.audit_logs a
+     WHERE a.organization_id = v_sale_org
+       AND a.branch_id = _branch
+       AND a.action = 'batch.operational.consumed'
+       AND a.record_id = _order_item::text;
+
+    IF v_prior IS NULL
+       OR v_prior->>'recipe_id' IS DISTINCT FROM _recipe::text
+       OR (v_prior->>'quantity')::numeric IS DISTINCT FROM _quantity
+       OR lower(btrim(v_prior->>'unit'))
+          IS DISTINCT FROM lower(btrim(_unit))
+       OR jsonb_typeof(v_prior->'batches') IS DISTINCT FROM 'array'
+    THEN
+      RAISE EXCEPTION
+        'Existing batch allocation does not match this sale'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF jsonb_array_length(v_prior->'batches') = 0 THEN
+      RAISE EXCEPTION
+        'Existing batch allocation evidence is empty'
+        USING ERRCODE = '23514';
+    END IF;
+
+    RETURN jsonb_build_object(
+      'ok', true,
+      'reason', 'already_consumed',
+      'consumed', _quantity,
+      'batches', v_prior->'batches'
+    );
+
+  END IF;
+
+  $replacement$
+        FROM start_position
+        FOR end_position - 1
+    );
+
+    anchor := '    UPDATE public.production_batches';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Prepared quantity update anchor differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $validation$
+
+    IF v_take IS NULL
+       OR v_take <= 0
+       OR v_take::text IN ('NaN','Infinity','-Infinity')
+       OR v_take_batch IS NULL
+       OR v_take_batch <= 0
+       OR v_take_batch::text IN ('NaN','Infinity','-Infinity')
+       OR v_batch.remaining_quantity IS NULL
+       OR v_batch.remaining_quantity::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR v_take_batch > v_batch.remaining_quantity
+    THEN
+        RAISE EXCEPTION
+          'Prepared batch quantity or unit conversion is invalid'
+          USING ERRCODE = '23514';
+    END IF;
+
+$validation$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$allocation_integrity$;
+
+
+-- Require successful allocation before ingredient stock movements.
+
+DO $allocation_result$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.inventory_consume_order_item_core(uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_batch_allocation_result_required_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor := '  v_batch_use numeric;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Batch consumption declaration differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        anchor || chr(10) ||
+        '  v_batch_result jsonb;'
+    );
+
+    anchor := $old$
+    PERFORM public.neo_consume_prepared_batch(
+      v_recipe.id,
+      v_branch,
+      v_batch_use_recipe,
+      v_recipe.yield_unit,
+      _order_item
+    );
+$old$;
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Canonical batch allocation call differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $new$
+
+    -- neo_batch_allocation_result_required_v1
+
+    v_batch_result := public.neo_consume_prepared_batch(
+      v_recipe.id,
+      v_branch,
+      v_batch_use_recipe,
+      v_recipe.yield_unit,
+      _order_item
+    );
+
+    IF v_batch_result IS NULL
+       OR (v_batch_result->>'ok') IS DISTINCT FROM 'true'
+       OR (v_batch_result->>'consumed')::numeric
+          IS DISTINCT FROM v_batch_use_recipe
+    THEN
+        RAISE EXCEPTION
+          'Prepared batch allocation was not completed'
+          USING ERRCODE = '23514';
+    END IF;
+
+$new$
+    );
+
+    EXECUTE d;
+
+END;
+$allocation_result$;
+
+
+-- Retain compatibility with the older signature.
+-- Route it through the scoped, unit-aware implementation.
+
+CREATE OR REPLACE FUNCTION public.neo_consume_prepared_batch(
+    _recipe uuid,
+    _branch uuid,
+    _quantity numeric,
+    _order_item uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $function$
+DECLARE
+    v_unit text;
+BEGIN
+
+    SELECT r.yield_unit
+      INTO v_unit
+      FROM public.recipes r
+     WHERE r.id = _recipe
+       AND r.organization_id = public.current_org_id()
+       AND (r.branch_id IS NULL OR r.branch_id = _branch);
+
+    IF NOT FOUND
+       OR nullif(btrim(v_unit),'') IS NULL
+       OR public.neo_branch_in_scope(_branch) IS NOT TRUE
+    THEN
+        RAISE EXCEPTION
+          'Prepared batch recipe or property is unavailable'
+          USING ERRCODE = '42501';
+    END IF;
+
+    RETURN public.neo_consume_prepared_batch(
+        _recipe,
+        _branch,
+        _quantity,
+        v_unit,
+        _order_item
+    );
+
+END;
+$function$;
