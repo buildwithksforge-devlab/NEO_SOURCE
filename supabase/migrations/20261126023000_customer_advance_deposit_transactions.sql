@@ -4841,3 +4841,300 @@ public.neo_reservation_deposit_allocation_immutable()
 FROM PUBLIC,anon,authenticated;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_RESERVATION_DEPOSIT_POLICY_V1
+--
+-- Keep historical and existing reservations on their
+-- original deposit accounting policy.
+--
+-- Progressive accounting is not activated by this migration.
+
+CREATE TABLE IF NOT EXISTS
+public.neo_reservation_deposit_policies (
+
+    reservation_id uuid PRIMARY KEY
+        REFERENCES public.reservations(id)
+        ON DELETE RESTRICT,
+
+    organization_id uuid NOT NULL,
+
+    branch_id uuid NOT NULL,
+
+    accounting_policy text NOT NULL
+        DEFAULT 'legacy-full-application'
+        CHECK (
+            accounting_policy IN (
+                'legacy-full-application',
+                'progressive-accommodation'
+            )
+        ),
+
+    configured_by uuid,
+
+    configured_at timestamptz NOT NULL DEFAULT now()
+
+);
+
+ALTER TABLE public.neo_reservation_deposit_policies
+ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON
+public.neo_reservation_deposit_policies
+FROM PUBLIC,anon,authenticated;
+
+
+-- Do not activate progressive accounting until
+-- financial execution dependencies are verified.
+
+CREATE OR REPLACE FUNCTION
+public.neo_progressive_deposit_execution_enabled()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path TO pg_catalog,public
+AS $function$
+
+    SELECT false;
+
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_progressive_deposit_execution_enabled()
+FROM PUBLIC,anon,authenticated;
+
+
+CREATE OR REPLACE FUNCTION
+public.neo_reservation_deposit_policy(
+    _org uuid,
+    _branch uuid,
+    _reservation uuid
+)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+    v_policy text;
+BEGIN
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.reservations r
+        WHERE r.id = _reservation
+          AND r.organization_id = _org
+          AND r.branch_id = _branch
+    ) THEN
+        RAISE EXCEPTION
+          'Reservation deposit policy scope is invalid';
+    END IF;
+
+    SELECT p.accounting_policy
+    INTO v_policy
+    FROM public.neo_reservation_deposit_policies p
+    WHERE p.reservation_id = _reservation
+      AND p.organization_id = _org
+      AND p.branch_id = _branch;
+
+    IF EXISTS (
+        SELECT 1
+        FROM public.neo_reservation_deposit_policies p
+        WHERE p.reservation_id = _reservation
+          AND (
+              p.organization_id IS DISTINCT FROM _org
+              OR p.branch_id IS DISTINCT FROM _branch
+          )
+    ) THEN
+        RAISE EXCEPTION
+          'Reservation deposit accounting policy requires reconciliation';
+    END IF;
+
+    RETURN coalesce(
+        v_policy,
+        'legacy-full-application'
+    );
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_reservation_deposit_policy(uuid,uuid,uuid)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Prevent unauthorized or premature changes to the
+-- accounting policy of an existing reservation.
+
+CREATE OR REPLACE FUNCTION
+public.neo_guard_reservation_deposit_policy()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+BEGIN
+
+    IF TG_OP = 'DELETE' THEN
+
+        RAISE EXCEPTION
+          'Reservation accounting policy cannot be deleted';
+
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+
+        IF NEW.reservation_id IS DISTINCT FROM OLD.reservation_id
+           OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
+           OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+           OR NEW.accounting_policy IS DISTINCT FROM OLD.accounting_policy
+        THEN
+
+            RAISE EXCEPTION
+              'Reservation accounting policy cannot be rewritten';
+
+        END IF;
+
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.reservations r
+        WHERE r.id = NEW.reservation_id
+          AND r.organization_id = NEW.organization_id
+          AND r.branch_id = NEW.branch_id
+    ) THEN
+
+        RAISE EXCEPTION
+          'Invalid reservation accounting policy scope';
+
+    END IF;
+
+    IF NEW.accounting_policy = 'progressive-accommodation' THEN
+
+        IF public.neo_progressive_deposit_execution_enabled()
+           IS NOT TRUE
+        THEN
+
+            RAISE EXCEPTION
+              'Progressive deposit accounting is not activated';
+
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM public.reservation_deposits d
+            WHERE d.reservation_id = NEW.reservation_id
+              AND d.organization_id = NEW.organization_id
+              AND (
+                  d.status = 'applied'
+                  OR d.applied_folio_id IS NOT NULL
+                  OR d.applied_folio_line_id IS NOT NULL
+              )
+        ) THEN
+
+            RAISE EXCEPTION
+              'Historical deposit applications cannot be converted automatically';
+
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM public.folios f
+            WHERE f.reservation_id = NEW.reservation_id
+              AND f.organization_id = NEW.organization_id
+        ) THEN
+
+            RAISE EXCEPTION
+              'Existing guest folios require controlled accounting reconciliation';
+
+        END IF;
+
+    END IF;
+
+    RETURN NEW;
+
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS
+neo_guard_reservation_deposit_policy
+ON public.neo_reservation_deposit_policies;
+
+CREATE TRIGGER
+neo_guard_reservation_deposit_policy
+
+BEFORE INSERT OR UPDATE OR DELETE
+
+ON public.neo_reservation_deposit_policies
+
+FOR EACH ROW
+
+EXECUTE FUNCTION
+public.neo_guard_reservation_deposit_policy();
+
+REVOKE ALL ON FUNCTION
+public.neo_guard_reservation_deposit_policy()
+FROM PUBLIC,anon,authenticated;
+
+
+-- Establish a fail-closed boundary at the existing
+-- automatic full-deposit application trigger.
+--
+-- Legacy reservations retain their existing workflow.
+-- Progressive reservations cannot accidentally enter it.
+
+DO $progressive_deposit_boundary$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.pms_apply_deposits_to_folio()'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_progressive_deposit_boundary_v1'
+    ) > 0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      '  IF NEW.reservation_id IS NULL THEN RETURN NEW; END IF;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Existing deposit application boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        anchor || chr(10) ||
+        $guard$
+
+  -- neo_progressive_deposit_boundary_v1
+
+  IF public.neo_reservation_deposit_policy(
+      NEW.organization_id,
+      NEW.branch_id,
+      NEW.reservation_id
+  ) = 'progressive-accommodation' THEN
+
+      RAISE EXCEPTION
+        'Progressive deposit execution requires its verified allocation engine';
+
+  END IF;
+
+$guard$
+    );
+
+    EXECUTE d;
+
+END;
+$progressive_deposit_boundary$;
+
+NOTIFY pgrst,'reload schema';
