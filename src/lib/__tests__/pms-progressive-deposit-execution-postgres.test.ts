@@ -4021,6 +4021,372 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
   });
 
+
+  // CANONICAL_SCHEDULER_ISOLATION_V1
+
+  const otherSchedulerProperty =
+    "00000000-0000-0000-0000-000000009801";
+
+  const otherSchedulerOrganization =
+    "00000000-0000-0000-0000-000000009802";
+
+  async function addOtherSchedulerProperty(
+    enabled: boolean
+  ) {
+
+    await db.query(`
+      INSERT INTO public.branches (
+        id,organization_id
+      )
+      VALUES ($1,$2)
+    `,[
+      otherSchedulerProperty,
+      otherSchedulerOrganization
+    ]);
+
+    await db.query(`
+      INSERT INTO public.business_days (
+        organization_id,
+        branch_id,
+        business_date,
+        status
+      )
+      VALUES (
+        $1,$2,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date,
+        'open'
+      )
+    `,[
+      otherSchedulerOrganization,
+      otherSchedulerProperty
+    ]);
+
+    await db.query(`
+      INSERT INTO
+        public.neo_pms_accommodation_automation_settings
+      (
+        organization_id,
+        branch_id,
+        enabled,
+        activation_date
+      )
+      VALUES (
+        $1,$2,$3,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date-1
+      )
+    `,[
+      otherSchedulerOrganization,
+      otherSchedulerProperty,
+      enabled
+    ]);
+
+  }
+
+  it("isolates disabled secondary properties during canonical scheduler execution", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await addOtherSchedulerProperty(false);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:1,
+        completed:1,
+        failed:0,
+        posted:1
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+
+      const otherRuns = await db.query<{
+        n:number;
+      }>(`
+        SELECT count(*)::int AS n
+        FROM public.neo_pms_accommodation_job_runs
+        WHERE branch_id=$1
+      `,[otherSchedulerProperty]);
+
+      expect(otherRuns.rows[0]!.n).toBe(0);
+
+    });
+  });
+
+  it("processes separate eligible property contexts without leaking accounting scope", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await addOtherSchedulerProperty(true);
+
+      const beforeContext =
+        await schedulerContextEvidence();
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:2,
+        completed:2,
+        failed:0,
+        posted:1
+      });
+
+      const runs = await db.query<{
+        status:string;
+        posted_count:number;
+      }>(`
+        SELECT status,posted_count
+        FROM public.neo_pms_accommodation_job_runs
+        ORDER BY posted_count
+      `);
+
+      expect(runs.rows).toEqual([
+        {
+          status:"completed",
+          posted_count:0
+        },
+        {
+          status:"completed",
+          posted_count:1
+        }
+      ]);
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual(beforeContext);
+
+      const foreignEvidence = await db.query<{
+        charges:number;
+        journals:number;
+        allocations:number;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM public.folio_lines
+            WHERE branch_id=$1
+          ) AS charges,
+          (
+            SELECT count(*)::int
+            FROM public.journal_entries
+            WHERE branch_id=$1
+          ) AS journals,
+          (
+            SELECT count(*)::int
+            FROM public.neo_reservation_deposit_allocations
+            WHERE branch_id=$1
+          ) AS allocations
+      `,[otherSchedulerProperty]);
+
+      expect(foreignEvidence.rows[0]).toEqual({
+        charges:0,
+        journals:0,
+        allocations:0
+      });
+
+    });
+  });
+
+  it("continues independent scheduler property processing after a financial failure", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await addOtherSchedulerProperty(true);
+
+      await db.exec(`
+        UPDATE public.accounting_periods
+        SET status='closed'
+      `);
+
+      const beforeContext =
+        await schedulerContextEvidence();
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:2,
+        completed:1,
+        failed:1,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      const otherRun = await db.query<{
+        status:string;
+        posted_count:number;
+      }>(`
+        SELECT status,posted_count
+        FROM public.neo_pms_accommodation_job_runs
+        WHERE branch_id=$1
+      `,[otherSchedulerProperty]);
+
+      expect(otherRun.rows).toEqual([
+        {
+          status:"completed",
+          posted_count:0
+        }
+      ]);
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual(beforeContext);
+
+    });
+  });
+
+  it("excludes historical property days outside the automatic posting window", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE public.business_days
+        SET business_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date-5;
+
+        UPDATE
+          public.neo_pms_accommodation_automation_settings
+        SET activation_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date-10;
+
+        UPDATE public.reservations
+        SET arrival_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date-7;
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:0,
+        completed:0,
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      const runs = await db.query<{n:number}>(`
+        SELECT count(*)::int AS n
+        FROM public.neo_pms_accommodation_job_runs
+      `);
+
+      expect(runs.rows[0]!.n).toBe(0);
+
+    });
+  });
+
+  it("rejects mismatched organization and property scheduler authorization", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await addOtherSchedulerProperty(true);
+
+      const originalProperty = await db.query<{
+        organization_id:string;
+        branch_id:string;
+      }>(`
+        SELECT organization_id,branch_id
+        FROM public.reservations
+        LIMIT 1
+      `);
+
+      await db.exec("SAVEPOINT wrong_scheduler_scope");
+
+      try {
+
+        await expect(
+          db.query(`
+            SELECT
+              public.neo_run_accommodation_accounting_context(
+                $1,
+                $2,
+                (now() AT TIME ZONE 'Africa/Nairobi')::date
+              )
+          `,[
+            originalProperty.rows[0]!.organization_id,
+            otherSchedulerProperty
+          ])
+        ).rejects.toThrow();
+
+      } finally {
+
+        await db.exec(
+          "ROLLBACK TO SAVEPOINT wrong_scheduler_scope"
+        );
+
+      }
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual({
+        organization:null,
+        system_posting:false,
+        scope:"self",
+        branches:[],
+        run_id:""
+      });
+
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 
