@@ -3695,6 +3695,332 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
   });
 
+
+  // CANONICAL_SCHEDULER_RECOVERY_V1
+
+  it("recovers failed scheduler accounting after the accounting period reopens", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE public.accounting_periods
+        SET status='closed'
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"exceptions",
+        failed:1,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      await db.exec(`
+        UPDATE public.accounting_periods
+        SET status='open'
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"completed",
+        completed:1,
+        failed:0,
+        posted:1
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+
+      const history = await db.query<{
+        status:string;
+        posted_count:number;
+      }>(`
+        SELECT status,posted_count
+        FROM public.neo_pms_accommodation_job_runs
+        ORDER BY status
+      `);
+
+      expect(history.rows).toEqual([
+        {
+          status:"completed",
+          posted_count:1
+        },
+        {
+          status:"failed",
+          posted_count:0
+        }
+      ]);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+
+    });
+  });
+
+  it("preserves the progressive activation lock through complete scheduler execution", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        CREATE OR REPLACE FUNCTION
+        public.neo_progressive_deposit_execution_enabled()
+        RETURNS boolean
+        LANGUAGE sql STABLE
+        AS $$
+          SELECT false
+        $$;
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"exceptions",
+        failed:1,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      const failure = await db.query<{
+        error_message:string;
+      }>(`
+        SELECT error_message
+        FROM public.neo_pms_accommodation_job_runs
+        WHERE status='failed'
+      `);
+
+      expect(failure.rows).toHaveLength(1);
+
+      expect(
+        failure.rows[0]!.error_message
+      ).toMatch(
+        /progressive deposit execution is disabled/i
+      );
+
+    });
+  });
+
+  it("preserves legacy accommodation scheduling when progressive execution is disabled", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      // Model an existing reservation without a
+      // progressive policy. Do not change the
+      // accounting policy of a posted reservation.
+
+      await db.exec(`
+        CREATE OR REPLACE FUNCTION
+        public.neo_reservation_deposit_policy(
+          _org uuid,
+    _branch uuid,
+    _reservation uuid
+        )
+        RETURNS text
+        LANGUAGE sql STABLE
+        AS $$
+          SELECT 'legacy-full-application'::text
+        $$;
+
+        CREATE OR REPLACE FUNCTION
+        public.neo_progressive_deposit_execution_enabled()
+        RETURNS boolean
+        LANGUAGE sql STABLE
+        AS $$
+          SELECT false
+        $$;
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"completed",
+        failed:0,
+        posted:1
+      });
+
+      const result =
+        await schedulerAccountingEvidence();
+
+      expect(result.charges).toBe(1);
+
+      expect(result.allocations).toBe(0);
+
+      expect(result.liability).toBe(50000);
+
+      expect(result.balance).toBe(19000);
+
+      expect(result.payments).toBe(0);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        failed:0,
+        posted:0
+      });
+
+    });
+  });
+
+  it("excludes closed business days from canonical scheduler execution", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE public.business_days
+        SET status='closed'
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:0,
+        completed:0,
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+    });
+  });
+
+  it("excludes properties before their configured automation activation date", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE
+          public.neo_pms_accommodation_automation_settings
+        SET activation_date=
+          (now() AT TIME ZONE 'Africa/Nairobi')::date+1
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:0,
+        completed:0,
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+    });
+  });
+
+  it("preserves restricted scheduler execution privileges", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      const result = await db.query<{
+        scheduler:boolean;
+        job:boolean;
+        wrapper:boolean;
+      }>(`
+        SELECT
+          has_function_privilege(
+            'authenticated',
+            'public.neo_pms_post_accommodation_scheduled(boolean)',
+            'EXECUTE'
+          ) AS scheduler,
+
+          has_function_privilege(
+            'authenticated',
+            'public.neo_pms_post_accommodation_job(uuid,uuid,date)',
+            'EXECUTE'
+          ) AS job,
+
+          has_function_privilege(
+            'authenticated',
+            'public.neo_run_accommodation_accounting_context(uuid,uuid,date)',
+            'EXECUTE'
+          ) AS wrapper
+      `);
+
+      expect(result.rows[0]).toEqual({
+        scheduler:false,
+        job:false,
+        wrapper:false
+      });
+
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 
