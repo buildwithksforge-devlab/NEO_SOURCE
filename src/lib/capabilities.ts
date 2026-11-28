@@ -85,6 +85,7 @@ export const ROUTE_CAPABILITIES: Entry[] = [
   { prefix: "/kitchen/display", module: "kitchen", feature: "queue" },
   { prefix: "/bar/display", module: "bar", feature: "queue" },
   { prefix: "/coffee/display", module: "kitchen", feature: "queue" },
+  { prefix: "/coffee/production", module: "kitchen", feature: "production" },
   { prefix: "/pastry/display", module: "kitchen", feature: "pastry-production" },
   { prefix: "/production-overview", module: "kitchen", feature: "all_stations" },
 

@@ -772,3 +772,54 @@ CREATE TRIGGER neo_production_measurement_immutable
 BEFORE UPDATE OR DELETE ON public.production_batches
 FOR EACH ROW EXECUTE FUNCTION
  public.neo_production_measurement_immutable();
+
+-- NEO_BATCH_RECIPE_CONFIGURATION_V1
+-- Keep explicit operational batch configuration when approving
+-- a replacement standard recipe.
+
+DO $batch_recipe_configuration$
+DECLARE
+    d text;
+    anchor text;
+    replacement text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_recipe_activate(uuid,uuid)'::regprocedure
+    );
+
+    IF strpos(d,'neo_batch_recipe_configuration_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'consumption_mode=CASE WHEN r.recipe_type=''direct_sale'' THEN ''direct_stock'' ELSE ''recipe'' END';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Canonical recipe activation anchor differs';
+    END IF;
+
+    replacement := $patch$
+consumption_mode=CASE
+        WHEN r.recipe_type='direct_sale'
+          THEN 'direct_stock'
+        WHEN consumption_mode='batch'
+          THEN 'batch'
+        ELSE 'recipe'
+      END
+$patch$;
+
+    d := replace(d,anchor,replacement);
+
+    d := replace(
+      d,
+      'UPDATE public.menu_items SET',
+      '-- neo_batch_recipe_configuration_v1'
+        || chr(10)
+        || '    UPDATE public.menu_items SET'
+    );
+
+    EXECUTE d;
+
+END;
+$batch_recipe_configuration$;

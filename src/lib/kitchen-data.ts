@@ -43,7 +43,7 @@ export function useKitchenStations() {
         .from("operational_stations")
         .select(
           sel(
-            "id, name, code, station_type, department_id, branch_id, supervisor_user_id, status, active, sort_order",
+            "id, name, code, station_type, department_id, branch_id, supervisor_user_id, status, active, sort_order, departments(catalogue_key)",
           ),
         )
         .eq("active", true)
@@ -604,15 +604,21 @@ export function useSavePortionStandard() {
 }
 
 export function useProductionBatches() {
+  const { branchId, filterKey } = useActivePropertyFilter();
   const { organizationId } = useCtx();
   return useQuery({
-    queryKey: ["kitchen", "batches", organizationId],
+    queryKey: ["kitchen", "batches", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("production_batches")
         .select(sel("*, operational_stations(name), recipes(version, menu_items(name))"))
+        .eq("organization_id", organizationId as string)
         .order("created_at", { ascending: false });
+
+      if (branchId) q = q.eq("branch_id", branchId);
+
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -693,6 +699,11 @@ export function useSaveBatch() {
 
 /** Reasons the server can refuse to post a batch, said plainly. */
 const BATCH_POST_REASONS: Record<string, string> = {
+  invalid_planned_quantity: "Enter a valid planned production quantity.",
+  invalid_batch_status: "This batch has already been closed or discarded.",
+  expired_batch: "This batch has passed its use-by time.",
+  invalid_production_dates: "Use-by time must follow preparation time.",
+  no_usable_output: "No usable beverage or food remains after waste.",
   not_found: "That batch no longer exists.",
   forbidden: "That batch belongs to another property.",
   not_permitted: "You do not have permission to post production to stock.",

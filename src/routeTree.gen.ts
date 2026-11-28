@@ -148,6 +148,7 @@ import { Route as ShellBarRequisitionsRouteImport } from './routes/_shell.bar.re
 import { Route as ShellBarSellRouteImport } from './routes/_shell.bar.sell'
 import { Route as ShellBarWastageRouteImport } from './routes/_shell.bar.wastage'
 import { Route as ShellCoffeeDisplayRouteImport } from './routes/_shell.coffee.display'
+import { Route as ShellCoffeeProductionRouteImport } from './routes/_shell.coffee.production'
 import { Route as ShellCrmIndexRouteImport } from './routes/_shell.crm.index'
 import { Route as ShellCrmCommunicationsRouteImport } from './routes/_shell.crm.communications'
 import { Route as ShellCrmCorporateRouteImport } from './routes/_shell.crm.corporate'
@@ -1118,6 +1119,11 @@ const ShellBarWastageRoute = ShellBarWastageRouteImport.update({
 const ShellCoffeeDisplayRoute = ShellCoffeeDisplayRouteImport.update({
   id: '/coffee/display',
   path: '/coffee/display',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellCoffeeProductionRoute = ShellCoffeeProductionRouteImport.update({
+  id: '/coffee/production',
+  path: '/coffee/production',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellCrmIndexRoute = ShellCrmIndexRouteImport.update({
@@ -2659,6 +2665,7 @@ export interface FileRoutesByFullPath {
   '/bar/sell': typeof ShellBarSellRoute
   '/bar/wastage': typeof ShellBarWastageRoute
   '/coffee/display': typeof ShellCoffeeDisplayRoute
+  '/coffee/production': typeof ShellCoffeeProductionRoute
   '/crm/communications': typeof ShellCrmCommunicationsRoute
   '/crm/corporate': typeof ShellCrmCorporateRoute
   '/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -3050,6 +3057,7 @@ export interface FileRoutesByTo {
   '/bar/sell': typeof ShellBarSellRoute
   '/bar/wastage': typeof ShellBarWastageRoute
   '/coffee/display': typeof ShellCoffeeDisplayRoute
+  '/coffee/production': typeof ShellCoffeeProductionRoute
   '/crm/communications': typeof ShellCrmCommunicationsRoute
   '/crm/corporate': typeof ShellCrmCorporateRoute
   '/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -3462,6 +3470,7 @@ export interface FileRoutesById {
   '/_shell/bar/sell': typeof ShellBarSellRoute
   '/_shell/bar/wastage': typeof ShellBarWastageRoute
   '/_shell/coffee/display': typeof ShellCoffeeDisplayRoute
+  '/_shell/coffee/production': typeof ShellCoffeeProductionRoute
   '/_shell/crm/communications': typeof ShellCrmCommunicationsRoute
   '/_shell/crm/corporate': typeof ShellCrmCorporateRoute
   '/_shell/crm/duplicates': typeof ShellCrmDuplicatesRoute
@@ -3874,6 +3883,7 @@ export interface FileRouteTypes {
     | '/bar/sell'
     | '/bar/wastage'
     | '/coffee/display'
+    | '/coffee/production'
     | '/crm/communications'
     | '/crm/corporate'
     | '/crm/duplicates'
@@ -4265,6 +4275,7 @@ export interface FileRouteTypes {
     | '/bar/sell'
     | '/bar/wastage'
     | '/coffee/display'
+    | '/coffee/production'
     | '/crm/communications'
     | '/crm/corporate'
     | '/crm/duplicates'
@@ -4676,6 +4687,7 @@ export interface FileRouteTypes {
     | '/_shell/bar/sell'
     | '/_shell/bar/wastage'
     | '/_shell/coffee/display'
+    | '/_shell/coffee/production'
     | '/_shell/crm/communications'
     | '/_shell/crm/corporate'
     | '/_shell/crm/duplicates'
@@ -5959,6 +5971,13 @@ declare module '@tanstack/react-router' {
       path: '/coffee/display'
       fullPath: '/coffee/display'
       preLoaderRoute: typeof ShellCoffeeDisplayRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/coffee/production': {
+      id: '/_shell/coffee/production'
+      path: '/coffee/production'
+      fullPath: '/coffee/production'
+      preLoaderRoute: typeof ShellCoffeeProductionRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/crm/': {
@@ -8509,6 +8528,7 @@ interface ShellRouteChildren {
   ShellBarSellRoute: typeof ShellBarSellRoute
   ShellBarWastageRoute: typeof ShellBarWastageRoute
   ShellCoffeeDisplayRoute: typeof ShellCoffeeDisplayRoute
+  ShellCoffeeProductionRoute: typeof ShellCoffeeProductionRoute
   ShellDashboardsKeyRoute: typeof ShellDashboardsKeyRoute
   ShellDeliveryMaintenanceRoute: typeof ShellDeliveryMaintenanceRoute
   ShellDeliveryQueueRoute: typeof ShellDeliveryQueueRoute
@@ -8597,6 +8617,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellBarSellRoute: ShellBarSellRoute,
   ShellBarWastageRoute: ShellBarWastageRoute,
   ShellCoffeeDisplayRoute: ShellCoffeeDisplayRoute,
+  ShellCoffeeProductionRoute: ShellCoffeeProductionRoute,
   ShellDashboardsKeyRoute: ShellDashboardsKeyRoute,
   ShellDeliveryMaintenanceRoute: ShellDeliveryMaintenanceRoute,
   ShellDeliveryQueueRoute: ShellDeliveryQueueRoute,
