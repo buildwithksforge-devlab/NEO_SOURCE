@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { StockItemPicker } from "@/components/inventory/StockItemPicker";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
 import {
   Select,
   SelectContent,
@@ -60,6 +61,7 @@ function statusTone(status: string): "default" | "secondary" | "outline" | "dest
 }
 
 function Page() {
+  const { branchId } = useActivePropertyFilter();
   const locations = useStockLocations();
   const items = useStockItems();
   const transfers = useStoreTransfers("all");
@@ -73,15 +75,21 @@ function Page() {
   const [drafts, setDrafts] = useState<Draft[]>([{ stockItemId: "", quantity: "" }]);
   const [attemptKey, setAttemptKey] = useState(newTransferAttemptKey);
 
-  const locationRows = (locations.data ?? []) as Row[];
-  const itemRows = (items.data ?? []) as Row[];
+  const locationRows = ((locations.data ?? []) as Row[]).filter((row) =>
+    row["active"] === true && row["branch_id"] === branchId,
+  );
+  const itemRows = ((items.data ?? []) as Row[]).filter((row) => row["active"] === true);
   const transferRows = (transfers.data ?? []) as TransferRow[];
 
   const lines: TransferLineInput[] = drafts
-    .filter((d) => d.stockItemId && Number(d.quantity) > 0)
+    .filter((d) => d.stockItemId && Number.isFinite(Number(d.quantity)) && Number(d.quantity) > 0)
     .map((d) => ({ stock_item_id: d.stockItemId, quantity: Number(d.quantity) }));
 
   const sameStore = Boolean(fromLocationId) && fromLocationId === toLocationId;
+  const invalidDraft = drafts.some((d) => (d.stockItemId || d.quantity.trim()) &&
+    (!d.stockItemId || !Number.isFinite(Number(d.quantity)) || Number(d.quantity) <= 0));
+  const validStores = locationRows.some((row) => row["id"] === fromLocationId) &&
+    locationRows.some((row) => row["id"] === toLocationId);
 
   function submit() {
     create.mutate(
@@ -108,6 +116,8 @@ function Page() {
         title="Create a transfer"
         description="Choose where the stock is leaving from, where it is going, and what is moving."
       >
+        {!branchId && <p className="mb-4 text-sm text-muted-foreground">Select one property before dispatching stock.</p>}
+        {locations.isError && <p role="alert" className="mb-4 text-sm text-destructive">Stores could not be loaded. Refresh before dispatching.</p>}
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -214,6 +224,9 @@ function Page() {
                 !fromLocationId ||
                 !toLocationId ||
                 sameStore ||
+                !branchId ||
+                !validStores ||
+                invalidDraft ||
                 lines.length === 0 ||
                 reason.trim().length === 0 ||
                 create.isPending
@@ -273,7 +286,7 @@ function Page() {
                         <>
                           <Button
                             size="sm"
-                            disabled={receive.isPending}
+                            disabled={receive.isPending || cancel.isPending}
                             onClick={() => receive.mutate(String(t["id"]))}
                           >
                             Confirm receipt
@@ -281,7 +294,7 @@ function Page() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={cancel.isPending}
+                            disabled={cancel.isPending || receive.isPending}
                             onClick={() =>
                               cancel.mutate({
                                 transferId: String(t["id"]),
@@ -306,9 +319,10 @@ function Page() {
 }
 
 function GuardedPage() {
+  const { filterKey } = useActivePropertyFilter();
   return (
     <OpsGuard path="/inventory/transfers">
-      <Page />
+      <Page key={filterKey} />
     </OpsGuard>
   );
 }

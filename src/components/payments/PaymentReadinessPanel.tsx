@@ -10,7 +10,14 @@
 import { Link } from "@tanstack/react-router";
 import { SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { LoadingState } from "@/components/common/StateSystem";
-import { usePaymentReadiness, type PaymentReadiness } from "@/lib/payment-methods";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { canAccessPath } from "@/lib/nav-permissions";
+import {
+  paymentAdapterCapabilities,
+  usePaymentReadiness,
+  type PaymentReadiness,
+} from "@/lib/payment-methods";
 
 function tone(row: PaymentReadiness): "success" | "warning" | "default" {
   if (row.ready) return "success";
@@ -18,23 +25,42 @@ function tone(row: PaymentReadiness): "success" | "warning" | "default" {
 }
 
 function state(row: PaymentReadiness): string {
-  if (row.kind === "recorded") return "Available";
-  if (row.ready) return "Ready";
+  if (row.kind === "recorded") return row.ready ? "Available" : "Unavailable";
+  if (row.ready) return "Collection enabled";
+  if (row.last_test?.status === "failed" || row.last_test_status === "failed") return "Verification failed";
   if (row.configured) return row.enabled ? "Not tested" : "Switched off";
   return "Not configured";
 }
 
 export function PaymentReadinessPanel({ title = "Payment methods" }: { title?: string }) {
   const readiness = usePaymentReadiness();
+  const { can, isAdmin } = useAuth();
   const rows = readiness.data ?? [];
 
   return (
     <SectionCard
       title={title}
       description="Recorded tenders are taken outside NEØ and entered here. Provider-backed tenders need their provider configured before they can be used."
+      actions={<Button variant="outline" size="sm" disabled={readiness.isFetching} onClick={() => void readiness.refetch()}>Refresh status</Button>}
     >
+      <div className="mb-4 flex flex-wrap gap-3 text-sm">
+        {isAdmin || canAccessPath(can, "/admin/delivery-settings") ? <Link to="/admin/delivery-settings" className="underline underline-offset-2">Delivery checkout methods</Link> : null}
+        {isAdmin || canAccessPath(can, "/platform/integrations") ? <Link to="/platform/integrations" className="underline underline-offset-2">Card and QR gateway setup</Link> : null}
+        {isAdmin || canAccessPath(can, "/admin/payments-mpesa") ? <Link to="/admin/payments-mpesa" className="underline underline-offset-2">M-Pesa setup</Link> : null}
+      </div>
+      <details className="mb-4 rounded-lg border border-border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">How payments reach NEØ</summary>
+        <dl className="mt-3 grid gap-3 text-muted-foreground sm:grid-cols-2">
+          <div><dt className="font-medium text-foreground">Standalone PDQ</dt><dd>Take the card payment on the bank terminal. Record Card terminal at the till with the bank slip reference and receiving account. Finance can match it to the settlement.</dd></div>
+          <div><dt className="font-medium text-foreground">Integrated PDQ</dt><dd>Connect a supported acquirer in Integration Centre. POS sends the amount to the processor, then waits for its confirmation. Verify the connection on the property before taking payments.</dd></div>
+          <div><dt className="font-medium text-foreground">M-Pesa and bank transfer</dt><dd>M-Pesa STK sends a prompt to the customer’s phone. A bank transfer is recorded against the receiving account once the funds arrive, then matched in bank reconciliation.</dd></div>
+          <div><dt className="font-medium text-foreground">Online checkout and QR</dt><dd>Delivery checkout supports configured M-Pesa, cash or payment on collection. Public hosted card and QR still require integration. The receipt link QR opens the chosen page.</dd></div>
+        </dl>
+      </details>
       {readiness.isLoading ? (
         <LoadingState variant="table" rows={4} />
+      ) : readiness.isError || rows.length === 0 ? (
+        <p role="status" className="text-sm text-muted-foreground">Saved payment readiness could not be verified. Refresh status to try again.</p>
       ) : (
         <ul className="grid gap-2 md:grid-cols-2">
           {rows.map((row) => (
@@ -47,7 +73,12 @@ export function PaymentReadinessPanel({ title = "Payment methods" }: { title?: s
                 <span className="block text-xs text-muted-foreground">
                   {row.reason ?? row.hint ?? ""}
                 </span>
-                {row.kind === "provider" && row.config_path ? (
+                {row.kind === "provider" && paymentAdapterCapabilities(row.method)?.refundExecution === "external-confirmation-only" ? (
+                  <span className="block text-xs text-muted-foreground">
+                    Finance can record a completed external POS refund. The provider’s refund eligibility and limits require separate verification.
+                  </span>
+                ) : null}
+                {row.kind === "provider" && row.config_path && (isAdmin || canAccessPath(can, row.config_path)) ? (
                   <Link to={row.config_path} className="mt-1 inline-block text-xs underline underline-offset-2">
                     {row.ready ? "Review setup" : "Set this up"}
                   </Link>

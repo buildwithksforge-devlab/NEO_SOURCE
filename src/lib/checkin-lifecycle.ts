@@ -24,6 +24,18 @@ export const CHECK_IN_EFFECTS = [
   "audit_logs",
 ] as const;
 
+/** Statuses accepted by `public.pms_check_in`; terminal stays cannot be re-arrived. */
+export const CHECK_IN_ELIGIBLE_RESERVATION_STATUSES = [
+  "confirmed",
+  "guaranteed",
+  "tentative",
+  "pending-deposit",
+] as const;
+
+export function canCheckInReservationStatus(status: string): boolean {
+  return CHECK_IN_ELIGIBLE_RESERVATION_STATUSES.some((eligible) => eligible === status);
+}
+
 /** What a revert must undo, so the reservation looks as it did before arrival. */
 export const REVERT_EFFECTS = [
   "folio_lines",

@@ -1,0 +1,761 @@
+﻿NEO PRINTING ENGINE SOURCE REVIEW
+
+========================================
+FILE: src/lib/printing.ts
+========================================
+   1: /**
+   2:  * Printer integration data layer.
+   3:  *
+   4:  * NEÃ˜ does not pretend to have printed anything. A print is queued in the
+   5:  * database; a printing agent (or the operator, for a test print) records the
+   6:  * real outcome. Failures retry on the same printer and, once the retry limit
+   7:  * is reached, fail over to the configured backup printer.
+   8:  */
+   9: import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+  10: import { toast } from "sonner";
+  11: import { supabase } from "@/integrations/supabase/client";
+  12: import { guardedRpc } from "@/lib/rpc-guard";
+  13: 
+  14: /* eslint-disable @typescript-eslint/no-explicit-any */
+  15: type Row = Record<string, any>;
+  16: 
+  17: const sb = supabase as unknown as {
+  18:   from: (t: string) => any;
+  19:   rpc: (
+  20:     fn: string,
+  21:     args?: Record<string, unknown>,
+  22:   ) => Promise<{
+  23:     data: unknown;
+  24:     error: { message: string } | null;
+  25:   }>;
+  26: };
+  27: 
+  28: const KEY = "printing";
+  29: 
+  30: export type Printer = {
+  31:   id: string;
+  32:   name: string;
+  33:   printer_role: string | null;
+  34:   branch_id: string | null;
+  35:   department_id: string | null;
+  36:   station_id: string | null;
+  37:   fallback_printer_id: string | null;
+  38:   connection_type: string | null;
+  39:   address: string | null;
+  40:   status: string | null;
+  41:   health_status: string;
+  42:   retry_limit: number;
+  43:   retry_backoff_seconds: number;
+  44:   last_error: string | null;
+  45:   last_success_at: string | null;
+  46:   last_failure_at: string | null;
+  47:   last_checked_at: string | null;
+  48:   active: boolean;
+  49: };
+  50: 
+  51: export type PrintJob = {
+  52:   id: string;
+  53:   printer_id: string;
+  54:   original_printer_id: string | null;
+  55:   document_type: string;
+  56:   title: string | null;
+  57:   status: string;
+  58:   attempts: number;
+  59:   max_attempts: number;
+  60:   failed_over: boolean;
+  61:   last_error: string | null;
+  62:   created_at: string;
+  63:   completed_at: string | null;
+  64: };
+  65: 
+  66: export type PosReceiptPrintState = {
+  67:   hasCompletedPrint: boolean;
+  68:   latest: {
+  69:     id: string;
+  70:     status: string;
+  71:     is_duplicate: boolean;
+  72:     completed_at: string | null;
+  73:   } | null;
+  74: };
+  75: 
+  76: async function rpc<T = unknown>(
+  77:   name: string,
+  78:   args?: Record<string, unknown>,
+  79: ): Promise<T> {
+  80:   const { data, error } = await guardedRpc(sb, name, args ?? {});
+  81: 
+  82:   if (error) {
+  83:     throw new Error(error.message);
+  84:   }
+  85: 
+  86:   return data as T;
+  87: }
+  88: 
+  89: function useInvalidate() {
+  90:   const qc = useQueryClient();
+  91: 
+  92:   return () => {
+  93:     void qc.invalidateQueries({
+  94:       queryKey: [KEY],
+  95:     });
+  96:   };
+  97: }
+  98: 
+  99: /**
+ 100:  * All configured printers visible to the current organisation.
+ 101:  */
+ 102: export function usePrinters(
+ 103:   organizationId: string | null | undefined,
+ 104: ) {
+ 105:   return useQuery({
+ 106:     queryKey: [KEY, "printers", organizationId ?? null],
+ 107:     enabled: Boolean(organizationId),
+ 108: 
+ 109:     queryFn: async () => {
+ 110:       const { data, error } = await sb
+ 111:         .from("printer_profiles")
+ 112:         .select("*")
+ 113:         .order("name");
+ 114: 
+ 115:       if (error) {
+ 116:         throw new Error(error.message);
+ 117:       }
+ 118: 
+ 119:       return (data ?? []) as Printer[];
+ 120:     },
+ 121:   });
+ 122: }
+ 123: 
+ 124: /**
+ 125:  * Recent organisation print jobs.
+ 126:  *
+ 127:  * This is primarily used by printer administration / monitoring screens.
+ 128:  * POS order pages should use usePosReceiptPrintState() instead of loading the
+ 129:  * organisation-wide print history.
+ 130:  */
+ 131: export function usePrintJobs(
+ 132:   organizationId: string | null | undefined,
+ 133: ) {
+ 134:   return useQuery({
+ 135:     queryKey: [KEY, "jobs", organizationId ?? null],
+ 136:     enabled: Boolean(organizationId),
+ 137:     refetchInterval: 15000,
+ 138: 
+ 139:     queryFn: async () => {
+ 140:       const { data, error } = await sb
+ 141:         .from("print_jobs")
+ 142:         .select("*")
+ 143:         .order("created_at", { ascending: false })
+ 144:         .limit(100);
+ 145: 
+ 146:       if (error) {
+ 147:         throw new Error(error.message);
+ 148:       }
+ 149: 
+ 150:       return (data ?? []) as PrintJob[];
+ 151:     },
+ 152:   });
+ 153: }
+ 154: 
+ 155: /**
+ 156:  * Returns whether this exact POS order already has a successfully completed
+ 157:  * physical receipt print.
+ 158:  *
+ 159:  * The backend remains authoritative:
+ 160:  *
+ 161:  * - no completed print -> pos.receipts.print
+ 162:  * - completed print exists -> any new physical copy is a reprint and requires
+ 163:  *   pos.receipts.reprint
+ 164:  *
+ 165:  * This hook is only for presenting the correct action in the UI. It must not
+ 166:  * be treated as the security boundary.
+ 167:  */
+ 168: export function usePosReceiptPrintState(
+ 169:   orderId: string | null | undefined,
+ 170: ) {
+ 171:   return useQuery<PosReceiptPrintState>({
+ 172:     queryKey: [
+ 173:       KEY,
+ 174:       "pos-receipt-state",
+ 175:       orderId ?? null,
+ 176:     ],
+ 177: 
+ 178:     enabled: Boolean(orderId),
+ 179: 
+ 180:     queryFn: async () => {
+ 181:       if (!orderId) {
+ 182:         return {
+ 183:           hasCompletedPrint: false,
+ 184:           latest: null,
+ 185:         };
+ 186:       }
+ 187: 
+ 188:       const { data, error } = await sb
+ 189:         .from("print_jobs")
+ 190:         .select(
+ 191:           "id, status, is_duplicate, completed_at",
+ 192:         )
+ 193:         .eq("order_id", orderId)
+ 194:         .eq("document_type", "pos_receipt")
+ 195:         .eq("status", "completed")
+ 196:         .not("completed_at", "is", null)
+ 197:         .order("completed_at", {
+ 198:           ascending: false,
+ 199:         })
+ 200:         .limit(1);
+ 201: 
+ 202:       if (error) {
+ 203:         throw new Error(error.message);
+ 204:       }
+ 205: 
+ 206:       const row = data?.[0] ?? null;
+ 207: 
+ 208:       const latest = row
+ 209:         ? {
+ 210:             id: String(row.id),
+ 211:             status: String(row.status),
+ 212:             is_duplicate: Boolean(row.is_duplicate),
+ 213:             completed_at:
+ 214:               row.completed_at === null ||
+ 215:               row.completed_at === undefined
+ 216:                 ? null
+ 217:                 : String(row.completed_at),
+ 218:           }
+ 219:         : null;
+ 220: 
+ 221:       return {
+ 222:         hasCompletedPrint: Boolean(
+ 223:           latest?.completed_at,
+ 224:         ),
+ 225:         latest,
+ 226:       };
+ 227:     },
+ 228:   });
+ 229: }
+ 230: 
+ 231: /**
+ 232:  * Create or update a printer profile.
+ 233:  */
+ 234: export function useSavePrinter() {
+ 235:   const invalidate = useInvalidate();
+ 236: 
+ 237:   return useMutation({
+ 238:     mutationFn: async (input: Row) => {
+ 239:       const { id, ...values } = input;
+ 240: 
+ 241:       const query = id
+ 242:         ? sb
+ 243:             .from("printer_profiles")
+ 244:             .update(values)
+ 245:             .eq("id", id)
+ 246:         : sb
+ 247:             .from("printer_profiles")
+ 248:             .insert(values);
+ 249: 
+ 250:       const { error } = await query;
+ 251: 
+ 252:       if (error) {
+ 253:         throw new Error(error.message);
+ 254:       }
+ 255: 
+ 256:       return id ?? null;
+ 257:     },
+ 258: 
+ 259:     onSuccess: () => {
+ 260:       invalidate();
+ 261:       toast.success("Printer saved");
+ 262:     },
+ 263: 
+ 264:     onError: (e: Error) => {
+ 265:       toast.error(e.message);
+ 266:     },
+ 267:   });
+ 268: }
+ 269: 
+ 270: /**
+ 271:  * Queue a document for physical printing.
+ 272:  *
+ 273:  * For POS receipts, neo_print_enqueue is responsible for deciding whether the
+ 274:  * request is the first print or a reprint and enforcing the corresponding
+ 275:  * permission.
+ 276:  */
+ 277: export function useQueuePrint() {
+ 278:   const invalidate = useInvalidate();
+ 279: 
+ 280:   return useMutation({
+ 281:     mutationFn: (input: {
+ 282:       printer: string;
+ 283:       documentType: string;
+ 284:       title?: string;
+ 285:       payload?: Row;
+ 286:     }) =>
+ 287:       rpc<string>("neo_print_enqueue", {
+ 288:         _printer: input.printer,
+ 289:         _document_type: input.documentType,
+ 290:         _title: input.title ?? null,
+ 291:         _payload: input.payload ?? {},
+ 292:       }),
+ 293: 
+ 294:     onSuccess: () => {
+ 295:       invalidate();
+ 296: 
+ 297:       toast.success(
+ 298:         "Queued â€” record the result once you know whether it printed",
+ 299:       );
+ 300:     },
+ 301: 
+ 302:     onError: (e: Error) => {
+ 303:       if (
+ 304:         e.message.includes(
+ 305:           "receipt_reprint_permission_required",
+ 306:         )
+ 307:       ) {
+ 308:         toast.error(
+ 309:           "This receipt has already been printed. Reprint permission is required.",
+ 310:         );
+ 311:         return;
+ 312:       }
+ 313: 
+ 314:       toast.error(e.message);
+ 315:     },
+ 316:   });
+ 317: }
+ 318: 
+ 319: /**
+ 320:  * Record the real physical outcome of a queued print job.
+ 321:  *
+ 322:  * A successful result is what makes a POS receipt count as having been
+ 323:  * physically printed. Queueing alone does not.
+ 324:  */
+ 325: export function useRecordPrintResult() {
+ 326:   const invalidate = useInvalidate();
+ 327: 
+ 328:   return useMutation({
+ 329:     mutationFn: (input: {
+ 330:       job: string;
+ 331:       success: boolean;
+ 332:       error?: string;
+ 333:     }) =>
+ 334:       rpc<Row>("neo_print_record_result", {
+ 335:         _job: input.job,
+ 336:         _success: input.success,
+ 337:         _error: input.error ?? null,
+ 338:       }),
+ 339: 
+ 340:     onSuccess: (result) => {
+ 341:       invalidate();
+ 342: 
+ 343:       if (result?.["failed_over"]) {
+ 344:         toast.warning(
+ 345:           "Retries exhausted â€” sent to the backup printer",
+ 346:         );
+ 347:       } else if (
+ 348:         result?.["status"] === "queued"
+ 349:       ) {
+ 350:         toast.message(
+ 351:           "Failed â€” queued for another attempt",
+ 352:         );
+ 353:       } else if (
+ 354:         result?.["status"] === "failed"
+ 355:       ) {
+ 356:         toast.error(
+ 357:           "Failed with no backup printer configured",
+ 358:         );
+ 359:       } else if (
+ 360:         result?.["is_duplicate"] === true
+ 361:       ) {
+ 362:         toast.success(
+ 363:           "Receipt reprint recorded as printed",
+ 364:         );
+ 365:       } else {
+ 366:         toast.success(
+ 367:           "Recorded as printed",
+ 368:         );
+ 369:       }
+ 370:     },
+ 371: 
+ 372:     onError: (e: Error) => {
+ 373:       if (
+ 374:         e.message.includes(
+ 375:           "receipt_reprint_permission_required",
+ 376:         )
+ 377:       ) {
+ 378:         toast.error(
+ 379:           "Reprint permission is required for this receipt.",
+ 380:         );
+ 381:         return;
+ 382:       }
+ 383: 
+ 384:       toast.error(e.message);
+ 385:     },
+ 386:   });
+ 387: }
+ 388: 
+ 389: /**
+ 390:  * Retry the same physical print job.
+ 391:  *
+ 392:  * This does not create a new receipt copy classification. A failed first-print
+ 393:  * job remains a first-print job; a failed reprint remains a reprint.
+ 394:  */
+ 395: export function useRetryPrintJob() {
+ 396:   const invalidate = useInvalidate();
+ 397: 
+ 398:   return useMutation({
+ 399:     mutationFn: (job: string) =>
+ 400:       rpc("neo_print_retry", {
+ 401:         _job: job,
+ 402:       }),
+ 403: 
+ 404:     onSuccess: () => {
+ 405:       invalidate();
+ 406:       toast.success("Job re-queued");
+ 407:     },
+ 408: 
+ 409:     onError: (e: Error) => {
+ 410:       if (
+ 411:         e.message.includes(
+ 412:           "receipt_reprint_permission_required",
+ 413:         )
+ 414:       ) {
+ 415:         toast.error(
+ 416:           "Reprint permission is required for this receipt.",
+ 417:         );
+ 418:         return;
+ 419:       }
+ 420: 
+ 421:       toast.error(e.message);
+ 422:     },
+ 423:   });
+ 424: }
+
+========================================
+FILE: src/routes/_shell.pos.settings.tsx
+========================================
+   1: import { useEffect, useState } from "react";
+   2: import { createFileRoute } from "@tanstack/react-router";
+   3: import { PageHeader, SectionCard } from "@/components/common/DataDisplay";
+   4: import { Button } from "@/components/ui/button";
+   5: import { Input } from "@/components/ui/input";
+   6: import { Label } from "@/components/ui/label";
+   7: import { Switch } from "@/components/ui/switch";
+   8: import { EmptyState, IntegrationStatus, PosGuard, QueryState } from "@/components/pos/PosShared";
+   9: import { RecordDialog } from "./_shell.pos.floor";
+  10: import { DEFAULT_POS_SETTINGS, type PosSettings } from "@/lib/pos";
+  11: import {
+  12:   usePosSettings,
+  13:   usePrinterProfiles,
+  14:   useSavePosSettings,
+  15:   useSaveRecord,
+  16:   useStations,
+  17: } from "@/lib/pos-data";
+  18: 
+  19: export const Route = createFileRoute("/_shell/pos/settings")({
+  20:   head: () => ({
+  21:     meta: [
+  22:       { title: "POS Settings â€” NEÃ˜" },
+  23:       {
+  24:         name: "description",
+  25:         content:
+  26:           "Service charge, tax, tipping, printer profiles and the real connection state of payment providers.",
+  27:       },
+  28:       { property: "og:title", content: "POS Settings â€” NEÃ˜" },
+  29:       {
+  30:         property: "og:description",
+  31:         content:
+  32:           "Service charge, tax, tipping, printer profiles and the real connection state of payment providers.",
+  33:       },
+  34:       { property: "og:type", content: "website" },
+  35:       { name: "twitter:card", content: "summary" },
+  36:     ],
+  37:   }),
+  38:   component: () => (
+  39:     <PosGuard action="settings.manage" path="/pos/settings">
+  40:       <SettingsPage />
+  41:     </PosGuard>
+  42:   ),
+  43: });
+  44: 
+  45: function SettingsPage() {
+  46:   const query = usePosSettings();
+  47:   const save = useSavePosSettings();
+  48:   const printers = usePrinterProfiles();
+  49:   const stations = useStations();
+  50:   const savePrinter = useSaveRecord("printer_profiles");
+  51:   const [form, setForm] = useState<PosSettings>(DEFAULT_POS_SETTINGS);
+  52:   const [printerDialog, setPrinterDialog] = useState(false);
+  53: 
+  54:   useEffect(() => {
+  55:     if (query.data) setForm(query.data.settings);
+  56:   }, [query.data]);
+  57: 
+  58:   return (
+  59:     <div>
+  60:       <PageHeader
+  61:         eyebrow="Restaurant & POS"
+  62:         title="POS Settings"
+  63:         description="Trading rules applied to every bill, plus the honest connection state of each integration."
+  64:         actions={
+  65:           <Button
+  66:             disabled={save.isPending}
+  67:             onClick={() => save.mutate({ id: query.data?.id ?? null, settings: form })}
+  68:           >
+  69:             Save settings
+  70:           </Button>
+  71:         }
+  72:       />
+  73: 
+  74:       <div className="grid gap-6 lg:grid-cols-2">
+  75:         <SectionCard title="Charges & tax" description="Applied when an order is recalculated.">
+  76:           <div className="grid gap-4">
+  77:             <div className="grid gap-1.5">
+  78:               <Label htmlFor="sc">Service charge %</Label>
+  79:               <Input
+  80:                 id="sc"
+  81:                 inputMode="decimal"
+  82:                 value={String(form.serviceChargePercent)}
+  83:                 onChange={(e) =>
+  84:                   setForm({ ...form, serviceChargePercent: Number(e.target.value) || 0 })
+  85:                 }
+  86:               />
+  87:             </div>
+  88:             <div className="grid gap-1.5">
+  89:               <Label htmlFor="tax">Default tax rate %</Label>
+  90:               <Input
+  91:                 id="tax"
+  92:                 inputMode="decimal"
+  93:                 value={String(form.defaultTaxPercent)}
+  94:                 onChange={(e) =>
+  95:                   setForm({ ...form, defaultTaxPercent: Number(e.target.value) || 0 })
+  96:                 }
+  97:               />
+  98:             </div>
+  99:             <div className="flex items-center justify-between gap-3">
+ 100:               <Label htmlFor="shift">Require an open shift before taking cash</Label>
+ 101:               <Switch
+ 102:                 id="shift"
+ 103:                 checked={form.enforceShift}
+ 104:                 onCheckedChange={(v) => setForm({ ...form, enforceShift: v })}
+ 105:               />
+ 106:             </div>
+ 107:             <div className="grid gap-1.5">
+ 108:               <Label htmlFor="footer">Receipt footer</Label>
+ 109:               <Input
+ 110:                 id="footer"
+ 111:                 value={form.receiptFooter}
+ 112:                 onChange={(e) => setForm({ ...form, receiptFooter: e.target.value })}
+ 113:               />
+ 114:             </div>
+ 115:           </div>
+ 116:         </SectionCard>
+ 117: 
+ 118:         <SectionCard
+ 119:           title="Integrations"
+ 120:           description="Nothing here is simulated â€” a provider is only 'connected' once real credentials are configured."
+ 121:         >
+ 122:           <div className="space-y-3">
+ 123:             <IntegrationStatus
+ 124:               label="M-Pesa / mobile money"
+ 125:               status="not-configured"
+ 126:               detail="Mobile money payments are recorded as pending and are never auto-confirmed until a verified provider callback is received."
+ 127:               steps={[
+ 128:                 "Provide provider credentials",
+ 129:                 "Enable the payment callback endpoint",
+ 130:                 "Confirm a live test transaction",
+ 131:               ]}
+ 132:             />
+ 133:             <IntegrationStatus
+ 134:               label="Card terminal"
+ 135:               status="not-configured"
+ 136:               detail="Card settlements are captured with their reference and stay pending until the acquirer confirms them."
+ 137:             />
+ 138:             <IntegrationStatus
+ 139:               label="Guest room folio posting"
+ 140:               status="connected"
+ 141:               detail="Room charges post directly to an open folio for in-house guests, with duplicate protection."
+ 142:             />
+ 143:             <IntegrationStatus
+ 144:               label="Kitchen Display System"
+ 145:               status="connected"
+ 146:               detail="Station tickets update live over the realtime channel."
+ 147:             />
+ 148:           </div>
+ 149:         </SectionCard>
+ 150:       </div>
+ 151: 
+ 152:       <SectionCard
+ 153:         className="mt-6"
+ 154:         title="Printer profiles"
+ 155:         description="Where receipts and station tickets are printed."
+ 156:         actions={
+ 157:           <Button size="sm" variant="outline" onClick={() => setPrinterDialog(true)}>
+ 158:             Add printer
+ 159:           </Button>
+ 160:         }
+ 161:       >
+ 162:         <QueryState
+ 163:           isLoading={printers.isLoading}
+ 164:           error={printers.error}
+ 165:           isEmpty={(printers.data ?? []).length === 0}
+ 166:           empty={
+ 167:             <EmptyState
+ 168:               title="No printers configured"
+ 169:               description="Add a printer profile per station or cashier point."
+ 170:             />
+ 171:           }
+ 172:         >
+ 173:           <ul className="space-y-2 text-sm">
+ 174:             {(printers.data ?? []).map((p) => (
+ 175:               <li key={p.id} className="flex items-center justify-between gap-3">
+ 176:                 <span>{p.name}</span>
+ 177:                 <span className="text-xs text-muted-foreground">
+ 178:                   {p.operational_stations?.name ?? "General"}
+ 179:                 </span>
+ 180:               </li>
+ 181:             ))}
+ 182:           </ul>
+ 183:         </QueryState>
+ 184:       </SectionCard>
+ 185: 
+ 186:       <RecordDialog
+ 187:         open={printerDialog}
+ 188:         onOpenChange={setPrinterDialog}
+ 189:         title="Add printer profile"
+ 190:         fields={[
+ 191:           { name: "name", label: "Printer name", required: true },
+ 192:           { name: "connection_target", label: "Address or device identifier" },
+ 193:         ]}
+ 194:         selects={[
+ 195:           {
+ 196:             name: "station_id",
+ 197:             label: "Station",
+ 198:             options: (stations.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+ 199:           },
+ 200:         ]}
+ 201:         onSubmit={(values) => savePrinter.mutate({ values })}
+ 202:       />
+ 203:     </div>
+ 204:   );
+ 205: }
+
+========================================
+FILE: supabase/migrations/20260920043536_cee5956b-8b70-4c91-b4f3-61f61b2ef897.sql
+========================================
+   1: 
+   2: ALTER TABLE public.printer_profiles
+   3:   ADD COLUMN IF NOT EXISTS department_id uuid REFERENCES public.departments(id),
+   4:   ADD COLUMN IF NOT EXISTS fallback_printer_id uuid REFERENCES public.printer_profiles(id),
+   5:   ADD COLUMN IF NOT EXISTS retry_limit integer NOT NULL DEFAULT 3,
+   6:   ADD COLUMN IF NOT EXISTS retry_backoff_seconds integer NOT NULL DEFAULT 30,
+   7:   ADD COLUMN IF NOT EXISTS health_status text NOT NULL DEFAULT 'unknown',
+   8:   ADD COLUMN IF NOT EXISTS last_error text,
+   9:   ADD COLUMN IF NOT EXISTS last_success_at timestamptz,
+  10:   ADD COLUMN IF NOT EXISTS last_failure_at timestamptz;
+  11: 
+  12: ALTER TABLE public.print_jobs
+  13:   ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES public.branches(id),
+  14:   ADD COLUMN IF NOT EXISTS original_printer_id uuid REFERENCES public.printer_profiles(id),
+  15:   ADD COLUMN IF NOT EXISTS title text,
+  16:   ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0,
+  17:   ADD COLUMN IF NOT EXISTS max_attempts integer NOT NULL DEFAULT 3,
+  18:   ADD COLUMN IF NOT EXISTS last_error text,
+  19:   ADD COLUMN IF NOT EXISTS failed_over boolean NOT NULL DEFAULT false,
+  20:   ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  21:   ADD COLUMN IF NOT EXISTS idempotency_key text,
+  22:   ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+  23: 
+  24: CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_idem_uidx
+  25:   ON public.print_jobs(organization_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+  26: CREATE INDEX IF NOT EXISTS print_jobs_queue_idx ON public.print_jobs(organization_id, status, next_attempt_at);
+  27: CREATE INDEX IF NOT EXISTS print_jobs_printer_idx ON public.print_jobs(printer_id, created_at DESC);
+  28: 
+  29: GRANT SELECT, INSERT, UPDATE ON public.print_jobs TO authenticated;
+  30: GRANT ALL ON public.print_jobs TO service_role;
+  31: 
+  32: CREATE OR REPLACE FUNCTION public.neo_print_enqueue(
+  33:   _printer uuid, _document_type text, _title text DEFAULT NULL,
+  34:   _payload jsonb DEFAULT '{}'::jsonb, _idempotency text DEFAULT NULL)
+  35: RETURNS uuid
+  36: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+  37: DECLARE p public.printer_profiles; j uuid;
+  38: BEGIN
+  39:   SELECT * INTO p FROM public.printer_profiles WHERE id = _printer;
+  40:   IF p.id IS NULL THEN RAISE EXCEPTION 'Printer not found'; END IF;
+  41:   IF p.organization_id <> current_org_id() THEN RAISE EXCEPTION 'Printer belongs to another workspace'; END IF;
+  42:   IF NOT (has_permission('pos','receipts.print') OR has_permission('pos','settings.manage') OR is_org_admin_for(p.organization_id)) THEN
+  43:     RAISE EXCEPTION 'permission_denied';
+  44:   END IF;
+  45:   IF _idempotency IS NOT NULL THEN
+  46:     SELECT id INTO j FROM public.print_jobs WHERE organization_id = p.organization_id AND idempotency_key = _idempotency;
+  47:     IF j IS NOT NULL THEN RETURN j; END IF;
+  48:   END IF;
+  49:   INSERT INTO public.print_jobs(organization_id, branch_id, printer_id, original_printer_id, document_type, title, payload, status, max_attempts, idempotency_key, created_by)
+  50:   VALUES (p.organization_id, p.branch_id, p.id, p.id, _document_type, _title, coalesce(_payload,'{}'::jsonb), 'queued', greatest(1, coalesce(p.retry_limit,3)), _idempotency, auth.uid())
+  51:   RETURNING id INTO j;
+  52:   RETURN j;
+  53: END $$;
+  54: 
+  55: CREATE OR REPLACE FUNCTION public.neo_print_record_result(_job uuid, _success boolean, _error text DEFAULT NULL)
+  56: RETURNS jsonb
+  57: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+  58: DECLARE jb public.print_jobs; fb uuid; new_status text; fell_over boolean := false; backoff integer;
+  59: BEGIN
+  60:   SELECT * INTO jb FROM public.print_jobs WHERE id = _job;
+  61:   IF jb.id IS NULL THEN RAISE EXCEPTION 'Print job not found'; END IF;
+  62:   IF jb.organization_id <> current_org_id() THEN RAISE EXCEPTION 'Print job belongs to another workspace'; END IF;
+  63:   IF NOT (has_permission('pos','receipts.print') OR has_permission('pos','settings.manage') OR is_org_admin_for(jb.organization_id)) THEN
+  64:     RAISE EXCEPTION 'permission_denied';
+  65:   END IF;
+  66: 
+  67:   IF _success THEN
+  68:     UPDATE public.print_jobs SET status='completed', attempts=attempts+1, completed_at=now(), last_error=NULL WHERE id=_job;
+  69:     UPDATE public.printer_profiles SET health_status='online', last_success_at=now(), last_checked_at=now(), last_error=NULL WHERE id=jb.printer_id;
+  70:     RETURN jsonb_build_object('status','completed','failed_over',false);
+  71:   END IF;
+  72: 
+  73:   SELECT fallback_printer_id, coalesce(retry_backoff_seconds,30) INTO fb, backoff
+  74:   FROM public.printer_profiles WHERE id = jb.printer_id;
+  75: 
+  76:   UPDATE public.printer_profiles
+  77:      SET health_status='error', last_failure_at=now(), last_checked_at=now(), last_error=_error
+  78:    WHERE id = jb.printer_id;
+  79: 
+  80:   IF jb.attempts + 1 < jb.max_attempts THEN
+  81:     new_status := 'queued';
+  82:     UPDATE public.print_jobs
+  83:        SET status='queued', attempts=attempts+1, last_error=_error,
+  84:            next_attempt_at = now() + make_interval(secs => backoff)
+  85:      WHERE id=_job;
+  86:   ELSIF fb IS NOT NULL AND NOT jb.failed_over THEN
+  87:     new_status := 'queued'; fell_over := true;
+  88:     UPDATE public.print_jobs
+  89:        SET status='queued', attempts=0, printer_id=fb, failed_over=true, last_error=_error, next_attempt_at=now()
+  90:      WHERE id=_job;
+  91:   ELSE
+  92:     new_status := 'failed';
+  93:     UPDATE public.print_jobs SET status='failed', attempts=attempts+1, last_error=_error WHERE id=_job;
+  94:   END IF;
+  95: 
+  96:   RETURN jsonb_build_object('status', new_status, 'failed_over', fell_over);
+  97: END $$;
+  98: 
+  99: CREATE OR REPLACE FUNCTION public.neo_print_retry(_job uuid)
+ 100: RETURNS uuid
+ 101: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+ 102: DECLARE jb public.print_jobs;
+ 103: BEGIN
+ 104:   SELECT * INTO jb FROM public.print_jobs WHERE id=_job;
+ 105:   IF jb.id IS NULL THEN RAISE EXCEPTION 'Print job not found'; END IF;
+ 106:   IF jb.organization_id <> current_org_id() THEN RAISE EXCEPTION 'Print job belongs to another workspace'; END IF;
+ 107:   IF NOT (has_permission('pos','receipts.print') OR has_permission('pos','settings.manage') OR is_org_admin_for(jb.organization_id)) THEN
+ 108:     RAISE EXCEPTION 'permission_denied';
+ 109:   END IF;
+ 110:   UPDATE public.print_jobs SET status='queued', attempts=0, next_attempt_at=now(), last_error=NULL WHERE id=_job;
+ 111:   RETURN _job;
+ 112: END $$;
+ 113: 
+ 114: REVOKE ALL ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) FROM PUBLIC;
+ 115: REVOKE ALL ON FUNCTION public.neo_print_record_result(uuid,boolean,text) FROM PUBLIC;
+ 116: REVOKE ALL ON FUNCTION public.neo_print_retry(uuid) FROM PUBLIC;
+ 117: GRANT EXECUTE ON FUNCTION public.neo_print_enqueue(uuid,text,text,jsonb,text) TO authenticated;
+ 118: GRANT EXECUTE ON FUNCTION public.neo_print_record_result(uuid,boolean,text) TO authenticated;
+ 119: GRANT EXECUTE ON FUNCTION public.neo_print_retry(uuid) TO authenticated;

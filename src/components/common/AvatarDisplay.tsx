@@ -103,9 +103,9 @@ export function AvatarUploader({
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <Avatar path={path} name={name} size={72} />
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-4">
+      <Avatar path={path} name={name} size={72} className="shrink-0" />
+      <div className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-2">
         <input
           ref={input}
           type="file"

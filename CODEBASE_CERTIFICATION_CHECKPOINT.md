@@ -1,5 +1,7 @@
 # NEØ codebase verification checkpoint — 23 September 2026
 
+> Historical test checkpoint. For current source, deployment and database evidence, read [the active execution queue](docs/repair/ACTIVE-EXECUTION-QUEUE.md). These September test counts are not current workflow acceptance.
+
 ## Outcome
 
 - Production build: **PASS**

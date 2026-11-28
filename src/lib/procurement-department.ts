@@ -1,3 +1,5 @@
+import { invalidateSupplyViews } from "@/lib/supply-view-refresh";
+import { createDepartmentTask } from "@/lib/task-creation";
 /**
  * Procurement department layer.
  *
@@ -7,6 +9,7 @@
  * pay a supplier. Those boundaries are enforced in the database as well as
  * here, so this layer only ever reads receiving and payment status.
  */
+import { useRef } from "react";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -45,10 +48,7 @@ export function useProcurementContext() {
 
 function useProcurementInvalidate() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["procurement-department"] });
-    void qc.invalidateQueries({ queryKey: ["inventory"] });
-  };
+  return (...keys: string[]) => invalidateSupplyViews(qc, keys);
 }
 
 import { useScopedDepartmentByKey } from "@/lib/scoped-options";
@@ -62,20 +62,42 @@ export function useProcurementDepartment() {
  * ------------------------------------------------------------------ */
 
 export function useSupplierQuotations(requestId: string | null) {
-  const { organizationId } = useProcurementContext();
+  const { organizationId, branchId } = useProcurementContext();
   return useQuery({
-    queryKey: ["procurement-department", "quotations", organizationId, requestId],
+    queryKey: ["procurement-department", "quotations", organizationId, branchId, requestId],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = db
         .from("supplier_quotations")
-        .select("*, suppliers:supplier_id(id, name, payment_terms, credit_terms_days, rating, on_time_deliveries, late_deliveries)")
+        .select(
+          "*, suppliers:supplier_id(id, name, payment_terms, credit_terms_days, rating, on_time_deliveries, late_deliveries)",
+        )
         .order("created_at", { ascending: false })
         .limit(200);
+      q = q.eq("organization_id", organizationId);
+      if (branchId) q = q.eq("branch_id", branchId);
       if (requestId) q = q.eq("request_id", requestId);
+      q = q.neq("status", "superseded");
       const { data, error } = await q;
       if (error) throw new Error(error.message);
       return (data ?? []) as ProcRow[];
+    },
+  });
+}
+
+export function useSelectedSupplierQuote(requestId: string | null) {
+  return useQuery({
+    queryKey: ["procurement-department", "selected-quote", requestId],
+    enabled: Boolean(requestId),
+    queryFn: async () => {
+      const { data, error } = await db.from("supplier_quotations")
+        .select("id, supplier_id, quotation_number, total_amount, currency, valid_until, suppliers(name), supplier_quotation_lines(id, quantity, unit, unit_price, tax_rate)")
+        .eq("request_id", requestId)
+        .eq("selected", true)
+        .eq("status", "selected")
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data as ProcRow | null;
     },
   });
 }
@@ -99,36 +121,32 @@ export function useQuotationLines(quotationId: string | null) {
 
 export function useRecordQuotation() {
   const invalidate = useProcurementInvalidate();
-  const { organizationId, branchId } = useProcurementContext();
   return useMutation({
     mutationFn: async (input: {
       requestId: string;
       supplierId: string;
-      totalAmount: number;
+      lines: { request_line_id: string; unit_price: number; tax_rate: number }[];
       validUntil?: string | null;
       notes?: string | null;
-      quotationNumber?: string | null;
     }) => {
-      if (!organizationId) throw new Error("No organisation context");
       if (!input.supplierId) throw new Error("Select the supplier who quoted");
-      const { error } = await db.from("supplier_quotations").insert({
-        organization_id: organizationId,
-        branch_id: branchId ?? null,
-        supplier_id: input.supplierId,
-        request_id: input.requestId,
-        quotation_number:
-          input.quotationNumber?.trim() ||
-          `QT-${new Date().toISOString().slice(2, 7).replace("-", "")}-${Math.floor(Math.random() * 9000 + 1000)}`,
-        status: "received",
-        valid_until: input.validUntil || null,
-        total_amount: input.totalAmount,
-        notes: input.notes ?? null,
+      if (!input.lines.length || input.lines.some((line) =>
+        !Number.isFinite(line.unit_price) || line.unit_price < 0 ||
+        !Number.isFinite(line.tax_rate) || line.tax_rate < 0 || line.tax_rate > 100))
+        throw new Error("Enter valid prices for every requested item");
+      const { error } = await guardedRpc(db, "neo_procurement_record_supplier_quote", {
+        _request: input.requestId,
+        _supplier: input.supplierId,
+        _lines: input.lines,
+        _valid_until: input.validUntil || null,
+        _notes: input.notes ?? null,
       });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Quotation recorded for comparison");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -137,33 +155,22 @@ export function useRecordQuotation() {
 /** Recommend a supplier. Awarding above the buyer's authority still needs approval. */
 export function useSelectQuotation() {
   const invalidate = useProcurementInvalidate();
-  const { user } = useAuth();
   return useMutation({
-    mutationFn: async (input: { quotationId: string; requestId: string | null; reason: string }) => {
+    mutationFn: async (input: { quotationId: string; requestId: string | null; reason: string; singleSource: boolean }) => {
       if (!input.reason.trim()) throw new Error("Record why this supplier is recommended");
-      if (input.requestId) {
-        const { error: clearError } = await db
-          .from("supplier_quotations")
-          .update({ selected: false, updated_at: new Date().toISOString() })
-          .eq("request_id", input.requestId);
-        if (clearError) throw new Error(clearError.message);
-      }
-      const { error } = await db
-        .from("supplier_quotations")
-        .update({
-          selected: true,
-          status: "selected",
-          selected_by: user?.id ?? null,
-          selected_at: new Date().toISOString(),
-          selection_reason: input.reason.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", input.quotationId);
+      if (!input.requestId) throw new Error("Choose a request before recommending a quote");
+      const { error } = await guardedRpc(db, "neo_procurement_recommend_supplier_quote", {
+        _request: input.requestId,
+        _quotation: input.quotationId,
+        _reason: input.reason.trim(),
+        _single_source: input.singleSource,
+      });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Supplier recommended — the order still follows the approval rules");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -189,16 +196,20 @@ export const RFQ_DISPATCH_STATES = {
 export type RfqDispatchState = keyof typeof RFQ_DISPATCH_STATES;
 
 export function useRfqs(requestId: string | null) {
-  const { organizationId } = useProcurementContext();
+  const { organizationId, branchId } = useProcurementContext();
   return useQuery({
-    queryKey: ["procurement-department", "rfqs", organizationId, requestId],
+    queryKey: ["procurement-department", "rfqs", organizationId, branchId, requestId],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = db
         .from("rfqs")
-        .select("*, rfq_suppliers(id, supplier_id, dispatch_state, dispatch_channel, dispatched_at, dispatch_note, responded_at, suppliers:supplier_id(id, name, email, phone, whatsapp))")
+        .select(
+          "*, rfq_suppliers(id, supplier_id, dispatch_state, dispatch_channel, dispatched_at, dispatch_note, responded_at, suppliers:supplier_id(id, name, email, phone, whatsapp))",
+        )
         .order("created_at", { ascending: false })
         .limit(100);
+      q = q.eq("organization_id", organizationId);
+      if (branchId) q = q.eq("branch_id", branchId);
       if (requestId) q = q.eq("request_id", requestId);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
@@ -210,8 +221,7 @@ export function useRfqs(requestId: string | null) {
 /** Raise one RFQ against a purchase request and invite one or more suppliers. */
 export function useCreateRfq() {
   const invalidate = useProcurementInvalidate();
-  const { organizationId, branchId } = useProcurementContext();
-  const { user } = useAuth();
+  const attempt = useRef<{ fingerprint: string; id: string } | null>(null);
   return useMutation({
     mutationFn: async (input: {
       requestId: string;
@@ -220,47 +230,34 @@ export function useCreateRfq() {
       closesAt?: string | null;
       notes?: string | null;
     }) => {
-      if (!organizationId) throw new Error("No organisation context");
       if (!input.requestId) throw new Error("Select the purchase request this RFQ sources");
       if (input.supplierIds.length === 0) throw new Error("Invite at least one supplier");
-
-      const { data: seq } = await guardedRpc(db, "next_document_number", { _doc_type: "rfq" });
-      const rfqNumber =
-        (seq as string | null) ??
-        `RFQ-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 9000 + 1000)}`;
-
-      const { data: rfq, error } = await db
-        .from("rfqs")
-        .insert({
-          organization_id: organizationId,
-          branch_id: branchId ?? null,
-          request_id: input.requestId,
-          rfq_number: rfqNumber,
-          title: input.title?.trim() || null,
-          status: "issued",
-          issued_at: new Date().toISOString(),
-          closes_at: input.closesAt || null,
-          notes: input.notes ?? null,
-          created_by: user?.id ?? null,
-        })
-        .select("id, rfq_number")
-        .single();
+      const fingerprint = JSON.stringify({
+        requestId: input.requestId,
+        supplierIds: [...input.supplierIds].sort(),
+        closesAt: input.closesAt || null,
+        title: input.title?.trim() || null,
+        notes: input.notes?.trim() || null,
+      });
+      if (attempt.current?.fingerprint !== fingerprint) {
+        attempt.current = { fingerprint, id: crypto.randomUUID() };
+      }
+      const { data, error } = await guardedRpc(db, "neo_procurement_create_rfq", {
+        _request: input.requestId,
+        _suppliers: [...new Set(input.supplierIds)],
+        _closes_at: input.closesAt || null,
+        _title: input.title?.trim() || null,
+        _notes: input.notes?.trim() || null,
+        _attempt: attempt.current.id,
+      });
       if (error) throw new Error(error.message);
-
-      const { error: inviteError } = await db.from("rfq_suppliers").insert(
-        input.supplierIds.map((supplierId) => ({
-          organization_id: organizationId,
-          rfq_id: (rfq as { id: string }).id,
-          supplier_id: supplierId,
-          dispatch_state: "prepared",
-        })),
-      );
-      if (inviteError) throw new Error(inviteError.message);
-      return rfq as { id: string; rfq_number: string };
+      return data as { id: string; rfq_number: string };
     },
     onSuccess: (rfq) => {
-      invalidate();
-      toast.success(`${rfq.rfq_number} prepared — nothing is sent until you despatch it`);
+      attempt.current = null;
+      const refresh = invalidate();
+      toast.success(`${rfq.rfq_number} issued. Eligible invited suppliers can access it through their portal. External delivery is recorded separately.`);
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -269,7 +266,6 @@ export function useCreateRfq() {
 /** Record how an invitation actually left the building. Never assumed, always stated. */
 export function useRecordRfqDispatch() {
   const invalidate = useProcurementInvalidate();
-  const { user } = useAuth();
   return useMutation({
     mutationFn: async (input: {
       inviteId: string;
@@ -277,27 +273,23 @@ export function useRecordRfqDispatch() {
       channel?: string | null;
       note?: string | null;
     }) => {
-      if (!(input.state in RFQ_DISPATCH_STATES)) throw new Error("Unknown despatch state");
-      const { error } = await db
-        .from("rfq_suppliers")
-        .update({
-          dispatch_state: input.state,
-          dispatch_channel: input.channel ?? null,
-          dispatch_note: input.note ?? null,
-          dispatched_at: input.state === "prepared" ? null : new Date().toISOString(),
-          dispatched_by: input.state === "prepared" ? null : (user?.id ?? null),
-        })
-        .eq("id", input.inviteId);
+      if (input.state !== "marked-sent" || !input.channel)
+        throw new Error("Confirm a manual send and its channel");
+      const { error } = await guardedRpc(db, "neo_procurement_record_rfq_dispatch", {
+        _invite: input.inviteId,
+        _channel: input.channel,
+        _note: input.note ?? null,
+      });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Supplier communication recorded");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 /* ------------------------------------------------------------------ *
  * Supplier order follow-up: ordered vs received vs outstanding
@@ -314,7 +306,13 @@ export function useOrderTracking() {
         .select(
           "*, suppliers:supplier_id(id, name, phone, email), purchase_order_lines(id, description, quantity, received_quantity, accepted_quantity, unit, unit_price)",
         )
-        .in("status", ["approved", "pending-delivery", "sent", "partially-received", "partially-invoiced"])
+        .in("status", [
+          "approved",
+          "pending-delivery",
+          "sent",
+          "partially-received",
+          "partially-invoiced",
+        ])
         .order("expected_date", { ascending: true, nullsFirst: false })
         .limit(200);
       if (branchId) q = q.eq("branch_id", branchId);
@@ -327,7 +325,9 @@ export function useOrderTracking() {
           (sum, l) => sum + num(l["accepted_quantity"] ?? l["received_quantity"]),
           0,
         );
-        const expected = order["expected_date"] ? new Date(String(order["expected_date"])).getTime() : null;
+        const expected = order["expected_date"]
+          ? new Date(String(order["expected_date"])).getTime()
+          : null;
         return {
           ...order,
           ordered_quantity: ordered,
@@ -419,10 +419,15 @@ export function useCreateProcurementTask() {
   const { user } = useAuth();
   const department = useProcurementDepartment();
   return useMutation({
-    mutationFn: async (input: { title: string; dueAt?: string | null; priority?: string; description?: string }) => {
+    mutationFn: async (input: {
+      title: string;
+      dueAt?: string | null;
+      priority?: string;
+      description?: string;
+    }) => {
       if (!organizationId) throw new Error("No organisation context");
       if (!input.title.trim()) throw new Error("Give the task a title");
-      const { error } = await db.from("tasks").insert({
+      return await createDepartmentTask(db, {
         organization_id: organizationId,
         branch_id: branchId ?? null,
         department_id: department.data?.["id"] ? String(department.data["id"]) : null,
@@ -434,11 +439,11 @@ export function useCreateProcurementTask() {
         assignee_id: user?.id ?? null,
         created_by: user?.id ?? null,
       });
-      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Procurement task created");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -459,8 +464,9 @@ export function useUpdateProcurementTask() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Task updated");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -517,8 +523,9 @@ export function useReportProcurementStockNeed() {
       return data as string;
     },
     onSuccess: () => {
-      invalidate();
+      const refresh = invalidate();
       toast.success("Office supply need recorded for Stores");
+      return refresh;
     },
     onError: (e: Error) => toast.error(e.message),
   });

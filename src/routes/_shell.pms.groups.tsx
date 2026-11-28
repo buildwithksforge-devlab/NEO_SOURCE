@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Users } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowUpRight, Plus, Receipt, Users } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill } from "@/components/common/DataDisplay";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +35,8 @@ import { EmptyState, PmsGuard, QueryState } from "@/components/pms/PmsShared";
 import { formatDateTime, money, nightsBetween, titleCase } from "@/lib/pms";
 import { useGroupBookings, useRoomTypes } from "@/lib/pms-data";
 import { useAuth } from "@/lib/auth";
+import { useBranchScope } from "@/lib/branches";
+import { formatDocumentMoney } from "@/lib/document-identity";
 import {
   useAddRoomingRow,
   useCreateGroupBooking,
@@ -42,6 +44,7 @@ import {
   useGroupBlocks,
   useGroupBooking,
   useGroupEvents,
+  useGroupMasterFolio,
   useRecordGroupDeposit,
   useReleaseBlock,
   useRoomingList,
@@ -606,24 +609,49 @@ function RoomingTab({ groupId }: { groupId: string }) {
 function DepositTab({ groupId }: { groupId: string }) {
   const group = useGroupBooking(groupId);
   const deposit = useRecordGroupDeposit();
+  const { can, isAdmin } = useAuth();
+  const { branches } = useBranchScope();
   const [form, setForm] = useState({ amount: "", method: "bank-transfer", reference: "" });
   const g = group.data;
+  const master = useGroupMasterFolio(groupId, g?.master_folio_id, g?.branch_id);
+  const currency = master.data?.currency ?? branches.find((branch) => branch.id === g?.branch_id)?.currency;
+  const canPost = isAdmin || can("front-office", "groups", "edit") || can("pms", "write");
+  const amount = Number(form.amount);
+  const reference = form.reference.trim();
+  const amountIsValid = /^(?:\d+|\d*\.\d{1,2})$/.test(form.amount.trim()) && Number.isFinite(amount) && amount > 0;
+  const formatAmount = (value: number) => currency ? formatDocumentMoney(value, currency) : money(value);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <Metric label="Deposit required" value={money(g?.deposit_required ?? 0)} />
-        <Metric label="Deposit paid" value={money(g?.deposit_paid ?? 0)} />
+        <Metric label="Deposit required" value={g ? formatAmount(g.deposit_required) : "—"} />
+        <Metric label="Deposit paid" value={g ? formatAmount(g.deposit_paid) : "—"} />
         <Metric label="Due date" value={g?.deposit_due_date ?? "Not set"} />
       </div>
 
+      <SectionCard title="Group master folio">
+        {master.isLoading ? <p role="status" className="text-sm text-muted-foreground">Loading the master folio…</p>
+          : master.isError || (g?.master_folio_id && !master.data) ? (
+            <div className="flex flex-wrap items-center gap-3"><p className="text-sm">The saved master folio could not be verified.</p>
+              <Button size="sm" variant="outline" onClick={() => void master.refetch()}>Retry folio</Button></div>
+          ) : master.data ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3"><Receipt className="size-5 text-muted-foreground" aria-hidden />
+                <div><p className="font-semibold">{master.data.folio_number}</p>
+                  <p className="text-sm text-muted-foreground">{titleCase(master.data.status)} · Balance {formatAmount(master.data.balance)}</p></div></div>
+              <Button asChild size="sm" variant="outline"><Link to="/pms/folios/$id" params={{ id: master.data.id }}>Open folio <ArrowUpRight className="size-4" aria-hidden /></Link></Button>
+            </div>
+          ) : g ? <p className="text-sm text-muted-foreground">The first deposit opens the master folio for this group.</p> : null}
+      </SectionCard>
+
+      {canPost ? (
       <SectionCard
         title="Record a deposit"
-        description="Posts to the group master folio. A repeated reference will not post twice."
+        description="Use the receipt or provider reference so a retry can find the original deposit."
       >
         <div className="grid gap-3 md:grid-cols-3">
           <Field
-            label="Amount"
+            label={currency ? `Amount (${currency})` : "Amount"}
             value={form.amount}
             onChange={(v) => setForm({ ...form, amount: v })}
           />
@@ -643,26 +671,28 @@ function DepositTab({ groupId }: { groupId: string }) {
             </Select>
           </div>
           <Field
-            label="Reference"
+            label="Receipt or payment reference"
             value={form.reference}
             onChange={(v) => setForm({ ...form, reference: v })}
           />
         </div>
         <Button
           className="mt-4"
-          disabled={!form.amount || Number(form.amount) <= 0 || deposit.isPending}
+          disabled={!g || Boolean(g.master_folio_id && (!master.data || master.data.status !== "open")) || !amountIsValid || !reference || reference.length > 120 || deposit.isPending}
           onClick={() =>
             deposit.mutate({
               group: groupId,
-              amount: Number(form.amount),
+              amount,
               method: form.method,
-              reference: form.reference,
-            })
+              reference,
+            }, { onSuccess: () => setForm({ amount: "", method: form.method, reference: "" }) })
           }
         >
-          Post deposit
+          {deposit.isPending ? "Posting deposit…" : "Post deposit"}
         </Button>
+        {deposit.data ? <p role="status" className="mt-3 text-sm text-muted-foreground">{deposit.data.duplicate ? "Original deposit found." : "Deposit saved."} <Link className="font-semibold underline" to="/pms/folios/$id" params={{ id: deposit.data.folio_id }}>View the master folio</Link></p> : null}
       </SectionCard>
+      ) : null}
 
       <SectionCard
         title="Billing and cancellation terms"

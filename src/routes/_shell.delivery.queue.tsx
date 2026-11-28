@@ -15,6 +15,7 @@ import { DeliveryPinDialog } from "@/components/delivery/DeliveryPinPanel";
 import { Button } from "@/components/ui/button";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
 import {
+  deliveryPaymentSettled,
   deliveryStageLabel,
   money,
   orderStatusTone,
@@ -121,7 +122,8 @@ function Page() {
         <Button size="sm" variant="ghost" onClick={() => setPinFor(order)}>
           <KeyRound className="mr-1.5 size-3.5" /> PIN
         </Button>
-        {action === "bill" ? (
+        {action === "bill" &&
+        !deliveryPaymentSettled(String(order["payment_status"] ?? "")) ? (
           <Button
             size="sm"
             variant="outline"

@@ -1,6 +1,7 @@
 import { QueryState } from "@/components/common/StateSystem";
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PermittedLink as Link } from "@/components/common/PermittedLink";
 import {
   BedDouble,
   CalendarCheck2,
@@ -18,6 +19,8 @@ import { NeoDatePicker } from "@/components/common/DatePicker";
 import { useAuth } from "@/lib/auth";
 import { money, today } from "@/lib/pms";
 import { useFrontOfficeMetrics, usePostAccommodation } from "@/lib/pms-data";
+import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useBusinessDays } from "@/lib/finance-controls";
 import { PmsGuard } from "@/components/pms/PmsShared";
 import { MovementBoard } from "@/components/pms/MovementBoard";
 
@@ -48,10 +51,69 @@ export const Route = createFileRoute("/_shell/pms/")({
 });
 
 function FrontOfficeDashboard() {
-  const { profile, can } = useAuth();
+  const { can } = useAuth();
   const [date, setDate] = useState(today());
-  const metrics = useFrontOfficeMetrics(profile?.branch_id ?? null, date);
-  const postNight = usePostAccommodation();
+  // Dashboard figures and financial posting use the same selected property.
+  const { branchId: postingBranchId } = useActivePropertyFilter();
+  const metrics = useFrontOfficeMetrics(postingBranchId, date);
+  const businessDays = useBusinessDays();
+  const postAccommodation = usePostAccommodation();
+
+  const openPostingDays = (businessDays.data ?? []).filter(
+    (day) =>
+      day.status === "open" &&
+      day.branch_id === postingBranchId,
+  );
+
+  const postingDay =
+    postingBranchId && openPostingDays.length === 1
+      ? openPostingDays[0]
+      : null;
+
+  const canPostAccommodation =
+    Boolean(postingBranchId) &&
+    Boolean(postingDay) &&
+    !businessDays.isLoading &&
+    !businessDays.isFetching &&
+    !businessDays.isError &&
+    !postAccommodation.isPending;
+
+  const postingUnavailableReason = !postingBranchId
+    ? "Select one property before posting accommodation."
+    : businessDays.isLoading || businessDays.isFetching
+      ? "Checking the property's business day."
+      : businessDays.isError
+        ? "Business-day information could not be loaded."
+        : openPostingDays.length === 0
+          ? "This property has no open business day."
+          : openPostingDays.length > 1
+            ? "Multiple open business days detected. Resolve this before posting."
+            : postAccommodation.isPending
+              ? "Accommodation posting is in progress."
+              : `Post accommodation for ${postingDay?.business_date}`;
+
+  function handlePostAccommodation() {
+    if (
+      !postingBranchId ||
+      !postingDay ||
+      !canPostAccommodation
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Post accommodation charges for ${postingDay.business_date}?\n\n` +
+        "This will charge eligible in-house guest folios for the selected property only.",
+    );
+
+    if (!confirmed) return;
+
+    postAccommodation.mutate({
+      branch: postingBranchId,
+      operationalDate: postingDay.business_date,
+    });
+  }
+
 
   const m = metrics.data;
   const occupancy =
@@ -73,10 +135,10 @@ function FrontOfficeDashboard() {
               quick={["today", "tomorrow", "next-7", "this-month"]}
             />
             <Button asChild variant="outline" size="sm">
-              <Link to="/pms/availability">Check availability</Link>
+              <Link to="/pms/availability" hideWhenDenied>Check availability</Link>
             </Button>
             <Button asChild size="sm">
-              <Link to="/pms/reservations/new">New reservation</Link>
+              <Link to="/pms/reservations/new" hideWhenDenied>New reservation</Link>
             </Button>
           </div>
         }
@@ -181,14 +243,19 @@ function FrontOfficeDashboard() {
           title="Night audit"
           description="Post the nightly accommodation charge to every in-house folio. Running it twice never double-charges."
           actions={
-            can("pms", "folios.create") ? (
+            can("pms", "folios.post_charge") ? (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => postNight.mutate(date)}
-                disabled={postNight.isPending}
+                title={postingUnavailableReason}
+                disabled={!canPostAccommodation}
+                onClick={handlePostAccommodation}
               >
-                {postNight.isPending ? "Posting…" : "Post accommodation"}
+                {postAccommodation.isPending
+                  ? "Posting accommodation..."
+                  : postingDay
+                    ? `Post accommodation · ${postingDay.business_date}`
+                    : "Post accommodation"}
               </Button>
             ) : null
           }

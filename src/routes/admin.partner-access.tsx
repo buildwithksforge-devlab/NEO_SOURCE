@@ -82,7 +82,7 @@ function PartnerAccessPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("suppliers")
-        .select("id, name")
+        .select("id, name").eq("active", true)
         .order("name")
         .limit(500);
       if (error) throw new Error(error.message);

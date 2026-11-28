@@ -1,0 +1,303 @@
+{
+  "updated": "2026-11-22",
+  "active_task": "WF11-T01",
+  "preview_release": {
+    "commit": "7909473",
+    "build": "1de6c43a2f96143c",
+    "worker_version": "c4444243-145c-4c5c-8d2a-1e2b26d3819d",
+    "verified_public_evidence": "Staff PIN, Guest Services, Transfers and Order History returned HTTP 200 with the new Preview build ID. The new Transfers and Orders assets were fetched and verified. Signed-in actions and property-level workflow acceptance remain open.",
+    "preflight": "The exact committed release passed TypeScript, production build smoke and the required rollout RPC checks. Guest and adjacent commerce tests passed 87 focused checks. The preceding owner and staff station entry change passed 53 focused local checks."
+  },
+  "rule": "Finish and verify the scoped task, record remaining installation/live evidence, then take the next independent task. A local pass does not close its workflow chain.",
+  "tasks": [
+    {
+      "id": "WF11-T01",
+      "chains": ["WF11", "WF18", "WF23"],
+      "title": "Protect unpaid POS-to-room transfers and prevent subsequent POS collection",
+      "status": "AWAITING_LIVE_RESULTS",
+      "confirmed_problem": "The original transfer could post the full bill despite prior POS money and offer collection again. The current source includes the partial-payment allocation and the collection guard.",
+      "finish_checks": [
+        "An unpaid sent/served bill posts exactly one original-source folio charge with inclusive tax/service/discount components.",
+        "Prior or pending money, routed cash, provider success/uncertainty and active receipt review stop an unallocated transfer.",
+        "Retries match original order, folio, property, currency, components and valid saved line; wrong destination/key/source refuses.",
+        "New POS receipts, late confirmation and routed cash cannot collect the transferred debt again; non-monetary evidence remains recordable.",
+        "Folio/stay ownership and status are checked; all effects roll back on downstream failure; original function owner/grants remain.",
+        "Terminal displays POS collection separately from transferred debt and refreshes Finance/folio views. Tests, TypeScript, build and smoke pass."
+      ],
+      "local_evidence": ["49 PostgreSQL and UI-state checks passed. The database fixtures exercise verified partial payments, idempotent retries and prevention of a second collection."],
+      "installation": "Preview exposes the room_transfer_paid_total column and refuses anonymous execution of pos_post_room_charge. Verify the installed definition using POS-ROOM-TRANSFER-PREFLIGHT.sql and reconcile a controlled transfer before live acceptance.",
+      "live_acceptance": "OPEN",
+      "limits": ["Unmatched payments and bills with tips or delivery fees still require allocation rules before transfer.", "Controlled account/credit/event boundaries in fixtures do not certify live journals or actual provider/stock effects."]
+    },
+    {
+      "id": "WF13-T01",
+      "chains": ["WF13", "WF14", "WF15", "WF17", "WF18"],
+      "title": "Reconcile existing reservation money by saved IDs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Review the corrected RESERVATION-MONEY-INSPECTION.sql JSON and trace each reported source/application/allocation/journal ID. Do not invent or overwrite balances.",
+      "local_evidence": ["Inspection corrected for absent reservations.currency; 9 PostgreSQL checks passed"],
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF07-T01",
+      "chains": ["WF07", "WF09"],
+      "title": "Reconcile explicit existing station/store links and actual remaining configuration",
+      "status": "AWAITING_LIVE_RESULTS",
+      "next_action": "Run NEXT-CONFIGURATION-DETAILS.sql to identify stations missing a usable departmental store. Preserve valid canonical mappings, verify ambiguous or missing links using actual department ownership, then confirm sale depletion and replenishment.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF17-T01",
+      "chains": ["WF17", "WF18", "WF23"],
+      "title": "Link group deposits to the verified master folio and protect reference retries",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["The guarded migration serializes master creation and deposit retries for the same group. Retries compare the saved payment, method, amount, currency and folio. The billing screen opens the verified folio and shows its balance and currency."],
+      "live_evidence": ["The 04:00:56 export identified both group billing routines as supported baselines."],
+      "next_action": "Apply the guarded group master deposit migration and confirm both installed definitions. Check a controlled group deposit and its Finance entries.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF17-T02",
+      "chains": ["WF17", "WF18", "WF23"],
+      "title": "Protect whole-charge group master transfers and company invoice receipt settlement",
+      "status": "AWAITING_LIVE_RESULTS",
+      "local_evidence": ["A whole posted charge moves once to its verified group master and preserves the original reversal and tax amount. A company invoice receipt retry returns the saved receipt and journal, including after full settlement."],
+      "live_evidence": ["The 07:28:52 export confirms both routines are installed and match the reviewed fingerprints. Both grant execution to authenticated callers and deny anonymous execution."],
+      "next_action": "Compare controlled property receipts, folio transfers, reversals and ledger entries. Partial allocations to multiple folios and company receipts spanning multiple invoices remain open.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T01",
+      "chains": ["WF12", "WF16", "WF27", "WF32", "WF34"],
+      "title": "Complete Guest navigation, shared cart, and booking and service handoffs",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "bf82044",
+      "local_evidence": ["The same four Guest destinations appear in Guest and property-linked Delivery. Linked Delivery resolves the name and logo from the verified property. Signed-in room results use the same photo-led gallery as the public catalogue and retain live rates and booking links.", "One active cart and one favourites list per guest use the current property menu. Booking detail uses the same verified-stay data as My Stay. Transfer and experience links carry the selected catalogue ID and require a saved request before showing success."],
+      "next_action": "Verify signed-in on desktop and phone from a room selection through booking details and My Stay, then Dining, cart, order status, transfers and request history. Confirm the intended property of Sartuday Kids Fun Day (f05d8e00-507f-4a9d-9e5c-51469cf473f0) before changing publication. The live Nairobi catalogue returned this listing with a Taveta venue.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF33-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Verify external supplier orders, receiving, invoices and hotel replies",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The Partner portal renders issued LPO PDFs from the actual saved order and order lines. An isolated PostgreSQL test denied anonymous access, unrelated accounts, other properties and draft orders."],
+      "live_evidence": ["Preview recognises neo_partner_lpo_payload and denies anonymous execution."],
+      "next_action": "Follow a controlled purchase order from the internal board into a real supplier account. Match partial receipt, posting and AP records and verify replies and historic document access.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF11-T02",
+      "chains": ["WF03", "WF11", "WF12", "WF23"],
+      "title": "Verify configurable payment methods by channel, property and processor",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "ffc50d0",
+      "local_evidence": ["POS links to Delivery rules, Daraja and gateway connection settings. Integrated dispatch uses the intent's property and environment and keeps an uncertain request pending.", "The dispatch handler now checks that processor response state and QR payload writes actually succeeded before reporting a usable QR result. Six mocked request-level cases cover successful storage, rejected state writes, rejected QR storage, concurrent callback closure, processor rejection and transport failure; five existing isolated PostgreSQL dispatch tests also passed. No processor was contacted.", "The callback URL fallback uses the server request URL instead of a caller-supplied Origin header; a mocked request with a spoofed Origin retained the server origin in the provider payload."],
+      "live_evidence": ["The 07:11:04 export contains the four installed definitions. Each matches pg_get_functiondef from the current repository migrations byte for byte when the migration uses LF line endings. The callback is service-only; the three intent and dispatch routines allow authenticated and service execution without anonymous grants. The preflight now recognises the published definitions and Windows line endings."],
+      "next_action": "Connect and prove the processor sandbox contracts for hosted card and QR checkout, verified callback, full and partial refund, and clearing accounts. Current public checkout supports its configured M-Pesa, cash or pay-on-collection flows.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF24-T01",
+      "chains": ["WF02", "WF03", "WF23", "WF24", "WF25"],
+      "title": "Verify live staff PIN, saved receipt tax and physical and PDF outputs",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["Saved percentages travel with each tax on the canonical receipt, including separate rows when a bill contains different VAT rates. An isolated SQL test compared the saved rate rows with Finance liability amounts.", "The new totals panels were rendered and inspected on a three-page 80 mm receipt and an A4 invoice. The staff and Guest folio export uses saved source-order tax rows only when they reconcile to the posted folio tax. Charges lacking that evidence retain a recorded-tax line. Scoped staff and supplier LPO payloads itemize saved tax rates when they reconcile to the saved LPO total."],
+      "live_evidence": ["The 2026-11-21 13:55 Savanna Crown Nairobi SQL export shows receipt_reads_named_tax=true and receipt_labels_show_saved_rates=true. The workspace has zero active profiles and zero active defaults. None of the eight sampled orders has item tax snapshots or saved tax codes, and the diagnostic found no matching print-job payload for those orders."],
+      "next_action": "Install the new folio and purchase-order tax document migrations before signed-in testing. Verify the property's approved tax configuration and item mappings, then trace a new sale through its saved tax allocations, POS PDF, reprint and Finance rows. The published Horizon Delivery page lacks the shared Guest dock and its source repository is unavailable.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF24-T02",
+      "chains": ["WF02", "WF03", "WF24", "WF25"],
+      "title": "Separate shared station entry from personal staff authorization",
+      "status": "AWAITING_INSTALLATION",
+      "local_evidence": ["Owner-scoped display setup saves a separate hashed staff/station credential. The paired display checks it before returning ticket data and refuses an account whose station assignment was removed. Shared display tools and logout require an in-scope supervisor's personal PIN. Verified logout revokes that paired session. The staff password sign-in, PIN broker and Edge proof exchange were unchanged."],
+      "live_evidence": ["The public Preview staff sign-in page returned HTTP 200 on build c17f2e1718dec9e0. The public Preview and Horizon PIN endpoints both rejected an empty, credential-free request with HTTP 401. A normal PIN verification from an authorized device was not exercised."],
+      "next_action": "Install both new display PIN migrations. Verify account password login, personal PIN login on an authorized device, display PIN entry, supervisor approval and logout in the matching deployed build.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF30-T01",
+      "chains": ["WF01", "WF26", "WF30", "WF34"],
+      "title": "Verify release readiness, saved defect counts and local Simulation",
+      "status": "BLOCKED",
+      "source_commit": "f66dbae",
+      "local_evidence": ["Local HTTP checks returned 200 for sign-in, Guest, Delivery and Simulation. The latest isolated Simulation run passed 379 tests and 27 readiness checks. The connection checker still reports invalid_credential for the configured browser Simulation server key. The cleanup test checks the saved registry state before reporting success."],
+      "next_action": "Connect browser-based Simulation with a valid server credential for the intended test project. Run the two isolated workspaces and capture the saved defect counts and workflow evidence in Platform & Readiness.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF05-T01",
+      "chains": ["WF04", "WF05", "WF06", "WF33"],
+      "title": "Align GRN creation with Receiving Clerk ownership",
+      "status": "AWAITING_LIVE_RESULTS",
+      "local_evidence": ["A separate reviewer approves the clerk's recorded quantities. The clerk can then post their own approved count once, with only accepted quantities affecting stock and accrual. The corrected rollout recognizes the reviewed receipt-posting variants and checks property/store, the approved accepted quantity, and matching journal evidence. An upgrade migration covers databases that recorded the original version."],
+      "live_evidence": ["The 2026-11-22 14:49:30 SQL export showed all five routines installed with matching permissions. The private posting routine matched digest 8e517246600878edf6b2e93114153283."],
+      "next_action": "Confirm a controlled clerk-created GRN, accepted stock and Finance accrual with the installed routines.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF10-T01",
+      "chains": ["WF10"],
+      "title": "Stable item-selection identity after an uncertain successful insert",
+      "status": "LOCAL_VERIFIED",
+      "source_commit": "34670cf",
+      "local_evidence": ["The terminal retains one UUID per pending selection in the current tab and submits it as the order-line primary key. Recovery verifies organization, waiter, bill and menu item. Existing atomic modifier and collected-bill triggers still own the write. Five focused tests passed, including a lost response, a failed recovery read and a deliberate second sale."],
+      "next_action": "Verify a lost response from the signed-in POS against installed order-line and modifier records. Then follow the single saved item through production, service and stock.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF12-T01",
+      "chains": ["WF12", "WF34"],
+      "title": "Scope courier dispatch and require a saved acknowledgement",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "3c53e82",
+      "local_evidence": ["The board uses each order's property, and dispatch matches organization, property, role and provider environment before handoff. A conditional database update claims the job before the network call, and an uncertain response leaves the original job open. The database migration records the handoff and prevents an in-house rider assignment while the external handoff is active. Nine handler checks and two PostgreSQL integration checks passed.", "The handler now requires one saved row from its conditional acknowledgement update. A concurrent callback that closes the job or a failed timeout-detail write returns an unconfirmed state rather than claiming the pending detail was saved. Eleven mocked handler checks and three isolated PostgreSQL handover checks passed; no courier was contacted."],
+      "live_evidence": ["The SQL editor export confirmed the courier claim is installed. Preview recognised and protected the new claim, and build 53ebadf0bae69c38 is live."],
+      "next_action": "Verify a configured courier and callback in a sandbox, including out-of-order callbacks and provider-side reconciliation where no response arrives.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF09-T01",
+      "chains": ["WF07", "WF09", "WF10", "WF12", "WF16"],
+      "title": "Use the POS departmental stock decision in Guest and Delivery",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The isolated PostgreSQL suite showed public sellability changes with department stock and blocked a stale multi-line order above the available quantity. The public API exposes status and published dish data only."],
+      "live_evidence": ["Preview serves neo_public_menu_with_stock. Installation of the public menu routine is confirmed."],
+      "next_action": "Verify the installed batch-aligned POS stock routine and checkout protection, then test sell-out and replenishment on a controlled department and each enabled channel.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF02-T01",
+      "chains": ["WF02", "WF21", "WF34"],
+      "title": "Activate named devices and scoped station displays from the PIN screen",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_commit": "bf82044",
+      "local_evidence": ["The staff PIN entry can redeem the existing one-use property code. Supervisors issue one-use display codes through the existing station pairing permissions. An isolated PostgreSQL test refused wrong scope, replay and revoked displays."],
+      "live_evidence": ["The SQL editor export confirmed the station administration and destination routines are installed. Preview recognised both and denies anonymous access. The live build serves the owner setup asset and the public PIN and station-screen routes."],
+      "next_action": "In My personal staff PIN, link an assigned staff account to its display. Verify an authorised device opens that display after an ordinary PIN sign-in, the existing email/password account opens the same display, and removing the assignment stops the redirect. The shared activation-code path and personal ticket action identity also need live verification.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T02",
+      "chains": ["WF01", "WF12", "WF16", "WF24", "WF32", "WF33", "WF34"],
+      "title": "Apply the mobile design reference across public and staff apps",
+      "status": "IN_PROGRESS",
+      "design_references": {
+        "motion": "Apple: short state transitions with a reduced-motion alternative",
+        "onboarding": "Duolingo: one clear step, progress and safe defaults",
+        "interface": "Linear: consistent spacing and contextual actions",
+        "typography": "Pentagram: distinct type hierarchy and aligned totals",
+        "minimalism": "Muji: display only the controls and content needed for the task",
+        "search": "Airbnb: nearby search and filters with reversible selections",
+        "art_direction": "Aesop: original hospitality imagery and a coherent property palette",
+        "dashboards": "Notion: group work by the records and actions each role needs",
+        "entry_pages": "Stripe: clear product entry and one primary action",
+        "interaction": "Framer: immediate, visible loading, success and recovery states",
+        "mobile_reference": "The supplied Medora image guides the layout: an image-led welcome, an overview with a strong first action, a compact icon dock, and details that retain the same palette and type. Use NEØ's own imagery, labels and data."
+      },
+      "local_evidence": ["Guest Transfers uses the URL for selection and keeps form details through a failed submit. A saved server reference controls the confirmation. Guest order filters survive opening a receipt and returning to the list, and loading is separate from an empty history.", "Rider Active Job and Home share the same handover form. Active Job completes the selected order in place, with PIN, recipient, cash for cash orders and visible server rejection."],
+      "live_evidence": ["Preview build 1de6c43a2f96143c serves the Guest Transfers, Orders and Services routes and the new Transfer and Orders assets."],
+      "next_action": "Verify Transfers and order detail back navigation on a signed-in Preview device. Continue with Guest reservations, other services and linked Delivery, then Partner, Rider, staff PIN and station displays. Review the mobile layout and saved results including sold-out, empty, slow and error states.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF16-T02",
+      "chains": ["WF09", "WF12", "WF16", "WF34"],
+      "title": "Recover the Guest basket and order total on the ordering screen",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/routes/guest.$hotelSlug.order.tsx"],
+      "roles": ["signed-in guest with a linked customer record"],
+      "owning_rpc": ["delivery_quote_cart", "neo_guest_place_room_service", "delivery_place_order"],
+      "downstream_effects": ["active basket scoped by hotel organisation and customer", "room-service POS order and kitchen ticket", "guest bill refresh after room-service placement", "linked Delivery checkout for eligible pickup and delivery"],
+      "confirmed_problem": "A loading or failed basket could look empty. A failed quote could leave stale totals actionable on local checkout paths. Room-service placement invalidated a cache key the Guest bill no longer uses.",
+      "local_evidence": ["The Guest order screen uses property text colours for basket and quote status, displays explicit loading and retry actions, and reserves the empty state for a loaded basket. The room-service and local pickup or delivery actions require a valid quote; linked Delivery continues to its own checkout.", "The basket query filters by the same organisation and customer as the Delivery cart. A successful room-service mutation invalidates the Guest bill projection.", "269 tests passed across Guest, Delivery, Rider, courier dispatch, payment persistence and receiving; 17 live checks were skipped. TypeScript, 1192 unique migration versions and the production build smoke check passed. The public Preview home returned HTTP 200 and reported build 8744f6772ed45fb7; this batch has not been deployed."],
+      "next_action": "Exercise the route on phone and tablet in both themes with a signed-in guest. Verify saved basket, quote failure and recovery, all fulfilment modes, stock, kitchen queue, folio and receipt evidence, and duplicate submissions. Follow the linked order through Rider handover.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF12-T02",
+      "chains": ["WF12", "WF16", "WF33", "WF34"],
+      "title": "Keep the saved Delivery order visible through payment and Rider handover",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/routes/delivery.$hotelSlug.checkout.tsx", "src/routes/delivery.$hotelSlug.track.$orderReference.tsx", "src/routes/guest.$hotelSlug.orders_.$orderReference.tsx", "src/routes/rider.active.tsx"],
+      "roles": ["guest with the order at the selected property", "assigned rider"],
+      "owning_rpc": ["delivery_place_order", "chargeDeliveryWithMpesa", "delivery_rider_advance", "delivery_confirm_delivery"],
+      "downstream_effects": ["saved order reference", "payment request and callback", "fulfilment progress", "rider dispatch status and history", "PIN handover and cash collection when applicable"],
+      "confirmed_problem": "Cart invalidation could hide checkout progress while payment dispatch was pending. Tracking did not poll active orders. Rider transitions treated a response with no transport error as success even if the payload rejected the transition.",
+      "local_evidence": ["Checkout suppresses duplicate submissions and preserves the saved order reference and tracking action while payment is requested. Tracking refreshes active orders and scopes its cache by user, organisation and property. The progress list distinguishes rider pickup from departure.", "Rider pickup and departure require a positive persisted transition acknowledgement. An error appears on the affected job beside its action. An idempotent acknowledgement is accepted.", "319 focused tests passed including two new hook regression checks; 17 live checks were skipped. Fifteen print-agent tests and ten isolated quotation persistence checks passed. One platform-specific print-agent check was skipped.", "A follow-up exposes View receipt details on Delivery tracking when the customer-owned projection returns a saved receipt. Both apps scope the projection cache by signed-in account. Forty-one focused checks and a production build smoke check passed."],
+      "next_action": "Run signed-in pickup and delivery acceptance with a sandbox payment callback. Capture the matching order, kitchen queue, rider transitions, handover, cash or provider reconciliation, and durable receipt. Paid tracking links to the Guest receipt details when the existing customer-owned projection returns a receipt number and a linked Guest workspace is available. Other orders still offer a receipt request via property contact. Verify the installed projection returns the receipt for each payment route. The PDF download and supplier-side quotation retrieval remain open. Verify mobile layouts and branding in both themes and verify supplier-side quotation retrieval separately.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF12-T03",
+      "chains": ["WF12", "WF16", "WF33"],
+      "title": "Read saved Delivery receipts from Finance and POS",
+      "status": "AWAITING_LIVE_RESULTS",
+      "source_routes": ["src/routes/delivery.$hotelSlug.track.$orderReference.tsx", "src/routes/guest.$hotelSlug.orders_.$orderReference.tsx"],
+      "owning_rpc": ["neo_guest_order_tracking"],
+      "confirmed_problem": "The existing guest projection only read legacy POS payment states. It missed confirmed POS payments and receipts posted against an order by Delivery Finance.",
+      "local_evidence": ["The guarded migration verifies the existing receipt lookup and guest ownership condition before changing the function. It selects the confirmed Delivery Finance receipt for the same order and guest, or falls back to confirmed POS evidence scoped to the property. It preserves the existing function grants.", "34 focused tests passed across the receipt projection, payment dispatch, tracking, Rider and thermal PDF. The isolated PostgreSQL check applies the migration twice and verifies Finance receipt selection, POS fallback, unpaid orders, wrong property and guest ownership."],
+      "live_evidence": ["The user's Cloud SQL Editor verification showed the routine and receipt projection installed, the customer check present, authenticated execution enabled, and anonymous execution denied."],
+      "next_action": "Install the property-scoped receipt evidence migration verified against the same signature used by the Guest PDF endpoint. Then verify one provider-paid and one pay-at-property order through Guest and Delivery receipt details and PDF download. Supplier-side quotation access remains open.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T03",
+      "chains": ["WF01", "WF34"],
+      "title": "Keep AI property access and displayed answer scope consistent",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/lib/ai-assistant.functions.ts", "src/lib/intelligence-ask.functions.ts", "src/routes/_shell.ai-insights.tsx"],
+      "roles": ["organisation-wide staff", "technical staff", "branch-scoped staff"],
+      "owning_rpc": ["current_access_scope", "current_branch_ids", "bi_kpis", "neo_intelligence", "neo_assert_reporting_scope"],
+      "downstream_effects": ["scoped KPI read", "local or configured AI narrative", "AI query and usage logs"],
+      "confirmed_problem": "The legacy assistant compared database scope values with UI labels. Organisation and technical staff without assigned properties were refused or reduced to one property. The live Ask NEØ route accepted a browser-supplied property label for its answer, so a valid scoped result could be mislabelled as another hotel.",
+      "local_evidence": ["Thirty-three focused assistant, intelligence and automation checks passed. Four more request-level checks prove a browser label cannot rename the scoped property, an unavailable property name stays neutral, and refused current or prior periods are not used as comparison evidence. Four isolated PostgreSQL checks execute the production reporting guard with synthetic tenants, staff and properties. Typecheck, migration version validation, device catalogue, production build and public-route smoke passed with a synthetic Supabase configuration."],
+      "next_action": "Rebase onto the owner's latest pushed repair branch, rerun typecheck and focused checks, verify the installed reporting guard rejects direct out-of-scope RPC reads, then hand signed-in Ask NEØ acceptance to the owner. The legacy askAssistant server function has no current UI caller.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T04",
+      "chains": ["WF01", "WF12", "WF16", "WF30", "WF34"],
+      "title": "Trace every sidebar destination and reachable role-specific route",
+      "status": "IN_PROGRESS",
+      "source_routes": ["src/lib/navigation.ts", "src/lib/nav-permissions.ts", "src/routeTree.gen.ts", "src/routes"],
+      "local_evidence": ["The current static inventory lists 191 sidebar destinations, 408 generated routes and 200 direct or hidden paths. Every generated staff route resolves to a capability or an explicitly permitted staff surface. Mixed-case paths use the canonical capability, unknown staff paths are denied and protected content waits for effective grants. The role-dashboard list and boot prefetch use the same per-staff, per-workspace cache key. A failed dashboard access check offers retry."],
+      "action_inventory": "node scripts/audit-navigation-routes.mjs --actions writes route files, controls and command call sites to .output/route-action-inventory.json. This static scan does not verify imported controls or runtime behaviour.",
+      "reviewed_actions": [
+        {"route": "/admin/documents", "action": "Choose a receipt QR destination and enter its link", "expected": "The saved brand setting supplies the same HTTPS destination and caption to the PDF and print agent."},
+        {"route": "/pos/orders/$id", "action": "Download or reprint a receipt", "expected": "Downloads use the scoped thermal PDF. The print agent places the configured QR caption and raster before the cut."},
+        {"route": "/guest/$hotelSlug/account", "action": "Open Bills & receipts or Saved dishes", "expected": "Each link opens its intended property-scoped screen."},
+        {"route": "/guest/$hotelSlug/folio", "action": "Download a statement or posted receipt", "expected": "The guest downloads their own saved document. Empty receipts are shown only after a successful bill read."},
+        {"route": "/partner/$propertySlug", "action": "Download LPO", "expected": "The PDF resolves the issued order for the selected supplier relationship and property. Supplier quote attachment and retrieval still need review."},
+        {"route": "/guest/$hotelSlug/orders/$orderReference", "action": "Cancel this order", "handler": "neo_guest_order_cancel", "expected": "Only the owner can cancel an unpaid, unstarted order. Delivery, POS, queued station tickets and history change together. A retry recovers the saved result and refreshes detail and order history."},
+        {"route": "/delivery/$hotelSlug/track/$orderReference", "action": "Open tracking, retry location or retry collection PIN", "handler": "Owner-scoped delivery order read, neo_guest_delivery_live and neo_delivery_pin_for_customer", "expected": "Wait for sign-in and scope cached details, location and PIN to the current account and order. A failed location or PIN lookup provides a retry."},
+        {"route": "/delivery/$hotelSlug/track/$orderReference", "action": "Submit transaction code", "handler": "neo_delivery_mpesa_till_claim_submit and neo_delivery_mpesa_till_claim_queue", "expected": "Only the guest who owns the order can queue a saved reference for scoped Finance review. Retrying the same reference returns the original claim and its status. The order remains unpaid until verified."},
+        {"route": "/delivery/$hotelSlug/track/$orderReference", "action": "Send payment request", "handler": "chargeDeliveryWithMpesa, neo_delivery_guest_mpesa_start and neo_mpesa_apply_result", "expected": "Owner and matching KES bill checks precede reservation. An outstanding attempt blocks duplicate dispatch. A failed dispatch requires saved failure evidence before the UI can report a definite outcome. Provider confirmation remains separate from dispatch."},
+        {"route": "/guest/$hotelSlug/transport", "action": "Send or retry a transfer request", "handler": "useRequestTransport and neo_guest_request_transport with request key", "expected": "A signed-in guest can recover the saved reference with the same form inputs after a lost reply. Retries update guest history and produce one row in the selected property's front-office queue.", "evidence": "Property-scoped PostgreSQL tests verify replay, rollback of a rejected product and distinct requests for distinct properties. The request-key migration is local."},
+        {"route": "/pms/transport", "action": "View or retry the property transfer queue", "handler": "useTransferRequests and transport_requests", "expected": "The existing property filter applies to saved guest transfers. The open queue refreshes every 30 seconds while active and provides a retry on read failure."},
+        {"route": "/pms/transport", "action": "Quote, confirm, assign a driver or complete", "handler": "neo_transport_set_status and neo_transport_rider_candidates", "expected": "Front Office staff with transfer edit access update only scoped records. The result identifies the saved request, status, quote and driver. A stale retry cannot move a transfer backward or repeat its audit event. The assignment is stored on the row read by the rider job list.", "evidence": "Isolated PostgreSQL exercises denied access, a sibling property and driver, quote through completion, readback, and duplicate and stale retries. Staff-action migration and signed-in handoff acceptance remain open."}
+      ],
+      "next_action": "Follow the remaining inventoried controls into imported components and server handlers. Record authorization, saved effects, downstream handoffs, failure and retry evidence before closing each workflow.",
+      "live_acceptance": "OPEN"
+    },
+    {
+      "id": "WF34-T05",
+      "chains": ["WF34"],
+      "title": "Bound AI provider response time",
+      "status": "LOCAL_VERIFIED",
+      "source_routes": ["src/lib/ai-provider.server.ts", "src/lib/ai-provider.functions.ts", "src/routes/_shell.ai-insights.tsx"],
+      "roles": ["workspace AI administrator", "staff with AI access"],
+      "owning_function": ["callProvider", "generateNarrative", "testAiProvider"],
+      "downstream_effects": ["provider request", "recoverable unavailable status", "AI usage record or connection check"],
+      "confirmed_problem": "The server waited indefinitely for a stalled external provider, leaving the assistant or connection check pending.",
+      "local_evidence": ["A mocked provider that never responds is aborted after 20 seconds and returns an unavailable timeout detail. A successful response clears the deadline. Seven focused tests and typecheck passed without any live provider call."],
+      "next_action": "Integrate this batch into the owner's latest source, rerun checks, and verify the installed and deployed version separately. Signed-in provider acceptance belongs to the owner; no real provider request was made by the local tests.",
+      "live_acceptance": "OPEN"
+    }
+  ]
+}

@@ -65,6 +65,7 @@ export function useBranches() {
       const { data, error } = await supabase
         .from("branches")
         .select("*")
+        .eq("organization_id", organizationId!)
         .order("is_main", { ascending: false })
         .order("name", { ascending: true });
       if (error) throw error;
@@ -169,10 +170,11 @@ export function useBranchScope() {
   return {
     organizationId,
     loading: branchesQuery.isLoading,
+    failed: branchesQuery.isError,
     branches,
     orgWide,
     /** No property assignment at all — screens must say Setup Incomplete. */
-    setupIncomplete: !orgWide && branches.length === 0,
+    setupIncomplete: branchesQuery.isSuccess && !orgWide && branches.length === 0,
     canManage,
     activeBranchId: resolvedId,
     activeBranch,

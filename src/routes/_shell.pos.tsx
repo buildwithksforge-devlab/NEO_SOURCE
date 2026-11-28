@@ -13,7 +13,7 @@ const TABS = [
   { label: "POS Home", to: "/pos" },
   { label: "Restaurant Floor", to: "/pos/floor" },
   { label: "Orders & Bills", to: "/pos/orders" },
-  { label: "Kitchen Display", to: "/pos/kds" },
+
   { label: "Menu Management", to: "/pos/menu" },
   { label: "Shift & Cash", to: "/pos/shifts" },
   { label: "Requisitions", to: "/pos/requisitions" },

@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "checks": 19,
+  "scope": "Synthetic exported schema, actual journal posting and receipt controls; no live business records changed."
+}

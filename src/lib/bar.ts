@@ -301,7 +301,7 @@ export function useBarScopeIds() {
     queryFn: async () => {
       let stationQuery = db
         .from("operational_stations")
-        .select("id, department_id, code, name, station_type")
+        .select("id, department_id, code, name, station_type").eq("active", true)
         .limit(200);
       let deptQuery = db.from("departments").select("id, code, name").limit(300);
       if (branchId) {

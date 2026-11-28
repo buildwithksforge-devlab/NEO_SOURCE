@@ -1,0 +1,13 @@
+{
+  "worker": "neo-preview",
+  "account": "a8f39d59dfcd73614466adf7d87a907d",
+  "sourceId": "fc9e4adcd8389bde",
+  "previousDeployment": "dda1e0f8-0980-49d5-ad5e-481c411ad75f",
+  "previousVersion": "9366124a-a143-460a-b0af-054cac170a75",
+  "typecheck": 0,
+  "build": 0,
+  "smoke": 0,
+  "testsPassed": 4065,
+  "testsFailed": 0,
+  "testsSkipped": 155
+}

@@ -1,3 +1,4 @@
+import { CustomerAdvanceDepositPosition } from "@/components/crm/CustomerAdvanceDepositPosition";
 /**
  * Customer account and billing.
  *
@@ -9,11 +10,12 @@
  * here is estimated, and nothing is shown as a credit limit unless a credit
  * line has actually been configured.
  */
-import { useMemo } from "react";
+import { CustomerFinancialPosition } from "@/components/crm/CustomerFinancialPosition";
+import { CustomerRepayment } from "@/components/crm/CustomerRepayment";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { SectionCard, StatusPill } from "@/components/common/DataDisplay";
-import { SummaryStrip, type SummaryFigure } from "@/components/common/SummaryStrip";
+
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useCustomerChildren, titleCase } from "@/lib/crm";
@@ -105,48 +107,44 @@ export function CustomerAccount({
   const settings = (creditLine.data?.["corporate_credit_settings"] ?? null) as Row | Row[] | null;
   const credit = (Array.isArray(settings) ? settings[0] : settings) ?? null;
 
-  const totals = useMemo(() => {
-    const invoiceRows = invoices.data ?? [];
-    const billed = invoiceRows.reduce((sum, r) => sum + Number(r["total"] ?? 0), 0);
-    const outstanding = invoiceRows
-      .filter((r) => String(r["status"] ?? "") !== "cancelled")
-      .reduce((sum, r) => sum + Number(r["balance"] ?? 0), 0);
-    const paid = (payments.data ?? [])
-      .filter((r) => String(r["status"] ?? "completed") !== "reversed")
-      .reduce((sum, r) => sum + Number(r["amount"] ?? 0), 0);
-    const credited = (creditNotes.data ?? []).reduce((sum, r) => sum + Number(r["total"] ?? 0), 0);
-    return { billed, outstanding, paid, credited };
-  }, [invoices.data, payments.data, creditNotes.data]);
+  const accountLoading =
+    invoices.isLoading ||
+    payments.isLoading ||
+    creditNotes.isLoading;
 
-  const limit = credit ? Number(credit["credit_limit"] ?? 0) : null;
-  const available = limit === null ? null : limit - totals.outstanding;
-
-  const lead: SummaryFigure = {
-    id: "outstanding",
-    label: "Outstanding",
-    value: money(totals.outstanding),
-    hint: "Invoiced and not yet settled",
-  };
-  const figures: SummaryFigure[] = [
-    { id: "billed", label: "Billed", value: money(totals.billed) },
-    { id: "received", label: "Received", value: money(totals.paid) },
-    { id: "credited", label: "Credited back", value: money(totals.credited) },
-    {
-      id: "limit",
-      label: "Credit limit",
-      value: limit === null ? "No credit line" : money(limit),
-      hint:
-        limit === null
-          ? "This guest settles on departure; a credit line is configured on a corporate account."
-          : `Available ${money(available)}`,
-    },
-  ];
+  const accountFailed = Boolean(
+    invoices.error ||
+    payments.error ||
+    creditNotes.error
+  );
 
   const latest = (statements.data ?? [])[0] ?? null;
 
   return (
     <div className="space-y-6">
-      <SummaryStrip lead={lead} figures={figures} />
+      <CustomerFinancialPosition
+        invoices={invoices.data ?? []}
+        payments={payments.data ?? []}
+        creditNotes={creditNotes.data ?? []}
+        loading={accountLoading}
+        failed={accountFailed}
+      />
+
+      {!accountLoading && !accountFailed && (
+        <><CustomerRepayment
+          key={customerId}
+          customerId={customerId}
+          invoices={invoices.data ?? []}
+          onRecorded={() =>
+            Promise.all([
+              invoices.refetch(),
+              payments.refetch(),
+              statements.refetch(),
+            ])
+          }
+        />
+      <CustomerAdvanceDepositPosition customerId={customerId} /></>
+      )}
 
       <SectionCard
         title="Credit line"
@@ -174,11 +172,11 @@ export function CustomerAccount({
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Currently owed</dt>
-              <dd>{money(totals.outstanding)}</dd>
+              <dd>See customer invoice balances above</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Still available</dt>
-              <dd>{money(available)}</dd>
+              <dd>Verify total corporate account exposure</dd>
             </div>
           </dl>
         ) : (

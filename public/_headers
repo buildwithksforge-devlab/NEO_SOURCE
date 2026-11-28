@@ -1,0 +1,5 @@
+/site.webmanifest
+  Cache-Control: no-cache, must-revalidate
+/worker-push-sw.js
+  Cache-Control: no-cache, must-revalidate
+  Service-Worker-Allowed: /

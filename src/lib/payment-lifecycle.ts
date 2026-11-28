@@ -1,3 +1,4 @@
+import {readViewAccess, VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
 /**
  * The one canonical money projection.
  *
@@ -20,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { guardedRpc } from "@/lib/rpc-guard";
 import { useAuth } from "@/lib/auth";
+import { readFolioChargeComponents, type FolioChargeComponent } from "@/lib/folio-charge-components";
 
 export type FolioProjection = {
   found: boolean;
@@ -35,6 +37,9 @@ export type FolioProjection = {
   netRevenue: number;
   tax: number;
   serviceCharge: number;
+  discountTotal: number;
+  otherCharges: number;
+  chargeComponents: FolioChargeComponent[];
   grossObligation: number;
   collected: number;
   outstanding: number;
@@ -78,6 +83,7 @@ const num = (v: unknown) => Number(v ?? 0);
 
 export function mapFolioProjection(raw: Record<string, unknown> | null): FolioProjection {
   const r = raw ?? {};
+  const charges = readFolioChargeComponents(r);
   return {
     found: r["found"] === true,
     folioId: (r["folio_id"] as string) ?? null,
@@ -92,6 +98,8 @@ export function mapFolioProjection(raw: Record<string, unknown> | null): FolioPr
     netRevenue: num(r["net_revenue"]),
     tax: num(r["tax"]),
     serviceCharge: num(r["service_charge"]),
+    discountTotal: num(r["total_discounts"]),
+    ...charges,
     grossObligation: num(r["gross_obligation"]),
     collected: num(r["collected"]),
     outstanding: num(r["outstanding"]),
@@ -136,9 +144,12 @@ export function mapPaymentLifecycle(r: Record<string, unknown>): PaymentLifecycl
 export function balancesGross(p: {
   netRevenue: number;
   tax: number;
+  serviceCharge?: number;
+  otherCharges?: number;
   grossObligation: number;
 }): boolean {
-  return Math.abs(p.netRevenue + p.tax - p.grossObligation) < 0.01;
+  return [p.netRevenue, p.tax, p.serviceCharge ?? 0, p.otherCharges ?? 0, p.grossObligation].every(Number.isFinite)
+    && Math.abs(p.netRevenue + p.tax + (p.serviceCharge ?? 0) + (p.otherCharges ?? 0) - p.grossObligation) < 0.005;
 }
 
 /** paid + outstanding = gross. */
@@ -147,7 +158,8 @@ export function balancesSettlement(p: {
   outstanding: number;
   grossObligation: number;
 }): boolean {
-  return Math.abs(p.collected + p.outstanding - p.grossObligation) < 0.01;
+  return [p.collected, p.outstanding, p.grossObligation].every(Number.isFinite)
+    && Math.abs(p.collected + p.outstanding - p.grossObligation) < 0.005;
 }
 
 /** A posted payment journal means the money is recognised — no other reading. */
@@ -181,10 +193,13 @@ export const STAGE_LABEL: Record<PaymentLifecycleStage, string> = {
 /* -------------------------------- hooks -------------------------------- */
 
 export function useFolioProjection(folioId: string | null | undefined) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   return useQuery({
-    queryKey: ["folio-projection", organizationId, folioId ?? null],
-    enabled: Boolean(organizationId && folioId),
+    ...VISIBLE_VIEW_REFRESH,
+    queryKey: ["folio-projection", organizationId, identity, folioId ?? null],
+    enabled: ready && (Boolean(organizationId && folioId)),
     queryFn: async (): Promise<FolioProjection> => {
       const { data, error } = await guardedRpc(supabase, "neo_folio_projection", {
         _folio: folioId,
@@ -201,18 +216,22 @@ export function usePaymentLifecycle(scope: {
   to?: string | null;
   paymentId?: string | null;
 }) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   const branch = scope.branchId && scope.branchId !== "all" ? scope.branchId : null;
   return useQuery({
+    ...VISIBLE_VIEW_REFRESH,
     queryKey: [
       "payment-lifecycle",
       organizationId,
+      identity,
       branch,
       scope.from ?? null,
       scope.to ?? null,
       scope.paymentId ?? null,
     ],
-    enabled: Boolean(organizationId),
+    enabled: ready && (Boolean(organizationId)),
     queryFn: async (): Promise<PaymentLifecycleRow[]> => {
       const { data, error } = await guardedRpc(supabase, "neo_payment_lifecycle", {
         _branch: branch,
@@ -248,10 +267,13 @@ export type PaymentAuditTrail = {
 };
 
 export function usePaymentAuditTrail(paymentId: string | null | undefined) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   return useQuery({
-    queryKey: ["payment-audit-trail", organizationId, paymentId ?? null],
-    enabled: Boolean(organizationId && paymentId),
+    ...VISIBLE_VIEW_REFRESH,
+    queryKey: ["payment-audit-trail", organizationId, identity, paymentId ?? null],
+    enabled: ready && (Boolean(organizationId && paymentId)),
     queryFn: async (): Promise<PaymentAuditTrail> => {
       const { data, error } = await guardedRpc(supabase, "neo_payment_audit_trail", {
         _payment: paymentId,

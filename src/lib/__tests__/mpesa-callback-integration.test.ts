@@ -9,11 +9,18 @@
  * payment was actually applied to its folio/order transaction.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Route } from "@/routes/api/public/mpesa.callback.$token";
+
+const queryState = vi.hoisted(() => ({
+  resultCode: "0",
+  unavailable: false,
+}));
 
 type Insert = Record<string, unknown>;
 
 const inserts: { table: string; row: Insert }[] = [];
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+let transactionOwnerOrg = "org-1";
 let applyResult: { data: unknown; error: { message: string } | null } = {
   data: { applied: true, status: "success" },
   error: null,
@@ -39,8 +46,17 @@ function makeAdmin() {
             : { data: null, error: null };
         }
         if (table === "mpesa_transactions") {
-          return state["checkout_request_id"] === "ws_CO_1"
-            ? { data: { id: "txn-1", applied_at: null }, error: null }
+          return state["organization_id"] === transactionOwnerOrg &&
+            state["checkout_request_id"] === "ws_CO_1"
+            ? {
+                data: {
+                  id: "txn-1",
+                  applied_at: null,
+                  amount: 2500,
+                  merchant_request_id: "mr-1",
+                },
+                error: null,
+              }
             : { data: null, error: null };
         }
         return { data: null, error: null };
@@ -63,13 +79,37 @@ vi.mock("@/integrations/supabase/client.server", () => ({
   },
 }));
 
+vi.mock("@/lib/mpesa.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mpesa.server")>();
+  return {
+    ...actual,
+    loadMpesaCredentials: vi.fn(async () => ({ organizationId: "org-1" })),
+    stkQuery: vi.fn(async () =>
+      queryState.unavailable
+        ? { ok: false as const, status: "network", detail: "unavailable" }
+        : {
+            ok: true as const,
+            data: {
+              ResultCode: queryState.resultCode,
+              ResultDesc: "Daraja verified result",
+              CheckoutRequestID: "ws_CO_1",
+              MerchantRequestID: "mr-1",
+            },
+          },
+    ),
+  };
+});
+
 const payload = (resultCode: number) => ({
   Body: {
     stkCallback: {
       MerchantRequestID: "mr-1",
       CheckoutRequestID: "ws_CO_1",
       ResultCode: resultCode,
-      ResultDesc: resultCode === 0 ? "The service request is processed successfully." : "Request cancelled by user",
+      ResultDesc:
+        resultCode === 0
+          ? "The service request is processed successfully."
+          : "Request cancelled by user",
       CallbackMetadata: {
         Item: [
           { Name: "Amount", Value: 2500 },
@@ -83,7 +123,6 @@ const payload = (resultCode: number) => ({
 });
 
 async function post(token: string, body: unknown) {
-  const { Route } = await import("@/routes/api/public/mpesa.callback.$token");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handler = (Route.options as any).server.handlers.POST;
   return (await handler({
@@ -100,6 +139,9 @@ describe("M-Pesa STK callback", () => {
   beforeEach(() => {
     inserts.length = 0;
     rpcCalls.length = 0;
+    transactionOwnerOrg = "org-1";
+    queryState.resultCode = "0";
+    queryState.unavailable = false;
     applyResult = { data: { applied: true, status: "success" }, error: null };
   });
 
@@ -107,6 +149,19 @@ describe("M-Pesa STK callback", () => {
     const res = await post("not-a-real-token-xx", payload(0));
     expect(res.status).toBe(401);
     expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("does not resolve another tenant's transaction through a valid callback token", async () => {
+    transactionOwnerOrg = "org-2";
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      organization_id: "org-1",
+      accepted: false,
+      retryable: true,
+    });
   });
 
   it("applies a successful payment to its transaction and acknowledges the provider", async () => {
@@ -120,12 +175,59 @@ describe("M-Pesa STK callback", () => {
     expect(call.args["_transaction"]).toBe("txn-1");
     expect(call.args["_result_code"]).toBe(0);
     expect(call.args["_receipt"]).toBe("SFG1A2B3C4");
+    expect(call.args["_transaction_date"]).toBe("2026-08-30T09:45:00.000Z");
     expect(call.args["_source"]).toBe("callback");
   });
 
   it("applies a cancelled result rather than dropping it", async () => {
+    queryState.resultCode = "1032";
     await post("tenant-token-1234567890", payload(1032));
     expect(rpcCalls[0]!.args["_result_code"]).toBe(1032);
+  });
+
+  it("rejects a successful callback whose amount only matches after rounding", async () => {
+    const body = payload(0);
+    body.Body.stkCallback.CallbackMetadata.Item[0]!.Value = 2500.4;
+    await post("tenant-token-1234567890", body);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: false,
+    });
+  });
+
+  it("does not apply an unverified callback result", async () => {
+    queryState.resultCode = "1032";
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: false,
+    });
+  });
+
+  it("requests a provider retry when Daraja status verification is unavailable", async () => {
+    queryState.unavailable = true;
+    const res = await post("tenant-token-1234567890", payload(0));
+
+    expect(res.status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      accepted: false,
+      retryable: true,
+    });
+  });
+
+  it("does not post a payment when Daraja returns an empty result code", async () => {
+    queryState.resultCode = "";
+    const res = await post("tenant-token-1234567890", payload(0));
+    expect(res.status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    expect(inserts.find((i) => i.table === "mpesa_callback_events")?.row).toMatchObject({
+      retryable: true,
+    });
   });
 
   it("records a retryable audit entry and asks the provider to retry when applying fails", async () => {
@@ -141,14 +243,25 @@ describe("M-Pesa STK callback", () => {
     expect(String(event!.row["detail"])).toContain("deadlock detected");
   });
 
-  it("logs an unmatched confirmation as not retryable and still acknowledges", async () => {
+  it("retains an unmatched confirmation for provider-verified recovery and requests provider retry", async () => {
     const body = payload(0);
     body.Body.stkCallback.CheckoutRequestID = "ws_CO_unknown";
     const res = await post("tenant-token-1234567890", body);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     const event = inserts.find((i) => i.table === "mpesa_callback_events");
-    expect(event!.row["retryable"]).toBe(false);
+    expect(event!.row["retryable"]).toBe(true);
     expect(rpcCalls).toHaveLength(0);
   });
+  it("applies an early callback only after its transaction tracking becomes available", async () => {
+    transactionOwnerOrg = "not-yet-matched";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(503);
+    expect(rpcCalls).toHaveLength(0);
+    transactionOwnerOrg = "org-1";
+    expect((await post("tenant-token-1234567890", payload(0))).status).toBe(200);
+    expect(rpcCalls).toHaveLength(1);
+  });
+  it.each([null,{}, {applied:false,reason:"Transaction not found"}, {applied:true,status:"failed"}, {ok:false,applied:true,status:"success"}])("does not acknowledge an unconfirmed database application %j",async(data)=>{applyResult={data,error:null};expect((await post("tenant-token-1234567890",payload(0))).status).toBe(500);expect(inserts.at(-1)?.row["retryable"]).toBe(true)});
+  it("acknowledges a matching atomic duplicate without creating another receipt",async()=>{applyResult={data:{applied:false,duplicate:true,status:"success"},error:null};expect((await post("tenant-token-1234567890",payload(0))).status).toBe(200);expect(rpcCalls).toHaveLength(1)});
+
 });

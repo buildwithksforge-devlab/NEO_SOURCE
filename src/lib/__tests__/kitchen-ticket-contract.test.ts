@@ -117,7 +117,21 @@ describe("scope and truthful states", () => {
 
   it("shows empty only after a successful zero-row load", () => {
     for (const file of [kds, queue]) {
-      expect(file).toContain("!queue.isLoading && !queue.error && queue.tickets.length === 0");
+      const emptyTicketSource = file.includes("const visibleTickets")
+        ? "visibleTickets"
+        : "queue.tickets";
+
+      expect(file).toContain(
+        "!queue.isLoading && !queue.error && " +
+        emptyTicketSource +
+        ".length === 0"
+      );
+
+      if (emptyTicketSource === "visibleTickets") {
+        expect(file).toContain("queue.tickets.filter");
+        expect(file).toContain("allowedCombinedStations.includes");
+        expect(file).toContain("visibleTickets.map");
+      }
     }
   });
 

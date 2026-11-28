@@ -3,8 +3,7 @@
  *
  * One shared view of the order book per supplier: what has been approved, what
  * is still owed, what has already been delivered and which goods receipts have
- * been posted. Everything is read from the same purchase order board
- * Procurement uses, so buyer and supplier are looking at identical numbers.
+ * been posted. The internal view reads from Procurement's purchase order board.
  * Reads follow the active property, so a buyer only sees their own branch.
  */
 import { useMemo, useState } from "react";
@@ -34,7 +33,7 @@ export const Route = createFileRoute("/_shell/procurement/supplier-portal")({
       {
         name: "description",
         content:
-          "Approved purchase orders, outstanding deliveries and posted goods receipts per supplier, so Procurement and suppliers share one stock view.",
+          "Approved purchase orders, outstanding deliveries and goods receipts by supplier.",
       },
       { property: "og:title", content: "Supplier portal — NEØ" },
       {
@@ -55,12 +54,14 @@ export const Route = createFileRoute("/_shell/procurement/supplier-portal")({
 const qty = (v: number) => (Math.round(v * 1000) / 1000).toLocaleString();
 
 type SupplierGroup = {
+  key: string;
   supplier: string;
   orders: OrderView[];
   awaitingDelivery: number;
   outstanding: number;
   value: number;
   receipts: number;
+  pendingReceipts: number;
   overdue: number;
 };
 
@@ -68,26 +69,31 @@ function group(orders: OrderView[]): SupplierGroup[] {
   const map = new Map<string, SupplierGroup>();
   for (const order of orders) {
     if (order.stage === "cancelled" || order.stage === "awaiting_approval") continue;
+    const key = String(order.raw["supplier_id"] ?? order.supplier);
     const entry =
-      map.get(order.supplier) ??
+      map.get(key) ??
       ({
+        key,
         supplier: order.supplier,
         orders: [],
         awaitingDelivery: 0,
         outstanding: 0,
         value: 0,
         receipts: 0,
+        pendingReceipts: 0,
         overdue: 0,
       } satisfies SupplierGroup);
     entry.orders.push(order);
     entry.value += order.total;
-    entry.receipts += order.receipts.length;
+    const posted = order.receipts.filter((receipt) => receipt["status"] === "posted").length;
+    entry.receipts += posted;
+    entry.pendingReceipts += order.receipts.length - posted;
     if (order.stage === "open" || order.stage === "partly_received") {
       entry.awaitingDelivery += 1;
       entry.outstanding += order.outstanding;
       if (order.overdue) entry.overdue += 1;
     }
-    map.set(order.supplier, entry);
+    map.set(key, entry);
   }
   return [...map.values()].sort((a, b) => b.awaitingDelivery - a.awaitingDelivery || a.supplier.localeCompare(b.supplier));
 }
@@ -142,7 +148,7 @@ function SupplierPortalPage() {
         <StatCard label="Goods receipts posted" value={String(totals.receipts)} icon={PackageCheck} />
       </div>
 
-      <SectionCard title="Order book by supplier" description="Ordered, delivered and still owed — the same figures on both sides.">
+      <SectionCard title="Order book by supplier" description="Open an order to follow up on deliveries and receipts.">
         <QueryState
           query={board}
           isLoading={board.isLoading}
@@ -155,11 +161,12 @@ function SupplierPortalPage() {
           ) : (
             <div className="space-y-3">
               {groups.map((g) => (
-                <div key={g.supplier} className="rounded-lg border">
+                <div key={g.key} className="rounded-lg border">
                   <button
                     type="button"
                     className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left"
-                    onClick={() => setOpenSupplier(openSupplier === g.supplier ? null : g.supplier)}
+                    aria-expanded={openSupplier === g.key}
+                    onClick={() => setOpenSupplier(openSupplier === g.key ? null : g.key)}
                   >
                     <div>
                       <p className="font-medium">{g.supplier}</p>
@@ -167,8 +174,9 @@ function SupplierPortalPage() {
                         {g.orders.length} order{g.orders.length === 1 ? "" : "s"} · {qty(g.outstanding)} units still owed
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {g.overdue > 0 ? <StatusPill tone="warning">{g.overdue} late</StatusPill> : null}
+                      {g.pendingReceipts > 0 ? <StatusPill tone="warning">{g.pendingReceipts} receipts awaiting posting</StatusPill> : null}
                       <StatusPill tone={g.awaitingDelivery > 0 ? "info" : "success"}>
                         {g.awaitingDelivery > 0 ? `${g.awaitingDelivery} pending` : "All delivered"}
                       </StatusPill>
@@ -176,7 +184,7 @@ function SupplierPortalPage() {
                     </div>
                   </button>
 
-                  {openSupplier === g.supplier ? (
+                  {openSupplier === g.key ? (
                     <div className="border-t px-4 py-3">
                       <TableScroll>
                         <Table>
@@ -194,7 +202,9 @@ function SupplierPortalPage() {
                           <TableBody>
                             {g.orders.map((o) => (
                               <TableRow key={o.id}>
-                                <TableCell className="font-medium">{o.number}</TableCell>
+                                <TableCell className="font-medium">
+                                  <Link to="/procurement/orders" search={{ order: o.id }} className="text-primary underline underline-offset-2">{o.number}</Link>
+                                </TableCell>
                                 <TableCell>
                                   <StatusPill tone={statusTone(o.status)}>{titleCase(o.status)}</StatusPill>
                                 </TableCell>
@@ -211,6 +221,7 @@ function SupplierPortalPage() {
                                     o.receipts.map((r: Row) => (
                                       <StatusPill key={String(r["id"])} tone={statusTone(String(r["status"] ?? ""))}>
                                         {String(r["grn_number"] ?? "GRN")}
+                                        {" · "}{titleCase(String(r["status"] ?? "status unavailable"))}
                                       </StatusPill>
                                     ))
                                   )}

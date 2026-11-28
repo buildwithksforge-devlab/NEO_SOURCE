@@ -16,7 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   getAiProviderSettings,
   saveAiProviderSettings,
@@ -34,7 +40,10 @@ export const Route = createFileRoute("/admin/ai-provider")({
           "Choose the AI provider and model NEØ Intelligence uses, store the provider key securely and validate connectivity before runtime calls.",
       },
       { property: "og:title", content: "AI Provider — NEØ Administration" },
-      { property: "og:description", content: "Configure and test the workspace AI provider for NEØ Intelligence." },
+      {
+        property: "og:description",
+        content: "Configure and test the workspace AI provider for NEØ Intelligence.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -43,9 +52,17 @@ export const Route = createFileRoute("/admin/ai-provider")({
 });
 
 const PROVIDERS = [
-  { value: "lovable", label: "Built-in NEØ AI gateway", hint: "Managed by the platform. No key required unless you supply your own." },
+  {
+    value: "lovable",
+    label: "Built-in NEØ AI gateway",
+    hint: "Optional external prose requires a saved workspace key. Otherwise summaries use local figures.",
+  },
   { value: "openai", label: "OpenAI", hint: "Uses https://api.openai.com/v1 with your own key." },
-  { value: "custom", label: "Custom OpenAI-compatible endpoint", hint: "Any provider exposing /chat/completions." },
+  {
+    value: "custom",
+    label: "Custom OpenAI-compatible endpoint",
+    hint: "Any provider exposing /chat/completions.",
+  },
 ];
 
 const MODEL_HINT: Record<string, string> = {
@@ -121,12 +138,15 @@ function AiProviderPage() {
       else toast.error(result.detail ?? "The provider did not respond");
       void queryClient.invalidateQueries({ queryKey: ["ai-provider-settings"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Connectivity test failed"),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Connectivity test failed"),
   });
 
   if (settings.isLoading) {
     return (
-      <p className="py-12 text-center text-sm text-muted-foreground">Loading AI provider settings…</p>
+      <p className="py-12 text-center text-sm text-muted-foreground">
+        Loading AI provider settings…
+      </p>
     );
   }
 
@@ -147,7 +167,7 @@ function AiProviderPage() {
       <PageHeader
         eyebrow="System"
         title="AI Provider"
-        description="NEØ Intelligence only ever sends already-authorised figures to the provider chosen here. The key is stored server-side and is never returned to the browser."
+        description="Summaries use local formatting by default. Saving a workspace provider key opts into external AI prose using already-authorised figures. Keys remain server-side. Connectivity tests make a real external request."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -194,10 +214,14 @@ function AiProviderPage() {
                 <Input
                   id="base"
                   value={baseUrl}
-                  placeholder={provider === "openai" ? "https://api.openai.com/v1" : "https://your-provider/v1"}
+                  placeholder={
+                    provider === "openai" ? "https://api.openai.com/v1" : "https://your-provider/v1"
+                  }
                   onChange={(e) => setBaseUrl(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Must expose an OpenAI-compatible /chat/completions route.</p>
+                <p className="text-xs text-muted-foreground">
+                  Must expose an OpenAI-compatible /chat/completions route.
+                </p>
               </div>
             ) : null}
 
@@ -208,14 +232,19 @@ function AiProviderPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="API key" description="Write-only. Saving a new value replaces the stored key.">
+        <SectionCard
+          title="API key"
+          description="Write-only. Saving a new value replaces the stored key."
+        >
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill tone={data?.has_key ? "success" : "warning"}>
                 {data?.has_key ? "Workspace key stored" : "No workspace key"}
               </StatusPill>
               {data?.platform_key_available ? (
-                <StatusPill tone="info">Platform gateway key available as fallback</StatusPill>
+                <StatusPill tone="info">
+                  Platform key available for explicit connectivity tests
+                </StatusPill>
               ) : null}
             </div>
 
@@ -226,14 +255,22 @@ function AiProviderPage() {
                 type="password"
                 autoComplete="off"
                 value={apiKey}
-                placeholder={data?.has_key ? "•••••••• (leave blank to keep current key)" : "Paste the provider key"}
+                placeholder={
+                  data?.has_key
+                    ? "•••••••• (leave blank to keep current key)"
+                    : "Paste the provider key"
+                }
                 onChange={(e) => setApiKey(e.target.value)}
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => saveMutation.mutate(false)} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {saveMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
                 Save settings
               </Button>
               <Button
@@ -241,11 +278,19 @@ function AiProviderPage() {
                 onClick={() => testMutation.mutate()}
                 disabled={testMutation.isPending}
               >
-                {testMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                {testMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <PlugZap className="size-4" />
+                )}
                 Test connectivity
               </Button>
               {data?.has_key ? (
-                <Button variant="ghost" onClick={() => saveMutation.mutate(true)} disabled={saveMutation.isPending}>
+                <Button
+                  variant="ghost"
+                  onClick={() => saveMutation.mutate(true)}
+                  disabled={saveMutation.isPending}
+                >
                   Remove stored key
                 </Button>
               ) : null}
@@ -262,10 +307,16 @@ function AiProviderPage() {
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <ShieldCheck className="size-4 text-muted-foreground" aria-hidden />
           <StatusPill tone={tone}>
-            {lastStatus === "ok" ? "Connectivity verified" : lastStatus ? `Failed: ${lastStatus}` : "Never tested"}
+            {lastStatus === "ok"
+              ? "Connectivity verified"
+              : lastStatus
+                ? `Failed: ${lastStatus}`
+                : "Never tested"}
           </StatusPill>
           <span className="text-muted-foreground">
-            {data?.last_check_at ? new Date(data.last_check_at).toLocaleString() : "No check has been run for this workspace."}
+            {data?.last_check_at
+              ? new Date(data.last_check_at).toLocaleString()
+              : "No check has been run for this workspace."}
           </span>
         </div>
         {data?.last_check_detail ? (

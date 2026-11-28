@@ -35,11 +35,12 @@ describe("shared public portal containment", () => {
     }
   });
 
-  it("contains partner tables and platform-console records locally", () => {
+  it("keeps partner cards and platform-console records within their available width", () => {
     const partner = read("src/routes/partner.$propertySlug.tsx");
     const consoleRoute = read("src/routes/platform-console.tsx");
-    expect(partner).toContain("neo-table-scroll");
-    expect(partner).toContain("table-fixed");
+    expect(partner).toContain('<ul className="mt-4 grid gap-3 sm:grid-cols-2">');
+    expect(partner).toContain('<li key={`${reference}:${index}`} className="min-w-0');
+    expect(partner).toContain('className="break-words font-semibold text-white"');
     expect(consoleRoute).toContain("neo-public-app");
     expect(consoleRoute).toContain("neo-table-scroll");
   });

@@ -81,6 +81,9 @@ export function resolveWorkHome(identity: WorkHomeIdentity): WorkHome {
   if (held.length > 1) {
     return { route: "/my-work", label: "My work", reason: "multiple-modules" };
   }
+  if (identity.canOpen?.("/inventory/receiving")) {
+    return { route: "/inventory/receiving", label: "Goods receiving", reason: "goods-receiving" };
+  }
   if (identity.dashboardKey) return DASHBOARD_HOME;
   return { route: "/my-work", label: "My work", reason: "no-module-entry" };
 }

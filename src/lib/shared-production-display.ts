@@ -1,0 +1,282 @@
+import { supabase } from "@/integrations/supabase/client";
+import { guardedRpc } from "@/lib/rpc-guard";
+import type { KitchenTicket } from "@/lib/kitchen-tickets";
+
+export const DISPLAY_TOKEN_STORAGE_KEY =
+  "neo.production.display.token.v1";
+export const DISPLAY_EXPIRY_STORAGE_KEY =
+  "neo.production.display.expires.v1";
+
+export type SharedDisplayAction = {
+  ticketId: string;
+  to: string;
+  expected: string;
+  requestId: string;
+  reason: string;
+};
+
+export type SharedDisplaySnapshot = {
+  ok: boolean;
+  session_id: string;
+  label: string;
+  property: string;
+  read_only: boolean;
+  expires_at: string;
+  server_time: string;
+  blocked_until: string | null;
+  stations: { id: string; name: string }[];
+  tickets: (KitchenTicket & { claimed_by?: string | null })[];
+};
+
+export type DisplayActionResult = {
+  ok: boolean;
+  reason?: string;
+  message?: string;
+  actor_name?: string;
+  idempotent?: boolean;
+};
+
+function storageAvailable() {
+  return typeof window !== "undefined";
+}
+
+export function clearSharedDisplayToken() {
+  if (!storageAvailable()) return;
+
+  window.localStorage.removeItem(DISPLAY_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(DISPLAY_EXPIRY_STORAGE_KEY);
+}
+
+export function readSharedDisplayToken() {
+  if (!storageAvailable()) return "";
+
+  try {
+    const token =
+      window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) ?? "";
+    const expiresAt =
+      window.localStorage.getItem(DISPLAY_EXPIRY_STORAGE_KEY);
+
+    if (!token || token.length > 256) {
+      clearSharedDisplayToken();
+      return "";
+    }
+
+    if (
+      expiresAt &&
+      (!Number.isFinite(Date.parse(expiresAt)) ||
+        Date.parse(expiresAt) <= Date.now())
+    ) {
+      clearSharedDisplayToken();
+      return "";
+    }
+
+    return token;
+  } catch {
+    return "";
+  }
+}
+
+export function productionActions(status: string): string[] {
+  return (
+    (
+      {
+        new: ["accepted"],
+        accepted: ["preparing"],
+        preparing: ["ready"],
+        "partially-ready": ["ready"],
+      } as Record<string, string[]>
+    )[status] ?? []
+  );
+}
+
+export async function readSharedDisplay(
+  token: string,
+): Promise<SharedDisplaySnapshot> {
+  const { data, error } = await guardedRpc<SharedDisplaySnapshot>(
+    supabase,
+    "neo_production_display_read",
+    { _token: token },
+  );
+
+  if (error) throw new Error(error.message);
+
+  if (data?.expires_at && storageAvailable()) {
+    window.localStorage.setItem(
+      DISPLAY_EXPIRY_STORAGE_KEY,
+      data.expires_at,
+    );
+  }
+
+  return data;
+}
+
+export async function actOnSharedDisplay(
+  token: string,
+  pin: string,
+  action: SharedDisplayAction,
+): Promise<DisplayActionResult> {
+  const { data, error } = await guardedRpc<DisplayActionResult>(
+    supabase,
+    "neo_production_display_act_pin_only",
+    {
+      _token: token,
+      _pin: pin,
+      _ticket: action.ticketId,
+      _to: action.to,
+      _expected: action.expected,
+      _request: action.requestId,
+      _reason: action.reason || null,
+    },
+  );
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function sharedDisplayEntry(token: string, pin?: string) {
+  const { data, error } = await guardedRpc<{ ready: boolean; message?: string }>(
+    supabase, "neo_production_display_entry", { _token: token, _pin: pin ?? null },
+  );
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function approveSharedDisplayControl(token: string, pin: string, action: "tools" | "logout") {
+  const { data, error } = await guardedRpc<{ ok: boolean; action?: string; message?: string }>(
+    supabase, "neo_production_display_supervisor", { _token: token, _pin: pin, _action: action },
+  );
+  if (error) throw new Error("Supervisor verification is unavailable. Try again or check the display connection.");
+  if (data?.ok !== true || data.action !== action) throw new Error(data?.message ?? "Supervisor approval was refused.");
+}
+
+export async function pairSharedDisplay(
+  branchId: string,
+  stationIds: string[],
+  label: string,
+  readOnly: boolean,
+) {
+  const { data, error } = await guardedRpc<{
+    ok: boolean;
+    token: string;
+    session_id: string;
+    expires_at?: string;
+  }>(
+    supabase,
+    "neo_production_display_pair",
+    {
+      _branch: branchId,
+      _stations: stationIds,
+      _label: label,
+      _read_only: readOnly,
+    },
+  );
+
+  if (error) throw new Error(error.message);
+
+  if (!data?.ok || !data.token || !data.session_id) {
+    throw new Error("The paired-display response was incomplete.");
+  }
+
+  try {
+    // The restricted display credential belongs to this browser, not to the
+    // supervisor. localStorage allows the paired station to survive tab and
+    // browser restarts; the server expiry and supervisor revocation still win.
+    window.localStorage.setItem(
+      DISPLAY_TOKEN_STORAGE_KEY,
+      data.token,
+    );
+
+    if (data.expires_at) {
+      window.localStorage.setItem(
+        DISPLAY_EXPIRY_STORAGE_KEY,
+        data.expires_at,
+      );
+    } else {
+      window.localStorage.removeItem(
+        DISPLAY_EXPIRY_STORAGE_KEY,
+      );
+    }
+
+    if (
+      window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !==
+      data.token
+    ) {
+      throw new Error(
+        "This browser could not retain the paired display session.",
+      );
+    }
+
+    const result = await supabase.auth.signOut({ scope: "local" });
+
+    if (result.error) throw result.error;
+  } catch (pairingError) {
+    clearSharedDisplayToken();
+
+    // If sign-out or browser storage failed, close the new display session
+    // while the supervisor session is still available.
+    await guardedRpc(
+      supabase,
+      "neo_production_display_manage",
+      { _close: data.session_id },
+    ).catch(() => undefined);
+
+    throw pairingError;
+  }
+
+  window.location.replace("/station-screen");
+}
+
+export async function issueSharedDisplayActivation(branch: string, stations: string[], label: string) {
+  const { data, error } = await guardedRpc<{ ok: boolean; code: string; expires_at: string }>(
+    supabase, "neo_production_display_activation_issue",
+    { _branch: branch, _stations: stations, _label: label, _read_only: false },
+  );
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !/^neods_[0-9a-f]{32}$/.test(data.code) || !data.expires_at) {
+    throw new Error("The display activation code could not be created.");
+  }
+  return data;
+}
+
+export async function activateSharedDisplay(code: string) {
+  const { data, error } = await guardedRpc<{ ok: boolean; token: string; session_id: string; expires_at: string }>(
+    supabase, "neo_production_display_activation_claim", { _code: code.trim().toLowerCase() },
+  );
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !/^[0-9a-f]{64}$/.test(data.token) || !data.session_id ||
+    !(Date.parse(data.expires_at) > Date.now())) {
+    throw new Error("The station display session could not be confirmed.");
+  }
+  retainSharedDisplaySession(data.token, data.expires_at);
+  window.location.replace("/station-screen");
+}
+
+export function retainSharedDisplaySession(token: string, expiresAt: string) {
+  try {
+    window.localStorage.setItem(DISPLAY_TOKEN_STORAGE_KEY, token);
+    window.localStorage.setItem(DISPLAY_EXPIRY_STORAGE_KEY, expiresAt);
+    if (window.localStorage.getItem(DISPLAY_TOKEN_STORAGE_KEY) !== token) {
+      throw new Error("This browser could not retain the display session.");
+    }
+  } catch (error) {
+    clearSharedDisplayToken();
+    throw error;
+  }
+}
+
+/** Shared screens never retain an authenticated operator browser session. */
+export async function ensureSharedScreenSignedOut() {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) throw error;
+
+  if (data.session) {
+    const result = await supabase.auth.signOut({ scope: "local" });
+
+    if (result.error) {
+      throw new Error(
+        "Sign out of the staff account before using this shared screen.",
+      );
+    }
+  }
+}

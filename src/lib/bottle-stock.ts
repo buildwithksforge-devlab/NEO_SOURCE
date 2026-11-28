@@ -44,7 +44,6 @@ export type ContainerEventRow = {
 /** Reasons a stock movement may be recorded outside a menu sale. */
 export const USAGE_REASONS = [
   { value: "requisition", label: "Bar requisition" },
-  { value: "transfer", label: "Transfer to another store" },
   { value: "breakage", label: "Breakage" },
   { value: "spillage", label: "Spillage" },
   { value: "complimentary", label: "Complimentary drink" },
@@ -74,6 +73,7 @@ export function useOpenContainers() {
         )
         .gt("open_volume_ml", 0)
         .order("last_opened_at", { ascending: false });
+      q = q.eq("organization_id", organizationId!);
       if (branchId) q = q.eq("branch_id", branchId);
       const { data, error } = await q;
       if (error) throw error;
@@ -100,6 +100,7 @@ export function useAllOpenContainers() {
           "id, stock_item_id, location_id, open_volume_ml, containers_open, last_opened_at, stock_items(name, container_volume_ml, default_pour_ml), stock_locations(name)",
         )
         .order("last_opened_at", { ascending: false });
+      q = q.eq("organization_id", organizationId!);
       if (branchId) q = q.eq("branch_id", branchId);
       const { data, error } = await q;
       if (error) throw error;
@@ -123,6 +124,7 @@ export function useContainerEvents(limit = 40) {
         )
         .order("created_at", { ascending: false })
         .limit(limit);
+      q = q.eq("organization_id", organizationId!);
       if (branchId) q = q.eq("branch_id", branchId);
       const { data, error } = await q;
       if (error) throw error;
@@ -144,6 +146,107 @@ function useInvalidate() {
       void qc.invalidateQueries({ queryKey: key });
     }
   };
+}
+
+
+export type OpeningContainerInput = {
+  stockItemId: string;
+  locationId: string;
+  remainingMl: number;
+  containerCount: number;
+  remainingValue: number | null;
+  reference: string;
+  reason: string;
+};
+
+export function newOpeningContainerReference(): string {
+  return crypto.randomUUID();
+}
+
+export function useRegisterOpeningContainer() {
+  const invalidate = useInvalidate();
+  const { organizationId } = useCtx();
+
+  return useMutation({
+    mutationFn: async (input: OpeningContainerInput) => {
+      if (!organizationId) {
+        throw new Error("Organization required.");
+      }
+
+      if (!input.stockItemId || !input.locationId || !input.reference) {
+        throw new Error("Stock item, store and registration reference are required.");
+      }
+
+      if (!Number.isFinite(input.remainingMl) || input.remainingMl <= 0) {
+        throw new Error("Enter a positive remaining volume in millilitres.");
+      }
+
+      if (!Number.isSafeInteger(input.containerCount) || input.containerCount <= 0) {
+        throw new Error("Enter a valid number of already-open containers.");
+      }
+
+      if (
+        input.remainingValue !== null &&
+        (!Number.isFinite(input.remainingValue) || input.remainingValue < 0)
+      ) {
+        throw new Error("Enter a valid remaining inventory value.");
+      }
+
+      if (input.reason.trim().length < 3) {
+        throw new Error("An opening-stock explanation is required.");
+      }
+
+      const { data, error } = await guardedRpc(
+        supabase,
+        "neo_register_opening_container",
+        {
+          _item: input.stockItemId,
+          _location: input.locationId,
+          _remaining_ml: input.remainingMl,
+          _container_count: input.containerCount,
+          _remaining_value: input.remainingValue,
+          _reference: input.reference,
+          _reason: input.reason.trim(),
+        } as never
+      );
+
+      if (error) throw new Error(error.message);
+
+      const result = data as unknown as Record<string, unknown> | null;
+
+      if (
+        !result ||
+        result['ok'] !== true ||
+        typeof result['event_id'] !== "string" ||
+        !["registered", "already-recorded"].includes(String(result['status']))
+      ) {
+        throw new Error("Opening-stock registration was not confirmed.");
+      }
+
+      return result;
+    },
+
+    onSuccess: (result) => {
+      invalidate();
+
+      if (result['status'] === "already-recorded") {
+        toast.info("Opening volume was already registered.");
+      } else {
+        toast.success("Existing open stock registered", {
+          description:
+            result['valuation_status'] === "unverified"
+              ? "Volume recorded. Inventory valuation requires review."
+              : "Open volume recorded without deducting a sealed bottle.",
+        });
+      }
+    },
+
+    onError: (error: Error) => {
+      toast.error("Opening-stock registration failed", {
+        description: error.message,
+      });
+    },
+  });
 }
 
 export function useOpenBottle() {

@@ -33,6 +33,8 @@ const OUT_OF_SCOPE = [
   /^unauthorized/,
   /^index\./,
   /^public\./,
+  /^privacy\.tsx$/,
+  /^terms\.tsx$/,
   // NEØ public front door and partner portal: customer/business surfaces.
   /^start\./,
   /^partner\./,
@@ -96,7 +98,10 @@ export function listRouteFiles(): string[] {
 }
 
 export function isSpecialist(file: string): boolean {
-  return SPECIALIST.some((k) => file.includes(k));
+  return (
+    file === "station-screen.tsx" ||
+    SPECIALIST.some((key) => file.includes(key))
+  );
 }
 
 /** Delegated page bodies live in components; follow one hop so a thin route

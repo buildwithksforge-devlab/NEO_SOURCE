@@ -1,0 +1,347 @@
+﻿
+========================================
+FILE: supabase/migrations/20260830014248_9de450de-87af-4188-9460-6698d84a34d1.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_kitchen_visible_station_ids()
+   2: RETURNS uuid[]
+   3: LANGUAGE sql
+   4: STABLE
+   5: SECURITY DEFINER
+   6: SET search_path = public
+   7: AS $$
+   8:   WITH me AS (
+   9:     SELECT public.current_org_id()          AS org,
+  10:            public.current_access_scope()    AS scope,
+  11:            public.current_branch_ids()      AS branches,
+  12:            public.current_department_ids()  AS depts,
+  13:            public.current_station_ids()     AS stations
+  14:   )
+  15:   SELECT COALESCE(array_agg(DISTINCT s.id), '{}'::uuid[])
+  16:   FROM public.operational_stations s, me
+  17:   WHERE me.org IS NOT NULL
+  18:     AND s.organization_id = me.org
+  19:     -- Property boundary stays hard for everyone below organisation reach.
+  20:     AND (
+  21:       public.scope_rank(me.scope) >= 5
+  22:       OR s.branch_id IS NULL
+  23:       OR s.branch_id = ANY (me.branches)
+  24:     )
+  25:     AND (
+  26:       public.scope_rank(me.scope) >= 5
+  27:       -- Broad production oversight is a configured capability, never a role name.
+  28:       OR public.has_permission('kitchen', 'all_stations', 'view')
+  29:       -- Explicitly assigned production station(s).
+  30:       OR s.id = ANY (me.stations)
+  31:       -- Departmental oversight is for supervisory reach only. Frontline staff
+  32:       -- (team/self scope) see the station(s) they are assigned to and nothing
+  33:       -- else, so a barista never sees Main Bar work and a bar attendant never
+  34:       -- sees Coffee Station work just because both sit under Food & Beverage.
+  35:       OR (
+  36:         public.scope_rank(me.scope) >= 3
+  37:         AND s.department_id IS NOT NULL
+  38:         AND s.department_id = ANY (me.depts)
+  39:       )
+  40:     );
+  41: $$;
+
+========================================
+FILE: supabase/migrations/20260914141453_39b0253f-f2bc-47ac-9838-c99919df1cfa.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_bar_station_ids(_branch uuid DEFAULT NULL::uuid)
+   2: RETURNS SETOF uuid
+   3: LANGUAGE sql
+   4: STABLE
+   5: SECURITY INVOKER
+   6: SET search_path = public
+   7: AS $fn$
+   8:   SELECT s.id
+   9:     FROM public.operational_stations s
+  10:     JOIN public.departments d ON d.id = s.department_id
+  11:    WHERE s.organization_id = public.current_org_id()
+  12:      AND (_branch IS NULL OR s.branch_id = _branch)
+  13:      AND coalesce(s.active, true)
+  14:      AND (upper(coalesce(d.code,'')) = 'BAR' OR d.name ILIKE 'bar%' OR d.name ILIKE '% bar%');
+  15: $fn$;
+
+========================================
+FILE: supabase/migrations/20260921131353_2754d565-1a6e-440a-8f1f-843dab1912bf.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_kitchen_queue(_branch uuid DEFAULT NULL::uuid, _station uuid DEFAULT NULL::uuid, _view text DEFAULT 'live'::text)
+   2:  RETURNS TABLE(ticket_id uuid, ticket_number text, status text, priority text, priority_reason text, delay_reason text, branch_id uuid, department_id uuid, station_id uuid, station_name text, station_missing boolean, order_id uuid, order_number text, order_type text, table_code text, guest_name text, guest_count integer, waiter_id uuid, allergy_alert text, dietary_notes text, course text, target_minutes integer, received_at timestamp with time zone, accepted_at timestamp with time zone, started_at timestamp with time zone, ready_at timestamp with time zone, age_minutes integer, is_delayed boolean, items jsonb)
+   3:  LANGUAGE sql
+   4:  STABLE
+   5:  SECURITY DEFINER
+   6:  SET search_path TO 'public'
+   7: AS $function$
+   8:   SELECT
+   9:     t.id,
+  10:     t.ticket_number,
+  11:     t.status,
+  12:     COALESCE(t.priority, 'normal'),
+  13:     t.priority_reason,
+  14:     t.delay_reason,
+  15:     t.branch_id,
+  16:     t.department_id,
+  17:     t.station_id,
+  18:     s.name,
+  19:     (t.station_id IS NULL),
+  20:     t.order_id,
+  21:     o.order_number,
+  22:     o.order_type,
+  23:     rt.code,
+  24:     o.guest_name,
+  25:     o.guest_count,
+  26:     o.waiter_id,
+  27:     o.allergy_alert,
+  28:     o.dietary_notes,
+  29:     t.course,
+  30:     COALESCE(t.target_minutes, 15),
+  31:     COALESCE(t.received_at, t.created_at),
+  32:     t.accepted_at,
+  33:     t.started_at,
+  34:     t.ready_at,
+  35:     GREATEST(0, (EXTRACT(EPOCH FROM (now() - COALESCE(t.received_at, t.created_at))) / 60)::int),
+  36:     (EXTRACT(EPOCH FROM (now() - COALESCE(t.received_at, t.created_at))) / 60) > COALESCE(t.target_minutes, 15)
+  37:       AND t.status NOT IN ('ready','served','completed','cancelled'),
+  38:     COALESCE(ki.items, '[]'::jsonb)
+  39:   FROM public.station_tickets t
+  40:   LEFT JOIN public.operational_stations s ON s.id = t.station_id
+  41:   LEFT JOIN public.pos_orders o ON o.id = t.order_id
+  42:   LEFT JOIN public.restaurant_tables rt ON rt.id = o.table_id
+  43:   LEFT JOIN public.neo_kitchen_ticket_items_bulk() ki ON ki.ticket_id = t.id
+  44:   WHERE t.organization_id = (SELECT public.current_org_id())
+  45:     AND (
+  46:       (
+  47:         (SELECT public.has_permission('kitchen'::text, 'queue'::text, 'view'::text))
+  48:         AND (
+  49:           t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+  50:           OR (
+  51:             t.station_id IS NULL
+  52:             AND (
+  53:               public.scope_rank((SELECT public.current_access_scope())) >= 5
+  54:               OR t.branch_id IN (SELECT unnest(public.current_branch_ids()))
+  55:             )
+  56:           )
+  57:         )
+  58:       )
+  59:       OR public.in_my_scope(t.organization_id, t.branch_id, t.department_id, t.station_id, t.assigned_chef_id, t.created_by)
+  60:     )
+  61:     AND (_branch IS NULL OR t.branch_id = _branch)
+  62:     AND (_station IS NULL OR t.station_id = _station)
+  63:     AND (
+  64:       CASE
+  65:         WHEN COALESCE(_view, 'live') = 'live' THEN t.status NOT IN ('served','completed','cancelled')
+  66:         WHEN _view = 'all' THEN true
+  67:         WHEN _view = 'delayed' THEN t.status NOT IN ('ready','served','completed','cancelled')
+  68:           AND (EXTRACT(EPOCH FROM (now() - COALESCE(t.received_at, t.created_at))) / 60) > COALESCE(t.target_minutes, 15)
+  69:         WHEN _view = 'unassigned-station' THEN t.station_id IS NULL AND t.status NOT IN ('served','completed','cancelled')
+  70:         ELSE t.status = _view
+  71:       END
+  72:     )
+  73:   ORDER BY COALESCE(t.received_at, t.created_at);
+  74: $function$;
+  75: 
+  76: REVOKE ALL ON FUNCTION public.neo_kitchen_queue(uuid, uuid, text) FROM PUBLIC, anon;
+  77: GRANT EXECUTE ON FUNCTION public.neo_kitchen_queue(uuid, uuid, text) TO authenticated, service_role;
+
+========================================
+FILE: supabase/migrations/20260923060604_01075328-bccb-4cb9-89b2-20115b551872.sql
+========================================
+   1: CREATE OR REPLACE FUNCTION public.neo_kitchen_assert_station_authority(_ticket uuid)
+   2: RETURNS void
+   3: LANGUAGE plpgsql
+   4: STABLE SECURITY DEFINER
+   5: SET search_path TO 'public'
+   6: AS $function$
+   7: DECLARE _t record;
+   8: BEGIN
+   9:   SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket;
+  10:   IF _t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+  11:   IF _t.organization_id <> public.current_org_id() THEN
+  12:     RAISE EXCEPTION 'Ticket % is outside your organisation', _t.ticket_number USING ERRCODE = '42501';
+  13:   END IF;
+  14:   -- Production authority is station reach only. Raising the order (created_by /
+  15:   -- waiter) lets you WATCH the ticket and close it out for service; it never
+  16:   -- grants the right to accept, start, finish or cancel another station's work.
+  17:   IF _t.station_id IS NOT NULL
+  18:      AND _t.station_id = ANY (public.neo_kitchen_visible_station_ids()) THEN
+  19:     RETURN;
+  20:   END IF;
+  21:   IF _t.assigned_chef_id = auth.uid() THEN RETURN; END IF;
+  22:   RAISE EXCEPTION 'You are not assigned to the % station, so you cannot change this ticket',
+  23:     COALESCE((SELECT name FROM public.operational_stations WHERE id = _t.station_id), 'production')
+  24:     USING ERRCODE = '42501';
+  25: END;
+  26: $function$;
+  27: 
+  28: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+  29:  RETURNS jsonb
+  30:  LANGUAGE plpgsql
+  31:  SECURITY DEFINER
+  32:  SET search_path TO 'public'
+  33: AS $function$
+  34: DECLARE
+  35:   _org uuid := public.current_org_id();
+  36:   _t record; _i record; _allowed text[]; _moved int := 0;
+  37:   _path text[] := ARRAY['new','accepted','preparing','ready','served','completed'];
+  38:   _target_idx int; _cur_idx int; _step text; _final text;
+  39: BEGIN
+  40:   SELECT * INTO _t FROM public.station_tickets WHERE id = _ticket AND organization_id = _org;
+  41:   IF _t.id IS NULL THEN RAISE EXCEPTION 'Ticket not found'; END IF;
+  42:   IF _to IN ('served','completed') AND public.neo_kitchen_caller_owns_order_ticket(_ticket) THEN
+  43:     PERFORM public.neo_kitchen_assert_ticket_scope(_ticket);
+  44:   ELSE
+  45:     PERFORM public.neo_kitchen_assert_station_authority(_ticket);
+  46:   END IF;
+  47:   IF _t.status IN ('completed','cancelled') THEN
+  48:     RAISE EXCEPTION 'Ticket % is already % and cannot change', _t.ticket_number, _t.status;
+  49:   END IF;
+  50: 
+  51:   _allowed := CASE _t.status
+  52:     WHEN 'new' THEN ARRAY['accepted','cancelled']
+  53:     WHEN 'accepted' THEN ARRAY['preparing','cancelled']
+  54:     WHEN 'preparing' THEN ARRAY['ready','cancelled']
+  55:     WHEN 'partially-ready' THEN ARRAY['ready','cancelled']
+  56:     WHEN 'ready' THEN ARRAY['served']
+  57:     WHEN 'served' THEN ARRAY['completed']
+  58:     ELSE ARRAY[]::text[] END;
+  59:   IF NOT (_to = ANY (_allowed)) THEN
+  60:     RAISE EXCEPTION 'Cannot move ticket % from % to %', _t.ticket_number, _t.status, _to;
+  61:   END IF;
+  62: 
+  63:   IF _to = 'cancelled' THEN
+  64:     IF COALESCE(btrim(_reason), '') = '' THEN RAISE EXCEPTION 'A reason is required to cancel a ticket'; END IF;
+  65:     FOR _i IN SELECT * FROM public.station_ticket_items WHERE ticket_id = _ticket AND status NOT IN ('cancelled','completed') LOOP
+  66:       IF _i.status IN ('ready','collected','served') THEN
+  67:         RAISE EXCEPTION 'Ticket % cannot be cancelled: item is already %', _t.ticket_number, _i.status;
+  68:       END IF;
+  69:       IF _i.status <> 'cancel-pending' THEN
+  70:         PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+  71:       END IF;
+  72:       PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+  73:       _moved := _moved + 1;
+  74:     END LOOP;
+  75:     _final := public.neo_kitchen_aggregate_ticket(_ticket);
+  76:     RETURN jsonb_build_object('ticket_status', _final, 'items_moved', _moved);
+  77:   END IF;
+  78: 
+  79:   _target_idx := array_position(_path, _to);
+  80:   FOR _i IN SELECT * FROM public.station_ticket_items WHERE ticket_id = _ticket AND status NOT IN ('cancelled','completed') LOOP
+  81:     _cur_idx := array_position(_path, _i.status);
+  82:     IF _cur_idx IS NULL AND _i.status = 'collected' THEN
+  83:       _cur_idx := array_position(_path, 'ready');
+  84:     END IF;
+  85:     IF _cur_idx IS NULL THEN
+  86:       RAISE EXCEPTION 'Ticket % cannot move to %: item is %', _t.ticket_number, _to, _i.status;
+  87:     END IF;
+  88:     WHILE _cur_idx < _target_idx LOOP
+  89:       _cur_idx := _cur_idx + 1;
+  90:       _step := _path[_cur_idx];
+  91:       PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+  92:       _moved := _moved + 1;
+  93:     END LOOP;
+  94:   END LOOP;
+  95: 
+  96:   _final := public.neo_kitchen_aggregate_ticket(_ticket);
+  97:   IF _final <> _to THEN
+  98:     RAISE EXCEPTION 'Ticket % could not reach % (items resolve to %)', _t.ticket_number, _to, _final;
+  99:   END IF;
+ 100:   RETURN jsonb_build_object('ticket_status', _final, 'items_moved', _moved);
+ 101: END;
+ 102: $function$;
+ 103: 
+ 104: GRANT EXECUTE ON FUNCTION public.neo_kitchen_assert_station_authority(uuid) TO authenticated;
+
+========================================
+FILE: src/lib/kitchen-visibility.ts
+========================================
+   1: /**
+   2:  * Kitchen production visibility contract.
+   3:  *
+   4:  * Mirrors `public.neo_kitchen_visible_station_ids()` and the
+   5:  * `station_tickets_production_read` RLS policy. This module is the executable
+   6:  * documentation of the rule â€” the database remains authoritative.
+   7:  *
+   8:  * Rule (in order):
+   9:  *  1. Tenant boundary: the ticket must belong to the viewer's organisation.
+  10:  *  2. Property boundary: below organisation/technical reach, the station's
+  11:  *     property must be one of the viewer's properties.
+  12:  *  3. Reach:
+  13:  *     - organisation / technical scope  â†’ every production station,
+  14:  *     - `kitchen.all_stations.view`     â†’ every production station at the property,
+  15:  *     - explicitly assigned station(s)  â†’ those stations,
+  16:  *     - department scope or above       â†’ stations of the viewer's department(s),
+  17:  *     - frontline (team/self) scope     â†’ assigned stations only.
+  18:  *  4. The viewer must additionally hold `kitchen.queue.view`.
+  19:  */
+  20: 
+  21: export const SCOPE_RANK: Record<string, number> = {
+  22:   organisation: 5,
+  23:   technical: 5,
+  24:   branch: 4,
+  25:   department: 3,
+  26:   team: 2,
+  27:   self: 1,
+  28: };
+  29: 
+  30: export function scopeRank(scope: string | null | undefined) {
+  31:   return SCOPE_RANK[scope ?? "self"] ?? 1;
+  32: }
+  33: 
+  34: export type VisibilityViewer = {
+  35:   organizationId: string;
+  36:   scope: string;
+  37:   branchIds: string[];
+  38:   departmentIds: string[];
+  39:   stationIds: string[];
+  40:   /** kitchen.all_stations.view */
+  41:   allStations: boolean;
+  42:   /** kitchen.queue.view */
+  43:   queueView: boolean;
+  44: };
+  45: 
+  46: export type VisibilityStation = {
+  47:   id: string;
+  48:   organizationId: string;
+  49:   branchId: string | null;
+  50:   departmentId: string | null;
+  51: };
+  52: 
+  53: export function visibleStationIds(
+  54:   viewer: VisibilityViewer,
+  55:   stations: VisibilityStation[],
+  56: ): string[] {
+  57:   const universal = scopeRank(viewer.scope) >= 5;
+  58:   return stations
+  59:     .filter((s) => s.organizationId === viewer.organizationId)
+  60:     .filter((s) => universal || s.branchId == null || viewer.branchIds.includes(s.branchId))
+  61:     .filter(
+  62:       (s) =>
+  63:         universal ||
+  64:         viewer.allStations ||
+  65:         viewer.stationIds.includes(s.id) ||
+  66:         // Departmental reach is supervisory only: frontline staff (team/self)
+  67:         // see the station(s) they are assigned to, never every station that
+  68:         // happens to share their department.
+  69:         (scopeRank(viewer.scope) >= 3 &&
+  70:           s.departmentId != null &&
+  71:           viewer.departmentIds.includes(s.departmentId)),
+  72:     )
+  73:     .map((s) => s.id);
+  74: }
+  75: 
+  76: export type VisibilityTicket = {
+  77:   organizationId: string;
+  78:   stationId: string | null;
+  79: };
+  80: 
+  81: export function canSeeProductionTicket(
+  82:   viewer: VisibilityViewer,
+  83:   ticket: VisibilityTicket,
+  84:   stations: VisibilityStation[],
+  85: ): boolean {
+  86:   if (!viewer.queueView) return false;
+  87:   if (ticket.organizationId !== viewer.organizationId) return false;
+  88:   if (!ticket.stationId) return false;
+  89:   return visibleStationIds(viewer, stations).includes(ticket.stationId);
+  90: }

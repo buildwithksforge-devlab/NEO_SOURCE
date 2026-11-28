@@ -1,3 +1,4 @@
+import { publishedNightlyRate } from '@/lib/guest-presentation';
 /**
  * NEØ ROOT — the public front door.
  *
@@ -12,6 +13,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { BrowserStorageNotice } from "./BrowserStorageNotice";
 import { useQuery } from "@tanstack/react-query";
 import { PoweredByNeo, PublicCreatorCredit } from "@/components/public/PublicAppShell";
 import {
@@ -65,8 +67,8 @@ function placeOf(p: DirectoryProperty): string | null {
  * has actually configured an active rate plan — never estimated.
  */
 function fromRate(p: DirectoryProperty): string | null {
-  if (p.from_rate == null || !Number.isFinite(Number(p.from_rate))) return null;
-  const amount = Number(p.from_rate);
+  const amount = publishedNightlyRate(p.from_rate);
+  if (amount === null) return null;
   const currency = p.currency ?? "";
   return `From ${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} / night`.trim();
 }
@@ -686,6 +688,9 @@ export function FrontDoorScreen() {
             >
               Put your hotel on NEØ
             </Link>
+            <Link to="/privacy" className="text-white/75 hover:underline">Privacy Policy</Link>
+            <Link to="/terms" className="text-white/75 hover:underline">Terms and Conditions</Link>
+            <BrowserStorageNotice />
           </nav>
         </div>
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 pb-10 text-xs text-white/70 sm:flex-row sm:items-center sm:justify-between">

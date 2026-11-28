@@ -35,7 +35,11 @@ import {
   useWorkflows,
   useAutomationRefresh,
 } from "@/lib/automation";
-import { generateAiBrief, getOutboundReleaseStatus, runAutomationEngine } from "@/lib/automation.functions";
+import {
+  generateAiBrief,
+  getOutboundReleaseStatus,
+  runAutomationEngine,
+} from "@/lib/automation.functions";
 import { EmptyState, LoadingState } from "@/components/common/StateSystem";
 
 export const Route = createFileRoute("/_shell/automation/")({
@@ -72,7 +76,10 @@ function AutomationDashboard() {
   const escalations = useEscalationEvents();
   const runEngine = useServerFn(runAutomationEngine);
   const loadOutboundStatus = useServerFn(getOutboundReleaseStatus);
-  const outboundStatus = useQuery({ queryKey: ["outbound-release-status"], queryFn: () => loadOutboundStatus() });
+  const outboundStatus = useQuery({
+    queryKey: ["outbound-release-status"],
+    queryFn: () => loadOutboundStatus(),
+  });
   const aiBrief = useServerFn(generateAiBrief);
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -111,8 +118,13 @@ function AutomationDashboard() {
     setBusy(true);
     try {
       const report = await runEngine({});
-      toast.success(`Processed ${report.eventsProcessed} event(s) · ${report.runsCreated} workflow run(s) · ${report.actionsCompleted} action(s)`);
-      if (report.queue.disabled) toast.warning("Outbound messages remain on hold pending backlog review and provider setup.");
+      toast.success(
+        `Processed ${report.eventsProcessed} event(s) · ${report.runsCreated} workflow run(s) · ${report.actionsCompleted} action(s)`,
+      );
+      if (report.queue.disabled)
+        toast.warning(
+          "Outbound messages remain on hold pending backlog review and provider setup.",
+        );
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Engine run failed");
@@ -145,8 +157,12 @@ function AutomationDashboard() {
       />
 
       {outboundStatus.data && !outboundStatus.data.enabled ? (
-        <p role="status" className="mb-6 rounded-xl border border-border bg-muted p-4 text-sm text-foreground">
-          Outbound delivery is on hold. Queued emails and texts have not been sent. Review historical messages and configure a release cutoff before enabling dispatch.
+        <p
+          role="status"
+          className="mb-6 rounded-xl border border-border bg-muted p-4 text-sm text-foreground"
+        >
+          Outbound delivery is on hold. Queued emails and texts have not been sent. Review
+          historical messages and configure a release cutoff before enabling dispatch.
         </p>
       ) : null}
 
@@ -199,7 +215,11 @@ function AutomationDashboard() {
           {queue.isLoading ? (
             <LoadingState variant="cards" rows={2} />
           ) : channelData.length === 0 ? (
-            <EmptyState inline title="No communications queued" description="No communications have been queued yet." />
+            <EmptyState
+              inline
+              title="No communications queued"
+              description="No communications have been queued yet."
+            />
           ) : (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -219,7 +239,7 @@ function AutomationDashboard() {
         </SectionCard>
 
         <SectionCard
-          title="AI smart notifications"
+          title="Operations brief"
           description="Summaries are produced only from recorded tenant figures."
           actions={
             <Button variant="outline" size="sm" onClick={handleBrief}>
@@ -256,7 +276,9 @@ function AutomationDashboard() {
             </div>
           ) : (
             <div className="space-y-2">
-              <StatusPill tone="info">AI generated</StatusPill>
+              <StatusPill tone="info">
+                {brief.provider === "local" ? "Local summary" : "AI generated"}
+              </StatusPill>
               <p className="whitespace-pre-wrap text-sm">{brief.summary}</p>
               <p className="text-xs text-muted-foreground">
                 Generated {new Date(brief.generatedAt).toLocaleString()} · period{" "}
@@ -301,7 +323,11 @@ function AutomationDashboard() {
           {escalations.isLoading ? (
             <LoadingState rows={3} />
           ) : (escalations.data ?? []).length === 0 ? (
-            <EmptyState inline title="No escalations raised" description="No escalations have been raised." />
+            <EmptyState
+              inline
+              title="No escalations raised"
+              description="No escalations have been raised."
+            />
           ) : (
             <ul className="divide-y divide-border text-sm">
               {(escalations.data ?? []).slice(0, 10).map((e) => (

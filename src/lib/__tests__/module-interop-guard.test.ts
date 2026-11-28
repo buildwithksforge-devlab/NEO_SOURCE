@@ -15,7 +15,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error -- plain ESM build script, no type declarations
-import { findBrokenInteropDestructures } from "../../../scripts/build-smoke.mjs";
+import { findBrokenInteropDestructures } from "../../../scripts/bundle-interop.mjs";
 
 const ROOT = process.cwd();
 

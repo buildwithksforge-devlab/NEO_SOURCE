@@ -1,0 +1,3 @@
+﻿20260924153000_front_office_connected_guards.sql:104: OR (public.hk_canonical_condition(r.housekeeping_status) IN ('clean','inspected')
+20261025110000_o04_stayover_occupancy_guard.sql:12: hk := lower(coalesce(NEW.housekeeping_status, 'dirty'));
+20261025110000_o04_stayover_occupancy_guard.sql:88: NEW.housekeeping_status := hk;

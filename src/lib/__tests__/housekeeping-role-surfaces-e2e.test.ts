@@ -89,7 +89,7 @@ describe("housekeeper sidebar matches the visibility gates exactly", () => {
     expect([...nav].sort()).toEqual(
       // "My Work" is the universal personal list every staff account holds;
       // "My Housekeeping Work" is the department surface on top of it.
-      ["Dashboard", "Guest Stays", "My Housekeeping Work", "My Work", "Notifications", "Tasks"].sort(),
+      ["Dashboard", "Guest Stays", "My Housekeeping Work", "My Work", "Notifications", "Tasks", "My Personal PIN"].sort(),
     );
   });
 
@@ -177,8 +177,7 @@ describe("housekeeping manager sidebar matches the visibility gates exactly", ()
         "My Work",
         "Notifications",
         "Station Stock",
-        "Tasks",
-      ].sort(),
+        "Tasks", "My Personal PIN"].sort(),
     );
   });
 

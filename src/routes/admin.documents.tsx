@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTenant } from "@/lib/tenant";
 import { documentTypeLabels } from "@/lib/tenant-defaults";
 import { cn } from "@/lib/utils";
+import { receiptQrConfig, receiptQrDestination, receiptQrLink } from "@/lib/receipt-qr";
 
 export const Route = createFileRoute("/admin/documents")({
   head: () => ({
@@ -26,9 +27,13 @@ export const Route = createFileRoute("/admin/documents")({
 });
 
 function DocumentsPage() {
-  const { tenant, updateDocumentTemplate } = useTenant();
+  const { tenant, updateDocumentTemplate, updateBrand } = useTenant();
   const [activeId, setActiveId] = useState(tenant.documentTemplates[0]?.id ?? "");
   const doc = tenant.documentTemplates.find((t) => t.id === activeId) ?? tenant.documentTemplates[0];
+  const qrDestination = receiptQrDestination(tenant.brand.receiptQrDestination);
+  const qrUrl = tenant.brand.receiptFeedbackUrl ?? "";
+  const invalidQrUrl = qrUrl.trim().length > 0 && !receiptQrLink(qrUrl);
+  const receiptQr = receiptQrConfig(tenant.brand);
 
   if (!doc) return null;
 
@@ -67,6 +72,59 @@ function DocumentsPage() {
 
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="space-y-6">
+            <div id="pos-receipt">
+            <SectionCard title="POS receipt" description="Set the QR link and payment instructions used on downloaded and printed POS receipts.">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="receipt-qr-destination">Receipt QR destination</Label>
+                  <select id="receipt-qr-destination" value={qrDestination}
+                    className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    onChange={(event) => updateBrand({ receiptQrDestination: receiptQrDestination(event.target.value) })}>
+                    <option value="feedback">Feedback</option>
+                    <option value="menu">Menu</option>
+                    <option value="socials">Socials</option>
+                    <option value="link">Other link</option>
+                    <option value="off">No QR code</option>
+                  </select>
+                </div>
+                {qrDestination === "off" ? null : (
+                  <div className="space-y-1">
+                    <Label htmlFor="receipt-qr-link">Destination link</Label>
+                    <Input id="receipt-qr-link" value={qrUrl} type="url" maxLength={512}
+                      placeholder="https://"
+                      aria-invalid={invalidQrUrl}
+                      aria-describedby="receipt-qr-help"
+                      onChange={(event) => updateBrand({ receiptFeedbackUrl: event.target.value })} />
+                    <p id="receipt-qr-help" className={cn("text-xs", invalidQrUrl ? "text-destructive" : "text-muted-foreground")}>
+                      {invalidQrUrl ? "Enter a valid HTTPS link; receipts will not show a QR code until it is fixed."
+                        : !receiptQr ? "No QR link is saved. Receipts will not show a QR code."
+                        : `${receiptQr.caption}. This link will appear as a QR code on new downloads and reprints.`}
+                    </p>
+                  </div>
+                )}
+                {([
+                  ["receiptPaybill", "M-Pesa Paybill"],
+                  ["receiptPaybillAccount", "Paybill account"],
+                  ["receiptTill", "M-Pesa Till"],
+                  ["receiptBankName", "Bank name"],
+                  ["receiptBankAccountName", "Bank account name"],
+                  ["receiptBankAccountNumber", "Bank account number"],
+                  ["receiptBankReference", "Bank payment reference"],
+                  ["receiptHeaderNote", "Receipt header note"],
+                  ["receiptFooterNote", "Receipt footer note"],
+                  ["receiptPaymentInstructions", "Other payment instructions"],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="space-y-1">
+                    <Label htmlFor={key}>{label}</Label>
+                    <Input id={key} type="text" maxLength={160}
+                      value={tenant.brand[key] ?? ""}
+                      onChange={(event) => updateBrand({ [key]: event.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+            </div>
             <SectionCard title="Header" description="Logo placement and heading text">
               <div className="space-y-4">
                 <div className="space-y-2">

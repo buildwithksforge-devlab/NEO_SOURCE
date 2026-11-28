@@ -1,3 +1,4 @@
+import {readViewAccess} from "@/lib/view-freshness";
 import { useState } from "react";
 import { OpsGuard } from "@/components/operations/OpsShared";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -54,7 +55,7 @@ function ProvidersPage() {
   async function runCheck() {
     try {
       await check({});
-      refresh();
+      await refresh();
       toast.success("Provider status refreshed from the backend");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Check failed");
@@ -90,7 +91,7 @@ function ProvidersPage() {
       />
 
       <SectionCard title="Channels">
-        <ul className="grid gap-3 md:grid-cols-2">
+        {connections.isLoading ? <p role="status">Loading provider status…</p> : connections.error ? <p role="alert" className="text-sm text-destructive">Provider status could not be loaded. Refresh before relying on the connection state.</p> : <ul className="grid gap-3 md:grid-cols-2">
           {PROVIDERS.map((p) => {
             const conn = byKey.get(p.key);
             const status = conn?.status ?? "not_configured";
@@ -117,7 +118,7 @@ function ProvidersPage() {
               </li>
             );
           })}
-        </ul>
+        </ul>}
         <p className="mt-4 text-xs text-muted-foreground">
           Credentials are added as backend secrets by an administrator and are never stored in
           frontend code or shown in this screen. Until a provider reports “Connected”, workflows
@@ -188,10 +189,13 @@ const ACCOUNT_FORMS: {
 ];
 
 function WorkspaceAccountsCard({ onSaved }: { onSaved: () => void }) {
+  const auth=useAuth();
+  const {identity,ready}=readViewAccess(auth);
   const loadSummary = useServerFn(getProviderCredentialSummary);
   const save = useServerFn(saveProviderCredentials);
   const summary = useQuery({
-    queryKey: ["provider-credential-summary"],
+    queryKey: ["provider-credential-summary", auth.organizationId, identity],
+    enabled: ready,
     queryFn: () => loadSummary({ data: undefined as never }),
   });
   const [values, setValues] = useState<Record<string, string>>({});
@@ -224,6 +228,9 @@ function WorkspaceAccountsCard({ onSaved }: { onSaved: () => void }) {
       setBusy(null);
     }
   }
+
+  if (summary.isPending) return <SectionCard title="Your provider accounts"><p role="status">Loading saved account status…</p></SectionCard>;
+  if (summary.error) return <SectionCard title="Your provider accounts"><p role="alert" className="text-sm text-destructive">Saved account status could not be loaded. Refresh before editing the credentials.</p><Button variant="outline" onClick={()=>void summary.refetch()}>Refresh account status</Button></SectionCard>;
 
   return (
     <SectionCard

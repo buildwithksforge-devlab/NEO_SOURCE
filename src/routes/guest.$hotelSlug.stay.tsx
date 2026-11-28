@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
-import { GuestScreen, GuestSection } from "@/components/public/GuestScreen";
+import { CalendarDays, ChevronRight, Loader2 } from "lucide-react";
+import { GuestPageIntro, GuestScreen, GuestSection } from "@/components/public/GuestScreen";
 import { PublicEmptyState, useWorkspace } from "@/components/public/PublicAppShell";
 import { GuestSignInPrompt } from "@/components/public/GuestSignInPrompt";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
-import { money } from "@/lib/public-delivery";
+import { money, statusLabel } from "@/lib/public-delivery";
 import {
   stayVerificationMessages,
   useGuestScreenView,
@@ -37,8 +37,8 @@ function MyStayPage() {
   const ws = useWorkspace();
   const { hotelSlug } = Route.useParams();
   const { user, loading } = useCustomerSession();
-  const stays = useMyStays(ws.organization_id, Boolean(user));
-  const verify = useVerifyStay(ws.organization_id);
+  const stays = useMyStays(ws.organization_id, ws.branch_id, user?.id);
+  const verify = useVerifyStay(ws.organization_id, ws.branch_id);
   const [reference, setReference] = useState("");
   const [detail, setDetail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -47,16 +47,17 @@ function MyStayPage() {
 
   return (
     <GuestScreen hotelSlug={hotelSlug} active="stay">
-      <section>
-        <h1 className="neo-pub-display text-3xl sm:text-4xl" style={{ color: brandFallback.secondary }}>
-          My stay
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: brandFallback.steel }}>
-          Your booking with {ws.hotel_name}, the room you are in and what has been charged.
-        </p>
-      </section>
+      <GuestPageIntro title="My stay" description={ws.hotel_name} image={ws.hero_url}>
+          <Link to="/guest/$hotelSlug/book" params={{ hotelSlug }} className="neo-guest-outline-action">Book a stay</Link>
+          {user ? <a href="#link-booking" className="neo-guest-outline-action">Link a booking</a> : null}
+          {user ? <Link to="/guest/$hotelSlug/folio" params={{ hotelSlug }} className="neo-guest-outline-action">Room charges</Link> : null}
+          <Link to="/guest/$hotelSlug/transport" params={{ hotelSlug }} className="neo-guest-outline-action">Transfers</Link>
+          <Link to="/guest/$hotelSlug/explore" params={{ hotelSlug }} search={{ section: "services" }} className="neo-guest-outline-action">Hotel services</Link>
+      </GuestPageIntro>
 
-      {!loading && !user ? (
+      {loading ? (
+        <p role="status" className="mt-4 text-sm text-[var(--guest-muted)]">Checking your guest session…</p>
+      ) : !user ? (
         <GuestSignInPrompt
           hotelSlug={hotelSlug}
           title="Sign in to see your stay"
@@ -64,50 +65,42 @@ function MyStayPage() {
         />
       ) : stays.isLoading ? (
         <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: "var(--guest-muted, #52627A)" }} />
         </div>
+      ) : stays.isError ? (
+        <PublicEmptyState title="Your bookings couldn’t load" description={`Refresh bookings for ${ws.hotel_name}.`}
+          action={<button type="button" className="neo-guest-secondary" onClick={() => void stays.refetch()}>Retry bookings</button>} />
       ) : (stays.data?.length ?? 0) === 0 ? (
-        <GuestSection
-          title="No stay linked yet"
-          description="If you booked another way, confirm it is yours below."
-        >
-          <PublicEmptyState
-            title="Nothing linked to your account"
-            description="Enter your booking reference with the surname, phone or email on the booking."
-          />
+        <GuestSection title="Your bookings">
+          <PublicEmptyState title="No bookings yet"
+            description="Enter your booking reference below if you already booked with the hotel." />
         </GuestSection>
       ) : (
-        <GuestSection title="Your bookings" description="Straight from the hotel's system.">
-          <ul className="space-y-3">
+        <GuestSection title="Your bookings">
+          <ul className="neo-guest-records">
             {((stays.data ?? []) as Row[]).map((s) => (
-              <li key={String(s["reservation_id"] ?? s["confirmation_number"])} className="rounded-xl border border-black/5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <li key={String(s["reservation_id"] ?? s["confirmation_number"])}>
+                <Link to="/guest/$hotelSlug/reservations/$reservationReference" params={{ hotelSlug, reservationReference: String(s["confirmation_number"]) }} className="neo-guest-record">
+                  <span className="neo-guest-record-icon"><CalendarDays className="size-5" aria-hidden /></span>
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
+                    <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
                       {String(s["confirmation_number"] ?? "")}
                     </p>
-                    <p className="text-xs" style={{ color: brandFallback.steel }}>
+                    <p className="text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                       {String(s["arrival_date"] ?? "")} → {String(s["departure_date"] ?? "")}
                       {s["room_number"] ? ` · Room ${String(s["room_number"])}` : ""}
-                      {s["status"] ? ` · ${String(s["status"])}` : ""}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="neo-guest-record-total">
                     {s["balance"] === undefined ? null : (
-                      <p className="text-sm font-semibold" style={{ color: brandFallback.secondary }}>
-                        {money(s["balance"])}
+                      <p className="text-sm font-semibold" style={{ color: "var(--guest-text, #07142D)" }}>
+                        {money(s["balance"], String(s["currency"] ?? ws.currency ?? "KES"))}
                       </p>
                     )}
-                    <Link
-                      to="/guest/$hotelSlug/folio"
-                      params={{ hotelSlug }}
-                      className="text-xs font-medium"
-                      style={{ color: ws.primary_color }}
-                    >
-                      View charges
-                    </Link>
+                    <p className="text-xs text-[var(--guest-muted)]">{statusLabel(s["status"])}</p>
                   </div>
-                </div>
+                  <ChevronRight className="neo-guest-record-arrow size-4" aria-hidden />
+                </Link>
               </li>
             ))}
           </ul>
@@ -116,6 +109,7 @@ function MyStayPage() {
 
       {user ? (
         <GuestSection
+          id="link-booking"
           title="Link another booking"
           description="Use the reference on your confirmation with a detail held on the booking."
         >
@@ -166,12 +160,12 @@ function MyStayPage() {
                 type="submit"
                 disabled={verify.isPending || !reference.trim() || !detail.trim()}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: ws.primary_color || brandFallback.primary }}
+                style={{ background: ws.primary_color || brandFallback.primary, color: "var(--pa-on-primary)" }}
               >
                 {verify.isPending ? "Checking…" : "Link my booking"}
               </button>
               {message ? (
-                <p className="mt-2 text-xs" style={{ color: brandFallback.steel }}>
+                <p className="mt-2 text-xs" style={{ color: "var(--guest-muted, #52627A)" }}>
                   {message}
                 </p>
               ) : null}

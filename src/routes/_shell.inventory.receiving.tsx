@@ -1,4 +1,5 @@
 import { ApprovedReceivingPosting } from "@/components/inventory/ApprovedReceivingPosting";
+import { ReceivingDocumentHistory } from "@/components/inventory/ReceivingDocumentHistory";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,6 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useReceivableOrders } from "@/lib/stores-lifecycle";
 import { NeoDatePicker } from "@/components/common/DatePicker";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClipboardList, FileCheck2, History, PackageCheck } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 type BlindItem = {
   id: string;
@@ -54,6 +58,9 @@ export const Route = createFileRoute("/_shell/inventory/receiving")({
 });
 
 function Page() {
+  const { can, permissionsLoaded } = useAuth();
+  const canPost = permissionsLoaded && (can("procurement", "receiving", "create") || can("procurement", "receiving.manage"));
+  const [view, setView] = useState("count");
   const orders = useReceivableOrders();
   const queryClient = useQueryClient();
 
@@ -79,7 +86,7 @@ function Page() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["procurement"] });
       toast.success(
-        "Blind receiving count submitted. Awaiting reconciliation."
+        "Blind receiving count submitted for independent review."
       );
       setPendingConfirmation(null);
       setSelected(null);
@@ -111,6 +118,7 @@ function Page() {
   }, [pendingConfirmation]);
 
   const [selected, setSelected] = useState<string | null>(null);
+  const deliveryNoteRef = useRef<HTMLInputElement>(null);
 
   const [delivered, setDelivered] = useState<Record<string, string>>({});
   const [rejected, setRejected] = useState<Record<string, string>>({});
@@ -123,6 +131,10 @@ function Page() {
   const rows = (orders.data ?? []) as BlindOrder[];
 
   const active = rows.find((order) => order.id === selected);
+
+  useEffect(() => {
+    if (selected) deliveryNoteRef.current?.focus();
+  }, [selected]);
 
   function openOrder(id: string) {
     if (submittingRef.current) return;
@@ -139,6 +151,11 @@ function Page() {
 
   function handleSubmit() {
     if (!active || submittingRef.current || pendingConfirmation) return;
+
+    if (!active.deliver_to_location_id) {
+      toast.error("This purchase order has no receiving store. Procurement must assign an active store at this property before you submit the count.");
+      return;
+    }
 
     if (!deliveryNote.trim()) {
       toast.error("Supplier delivery note number is required.");
@@ -221,13 +238,31 @@ function Page() {
     <div className="space-y-6">
 
       <PageHeader
-        eyebrow="Supply Chain"
         title="Blind Goods Receiving"
-        description="Count what physically arrived. Purchase order quantities and prices are hidden until the receiving count is submitted."
+        icon={PackageCheck}
+        description="Submit delivery quantities for review, then create the GRN from the approved count."
       />
 
-      <ApprovedReceivingPosting />
-
+      <Tabs
+        value={view === "posting" && !canPost ? "count" : view}
+        onValueChange={setView}
+        className="space-y-4"
+      >
+        <TabsList variant="pill" aria-label="Receiving workflow" className="max-w-full p-1">
+          <TabsTrigger className="min-h-11 gap-2" value="count"><ClipboardList className="size-4" aria-hidden /> Deliveries</TabsTrigger>
+          {canPost ? <TabsTrigger className="min-h-11 gap-2" value="posting"><FileCheck2 className="size-4" aria-hidden /> Post GRNs</TabsTrigger> : null}
+          <TabsTrigger className="min-h-11 gap-2" value="history"><History className="size-4" aria-hidden /> Saved GRNs</TabsTrigger>
+        </TabsList>
+        {canPost ? (
+          <TabsContent value="posting" forceMount className="data-[state=inactive]:hidden">
+            <ApprovedReceivingPosting />
+          </TabsContent>
+        ) : null}
+        <TabsContent value="history" forceMount className="data-[state=inactive]:hidden">
+          <ReceivingDocumentHistory />
+        </TabsContent>
+        <TabsContent value="count" forceMount className="space-y-4 data-[state=inactive]:hidden">
+      {!active ? (
       <QueryState
         isLoading={orders.isLoading}
         error={orders.error}
@@ -244,11 +279,11 @@ function Page() {
           title="Purchase orders awaiting delivery"
           description="Select the supplier delivery you are counting."
         >
-          <div className="space-y-3">
+          <ul className="divide-y divide-border">
             {rows.map((order) => (
-              <div
+              <li
                 key={order.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4"
+                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
               >
                 <div>
                   <p className="font-medium">{order.order_number}</p>
@@ -258,17 +293,18 @@ function Page() {
                 </div>
 
                 <Button
-                  variant={selected === order.id ? "secondary" : "default"}
+                  className="min-h-11 rounded-full"
                   disabled={submitCount.isPending}
                   onClick={() => openOrder(order.id)}
                 >
                   Start blind count
                 </Button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </SectionCard>
       </QueryState>
+      ) : null}
 
       {active && (
         <SectionCard
@@ -277,21 +313,20 @@ function Page() {
         >
           <div className="space-y-6">
 
-            <div className="rounded-lg border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/60 p-4">
               <p className="text-sm font-medium">
                 Supplier: {active.supplier_name}
               </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                Count all items physically before recording acceptance or rejection.
-              </p>
+              <span className="text-sm text-muted-foreground">{active.items.length} line items</span>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
 
               <div className="space-y-2">
-                <Label>Supplier delivery note number</Label>
+                <Label htmlFor="receiving-delivery-note">Supplier delivery note number</Label>
                 <Input
+                  ref={deliveryNoteRef}
+                  id="receiving-delivery-note"
                   value={deliveryNote}
                   onChange={(e) => setDeliveryNote(e.target.value)}
                   placeholder="Enter delivery note reference"
@@ -299,8 +334,9 @@ function Page() {
               </div>
 
               <div className="space-y-2">
-                <Label>Receiving remarks</Label>
+                <Label htmlFor="receiving-remarks">Receiving remarks</Label>
                 <Input
+                  id="receiving-remarks"
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   placeholder="Driver, vehicle or delivery condition"
@@ -430,26 +466,26 @@ function Page() {
             </div>
 
             <div className="rounded-lg border border-warning/40 bg-tint-warning p-4 text-sm text-on-tint-warning">
-              Blind counting is enabled. Stock posting remains locked
-              until the A10 database authorization and reconciliation
-              controls are installed.
+              After approval, open Post GRNs to create the Goods Received Note and admit the accepted quantities into stock.
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">
 
               <Button
                 variant="outline"
+                className="min-h-11 rounded-full"
                 disabled={submitCount.isPending}
                 onClick={() => {
                   setPendingConfirmation(null);
                   setSelected(null);
                 }}
               >
-                Close count
+                Back to deliveries
               </Button>
 
               <Button
                 disabled={submitCount.isPending}
+                className="min-h-11 rounded-full"
                 onClick={handleSubmit}
               >
                 {submitCount.isPending
@@ -462,6 +498,8 @@ function Page() {
           </div>
         </SectionCard>
       )}
+        </TabsContent>
+      </Tabs>
 
       <dialog
         ref={confirmationRef}

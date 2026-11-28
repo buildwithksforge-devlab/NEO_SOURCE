@@ -1,3 +1,4 @@
+import { DeleteIncorrectEmployeeButton } from "@/components/hr/DeleteIncorrectEmployeeButton";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, UserPlus, Users } from "lucide-react";
@@ -455,6 +456,7 @@ function EmployeeDirectory() {
             ) : null}
           </>
         ) : null}
+        {inspected ? <DeleteIncorrectEmployeeButton id={String(inspected["id"])} number={String(inspected["employee_number"])} name={String(inspected["full_name"])} linkedProfile={Boolean(inspected["profile_id"])} onDeleted={()=>setInspectId(null)} /> : null}
       </InspectorSheet>
     </div>
   );

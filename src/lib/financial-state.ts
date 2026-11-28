@@ -1,3 +1,4 @@
+import {readViewAccess, VISIBLE_VIEW_REFRESH} from "@/lib/view-freshness";
 /**
  * Canonical financial state.
  *
@@ -152,19 +153,23 @@ export type FinancialStateFilter = {
 
 /** The register behind every Finance tile, list and drilldown. */
 export function useFinancialStates(filter: FinancialStateFilter = {}, enabled = true) {
-  const { organizationId } = useAuth();
+  const auth = useAuth();
+  const { organizationId } = auth;
+  const {identity, ready} = readViewAccess(auth);
   const { branchId, filterKey } = useActivePropertyFilter();
   return useQuery({
+    ...VISIBLE_VIEW_REFRESH,
     queryKey: [
       "financial-states",
       organizationId,
+      identity,
       filterKey,
       filter.from ?? null,
       filter.to ?? null,
       filter.module ?? null,
       filter.status ?? null,
     ],
-    enabled: enabled && Boolean(organizationId),
+    enabled: ready && (enabled && Boolean(organizationId)),
     queryFn: async (): Promise<FinancialStateRow[]> => {
       const { data, error } = await rpc("neo_financial_state_register", {
         _branch: branchId ?? null,

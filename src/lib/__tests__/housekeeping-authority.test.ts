@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addGrant, canFromPermissions } from "@/lib/permissions";
 
-const RLS = readFileSync(join(process.cwd(), "src/lib/__tests__/fixtures/ownership-isolation.sql"), "utf8");
+const RLS = readFileSync(join(process.cwd(), "src/lib/__tests__/fixtures/ownership-isolation.sql"), "utf8").replace(/\r\n/g, "\n");
 const policy = (name: string) => {
   const i = RLS.indexOf(`(${name})`);
   expect(i, `${name} missing from fixture`).toBeGreaterThan(-1);

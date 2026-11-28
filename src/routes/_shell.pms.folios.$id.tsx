@@ -38,7 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, FolioStatusBadge, PmsGuard, QueryState } from "@/components/pms/PmsShared";
 import {
-  FOLIO_CATEGORIES,
+  MANUAL_FOLIO_CATEGORIES,
   formatDateTime,
   moneyWithCode as money,
   titleCase,
@@ -143,13 +143,13 @@ function FolioDetailPage() {
   const lineRows = (lines.data ?? []) as Array<Record<string, any>>;
   const postedRows = lineRows.filter((l) => String(l["status"] ?? "posted") === "posted");
   const postedLineCount = postedRows.length;
-  const discountTotal = Number(f?.["total_discounts"] ?? 0);
 
   // The bill itself is never re-added here. `neo_folio_projection` is the one
   // canonical answer to net, tax, gross, collected and outstanding, so this
   // screen cannot disagree with the register, the cashbook or the ledger.
   const projection = useFolioProjection(id);
   const proj = projection.data?.found ? projection.data : null;
+  const discountTotal = proj?.discountTotal ?? 0;
   const netCharges = proj?.netRevenue ?? 0;
   const taxTotal = proj?.tax ?? 0;
   const serviceTotal = proj?.serviceCharge ?? 0;
@@ -277,11 +277,14 @@ function FolioDetailPage() {
                     value={money(netCharges, currency)}
                   />
                   {discountTotal > 0 ? (
-                    <StatementRow label="Discounts" value={`- ${money(discountTotal, currency)}`} />
+                    <p className="text-xs text-muted-foreground">Net charges already include discounts of {money(discountTotal, currency)}.</p>
                   ) : null}
                   <StatementRow label="Service charge" value={money(serviceTotal, currency)} />
+                  {(proj?.chargeComponents ?? []).map((charge) => (
+                    <StatementRow key={charge.key} label={charge.label} value={money(charge.amount, currency)} />
+                  ))}
 
-                  <StatementRow label="VAT" value={money(taxTotal, currency)} />
+                  <StatementRow label="Taxes" value={money(taxTotal, currency)} />
                   <StatementRow label="Gross billed" value={money(totalBilled, currency)} />
                   <StatementRow label="Collected" value={money(totalCollected, currency)} />
                   {Number(f["total_refunds"] ?? 0) > 0 ? (
@@ -484,7 +487,8 @@ function FolioDetailPage() {
       </QueryState>
 
       <PostChargeDialog folioId={id} open={charging} onClose={() => setCharging(false)} />
-      <TransferDialog line={transferLine} folioId={id} onClose={() => setTransferLine(null)} />
+      <TransferDialog key={transferLine?.id ?? "closed"} line={transferLine} folioId={id}
+        branchId={f?.["branch_id"]} currency={f?.["currency"]} onClose={() => setTransferLine(null)} />
       <ReverseDialog line={reverseLine} onClose={() => setReverseLine(null)} />
       <ReopenDialog folioId={id} open={reopening} onClose={() => setReopening(false)} />
     </div>
@@ -521,7 +525,7 @@ function PostChargeDialog({
   onClose: () => void;
 }) {
   const post = usePostFolioCharge();
-  const [category, setCategory] = useState(String(FOLIO_CATEGORIES[0]));
+  const [category, setCategory] = useState("miscellaneous");
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
@@ -542,8 +546,7 @@ function PostChargeDialog({
         <DialogHeader>
           <DialogTitle>Post a charge</DialogTitle>
           <DialogDescription>
-            The posting carries its source module, actor and an idempotency key, so a repeated click
-            cannot double-charge the guest.
+            Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -554,7 +557,7 @@ function PostChargeDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {FOLIO_CATEGORIES.map((c) => (
+                {MANUAL_FOLIO_CATEGORIES.map((c) => (
                   <SelectItem key={c} value={c}>
                     {titleCase(c)}
                   </SelectItem>
@@ -645,10 +648,14 @@ function Field({
 function TransferDialog({
   line,
   folioId,
+  branchId,
+  currency,
   onClose,
 }: {
   line: LineRow | null;
   folioId: string;
+  branchId: string | null | undefined;
+  currency: string | null | undefined;
   onClose: () => void;
 }) {
   const transfer = useTransferFolioLine();
@@ -656,7 +663,7 @@ function TransferDialog({
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
   const options = ((folios.data ?? []) as Record<string, any>[]).filter(
-    (f) => String(f["id"]) !== folioId,
+    (f) => Boolean(branchId && currency) && f["id"] !== folioId && f["branch_id"] === branchId && f["currency"] === currency,
   );
 
   return (
@@ -665,8 +672,7 @@ function TransferDialog({
         <DialogHeader>
           <DialogTitle>Transfer charge</DialogTitle>
           <DialogDescription>
-            The charge is reversed here and re-posted on the receiving folio, with both sides linked
-            by one correlation key.
+            Move the full charge, including taxes and discounts, to an open folio in the same property and currency.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -685,6 +691,13 @@ function TransferDialog({
                 ))}
               </SelectContent>
             </Select>
+            {folios.isError ? (
+              <button type="button" className="text-left text-sm underline" onClick={() => void folios.refetch()}>
+                Receiving folios could not load. Try again
+              </button>
+            ) : !folios.isLoading && options.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No eligible receiving folios are open.</p>
+            ) : null}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="transfer-reason">Reason</Label>
@@ -695,7 +708,7 @@ function TransferDialog({
             />
           </div>
           <Button
-            disabled={!target || reason.trim().length < 3 || transfer.isPending}
+            disabled={!options.some((folio) => folio["id"] === target) || reason.trim().length < 3 || transfer.isPending}
             onClick={() =>
               transfer.mutate(
                 { line: line!.id, target, reason: reason.trim() },

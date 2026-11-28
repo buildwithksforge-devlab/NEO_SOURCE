@@ -25,6 +25,7 @@ const inventoryIndex = read("src/routes/_shell.inventory.index.tsx");
 const configCollection = read("src/components/config/ConfigCollection.tsx");
 const procurementDepartment = read("src/lib/procurement-department.ts");
 const quotationsRoute = read("src/routes/_shell.procurement.quotations.tsx");
+const rfqMigration = read("supabase/migrations/20261123121000_atomic_procurement_rfq.sql");
 
 describe("stock item master", () => {
   it("has a catalogue that creates stock items directly", () => {
@@ -77,8 +78,10 @@ describe("stock item master", () => {
 describe("requests for quotation", () => {
   it("raises an RFQ against a purchase request and invites suppliers", () => {
     expect(procurementDepartment).toContain("export function useCreateRfq");
-    expect(procurementDepartment).toContain('.from("rfqs")');
-    expect(procurementDepartment).toContain('.from("rfq_suppliers")');
+    expect(procurementDepartment).toContain('"neo_procurement_create_rfq"');
+    expect(rfqMigration).toContain("INSERT INTO public.rfqs");
+    expect(rfqMigration).toContain("INSERT INTO public.rfq_suppliers");
+    expect(rfqMigration).toContain("attempt_key");
     expect(procurementDepartment).toContain("Invite at least one supplier");
   });
 
@@ -95,7 +98,8 @@ describe("requests for quotation", () => {
   });
 
   it("a new invitation starts prepared, not sent", () => {
-    expect(procurementDepartment).toContain('dispatch_state: "prepared"');
+    expect(rfqMigration).toContain("'prepared'");
+    expect(rfqMigration).toContain("WHERE organization_id = _org AND id = ANY(_suppliers)");
   });
 
   it("surfaces the RFQ on the quotation comparison screen behind the management capability", () => {

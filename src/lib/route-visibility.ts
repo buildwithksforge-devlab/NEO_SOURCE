@@ -21,6 +21,8 @@ export type RouteVisibility = "PUBLIC_INDEXABLE" | "PRIVATE_NOINDEX";
  */
 export const PUBLIC_INDEXABLE_ROUTES = [
   "/",
+  "/privacy",
+  "/terms",
   "/start/:slug",
   "/guest/:slug",
   "/guest/:slug/explore",
@@ -113,7 +115,7 @@ export function canonicalUrl(path: string): string {
  * every hotel that has deliberately switched on public discovery.
  */
 export function sitemapPaths(publicPropertySlugs: string[]): string[] {
-  const paths = ["/"];
+  const paths: string[] = PUBLIC_INDEXABLE_ROUTES.filter((path) => !path.includes(":"));
   for (const slug of publicPropertySlugs) {
     paths.push(`/start/${slug}`, `/guest/${slug}`, `/guest/${slug}/explore`, `/guest/${slug}/book`);
   }

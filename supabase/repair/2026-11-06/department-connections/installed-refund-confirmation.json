@@ -1,0 +1,93 @@
+{
+  "diagnostic_version": "refund-deposit-payout-connections-v1",
+  "definitions_match": true,
+  "definition_checks": [
+    {
+      "signature": "public.neo_cash_refund_decide(uuid,boolean,text)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_cash_refund_payment_valid(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_cash_refund_request(uuid,numeric,text)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_cash_refund_request_v2(uuid,numeric,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_cash_refund_settle(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_cash_refunds(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_deposit_net_amount(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_finance_post_refund(text,uuid,boolean)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_finance_post_txn(text,uuid,boolean)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_pos_refund_decide(uuid,boolean,text)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_pos_refund_position(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_pos_refund_request(uuid,uuid,numeric,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_pos_refund_settle(uuid,text,uuid,boolean)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_refund_payment_write_guard()",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_refund_receipt_lock(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_refund_reserve(uuid,numeric,text,text,uuid,boolean,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_refund_settle_internal(uuid,boolean,text,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_refunded_deposit_id(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_reservation_collection_facts(uuid,uuid,uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.neo_reservation_deposit_position(uuid)",
+      "matches": true
+    },
+    {
+      "signature": "public.pms_apply_deposits_to_folio()",
+      "matches": true
+    }
+  ],
+  "direct_refund_decisions_disabled": true,
+  "refund_write_guard_enabled": true,
+  "evidence": "User supplied Results JSON; all 21 definitions matched. No business action executed by installation."
+}

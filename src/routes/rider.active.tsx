@@ -5,9 +5,10 @@ import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { money, statusLabel } from "@/lib/public-delivery";
 import { useMyDeliveries, useMyRiderProfile, useRiderAdvance } from "@/lib/delivery-data";
-import { RiderTabBar } from "@/components/public/RiderTabBar";
+import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
 import { PullToRefresh } from "@/components/common/PullToRefresh";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
+import { RiderHandoverForm } from "@/components/public/RiderHandoverForm";
 
 export const Route = createFileRoute("/rider/active")({
   head: () => ({
@@ -29,7 +30,6 @@ type Row = Record<string, unknown>;
 const NEXT_STEP: Record<string, { to: string; label: string }> = {
   "rider-assigned": { to: "collected", label: "Picked up from restaurant" },
   collected: { to: "en-route", label: "Start delivery" },
-  "en-route": { to: "arrived", label: "I have arrived" },
 };
 
 const ON_ROAD = ["rider-assigned", "collected", "out-for-delivery"];
@@ -38,6 +38,7 @@ function RiderActiveJob() {
   const navigate = useNavigate();
   const { user, loading } = useCustomerSession();
   const rider = useMyRiderProfile();
+  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
   const riderId = rider.data?.["id"] as string | undefined;
   const deliveries = useMyDeliveries(riderId);
   const advance = useRiderAdvance();
@@ -51,13 +52,13 @@ function RiderActiveJob() {
   );
 
   return (
-    <div className="neo-rider-page">
+    <div className="neo-rider-page" style={brand.style}>
       <PreviewBanner experience="Rider" />
       <header className="px-4 py-4" style={{ background: brandFallback.navy }}>
         <div className="mx-auto w-full max-w-md">
           <p className="text-sm font-semibold text-white">Active job</p>
           <p className="text-xs text-white/60">
-            {jobs.length === 0 ? "Nothing on the road" : `${jobs.length} on the road`}
+            {jobs.length === 0 ? "No active deliveries" : `${jobs.length} on the road`}
           </p>
         </div>
       </header>
@@ -65,11 +66,16 @@ function RiderActiveJob() {
       <PullToRefresh>
       <main className="mx-auto w-full max-w-md min-w-0 space-y-4 px-4 pb-28 pt-5">
         <section className="neo-rider-hero">
-          <div><p className="neo-commerce-eyebrow">Live run</p><h1 className="mt-1 text-2xl font-bold text-white">Active delivery</h1><p className="mt-2 text-sm text-white/75">Follow the operational sequence. Kitchen readiness and delivery confirmation remain enforced by the backend.</p></div>
+          <div><h1 className="text-2xl font-bold text-white">Active delivery</h1>{brand.property ? <p className="mt-2 text-sm text-white/80">{brand.property.property_name}</p> : null}</div>
         </section>
         {loading || rider.isLoading || deliveries.isLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin" style={{ color: brandFallback.steel }} />
+          </div>
+        ) : rider.isError || deliveries.isError ? (
+          <div className="neo-rider-card p-5 text-slate-800" role="alert">
+            <p>Active deliveries couldn’t load.</p>
+            <button className="neo-commerce-primary mt-3" onClick={() => void (rider.isError ? rider.refetch() : deliveries.refetch())}>Retry</button>
           </div>
         ) : !rider.data ? (
           <p className="neo-rider-card p-6 text-center text-sm" style={{ color: brandFallback.steel }}>
@@ -89,11 +95,18 @@ function RiderActiveJob() {
             const status = String(job["order_status"]);
             const next = NEXT_STEP[status];
             const address = (job["address_snapshot"] ?? {}) as Record<string, unknown>;
-            const line = [address["line1"], address["area"], address["city"]]
+            const line = [address["address_line"] ?? address["line1"], address["area"], address["city"]]
               .filter(Boolean)
               .map(String)
               .join(", ");
-            const phone = address["phone"] ? String(address["phone"]) : null;
+            const phone = String(address["phone"] || job["contact_phone"] || "");
+            const instructions = address["delivery_instructions"] ?? address["instructions"];
+            const latitude = address["latitude"];
+            const longitude = address["longitude"];
+            const mapsUrl = typeof latitude === "number" && Math.abs(latitude) <= 90 &&
+              typeof longitude === "number" && Math.abs(longitude) <= 180
+              ? `https://maps.apple.com/?daddr=${latitude},${longitude}` : null;
+            const readyForPickup = status !== "rider-assigned" || ["ready", "completed"].includes(String(job["kitchen_status"]));
             return (
               <section key={String(job["id"])} className="neo-rider-card p-5">
                 <div className="neo-public-row">
@@ -119,41 +132,44 @@ function RiderActiveJob() {
                     {line}
                   </p>
                 ) : null}
-                {address["instructions"] ? (
+                {instructions ? (
                   <p className="mt-1 text-xs" style={{ color: brandFallback.steel }}>
-                    {String(address["instructions"])}
+                    {String(instructions)}
                   </p>
                 ) : null}
+                <div className="mt-2 flex flex-wrap gap-x-4">
                 {phone ? (
                   <a
                     href={`tel:${phone}`}
-                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium"
-                    style={{ color: brandFallback.primary }}
+                    className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-800"
                   >
                     <Phone className="size-4" /> Call the customer
                   </a>
                 ) : null}
+                {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-800"><MapPin className="size-4" aria-hidden /> Open drop-off in Maps</a> : null}
+                </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {next ? (
+                  {next && readyForPickup ? (
                     <button
                       type="button"
                       disabled={advance.isPending}
                       onClick={() => advance.mutate({ orderId: String(job["id"]), to: next.to })}
-                      className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ background: brandFallback.primary }}
+                      className="neo-commerce-primary w-full"
                     >
-                      {advance.isPending ? "Saving…" : next.label}
+                      {advance.isPending && advance.variables?.orderId === String(job["id"]) ? "Saving…" : next.label}
                     </button>
                   ) : null}
-                  <Link
-                    to="/rider"
-                    className="rounded-xl px-4 py-2.5 text-sm font-semibold"
-                    style={{ border: `1px solid ${brandFallback.primary}`, color: brandFallback.primary }}
-                  >
-                    Confirm delivery
-                  </Link>
+                  {advance.isError && advance.variables?.orderId === String(job["id"]) ? (
+                    <p role="alert" className="w-full rounded-xl bg-red-50 px-3 py-2 text-sm text-red-950">
+                      {advance.error.message}
+                    </p>
+                  ) : null}
+                  {!readyForPickup ? <p className="w-full rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">Waiting for the kitchen to mark this order ready.</p> : null}
                 </div>
+                {status === "out-for-delivery" ? (
+                  <RiderHandoverForm orderId={String(job["id"])} paymentMethod={String(job["payment_method"] ?? "")} />
+                ) : null}
               </section>
             );
           })

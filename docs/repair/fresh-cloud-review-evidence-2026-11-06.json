@@ -1,0 +1,44 @@
+{
+  "reviewDate": "2026-11-06",
+  "timezone": "Africa/Nairobi",
+  "mode": "Fresh visible in-app browser, read-only",
+  "property": "Savanna Crown Nairobi",
+  "role": "Owner / Director",
+  "sourceCommit": "7ce7375",
+  "liveBuild": "f9fe3068b2bc497c",
+  "localSourceAndBuiltServerMatch": true,
+  "chooserFrameVerified": true,
+  "chooserDashboardTransitionVerified": true,
+  "mpesaQueueRead": "PASS empty state, no missing-function error",
+  "postingMonthly": {
+    "reasons": [
+      "Posting receipt has no balanced posted journal",
+      "Unmapped Savannah revenue category: event-catering"
+    ],
+    "failedEntries": 1,
+    "range": "2026-11-01 through 2026-11-06",
+    "blockedExceptionEntries": 6
+  },
+  "dashboardLast30Days": {
+    "blockedEntries": 18,
+    "failedEntries": 1
+  },
+  "nightAudit": {
+    "blockingExceptions": 18,
+    "newAuditRun": false,
+    "closeDisabled": true,
+    "loadedBusinessDate": "2026-09-25"
+  },
+  "printers": {
+    "pairedPropertyComputerShown": false,
+    "physicalPaperVerified": false
+  },
+  "release": {
+    "status": "Not ready",
+    "readinessGatesShown": 0
+  },
+  "operationalMutations": 0,
+  "wholeWorkflowPassesInferred": 0,
+  "original87or88ClosureCount": "Not inferred",
+  "report": "NEO-FRESH-CLOUD-READINESS-2026-11-06.md"
+}

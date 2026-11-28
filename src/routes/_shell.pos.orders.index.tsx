@@ -1,3 +1,4 @@
+import {outstandingPaidBill} from '@/lib/pos-payment-display';
 import { Fragment, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ReceiptText } from "lucide-react";
@@ -23,7 +24,7 @@ import {
 import { EmptyState, OrderStatusBadge, PosGuard, QueryState } from "@/components/pos/PosShared";
 import { RecordDialog } from "./_shell.pos.floor";
 import { MANUAL_ORDER_TYPES, ORDER_TYPES, money, titleCase } from "@/lib/pos";
-import { useCreateOrder, usePosOrders, useRestaurantTables } from "@/lib/pos-data";
+import { useCreateOrder, useMyHandledPosOrders, useMyPosPerformance, usePosOrderHistory, useRestaurantTables } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/_shell/pos/orders/")({
   head: () => ({
@@ -51,18 +52,133 @@ export const Route = createFileRoute("/_shell/pos/orders/")({
   ),
 });
 
+
+function MyPosPerformanceCard({
+  from,
+  to,
+}: {
+  from: string;
+  to: string;
+}) {
+  const performance = useMyPosPerformance(from, to);
+  const result = performance.data;
+
+  const number = (value: number | string | undefined) =>
+    Number(value ?? 0);
+
+  return (
+    <SectionCard
+      title="My Performance"
+      description="Personal POS activity for the selected reporting period. Finalized bill value is not reconciled revenue."
+    >
+      {performance.isLoading ? (
+        <p className="text-sm text-muted-foreground">
+          Loading personal performance...
+        </p>
+      ) : performance.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          Performance information is unavailable:{" "}
+          {performance.error.message}
+        </p>
+      ) : !result ? (
+        <p className="text-sm text-muted-foreground">
+          No attributed POS activity was found for this period.
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              label: "Orders created",
+              value: String(number(result.orders_created)),
+            },
+            {
+              label: "Orders assigned",
+              value: String(number(result.orders_currently_assigned)),
+            },
+            {
+              label: "Created orders finalized",
+              value: String(number(result.created_orders_finalized)),
+            },
+            {
+              label: "Assigned orders finalized",
+              value: String(number(result.assigned_orders_finalized)),
+            },
+            {
+              label: "Cancelled orders created",
+              value: String(number(result.created_orders_cancelled)),
+            },
+            {
+              label: "Voided orders created",
+              value: String(number(result.created_orders_voided)),
+            },
+            {
+              label: "Finalized bill value",
+              value: money(number(result.finalized_bill_value)),
+            },
+          ].map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-lg border bg-card p-4"
+            >
+              <p className="text-xs text-muted-foreground">
+                {metric.label}
+              </p>
+              <p className="mt-2 text-xl font-semibold tabular-nums">
+                {metric.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function OrdersPage() {
   const navigate = useNavigate();
-  const [scope, setScope] = useState<"open" | "all">("open");
+  const [scope, setScope] = useState<"open" | "closed" | "all">("open");
+  const [page, setPage] = useState(0);
+  const [ownership, setOwnership] = useState<"mine" | "team">("mine");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [search, setSearch] = useState("");
   const [channel, setChannel] = useState<string>("all");
   const [newOrder, setNewOrder] = useState(false);
-  const orders = usePosOrders(scope);
+
+  const [performancePeriod] = useState(() => {
+    const now = new Date();
+
+    const localDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    };
+
+    return {
+      from: localDate(
+        new Date(now.getFullYear(), now.getMonth(), 1),
+      ),
+      to: localDate(now),
+    };
+  });
+  const orders = usePosOrderHistory(scope, page, 50, {
+    ownership,
+    search,
+    from: fromDate,
+    to: toDate,
+  });
+  const handledOrders = useMyHandledPosOrders(
+    fromDate,
+    toDate,
+    scope === "closed",
+    page,
+  );
   const tables = useRestaurantTables();
   const createOrder = useCreateOrder();
 
-  const q = search.trim().toLowerCase();
-  const scoped = orders.data ?? [];
+  const scoped = orders.data?.rows ?? [];
 
   /** Where the order came from is the first question on a busy service. */
   const channelCounts = new Map<string, number>();
@@ -74,12 +190,7 @@ function OrdersPage() {
 
   const rows = scoped.filter(
     (o) =>
-      (channel === "all" || o.order_type === channel) &&
-      (!q ||
-      o.order_number.toLowerCase().includes(q) ||
-      (o.guest_name ?? "").toLowerCase().includes(q) ||
-      (o.customers?.full_name ?? "").toLowerCase().includes(q) ||
-      (o.restaurant_tables?.code ?? "").toLowerCase().includes(q)),
+      (channel === "all" || o.order_type === channel),
   );
 
   /** Orders read by origin: one band per channel, each with its own value. */
@@ -104,26 +215,68 @@ function OrdersPage() {
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Select value={scope} onValueChange={(v) => setScope(v as "open" | "all")}>
+        <Select value={scope} onValueChange={(v) => { setScope(v as "open" | "closed" | "all"); setPage(0); }}>
           <SelectTrigger className="w-48" aria-label="Order scope">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="open">Open orders</SelectItem>
+            <SelectItem value="closed">Closed orders</SelectItem>
             <SelectItem value="all">All orders</SelectItem>
           </SelectContent>
         </Select>
+        <Select
+          value={ownership}
+          onValueChange={(value) => {
+            setOwnership(value as "mine" | "team");
+            setPage(0);
+          }}
+        >
+          <SelectTrigger className="w-44" aria-label="Order ownership">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mine">My orders</SelectItem>
+            <SelectItem value="team">Scoped team orders</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          type="date"
+          aria-label="Orders from date"
+          className="w-44"
+          value={fromDate}
+          onChange={(e) => {
+            setFromDate(e.target.value);
+            setPage(0);
+          }}
+        />
+
+        <Input
+          type="date"
+          aria-label="Orders to date"
+          className="w-44"
+          value={toDate}
+          onChange={(e) => {
+            setToDate(e.target.value);
+            setPage(0);
+          }}
+        />
+
         <Input
           className="w-64"
-          placeholder="Search order, guest or table"
+          placeholder="Search order number"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(0);
+          }}
         />
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1.5">
         <ChannelChip
-          label="All channels"
+          label="All channels (this page)"
           count={scoped.length}
           total={scoped.reduce((sum, o) => sum + Number(o.grand_total), 0)}
           active={channel === "all"}
@@ -141,6 +294,87 @@ function OrdersPage() {
         ))}
       </div>
 
+      <div className="mb-6">
+        <MyPosPerformanceCard
+          from={performancePeriod.from}
+          to={performancePeriod.to}
+        />
+      </div>
+
+      {ownership === "mine" && scope !== "open" && (
+        <SectionCard
+          title="My Permanent Order History"
+          description="Orders you created, handled or received through reassignment, including closed and transferred orders."
+        >
+          <QueryState
+            isLoading={handledOrders.isLoading}
+            error={handledOrders.error}
+            isEmpty={(handledOrders.data ?? []).length === 0}
+            empty={
+              <EmptyState
+                icon={ReceiptText}
+                title="No matching historical orders"
+                description="Try another date range or select All orders."
+              />
+            }
+          >
+            <TableScroll>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>My involvement</TableHead>
+                    <TableHead className="text-right">Bill value</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {(handledOrders.data ?? []).map((order) => (
+                    <TableRow key={order.order_id}>
+                      <TableCell className="font-mono text-xs">
+                        {order.order_number}
+                      </TableCell>
+
+                      <TableCell>
+                        {new Date(
+                          order.closed_at ?? order.created_at,
+                        ).toLocaleString("en-KE", {
+                          timeZone: "Africa/Nairobi",
+                        })}
+                      </TableCell>
+
+                      <TableCell>
+                        {titleCase(order.order_status)}
+                      </TableCell>
+
+                      <TableCell>
+                        {[
+                          order.original_creator && "Created",
+                          order.current_waiter && "Current waiter",
+                          order.previously_assigned && "Handled / assigned",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        {money(Number(order.order_value ?? 0))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableScroll>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Showing up to 50 records for this page.
+              The selected date range applies to this history.
+            </p>
+          </QueryState>
+        </SectionCard>
+      )}
       <SectionCard title="Orders" description="Select an order to open the service terminal.">
         <QueryState
           isLoading={orders.isLoading}
@@ -214,6 +448,7 @@ function OrdersPage() {
                         <TableCell>{new Date(o.created_at).toLocaleString()}</TableCell>
                         <TableCell>
                           <OrderStatusBadge status={o.status} />
+                          {outstandingPaidBill(o) ? <p className="text-xs font-medium text-destructive">Payment outstanding</p> : null}
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">
                           {money(o.grand_total)}
@@ -226,6 +461,34 @@ function OrdersPage() {
             </Table>
           </TableScroll>
         </QueryState>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {orders.data?.total ?? 0} orders in this view.
+              Showing page {page + 1} of{" "}
+              {Math.max(1, Math.ceil((orders.data?.total ?? 0) / 50))}.
+            </p>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={page === 0 || orders.isFetching}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Previous
+              </Button>
+
+              <Button
+                variant="outline"
+                disabled={
+                  orders.isFetching ||
+                  (page + 1) * 50 >= (orders.data?.total ?? 0)
+                }
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+        </div>
       </SectionCard>
 
       <RecordDialog

@@ -1,3 +1,5 @@
+import { OpenVolumeTransferCard } from "@/components/inventory/OpenVolumeTransferCard";
+import { OpeningContainerForm } from "@/components/inventory/OpeningContainerForm";
 /**
  * Bottles and controlled usage.
  *
@@ -41,7 +43,7 @@ import {
 
 const str = (v: unknown, fallback = "") => (v == null ? fallback : String(v));
 
-export function BottleUsageCard() {
+function ExistingBottleUsageCard() {
   const locations = useStockLocations();
   const items = useStockItems();
   const openContainers = useOpenContainers();
@@ -317,6 +319,16 @@ export function BottleUsageCard() {
           </TableScroll>
         )}
       </SectionCard>
+    </div>
+  );
+}
+
+export function BottleUsageCard() {
+  return (
+    <div className="space-y-4">
+      <OpeningContainerForm />
+      <ExistingBottleUsageCard />
+      <OpenVolumeTransferCard />
     </div>
   );
 }

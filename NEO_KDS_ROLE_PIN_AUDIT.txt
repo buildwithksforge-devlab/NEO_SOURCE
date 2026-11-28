@@ -1,0 +1,1067 @@
+﻿NEØ KDS ROLE AND PIN AUDIT
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\analytics.ts
+L292: owner: "Kitchen Manager",
+L860: "Review recipe variance, portioning and wastage with the Kitchen Manager before changing any menu price.",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\assignment-chain.ts
+L52: "barista",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\bar.ts
+L318: if (text.includes("barista") || text.includes("coffee")) return false;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\canonical-workflow.ts
+L146: s("failed", "Failed", "Kitchen Manager", "Requeue the ticket", ["queued"]),
+L147: s("cancelled", "Cancelled", "Kitchen Manager", null, []),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\data-scope.ts
+L11: *  - Self scope (waiter, barista, housekeeper, laundry attendant, rider,
+L101: users: ["assigned_chef_id", "created_by"],
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\delivery.ts
+L76: { key: "food-quality", label: "Food quality", routeTo: "Kitchen Manager" },
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\density.ts
+L96: "barista",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-data.ts
+L207: // kitchen manager sees the department, a superuser the organisation.
+L874: toast.success("Shortage reported to Stores and the Kitchen Manager.");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-tickets.ts
+L6: * mutate through `public.neo_kitchen_ticket_transition` /
+L31: chef_id: string | null;
+L74: * Lifecycle contract — mirrors neo_kitchen_ticket_transition()
+L121: /** Mirrors `neo_kitchen_item_transition()`. The server re-validates every move. */
+L315: export function useKitchenTicketTransition() {
+L327: const { data, error } = await guardedRpc(supabase, "neo_kitchen_ticket_transition", {
+L357: const { data, error } = await guardedRpc(supabase, "neo_kitchen_item_transition", {
+L665: const { data, error } = await guardedRpc<string[]>(supabase, "neo_kitchen_visible_station_ids");
+L694: * `neo_kitchen_assert_station_authority`, and this hook keeps the screens
+L697: export function useStationAuthority() {
+L718: canWorkStation: (stationId: string | null | undefined) =>
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\kitchen-visibility.ts
+L4: * Mirrors `public.neo_kitchen_visible_station_ids()` and the
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\main-kitchen.ts
+L7: *  - The Kitchen Manager / Head Chef owns the whole Main Kitchen and is the
+L11: *    the Head Chef — never requisitioning directly.
+L329: * Stock needs — anyone reports, the Head Chef alone requisitions
+L379: toast.success("Need sent up to the Head Chef");
+L410: /** Head Chef only: consolidate the selected needs into one Stores requisition. */
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\marketing-data.ts
+L278: changed_by: user?.id ?? null,
+L336: changed_by: user?.id ?? null,
+L443: changed_by: user?.id ?? null,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\navigation.ts
+L1342: if (has("waiter", "waitress", "barista", "bar ", "restaurant")) return "waiter";
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\pastry-department.ts
+L7: *  - The Head Pastry Chef owns the production schedule, assigns Pastry Chefs,
+L10: *  - A Pastry Chef sees only the production assigned to them — product,
+L109: * Production plans and planned items — Head Pastry Chef
+L218: toast.success("Pastry Chef assigned");
+L244: /** Head Pastry Chef only: reconcile what was produced against sold and wasted. */
+L266: * A Pastry Chef's own work — no customer money is ever returned
+L358: toast.success("Cake assigned to a Pastry Chef");
+L385: * Wastage — both roles record, only the Head Pastry Chef reviews
+L432: toast.success("Wastage sent to the Head Pastry Chef");
+L459: * Stock needs and the Head Pastry Chef's requisition
+L509: toast.success("Need sent up to the Head Pastry Chef");
+L515: /** Head Pastry Chef only: consolidate the selected needs into one requisition. */
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\permissions.ts
+L398: * `kitchen.chef.assign`. Ask this way whenever the backend gate is exact.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\production-displays.ts
+L32: if (type === "coffee" || /\b(coffee|barista)\b/.test(label)) return "coffee";
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\role-aliases.ts
+L19: "food-and-beverage-manager": "F&B Manager",
+L23: barista: "Barista",
+L54: "head-chef": "Kitchen Manager / Head Chef",
+L59: "head-pastry-chef": "Head Pastry Chef",
+L60: "pastry-chef": "Pastry Chef",
+L85: "kitchen manager": "head-chef",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\role-templates.ts
+L174: barista: [
+L221: // The Head Pastry Chef owns the bakery plan, custom cakes and wastage review,
+L242: // A Pastry Chef sees only their own production; no schedule, no cake pricing,
+L611: barista: "self",
+L698: ["ai", "insights", "view"], ["kitchen", "overview", "view"], ["kitchen", "overview", "edit"], ["kitchen", "queue", "view"], ["kitchen", "queue", "edit"], ["kitchen", "my-station", "view"], ["kitchen", "my-station", "edit"], ["kitchen", "production", ...
+L785: barista: {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\rpc-manifest.ts
+L19: neo_production_display_act: "anon",
+L20: neo_production_staff_pin: "authenticated",
+L24: neo_kitchen_visible_station_ids: "authenticated",
+L385: neo_kitchen_item_transition: "authenticated",
+L414: neo_kitchen_ticket_transition: "authenticated",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\shared-production-display.ts
+L63: "neo_production_display_act",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\station-store-routing.ts
+L79: changedByName: (r["changed_by_name"] as string | null) ?? null,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\workspace-preview.ts
+L27: "Barista",
+L31: "Kitchen Manager",
+L35: "Pastry Chef",
+L90: barista: "coffee-station",
+L147: Barista: "coffee-station",
+L151: "Kitchen Manager": "kitchen-overview",
+L155: "Pastry Chef": "pastry",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\simulation\suites.server.ts
+L285: // Kitchen work is allocated by the head chef before it reaches a chef's queue.
+L293: t.must(`the head chef can allocate the ticket${allocError ? `: ${allocError.message}` : ""}`, !allocError);
+L312: const { error: acceptError } = await rpc(chef, "neo_kitchen_item_transition", {
+L318: await expectOk(chef, "neo_kitchen_item_transition", { _item: item.id, _to: "preparing", _reason: "System test" });
+L319: await expectOk(chef, "neo_kitchen_item_transition", { _item: item.id, _to: "ready", _reason: "System test" });
+L333: const { error: serveError } = await rpc(waiterClient, "neo_kitchen_item_transition", {
+L884: .select("new_status, changed_by, created_at")
+L1443: .select("action, changed_by, created_at")
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\assignment-chain.test.ts
+L44: expect(requiresStation(roleKeysOf(["Barista"]))).toBe(true);
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\density-system.test.ts
+L72: expect(recommendDensityForRoles(["Barista"], tablet)).toBe("touch");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\department-access-parity.test.ts
+L37: "barista",
+L145: for (const role of ["waiter", "receptionist", "cashier", "barista", "chef", "housekeeper", "rider"]) {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-assignment-governance.test.ts
+L18: ["kitchen", "*", "chef.assign"],
+L20: ["kitchen", "*", "production.manage"],
+L31: const BARISTA = grants([
+L43: canExact("kitchen", "chef.assign") ||
+L45: canExact("kitchen", "production.manage")
+L53: expect(allocates(BARISTA)).toBe(false);
+L61: expect(canFromPermissions(CHEF)("kitchen", "chef.assign")).toBe(true);
+L62: expect(canExactlyFromPermissions(CHEF)("kitchen", "chef.assign")).toBe(false);
+L67: expect(chef("kitchen", "ticket.accept")).toBe(true);
+L68: expect(chef("kitchen", "item.prepare")).toBe(true);
+L69: expect(chef("kitchen", "item.ready")).toBe(true);
+L70: const barista = canFromPermissions(BARISTA);
+L71: expect(barista("kitchen", "ticket.accept")).toBe(true);
+L72: expect(barista("kitchen", "item.ready")).toBe(true);
+L82: expect(data).not.toContain("assigned_chef_id");
+L87: expect(queue).toContain("canExact(\"kitchen\", \"chef.assign\")");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-execution-vs-assignment.test.ts
+L14: *                                       'chef.assign' | 'item.reassign'
+L15: *                                       | 'production.manage')
+L17: *   neo_kitchen_item_transition() -> has_permission('kitchen', <action>)
+L18: *                                    where accepted -> ticket.accept,
+L19: *                                    preparing -> item.prepare,
+L20: *                                    ready -> item.ready, else item.prepare
+L34: ["kitchen", "*", "chef.assign"],
+L36: ["kitchen", "*", "production.manage"],
+L43: ["kitchen", "*", "production.manage"],
+L57: const BARISTA = grants([
+L70: exact("kitchen", "chef.assign") ||
+L74: exact("kitchen", "production.manage") ||
+L79: /** Mirrors the permission branch of neo_kitchen_item_transition(). */
+L81: accepted: "ticket.accept",
+L82: preparing: "item.prepare",
+L83: progress: "item.prepare",
+L84: ready: "item.ready",
+L89: return can("kitchen", TRANSITION_PERMISSION[to] ?? "item.prepare");
+L97: ["barista", BARISTA],
+L98: ["head chef", HEAD_CHEF],
+L99: ["kitchen manager", KITCHEN_MANAGER],
+L120: expect(canAllocate(BARISTA)).toBe(false);
+L126: it("allows allocation for the head chef and the kitchen manager", () => {
+L138: expect(canFromPermissions(STATION_CHEF)("kitchen", "chef.assign")).toBe(true);
+L139: expect(canExactlyFromPermissions(STATION_CHEF)("kitchen", "chef.assign")).toBe(false);
+L149: expect(data).not.toContain("assigned_chef_id");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-queue-visibility.test.ts
+L49: it("F&B manager with all-stations capability sees kitchen production at the property", () => {
+L55: it("head chef / kitchen manager sees the kitchen queues they manage, not only assigned tickets", () => {
+L77: const barista = viewer({ scope: "self", departmentIds: [DEPT_FNB], stationIds: ["coffee"] });
+L79: expect(canSeeProductionTicket(barista, grillTicket, stations)).toBe(false);
+L81: expect(visibleStationIds(barista, stations)).toEqual(["coffee"]);
+L113: expect(sql).toContain("neo_kitchen_visible_station_ids");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-recipe-surfaces.test.ts
+L4: * Kitchen Manager and Head Chef may open and edit recipe and menu screens;
+L22: /** Head Chef / Kitchen Manager hold the whole kitchen module (kitchen.*). */
+L39: ["kitchen", "*", "item.ready"],
+L52: it("kitchen manager / head chef may open recipes", () => {
+L67: ["kitchen manager", KITCHEN_MANAGER, true],
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-station-routing.test.ts
+L104: "assigned_chef_id",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\kitchen-ticket-contract.test.ts
+L41: expect(file).toContain("useKitchenTicketTransition");
+L55: "neo_kitchen_ticket_transition",
+L136: expect(RPC_MANIFEST["neo_kitchen_item_transition"]).toBe("authenticated");
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-approvals-authority-e2e.test.ts
+L90: describe("F&B manager holding approvals.approve", () => {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\pos-kds-contract.test.ts
+L29: const ticketTransition = fn("neo_kitchen_ticket_transition");
+L30: const itemTransition = fn("neo_kitchen_item_transition");
+L152: for (const role of ["waiter", "cashier", "chef", "barista", "accountant"]) {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\production-uat.test.ts
+L40: Barista: "barista",
+L41: "Head Chef": "head-chef",
+L131: expect(ROLE_ACCESS_SCOPES["barista"]).toBe("self");
+L187: for (const key of ["head-chef", "housekeeper", "rider", "waiter", "barista", "maintenance-technician"]) {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\role-certification-matrix.test.ts
+L367: role: "barista",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\role-isolation.test.ts
+L32: const chef = canFromPermissions(new Set(["kitchen.queue.view", "kitchen.item.prepare"]));
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\role-structure-v2.test.ts
+L18: "barista",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\role-template-apply.test.ts
+L17: { role: "Barista", expected: 36, added: 29 },
+L18: { role: "Kitchen Manager", expected: 15, added: 1 },
+L31: const outcome = interpretApplyResult({ ok: true, verified: true, role: "Barista", added: 0, missing_after: 0, expected: 36 });
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\rpc-manifest.test.ts
+L92: "neo_production_display_act",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\staff-assignment-scoping.test.ts
+L130: { id: "t-chef", name: "Head Chef", access_scope: null, department_id: "d-kitchen", normalized_role_key: null },
+L131: { id: "t-barista", name: "Barista", access_scope: null, department_id: "d-fnb", normalized_role_key: null },
+L152: expect(ids("d-fnb").sort()).toEqual(["t-barista", "t-coffee", "t-owner"]);
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\station-scope-certification.test.ts
+L7: *   • Baristas            → Coffee Station
+L11: *   • F&B Manager  → Restaurant Floor, Coffee Station, Main Bar (Food & Beverage)
+L12: *   • Head Chef    → Hot Kitchen, Pastry (Main Kitchen + Pastry & Bakery)
+L16: * fallback would show a barista the bar's tickets. Department reach is
+L21: * `neo_kitchen_visible_station_ids` carries the same rule.
+L71: ["Barista", FNB, "coffee-station"],
+L93: const barista = viewer({ scope: "team", departmentIds: [FNB], stationIds: ["coffee-station"] });
+L95: expect(visibleStationIds(barista, STATIONS)).toEqual(["coffee-station"]);
+L113: it("gives the F&B Manager Restaurant Floor, Coffee Station and Main Bar", () => {
+L118: // Kitchen production is not the F&B Manager's department by assignment.
+L123: it("gives the Head Chef Hot Kitchen and Pastry according to assignment", () => {
+L156: `select replace(coalesce(string_agg(p.prosrc,' '),''), chr(10), ' ') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='neo_kitchen_visible_station_ids'`,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\void-discount-governance.test.ts
+L41: "barista",
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\delivery-dispatch.sql
+L55: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+L286: INSERT INTO public.rider_availability_history (organization_id, rider_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\delivery-notify-grn.sql
+L55: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\dispatch-candidates.sql
+L55: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\kitchen-routing.sql
+L134: accepted_at, started_at, ready_at, completed_at, cancelled_at, assigned_chef_id,
+L143: _t.assigned_chef_id, _t.created_by,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\pms-checkin-lifecycle.sql
+L81: (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\pos-kds-contract.sql
+L11: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL::text)
+L27: WHEN 'accepted' THEN 'ticket.accept'
+L28: WHEN 'preparing' THEN 'item.prepare'
+L29: WHEN 'ready' THEN 'item.ready'
+L33: ELSE 'item.prepare' END;
+L71: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L82: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+L142: 'chef_id', i.chef_id,
+L177: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+L214: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L216: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L232: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\pos-status-rules.sql
+L70: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\lib\__tests__\fixtures\pos-void-governance.sql
+L92: INSERT INTO public.pos_order_status_history (organization_id, order_id, order_item_id, previous_status, new_status, station_id, changed_by)
+L114: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\ProductionDisplay.tsx
+L30: useKitchenTicketTransition,
+L32: useStationAuthority,
+L119: canExact("kitchen", "production.manage") ||
+L120: canExact("kitchen", "chef.assign") ||
+L122: const { canWorkStation } = useStationAuthority();
+L124: const transition = useKitchenTicketTransition();
+L261: stationAuthority={!readOnly && canWorkStation(t.station_id)}
+L276: if (readOnly || !canWorkStation(t.station_id)) return;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\components\kitchen\TicketCard.tsx
+L53: * cancel its production. Matches `neo_kitchen_assert_station_authority`.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.needs.tsx
+L51: "Report Main Kitchen stock needs and, as Head Chef, consolidate them into a single Stores requisition.",
+L81: // Only the Kitchen Manager / Head Chef holds the requisition capability.
+L146: description="Chefs and supervisors report what the kitchen is short of. The Kitchen Manager / Head Chef is the only role that turns those needs into a Stores requisition."
+L188: description="Report a shortage and it goes straight to the Head Chef for requisition."
+L282: This does not order anything — it tells the Head Chef what the kitchen is short of.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.production.tsx
+L59: const canPost = can("kitchen", "production.edit") || can("kitchen", "production.manage");
+L120: can("kitchen", "production.manage") ? (
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.queue.tsx
+L29: useStationAuthority,
+L37: useKitchenTicketTransition,
+L96: const transition = useKitchenTicketTransition();
+L98: const { canWorkStation } = useStationAuthority();
+L110: canExact("kitchen", "chef.assign") ||
+L112: canExact("kitchen", "production.manage");
+L191: stationAuthority={canWorkStation(t.station_id)}
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stewarding.tsx
+L503: The record is kept for the Supervisor and Head Chef.
+L575: Recorded against you and reviewed by the Supervisor or Head Chef.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.kitchen.stores.tsx
+L182: description="Alerts Stores, Procurement and the Kitchen Manager so menu availability can be adjusted."
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.custom-cakes.tsx
+L52: "Take custom cake orders with size, flavour, message and collection time, assign them to a Pastry Chef and track them through to collection.",
+L107: description="A custom cake is a promise with a deadline. Record the specification once, assign it, and the Pastry Chef sees everything except the money."
+L187: aria-label="Assign Pastry Chef"
+L189: <SelectValue placeholder="Assign Pastry Chef" />
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.index.tsx
+L72: description="Production is planned before the order arrives. Plan the day, assign your Pastry Chefs, keep custom cakes on time and account for every tray that does not sell."
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.my-production.tsx
+L30: "A Pastry Chef's own assigned production and custom cakes, with quantity, due time and finishing instructions — and no guest billing.",
+L71: description="When the Head Pastry Chef assigns you production or a custom cake, it appears here."
+L144: Waiting on the Head Pastry Chef to close this off.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.needs.tsx
+L44: "Pastry Chefs report what the bakery is short of; only the Head Pastry Chef consolidates those needs into a single Stores requisition.",
+L95: description="Anyone in pastry can flag a shortage. Only the Head Pastry Chef turns those flags into a requisition, so Stores receives one consolidated request per department."
+L185: This goes to the Head Pastry Chef, not straight to Stores.
+L265: Send to Head Pastry Chef
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.production.tsx
+L52: "Plan the day's bakery output, assign each product to a Pastry Chef and reconcile what was produced against what sold.",
+L110: description="Bakery output is planned before an order exists. Every product on the plan carries a quantity, a due time and the Pastry Chef responsible for it."
+L160: : "The Head Pastry Chef has not published a production plan."
+L196: aria-label="Assign Pastry Chef"
+L198: <SelectValue placeholder="Assign Pastry Chef" />
+L299: <Label htmlFor="pastry-assignee">Pastry Chef</Label>
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.queue.tsx
+L13: useKitchenTicketTransition,
+L61: const transition = useKitchenTicketTransition();
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.requisitions.tsx
+L16: "Every Stores requisition raised for Pastry & Bakery by the Head Pastry Chef, with its approval and issue status.",
+L55: description="Requisitions the Head Pastry Chef has sent to Stores, and where each one now stands."
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pastry.wastage.tsx
+L47: "Record bakery wastage — unsold, spoiled or failed batches — and let the Head Pastry Chef review every entry.",
+L52: content: "Bakery wastage recorded by the chef and reviewed by the Head Pastry Chef.",
+L87: description="Bakery produces ahead of demand, so wastage is part of the trade. Record it honestly — the Head Pastry Chef reviews every entry and nobody reviews their own."
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pms.reservations.$id.tsx
+L114: changed_by: user?.id ?? null,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.pos.kds.tsx
+L21: useKitchenTicketTransition,
+L24: useStationAuthority,
+L56: const { canWorkStation } = useStationAuthority();
+L64: const transition = useKitchenTicketTransition();
+L132: stationAuthority={canWorkStation(t.station_id)}
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\src\routes\_shell.staff-display-code.tsx
+L21: const { data, error } = await guardedRpc<PinState>(supabase, "neo_production_staff_pin");
+L29: const { data, error } = await guardedRpc<PinState>(supabase, "neo_production_staff_pin", {
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260811114844_c45d8dc9-a432-4230-b308-a348cc9d9293.sql
+L437: 'Front Office Manager','Receptionist','Restaurant Manager','Waiter','Bar Attendant','Kitchen Manager','Chef',
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260811142350_11345b8a-4a31-4f94-9fea-d576331fca33.sql
+L383: WHEN 'Barista' THEN 'coffee-station'
+L387: WHEN 'Kitchen Manager' THEN 'kitchen-overview'
+L391: WHEN 'Pastry Chef' THEN 'pastry'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260811142419_26998a99-bad6-44ed-b72b-985f361cdab0.sql
+L18: WHEN 'Barista' THEN 'coffee-station'
+L22: WHEN 'Kitchen Manager' THEN 'kitchen-overview'
+L26: WHEN 'Pastry Chef' THEN 'pastry'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260811154839_f848389a-50b2-4fb5-baad-f4be5f29ccd8.sql
+L71: changed_by uuid,
+L294: changed_by uuid,
+L848: INSERT INTO public.reservation_history (organization_id, reservation_id, action, field, previous_value, new_value, reason, changed_by)
+L903: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L1121: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812181742_3d2a0f81-f19a-482d-a8f3-6b9980f5e689.sql
+L322: changed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L763: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+L790: INSERT INTO public.pos_order_status_history (organization_id, order_id, order_item_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260812190514_e81da8a2-74d2-425f-a798-b720a4ae5799.sql
+L12: ADD COLUMN IF NOT EXISTS assigned_chef_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L28: ADD COLUMN IF NOT EXISTS chef_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L99: changed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L112: chef_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L120: CREATE INDEX IF NOT EXISTS ticket_assignments_chef_idx ON public.ticket_assignments (organization_id, chef_id, created_at DESC);
+L203: chef_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+L481: ('station_ticket_status_history','item.prepare'),
+L482: ('ticket_assignments','chef.assign'),
+L487: ('production_batches','production.manage'),
+L488: ('batch_ingredient_usage','production.manage'),
+L493: ('returned_meal_records','item.prepare'),
+L523: ('ticket.accept','Accept station tickets'),
+L524: ('item.prepare','Start preparing items'),
+L525: ('item.ready','Mark items ready'),
+L532: ('chef.assign','Assign chefs to tickets'),
+L548: ('production.manage','Manage production batches'),
+L562: WHERE (r.name ILIKE '%kitchen manager%' OR r.name ILIKE '%executive chef%' OR r.name IN ('Owner','System Administrator','General Manager'))
+L569: AND p.action IN ('access','queue.view','ticket.accept','item.prepare','item.ready','item.cancel_request',
+L573: AND r.name NOT ILIKE '%kitchen manager%'
+L581: AND p.action IN ('all_stations.view','chef.assign','item.reassign','ticket.prioritize','quality.approve',
+L582: 'quality_hold.create','quality_hold.release','waste.view','waste.approve','production.manage',
+L707: WHEN 'accepted' THEN 'ticket.accept'
+L708: WHEN 'preparing' THEN 'item.prepare'
+L709: WHEN 'ready' THEN 'item.ready'
+L712: ELSE 'item.prepare' END;
+L740: chef_id = CASE WHEN _to_status IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L751: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813094937_4886363c-e902-4baf-a0ea-971d04ffcb0b.sql
+L1286: OR (r.name IN ('Kitchen Manager','Restaurant Manager','Bar Manager') AND p.action IN ('dashboard.view','stock.manage','transfers.manage','requests.manage','reports.view','costing.view','stocktake.manage'))
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813140649_0ebfde60-9b8a-40a1-a294-925d19eae371.sql
+L538: changed_by uuid,
+L847: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L858: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L1252: INSERT INTO work_order_status_history (organization_id, work_order_id, previous_status, new_status, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813143452_f2d60a6c-45b2-4e6d-bb21-81915fc8ee1a.sql
+L109: 'Finance Manager','Front Office Manager','Restaurant Manager','Kitchen Manager',
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260813163312_8725cfe1-b167-4f5d-b2de-535ce2153182.sql
+L147: changed_by uuid,
+L223: changed_by uuid,
+L957: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+L986: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, changed_by)
+L1005: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+L1041: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+L1064: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, changed_by)
+L1105: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, latitude, longitude, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260814120702_d1a59a4f-d6f9-4fb1-a613-6e53345b7566.sql
+L219: changed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260814130212_50f6ac55-270f-4e14-975e-4263952bd9fd.sql
+L69: changed_by uuid,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260817102415_c9422250-046c-490e-ade7-c30a5f946e8c.sql
+L58: ('Barista',array['restaurant'],array['create','edit','print','view']),
+L59: ('Kitchen Manager',array['kitchen'],array['approve','create','edit','export','override','print','reject','view']),
+L60: ('Kitchen Manager',array['stores'],array['create','view']),
+L61: ('Kitchen Manager',array['restaurant','analytics'],array['view']),
+L62: ('Kitchen Manager',array['reports'],array['export','print','view']),
+L71: ('Pastry Chef',array['kitchen'],array['create','edit','print','view']),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260819061953_aef1d910-92f8-43b1-a15c-d69ceb25b339.sql
+L109: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L120: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L130: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260819083356_8f3bbced-e6b2-4b41-9504-ee17d147d9cd.sql
+L66: public.in_my_scope(organization_id, branch_id, department_id, station_id, assigned_chef_id, created_by)
+L80: public.in_my_scope(organization_id, branch_id, department_id, station_id, assigned_chef_id, created_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260820113645_1bdb239e-0634-4bed-9f51-20de0bb37f5d.sql
+L45: ('barista','Barista','Food and Beverage','food-and-beverage-manager','multiple','self',false,false,42,
+L49: ('head-chef','Head Chef','Main Kitchen','operations-manager','single','department',false,false,50,
+L57: ('head-pastry-chef','Head Pastry Chef','Pastry and Bakery','operations-manager','single','department',false,false,60,
+L59: ('pastry-chef','Pastry Chef','Pastry and Bakery','head-pastry-chef','multiple','self',false,false,61,
+L228: ('operations-manager','kitchen', ARRAY['access','view','queue.view','all_stations.view','ticket.accept','ticket.prioritize','chef.assign','item.prepare','item.ready','item.reassign','item.cancel_request','recipes.view','recipes.create','recipes.edit'...
+L320: ('barista','pos', ARRAY['access','orders.view','menu.view','kds.view']),
+L321: ('barista','kitchen', ARRAY['access','queue.view','ticket.accept','item.prepare','item.ready','recipes.view','portions.view','waste.record','delay.report','ingredient_request.create','ingredient_request.view','clarification.request','item.cancel_requ...
+L322: ('barista','stores', ARRAY['requisition.create','requisition.submit','requisition.receive','consumption.record']),
+L329: ('head-chef','kitchen', ARRAY['access','view','queue.view','all_stations.view','ticket.accept','ticket.prioritize','chef.assign','item.prepare','item.ready','item.reassign','item.cancel_request','recipes.view','recipes.create','recipes.edit','recipes...
+L339: ('hot-kitchen-chef','kitchen', ARRAY['access','queue.view','ticket.accept','item.prepare','item.ready','recipes.view','portions.view','waste.record','delay.report','clarification.request','ingredient_request.create','ingredient_request.view','item.ca...
+L352: ('head-pastry-chef','kitchen', ARRAY['access','view','queue.view','all_stations.view','ticket.accept','ticket.prioritize','chef.assign','item.prepare','item.ready','item.reassign','item.cancel_request','recipes.view','recipes.create','recipes.edit','...
+L359: ('pastry-chef','kitchen', ARRAY['access','queue.view','ticket.accept','item.prepare','item.ready','recipes.view','portions.view','waste.record','delay.report','clarification.request','ingredient_request.create']),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260820130750_c3aa0096-bbba-4eac-a92b-e939e5701a5d.sql
+L46: 'Front Office Manager','Receptionist','Restaurant Manager','Waiter / Waitress','Barista','Coffee Station Supervisor',
+L47: 'Bar Manager','Bar Attendant','Kitchen Manager','Hot Kitchen Supervisor','Chef','Pastry Supervisor','Pastry Chef',
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260820133712_6a296ccc-ed4d-466b-a004-8c72c3c4bb01.sql
+L201: ('barista','barista',false,''),
+L204: ('kitchen manager','head-chef',false,''),
+L205: ('head chef','head-chef',false,''),
+L211: ('head pastry chef','head-pastry-chef',false,''),
+L212: ('pastry chef','pastry-chef',false,''),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260820143019_9675c6ac-8c33-4f9c-a539-fdc6fd0c6b70.sql
+L57: WHEN 'barista' THEN 'coffee-station'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260820145609_0b8e1d3a-168e-415e-a1ce-220e48b6de4c.sql
+L60: WHEN 'barista' THEN 'coffee-station'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260821150309_2c4bc3db-74e4-47e2-95c0-dcc73639d13f.sql
+L62: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260821154516_43637152-d21b-478e-8ddc-be44d706a524.sql
+L61: ('barista', 'restaurant.overview|restaurant.floor|restaurant.orders|restaurant.shifts'),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260821160557_1d48171b-a544-418b-8137-774ac1cd0b18.sql
+L28: ('coffee station supervisor', 'barista', 'team', 'Coffee station lead — compiled as Barista with team scope.'),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822093737_eb450338-6c6e-485e-ae26-a98e21e13fb9.sql
+L99: ('barista',                     0, ARRAY['coffee-station-supervisor','food-and-beverage-manager'],      'self'),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822154014_fc1d4f4c-654a-435b-bf0f-f121478ef999.sql
+L78: 'chef_id', i.chef_id,
+L132: WHEN 'accepted' THEN 'ticket.accept'
+L133: WHEN 'preparing' THEN 'item.prepare'
+L134: WHEN 'ready' THEN 'item.ready'
+L137: ELSE 'item.prepare' END;
+L171: chef_id = CASE WHEN _to_status IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L182: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+L243: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+L303: REVOKE ALL ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) FROM PUBLIC;
+L304: GRANT EXECUTE ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) TO authenticated;
+L318: IF NOT public.has_permission('kitchen', 'item.prepare') THEN
+L319: RAISE EXCEPTION 'You do not have the kitchen.item.prepare permission';
+L324: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, from_status, to_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822154940_19bfe8c8-e010-46c9-928d-4bbdcf04cab0.sql
+L75: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL)
+L91: WHEN 'accepted' THEN 'ticket.accept'
+L92: WHEN 'preparing' THEN 'item.prepare'
+L93: WHEN 'ready' THEN 'item.ready'
+L97: ELSE 'item.prepare' END;
+L135: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L146: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+L164: REVOKE ALL ON FUNCTION public.neo_kitchen_item_transition(uuid, text, text) FROM PUBLIC;
+L165: GRANT EXECUTE ON FUNCTION public.neo_kitchen_item_transition(uuid, text, text) TO authenticated;
+L174: SELECT public.neo_kitchen_item_transition(_ticket_item_id, _to_status, _reason);
+L181: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+L218: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L220: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L236: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+L249: REVOKE ALL ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) FROM PUBLIC;
+L250: GRANT EXECUTE ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) TO authenticated;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822155022_b763a5e9-3321-4b3f-ba6a-c859b84492be.sql
+L5: REVOKE EXECUTE ON FUNCTION public.neo_kitchen_item_transition(uuid, text, text) FROM anon;
+L6: REVOKE EXECUTE ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) FROM anon;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822160050_836a7bb4-888b-4185-875b-44971c33ff1a.sql
+L17: _res := public.neo_kitchen_ticket_transition(_id, _to, _reason);
+L40: PERFORM public.neo_kitchen_item_transition(_id, _to, _reason);
+L130: LEFT JOIN public.profiles p ON p.id = h.changed_by
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822160912_183c11f0-e3d1-4690-a588-d42b7bc12977.sql
+L179: accepted_at, started_at, ready_at, completed_at, cancelled_at, assigned_chef_id,
+L188: _t.assigned_chef_id, _t.created_by,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260822162358_dcf6d9ce-9390-4b37-a3a7-7c90b473f07d.sql
+L319: _res := public.neo_kitchen_ticket_transition(_id, _to, _reason);
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823110935_093f3e98-1742-4917-b9ca-6debeb86bb8e.sql
+L51: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L137: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823113616_35fa548b-938e-4c8d-8ef9-40fe3c730376.sql
+L81: (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823114314_0ca99d68-d20d-4f96-9275-72522183645d.sql
+L318: h.changed_by
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823115157_d85e7b01-f495-4111-91d3-fcdd18dc06d5.sql
+L128: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+L187: h.changed_by
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823122726_5343706f-5b83-43f0-bb83-b77d3fa07e17.sql
+L182: INSERT INTO public.rider_availability_history (organization_id, rider_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823124708_d924d2fd-9878-4a5f-9846-74cccb25ade5.sql
+L90: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823135736_7e6d512b-2696-453c-82ca-e9bfbe3093bc.sql
+L76: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823143517_d3c0c65b-4f7b-4ee7-aaa6-eaa73be810a6.sql
+L67: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823144825_f854459f-9096-4db5-ac61-fc0244789b47.sql
+L9: WHERE role_key IN ('hot-kitchen-chef','pastry-chef','kitchen-steward','bar-attendant','barista')
+L14: WHERE normalized_role_key IN ('hot-kitchen-chef','pastry-chef','kitchen-steward','bar-attendant','barista')
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823145149_a3bb14e2-ef77-4193-a5b7-0dbfa41d0867.sql
+L3: -- fired. A Pastry chef was able to advance a Hot Kitchen ticket. Replace it
+L19: _t.station_id, _t.assigned_chef_id, _t.created_by) THEN
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823145328_daa414aa-abb1-4a1d-8fce-c713fd04040b.sql
+L1: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL::text)
+L17: WHEN 'accepted' THEN 'ticket.accept'
+L18: WHEN 'preparing' THEN 'item.prepare'
+L19: WHEN 'ready' THEN 'item.ready'
+L23: ELSE 'item.prepare' END;
+L57: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L68: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+L86: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+L121: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L123: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L139: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+L152: REVOKE ALL ON FUNCTION public.neo_kitchen_item_transition(uuid,text,text) FROM PUBLIC, anon;
+L153: REVOKE ALL ON FUNCTION public.neo_kitchen_ticket_transition(uuid,text,text) FROM PUBLIC, anon;
+L154: GRANT EXECUTE ON FUNCTION public.neo_kitchen_item_transition(uuid,text,text) TO authenticated, service_role;
+L155: GRANT EXECUTE ON FUNCTION public.neo_kitchen_ticket_transition(uuid,text,text) TO authenticated, service_role;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823145414_cfc2e29f-9180-41b4-9851-44545ddbd1d0.sql
+L4: -- Pastry chef progress a Hot Kitchen ticket. Make the predicate strictly boolean.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823145914_5eb97c1b-4196-4795-ad2a-c82c9a77d421.sql
+L5: -- (2) Marking an item collected/served demanded the kitchen 'item.prepare'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823150632_03d2466c-01b9-42fc-a2a5-cba42b60844e.sql
+L28: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL)
+L45: OR public.has_permission('kitchen','item.ready')) THEN
+L50: WHEN 'accepted' THEN 'ticket.accept'
+L51: WHEN 'preparing' THEN 'item.prepare'
+L52: WHEN 'ready' THEN 'item.ready'
+L56: ELSE 'item.prepare' END;
+L93: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L104: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+L122: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL)
+L159: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L161: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L180: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+L193: REVOKE ALL ON FUNCTION public.neo_kitchen_item_transition(uuid, text, text) FROM PUBLIC, anon;
+L194: REVOKE ALL ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) FROM PUBLIC, anon;
+L195: GRANT EXECUTE ON FUNCTION public.neo_kitchen_item_transition(uuid, text, text) TO authenticated, service_role;
+L196: GRANT EXECUTE ON FUNCTION public.neo_kitchen_ticket_transition(uuid, text, text) TO authenticated, service_role;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823155950_9bfc8e15-dea5-4a7c-ad87-10682b0b53e0.sql
+L52: INSERT INTO work_order_status_history (organization_id, work_order_id, previous_status, new_status, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823171920_8e4a27fe-6f2a-43e6-97c8-f9fa5006b38e.sql
+L60: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823173604_e2c07318-eac4-4996-966c-7d0f49f04587.sql
+L97: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823173942_d9958d21-2cef-404f-8389-87c34933fa7a.sql
+L47: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, latitude, longitude, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260823184150_74d7ba88-b507-4ada-be16-9a699823a802.sql
+L57: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L68: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+L78: INSERT INTO room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824051415_6975b7ec-e718-4e23-bcea-1b9e9b53f781.sql
+L81: (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824144534_1053d42f-62f6-4228-bc83-d8c025efcb35.sql
+L47: UPDATE public.role_catalogue SET role_name='F&B Manager', department='Food & Beverage',
+L55: sort_order=350, updated_at=now() WHERE role_key='barista';
+L104: UPDATE public.role_catalogue SET role_name='Kitchen Manager / Head Chef', department='Main Kitchen',
+L151: ('kitchen manager','head-chef',false,''),
+L152: ('head chef','head-chef',false,''),
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824161352_a34dd2f2-6950-4dff-87d3-b1b2e3458357.sql
+L9: -- 2. Reporting line: Coffee Station Supervisor reports to the F&B Manager ---
+L19: 'coffee-station-supervisor', 'waiter', 'barista');
+L23: -- F&B Manager — whole department, approves wastage, reads reports
+L83: -- Barista — coffee station work only
+L84: ('barista','restaurant','overview',ARRAY['view','create','edit']),
+L85: ('barista','restaurant','floor',   ARRAY['view','create','edit']),
+L86: ('barista','restaurant','orders',  ARRAY['view','create','edit']),
+L87: ('barista','restaurant','kds',     ARRAY['view']),
+L88: ('barista','restaurant','shifts',  ARRAY['view','create','edit']),
+L89: ('barista','restaurant','wastage', ARRAY['view','create'])
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260824162925_893dfad4-0878-45c3-8c63-41e2f0066e49.sql
+L141: WHEN o.waiter_id IS NOT NULL AND o.waiter_id <> COALESCE(t.assigned_chef_id, '00000000-0000-0000-0000-000000000000'::uuid)
+L146: t.assigned_chef_id, ap.full_name, (t.assigned_chef_id = auth.uid()),
+L168: LEFT JOIN public.profiles ap ON ap.id = t.assigned_chef_id
+L172: WHEN 'mine' THEN t.assigned_chef_id = auth.uid()
+L173: WHEN 'unassigned' THEN t.assigned_chef_id IS NULL
+L200: IF _t.assigned_chef_id IS NOT NULL AND _t.assigned_chef_id <> auth.uid() THEN
+L209: SET assigned_chef_id = auth.uid(),
+L215: INSERT INTO public.station_ticket_status_history (ticket_id, from_status, to_status, changed_by, reason)
+L241: IF NOT _supervisor AND COALESCE(_t.assigned_chef_id, '00000000-0000-0000-0000-000000000000'::uuid) <> auth.uid() THEN
+L244: IF _t.assigned_chef_id IS NULL THEN
+L247: RETURN public.neo_kitchen_ticket_transition(_ticket, _to, _reason);
+L277: SET assigned_chef_id = _to_user, updated_at = now()
+L281: jsonb_build_object('from', _t.assigned_chef_id, 'to', _to_user, 'reason', _reason,
+L327: 'unassigned', (SELECT count(*) FROM tickets WHERE assigned_chef_id IS NULL
+L366: FROM tickets t JOIN public.profiles p ON p.id = t.assigned_chef_id
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825045147_1a5913ce-3a3b-4ab8-a38a-d444b0baf72c.sql
+L381: INSERT INTO public.work_order_status_history (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825050643_d3642075-e644-44ed-af0d-145dda01993e.sql
+L138: AND (sti.chef_id = auth.uid() OR t.assigned_chef_id = auth.uid())
+L149: -- Supervisor / Head Chef assigns a chef to a ticket or an item
+L167: UPDATE public.station_tickets SET assigned_chef_id = _chef, updated_at = now()
+L169: UPDATE public.station_ticket_items SET chef_id = _chef, updated_at = now()
+L172: UPDATE public.station_ticket_items SET chef_id = _chef, updated_at = now()
+L177: organization_id, branch_id, ticket_id, ticket_item_id, station_id, chef_id, assigned_by, method, reason
+L189: -- Stewarding tasks — created by supervisor/head chef, worked by the steward
+L378: -- Head Chef alone turns reported kitchen needs into one Stores requisition
+L391: RAISE EXCEPTION 'Only the Kitchen Manager / Head Chef can send a Stores requisition for the Main Kitchen';
+L460: -- Head Chef already holds kitchen.* which covers requisition, stewarding and hygiene.
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825052023_8e3133ca-c3e8-4657-8ed7-5c4b06cab2b5.sql
+L3: -- Head Pastry Chef -> Pastry Chef(s). Only the Head Pastry Chef
+L105: -- Chef. A Pastry Chef reaches their own assigned cakes through
+L135: -- Production plan — Head Pastry Chef
+L148: RAISE EXCEPTION 'Only the Head Pastry Chef can plan pastry production';
+L187: RAISE EXCEPTION 'Only the Head Pastry Chef can add planned production';
+L221: RAISE EXCEPTION 'Only the Head Pastry Chef can assign pastry production';
+L245: -- A Pastry Chef's own work — production and assigned custom cakes,
+L347: RAISE EXCEPTION 'Only the Head Pastry Chef can reconcile produced against sold';
+L425: RAISE EXCEPTION 'Only the Head Pastry Chef assigns custom cake production';
+L481: RAISE EXCEPTION 'Only the Head Pastry Chef closes a custom cake order';
+L499: -- Wastage — both roles record, only the Head Pastry Chef reviews
+L546: RAISE EXCEPTION 'Only the Head Pastry Chef reviews pastry wastage';
+L571: -- Head Pastry Chef alone turns reported needs into a Stores requisition
+L584: RAISE EXCEPTION 'Only the Head Pastry Chef can send a Stores requisition for Pastry & Bakery';
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260825053321_9f4d3e94-5359-44a3-9bd2-1efecb0fe70a.sql
+L18: -- 2. Head Pastry Chef — department scope over the whole bakery -------------
+L28: -- 3. Pastry Chef — own production, report a need, record wastage -----------
+L35: -- A Pastry Chef never sees the schedule, cake pricing or the requisition.
+L57: RAISE EXCEPTION 'Only the Kitchen Manager / Head Chef can send a Stores requisition for the Main Kitchen';
+L104: RAISE EXCEPTION 'Only the Head Pastry Chef can send a Stores requisition for Pastry & Bakery';
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260827071855_90407087-1adc-44a7-91c5-34f4aa7ca0e9.sql
+L50: 'unassigned', (SELECT count(*) FROM tickets WHERE assigned_chef_id IS NULL
+L93: FROM tickets t JOIN public.profiles p ON p.id = t.assigned_chef_id
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260827073010_968bf81a-465f-4e46-8aa8-0447e2d842bf.sql
+L14: AND d.name NOT ILIKE '%barista%'
+L55: LEFT JOIN public.profiles p ON p.id = t.assigned_chef_id
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260827131347_7cdd2e87-6181-4a5b-94b4-31e3775a341d.sql
+L32: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260827131845_e0bf8c54-b999-487c-af3b-85988d153286.sql
+L46: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260829004231_b53c71ff-9c3d-47c2-b002-1778a7bd8a5f.sql
+L2: CREATE OR REPLACE FUNCTION public.neo_kitchen_visible_station_ids()
+L37: GRANT EXECUTE ON FUNCTION public.neo_kitchen_visible_station_ids() TO authenticated;
+L46: AND station_id = ANY (public.neo_kitchen_visible_station_ids())
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260829004728_d1a31a90-3f9c-436b-9216-480ce9df1f9f.sql
+L1: REVOKE ALL ON FUNCTION public.neo_kitchen_visible_station_ids() FROM PUBLIC;
+L2: REVOKE ALL ON FUNCTION public.neo_kitchen_visible_station_ids() FROM anon;
+L3: GRANT EXECUTE ON FUNCTION public.neo_kitchen_visible_station_ids() TO authenticated;
+L4: GRANT EXECUTE ON FUNCTION public.neo_kitchen_visible_station_ids() TO service_role;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260829010400_1e572c0e-d722-4de1-ad01-9bffce950d2b.sql
+L3: -- Read/visibility (neo_kitchen_visible_station_ids, station_tickets_production_read)
+L9: -- `kitchen.chef.assign`. Allocation must be an exact grant.
+L20: OR public.has_exact_permission('kitchen', '*', 'chef.assign')
+L24: OR public.has_exact_permission('kitchen', '*', 'production.manage')
+L42: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef' USING ERRCODE = '42501';
+L51: UPDATE public.station_tickets SET assigned_chef_id = _chef, updated_at = now()
+L53: UPDATE public.station_ticket_items SET chef_id = _chef, updated_at = now()
+L56: UPDATE public.station_ticket_items SET chef_id = _chef, updated_at = now()
+L61: organization_id, branch_id, ticket_id, ticket_item_id, station_id, chef_id, assigned_by, method, reason
+L90: IF _t.assigned_chef_id IS NOT NULL AND _t.assigned_chef_id <> auth.uid() THEN
+L100: SET assigned_chef_id = auth.uid(),
+L107: PERFORM public.emit_domain_event(_org, _t.branch_id, 'bar.ticket.accepted', 'bar', _ticket,
+L141: SET assigned_chef_id = _to_user, updated_at = now()
+L146: jsonb_build_object('from', _t.assigned_chef_id, 'to', _to_user, 'reason', _reason,
+L163: IF NEW.assigned_chef_id IS DISTINCT FROM OLD.assigned_chef_id
+L169: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef'
+L188: IF NEW.chef_id IS DISTINCT FROM OLD.chef_id THEN
+L191: OR NEW.chef_id IS NULL THEN
+L194: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260830014248_9de450de-87af-4188-9460-6698d84a34d1.sql
+L1: CREATE OR REPLACE FUNCTION public.neo_kitchen_visible_station_ids()
+L33: -- else, so a barista never sees Main Bar work and a bar attendant never
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260830034201_3dd7db77-ceb1-45a3-87b9-9a0506738a4f.sql
+L123: previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260830040148_a1812bd0-17aa-444a-bfff-c9ba5b8a0230.sql
+L95: INSERT INTO public.room_status_history (organization_id, branch_id, room_id, field, previous_value, new_value, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831045823_d8993219-835b-4244-8912-765e9b835a92.sql
+L73: (organization_id, reservation_id, action, field, previous_value, new_value, reason, changed_by)
+L271: (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831050052_abb267b0-992c-448b-9292-715775ac34ba.sql
+L64: INSERT INTO public.reservation_history (organization_id,reservation_id,action,new_value,changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831093101_a22a484a-d298-4fa0-b73a-ddae3f611f0e.sql
+L35: RAISE EXCEPTION 'Only the Kitchen Manager / Head Chef can send a Stores requisition for the Main Kitchen';
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831100911_522046ca-2454-4b08-bce0-751841c16f95.sql
+L24: ('barista','restaurant','overview'),
+L25: ('barista','restaurant','floor'),
+L26: ('barista','restaurant','orders'),
+L27: ('barista','restaurant','kds'),
+L28: ('barista','restaurant','shifts'),
+L29: ('barista','restaurant','wastage'),
+L30: ('barista','ai','insights'),
+L71: -- Waiter / Barista: serve the floor, never author it.
+L73: WHERE role_key IN ('waiter','barista')
+L102: WHERE role_key IN ('operations-manager','waiter','barista',
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831115459_23b9e897-0c62-43da-9b34-a0416c812e0b.sql
+L98: INSERT INTO public.reservation_history (organization_id,reservation_id,action,new_value,changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260831133851_0d49106b-fd65-4f1a-a146-763eb621e4dd.sql
+L90: INSERT INTO public.reservation_history (organization_id,reservation_id,action,new_value,changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260908104348_918b0108-7b52-4ea5-9edc-f064d1dedbf0.sql
+L158: INSERT INTO public.reservation_history (organization_id, reservation_id, action, new_value, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260908114223_ea50b707-3c24-4af2-a90f-97a3f149c92e.sql
+L98: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260908152227_5ae536fc-575e-464b-8dca-648ee2c7089f.sql
+L76: accepted_at, started_at, ready_at, completed_at, cancelled_at, assigned_chef_id,
+L85: _t.assigned_chef_id, _t.created_by,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260909071451_809d5315-9144-4c8b-8fa3-ba3694a42d90.sql
+L7: ), acts(action) AS (VALUES ('ticket.accept'), ('item.prepare'), ('item.ready'))
+L23: AND ft.action IN ('ticket.accept', 'item.prepare', 'item.ready')
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260910114920_5b135ecb-915a-4ee9-af6a-356a662f217d.sql
+L40: INSERT INTO public.rider_availability_history (organization_id, rider_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260913085659_0865e4a4-2b39-4d97-8be3-769ce089727d.sql
+L161: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260914044502_5f36fea5-7361-4cf8-b1fe-4942d5cf024a.sql
+L60: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260914052635_38c2d41b-ff97-47f1-bcfc-a3b252c2859d.sql
+L72: (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260914092138_0e2e7b6a-df41-4dae-b8c2-a5f05e248147.sql
+L445: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, latitude, longitude, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260914101848_a7a369c6-629c-4fa7-808b-0d6e10ae7c82.sql
+L159: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260915092528_483bf8fa-e6a9-4c09-885b-cce7422424ad.sql
+L3: keep_auth text[] := ARRAY['apply_recommended_permissions','audit_trail','bi_data_quality_scan','bi_kpis','bi_occupancy_series','bi_revenue_breakdown','bi_revenue_series','bi_risk_scan','bootstrap_tenant_for','can_approve_restricted','can_manage_staff...
+L4: keep_anon text[] := ARRAY['can_approve_restricted','can_manage_staff_photos','can_manage_workforce','can_read_general_ledger','can_read_guest_ledger','can_read_journals','can_read_stock','can_view_role_directory','canonical_permission','current_acces...
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260915111622_78c7e2e7-db00-4a99-ba32-6cc024f15d38.sql
+L45: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, reason, changed_by)
+L72: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260920111922_83ab239d-075b-4c03-8eb0-62724e6bf1aa.sql
+L255: (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921120403_3d9a22cb-afca-45a8-992d-b96420e7c23e.sql
+L106: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921120719_8bc982c2-9dc0-441f-b339-35c918ab48da.sql
+L27: INSERT INTO public.pos_order_status_history (organization_id, order_id, order_item_id, previous_status, new_status, station_id, changed_by)
+L49: INSERT INTO public.pos_order_status_history (organization_id, order_id, previous_status, new_status, station_id, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921120901_8a55886c-4153-4e83-b588-8d651cc89e1a.sql
+L106: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921130356_36936b3e-093e-4ff5-bc19-bc85aae66819.sql
+L10: AND t.station_id = ANY (public.neo_kitchen_visible_station_ids())
+L22: AND t.station_id = ANY (public.neo_kitchen_visible_station_ids())
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921130545_e4cf0f9a-c9af-4d3b-85fd-534e4036ada1.sql
+L14: AND t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+L28: AND t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921130716_0c88f148-cf82-4158-a23f-71bae75e3974.sql
+L16: 'chef_id', i.chef_id,
+L35: t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+L36: OR public.in_my_scope(t.organization_id, t.branch_id, t.department_id, t.station_id, t.assigned_chef_id, t.created_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921130922_2252525e-ed23-4eea-8695-55bcc922d89c.sql
+L15: 'chef_id', i.chef_id,
+L31: t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+L32: OR public.in_my_scope(t.organization_id, t.branch_id, t.department_id, t.station_id, t.assigned_chef_id, t.created_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260921131353_2754d565-1a6e-440a-8f1f-843dab1912bf.sql
+L49: t.station_id IN (SELECT unnest(public.neo_kitchen_visible_station_ids()))
+L59: OR public.in_my_scope(t.organization_id, t.branch_id, t.department_id, t.station_id, t.assigned_chef_id, t.created_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260922001101_e538a068-b236-4784-b41d-d1fdb4352213.sql
+L10: changed_at timestamptz, changed_by_name text, state text
+L19: p.full_name AS changed_by_name,
+L48: c.changed_at, c.changed_by_name,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260922002732_cb315176-c3fd-4464-b511-153661bfe6d5.sql
+L7: changed_at timestamptz, changed_by_name text, state text)
+L27: ) AS changed_by_name,
+L56: c.changed_at, c.changed_by_name,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260922050342_1ed5d18d-5fb5-47d4-9d70-f2e2fca257cd.sql
+L15: _t.station_id, _t.assigned_chef_id, _t.created_by) THEN
+L20: AND _t.station_id = ANY (public.neo_kitchen_visible_station_ids()) THEN
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260922050511_5ae55db6-865f-4bbf-87c2-6055651d3172.sql
+L8: IF NEW.assigned_chef_id IS DISTINCT FROM OLD.assigned_chef_id
+L17: AND OLD.assigned_chef_id IS NULL
+L18: AND NEW.assigned_chef_id = auth.uid()
+L19: AND public.has_permission('kitchen', 'ticket.accept') THEN
+L22: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef'
+L36: IF NEW.chef_id IS DISTINCT FROM OLD.chef_id THEN
+L39: OR NEW.chef_id IS NULL THEN
+L42: IF OLD.chef_id IS NULL
+L43: AND NEW.chef_id = auth.uid()
+L44: AND public.has_permission('kitchen', 'ticket.accept') THEN
+L47: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260922173633_5381216e-836c-4934-8c94-0617dcecd9db.sql
+L393: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260923045541_79f0a5f3-0e47-4bea-9eb4-4badf1d5b6ad.sql
+L1: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL::text)
+L23: OR public.has_permission('kitchen','item.ready')) THEN
+L28: WHEN 'accepted' THEN 'ticket.accept'
+L29: WHEN 'preparing' THEN 'item.prepare'
+L30: WHEN 'ready' THEN 'item.ready'
+L34: ELSE 'item.prepare' END;
+L71: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L82: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260923060604_01075328-bccb-4cb9-89b2-20115b551872.sql
+L1: CREATE OR REPLACE FUNCTION public.neo_kitchen_assert_station_authority(_ticket uuid)
+L18: AND _t.station_id = ANY (public.neo_kitchen_visible_station_ids()) THEN
+L21: IF _t.assigned_chef_id = auth.uid() THEN RETURN; END IF;
+L28: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+L45: PERFORM public.neo_kitchen_assert_station_authority(_ticket);
+L70: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L72: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L91: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+L104: GRANT EXECUTE ON FUNCTION public.neo_kitchen_assert_station_authority(uuid) TO authenticated;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260923072633_3a014101-2604-47e2-a18c-bdfe8696b6e2.sql
+L1: CREATE OR REPLACE FUNCTION public.neo_kitchen_item_transition(_item uuid, _to text, _reason text DEFAULT NULL::text)
+L27: OR public.has_permission('kitchen','item.ready')
+L33: WHEN 'accepted' THEN 'ticket.accept'
+L34: WHEN 'preparing' THEN 'item.prepare'
+L35: WHEN 'ready' THEN 'item.ready'
+L39: ELSE 'item.prepare' END;
+L77: chef_id = CASE WHEN _to IN ('accepted','preparing') THEN COALESCE(chef_id, auth.uid()) ELSE chef_id END,
+L88: INSERT INTO public.station_ticket_status_history (organization_id, ticket_id, ticket_item_id, from_status, to_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260923073001_05adcc02-a2f7-44e6-87b1-4bcfcdca6536.sql
+L8: IF NEW.chef_id IS DISTINCT FROM OLD.chef_id THEN
+L11: OR NEW.chef_id IS NULL THEN
+L16: IF OLD.chef_id IS NULL
+L17: AND NEW.chef_id = auth.uid()
+L19: public.has_permission('kitchen', 'ticket.accept')
+L31: RAISE EXCEPTION 'Kitchen work is allocated by the Kitchen Manager / Head Chef'
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924150000_cross_entry_guest_rider_guards.sql
+L249: (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924154500_department_requisition_family_guards.sql
+L98: IF NOT public.has_permission('kitchen','pastry-requisition','create') THEN RAISE EXCEPTION 'Only the Head Pastry Chef can send a Stores requisition for Pastry & Bakery'; END IF;
+L112: IF NOT (public.has_permission('kitchen','requisition','create') OR public.has_permission('kitchen','requisitions','create')) THEN RAISE EXCEPTION 'Only the Kitchen Manager / Head Chef can send a Stores requisition for the Main Kitchen'; END IF;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20260924163500_maintenance_status_contract_alignment.sql
+L86: (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261004213000_harden_bar_reassignment_scope.sql
+L62: SET assigned_chef_id = _to_user,
+L75: 'from', _t.assigned_chef_id,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261021110000_shared_production_displays.sql
+L8: OR to_regprocedure('public.neo_kitchen_ticket_transition(uuid,text,text)') IS NULL
+L9: OR to_regprocedure('public.neo_kitchen_visible_station_ids()') IS NULL THEN
+L42: CREATE TABLE IF NOT EXISTS public.neo_production_display_actions (
+L61: CREATE INDEX IF NOT EXISTS neo_production_display_actions_ticket_idx
+L62: ON public.neo_production_display_actions (organization_id, ticket_id, created_at);
+L66: ALTER TABLE public.neo_production_display_actions ENABLE ROW LEVEL SECURITY;
+L68: public.neo_production_staff_codes, public.neo_production_display_actions
+L83: CREATE OR REPLACE FUNCTION public.neo_production_can_manage()
+L87: OR public.has_exact_permission('kitchen','*','production.manage')
+L88: OR public.has_exact_permission('kitchen','*','chef.assign')
+L92: REVOKE ALL ON FUNCTION public.neo_production_can_manage() FROM PUBLIC, anon, authenticated;
+L122: OR NOT public.neo_production_can_manage()
+L123: OR NOT (s.station_ids <@ public.neo_kitchen_visible_station_ids())
+L137: CREATE OR REPLACE FUNCTION public.neo_production_staff_pin(_pin text DEFAULT NULL, _disable boolean DEFAULT false)
+L142: public.has_permission('kitchen','ticket.accept')
+L143: OR public.has_permission('kitchen','item.prepare')
+L145: OR public.neo_production_can_manage()
+L167: REVOKE ALL ON FUNCTION public.neo_production_staff_pin(text,boolean) FROM PUBLIC, anon;
+L168: GRANT EXECUTE ON FUNCTION public.neo_production_staff_pin(text,boolean) TO authenticated;
+L174: IF NOT public.neo_production_can_manage() THEN RAISE EXCEPTION 'A production supervisor must pair this screen.' USING ERRCODE='42501'; END IF;
+L178: OR NOT (v_stations <@ public.neo_kitchen_visible_station_ids())
+L199: IF NOT public.neo_production_can_manage() THEN RAISE EXCEPTION 'Production supervisor access is required.' USING ERRCODE='42501'; END IF;
+L203: AND (opened_by=auth.uid() OR station_ids <@ public.neo_kitchen_visible_station_ids());
+L211: AND (s.opened_by=auth.uid() OR s.station_ids <@ public.neo_kitchen_visible_station_ids());
+L229: SELECT p.full_name FROM public.station_ticket_items ti JOIN public.profiles p ON p.id=ti.chef_id
+L230: WHERE ti.ticket_id=q.ticket_id AND ti.organization_id=s.organization_id AND ti.chef_id IS NOT NULL
+L257: CREATE OR REPLACE FUNCTION public.neo_production_display_act(
+L263: t public.station_tickets; a public.neo_production_display_actions;
+L320: OR NOT (t.station_id=ANY(public.neo_kitchen_visible_station_ids())) THEN
+L323: PERFORM public.neo_kitchen_assert_station_authority(t.id);
+L325: IF NOT (public.has_permission('kitchen',CASE _to WHEN 'accepted' THEN 'ticket.accept' WHEN 'ready' THEN 'item.ready' ELSE 'item.prepare' END)
+L329: SELECT * INTO a FROM public.neo_production_display_actions WHERE session_id=s.id AND request_id=_request;
+L342: IF (t.assigned_chef_id IS NOT NULL AND t.assigned_chef_id<>c.user_id
+L344: AND status NOT IN ('cancelled','completed') AND chef_id IS NOT NULL AND chef_id<>c.user_id))
+L351: INSERT INTO public.station_ticket_status_history(organization_id,ticket_id,from_status,to_status,reason,changed_by)
+L355: v_result:=public.neo_kitchen_ticket_transition(t.id,_to,NULL);
+L359: INSERT INTO public.neo_production_display_actions(session_id,request_id,organization_id,branch_id,station_id,ticket_id,
+L382: REVOKE ALL ON FUNCTION public.neo_production_display_act(text,text,text,uuid,text,text,uuid,text) FROM PUBLIC;
+L383: GRANT EXECUTE ON FUNCTION public.neo_production_display_act(text,text,text,uuid,text,text,uuid,text) TO anon, authenticated;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261022110000_savannah_revenue_account_alignment.sql
+L31: IF cat IN ('coffee','espresso','barista') THEN RETURN '4030'; END IF;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261023184500_f02_reservation_create_deposit_integration.sql
+L116: INSERT INTO public.reservation_history (organization_id,reservation_id,action,new_value,changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261025140000_o07_maintenance_verification_closure.sql
+L103: (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026140000_p12_kds_transition_lock.sql
+L6: CREATE OR REPLACE FUNCTION public.neo_kitchen_ticket_transition(_ticket uuid, _to text, _reason text DEFAULT NULL::text)
+L23: PERFORM public.neo_kitchen_assert_station_authority(_ticket);
+L48: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancel-pending', _reason);
+L50: PERFORM public.neo_kitchen_item_transition(_i.id, 'cancelled', _reason);
+L69: PERFORM public.neo_kitchen_item_transition(_i.id, _step, _reason);
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026141000_p12_kds_reconciliation_guard.sql
+L82: accepted_at, started_at, ready_at, completed_at, cancelled_at, assigned_chef_id,
+L91: _t.assigned_chef_id, _t.created_by,
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026142000_p13_kitchen_station_authority.sql
+L5: CREATE OR REPLACE FUNCTION public.neo_kitchen_assert_station_authority(_ticket uuid)
+L41: AND _t.station_id = ANY(public.neo_kitchen_visible_station_ids()) THEN
+L45: IF _t.assigned_chef_id = auth.uid() THEN RETURN; END IF;
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026150000_p16_delivery_rider_transition_guard.sql
+L63: (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, changed_by)
+
+FILE: C:\Users\Kelvin\Downloads\NEO_COMPLETE_2026-09-26\NEO_SOURCE\supabase\migrations\20261026154000_p16_delivery_pin_handover_guard.sql
+L130: INSERT INTO public.delivery_order_status_history (organization_id, delivery_order_id, status_kind, previous_status, new_status, source, latitude, longitude, changed_by)

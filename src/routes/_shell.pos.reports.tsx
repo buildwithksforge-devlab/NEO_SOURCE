@@ -1,4 +1,29 @@
-import { useMemo, useState } from "react";
+import { PosHandoffRecoveryCard } from "../components/pos/PosHandoffRecoveryCard";
+
+const neoHandoffRpc = async (
+  name: string,
+  args: Record<string, unknown>
+): Promise<{
+  data: unknown;
+  error: { message: string } | null;
+}> => {
+  const result = await supabase.rpc(
+    name as never,
+    args as never
+  );
+
+  return {
+    data: result.data,
+    error: result.error
+      ? { message: result.error.message }
+      : null,
+  };
+};
+
+import { supabase } from "@/integrations/supabase/client";
+import { PosConsumptionExceptionCard } from "@/components/pos/PosConsumptionExceptionCard";
+import { kenyaBusinessDate } from "@/lib/kenya-business-date";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader, SectionCard, TableScroll } from "@/components/common/DataDisplay";
 import { Label } from "@/components/ui/label";
@@ -13,8 +38,24 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, PosGuard, QueryState } from "@/components/pos/PosShared";
 import { money, titleCase } from "@/lib/pos";
-import { usePosOrders } from "@/lib/pos-data";
+import {
+  usePosCompletePeriodOrders,
+  useTeamPosPerformance,
+  usePosStaffDisplayNames,
+} from "@/lib/pos-data";
+
+import {
+  unusualPosBillIds,
+} from "@/lib/pos-reporting-anomalies";
+
+import {
+  posReportingErrorMessage,
+} from "@/lib/pos-reporting-errors";
 import { NeoDatePicker } from "@/components/common/DatePicker";
+import { PosCollectionEvidenceCard } from "@/components/pos/PosCollectionEvidenceCard";
+import { PosFullPeriodFinancialCard } from "@/components/pos/PosFullPeriodFinancialCard";
+import { PosFinanceReconciliationCard } from "@/components/pos/PosFinanceReconciliationCard";
+
 import {
   ReportExceptions,
   ReportExportButton,
@@ -32,13 +73,13 @@ import {
 export const Route = createFileRoute("/_shell/pos/reports")({
   head: () => ({
     meta: [
-      { title: "POS Reports — NEØ" },
+      { title: "POS Reports â€” NEÃ˜" },
       {
         name: "description",
         content:
           "Sales by outlet, order type and payment method, calculated only from finalised transactions.",
       },
-      { property: "og:title", content: "POS Reports — NEØ" },
+      { property: "og:title", content: "POS Reports â€” NEÃ˜" },
       {
         property: "og:description",
         content:
@@ -90,30 +131,210 @@ const EXCEPTION_RULES: ExceptionRule<SalesRow>[] = [
   },
 ];
 
+
+function TeamPosPerformanceCard({
+  from,
+  to,
+}: {
+  from: string;
+  to: string;
+}) {
+  const performance = useTeamPosPerformance(from, to);
+
+  const rows = performance.data ?? [];
+
+  const staffNames = usePosStaffDisplayNames(
+    rows.map((row) => row.profile_id),
+  );
+
+  const amount = (value: number | string | null | undefined) =>
+    Number(value ?? 0);
+
+  const total = rows.reduce(
+    (sum, row) => sum + amount(row.finalized_bill_value),
+    0,
+  );
+
+  return (
+    <SectionCard
+      title="Employee Sales Activity"
+      description="Property-scoped employee POS activity. Figures are finalized bill values, not reconciled revenue or award rankings."
+    >
+      {performance.isLoading ? (
+        <p className="text-sm text-muted-foreground">
+          Loading employee performance...
+        </p>
+      ) : performance.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          Employee performance is unavailable:{" "}
+          {posReportingErrorMessage(performance.error)}
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No employee POS activity was found for this reporting period.
+        </p>
+      ) : (
+        <>
+          <div className="mb-4 rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">
+              Finalized bill value attributed to original creators
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {money(total)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This is an operational attribution total, not an
+              official Finance revenue figure.
+            </p>
+          </div>
+
+          <TableScroll>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="text-right">
+                    Created
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Assigned
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Finalized
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Cancelled
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Voided
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Average bill
+                  </TableHead>
+                  <TableHead className="text-right">
+                    Finalized value
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const finalized = amount(
+                    row.created_orders_finalized,
+                  );
+                  const value = amount(
+                    row.finalized_bill_value,
+                  );
+
+                  return (
+                    <TableRow key={row.profile_id}>
+                      <TableCell className="font-mono text-xs">
+                        {staffNames.data?.[row.profile_id] ??
+                          `Staff ${row.profile_id.slice(0, 8)}`}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {amount(row.orders_created)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {amount(row.orders_currently_assigned)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {finalized}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {amount(row.created_orders_cancelled)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {amount(row.created_orders_voided)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {money(
+                          finalized > 0 ? value / finalized : 0,
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(value)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableScroll>
+
+          <p className="mt-3 text-xs text-muted-foreground">
+            Employee names are resolved from authorized profiles.
+            If a profile is not visible under database permissions,
+            its shortened identifier is shown instead.
+            Figures are operational activity, not certified revenue.
+          </p>
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
 function ReportsPage() {
   const navigate = useNavigate();
-  const orders = usePosOrders("closed");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kenyaBusinessDate();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
+  const [sourcePage, setSourcePage] = useState(0);
+
+  useEffect(() => {
+    setSourcePage(0);
+  }, [from, to]);
 
   const period = { from, to };
   const previous = previousPeriod(period);
+
+  const orders = usePosCompletePeriodOrders(
+    from,
+    to,
+    previous?.from ?? from,
+    previous?.to ?? to,
+  );
 
   const all = (orders.data ?? []) as unknown as SalesRow[];
 
   const inRange = (window: { from: string; to: string } | null) => {
     if (!window) return [] as SalesRow[];
-    const start = new Date(`${window.from}T00:00:00`);
-    const end = new Date(`${window.to}T23:59:59`);
+    const start = new Date(`${window.from}T00:00:00+03:00`);
+
+    const nextDay = new Date(
+      Date.parse(`${window.to}T00:00:00Z`) +
+      86400000,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    const end = new Date(`${nextDay}T00:00:00+03:00`);
     return all.filter((o) => {
-      const d = new Date(o.closed_at ?? o.created_at);
-      return d >= start && d <= end && !["voided", "cancelled"].includes(o.status);
+      if (!o.closed_at) return false;
+
+      const d = new Date(o.closed_at);
+
+      return (
+        d >= start &&
+        d < end &&
+        ["paid", "charged-to-room", "credit", "closed"]
+          .includes(o.status)
+      );
     });
   };
 
   const rows = useMemo(() => inRange(period), [all, from, to]);
   const priorRows = useMemo(() => inRange(previous), [all, from, to]);
+
+  const sourcePageSize = 100;
+  const sourcePageCount = Math.max(
+    1,
+    Math.ceil(rows.length / sourcePageSize),
+  );
+
+  const safeSourcePage = Math.min(
+    sourcePage,
+    sourcePageCount - 1,
+  );
 
   const revenue = rows.reduce((s, o) => s + Number(o.grand_total ?? 0), 0);
   const priorRevenue = priorRows.reduce((s, o) => s + Number(o.grand_total ?? 0), 0);
@@ -129,7 +350,33 @@ function ReportsPage() {
     });
   }
 
-  const exceptions = useMemo(() => collectExceptions(rows, EXCEPTION_RULES), [rows]);
+  const unusualBillIds = useMemo(
+    () => unusualPosBillIds(rows),
+    [rows],
+  );
+
+  const exceptions = useMemo(
+    () =>
+      collectExceptions(
+        rows,
+        [
+          ...EXCEPTION_RULES,
+          {
+            id: "unusually-large-bill",
+            severity: "high",
+            when: (bill) => unusualBillIds.has(bill.id),
+            title: (bill) =>
+              `Unusually large bill ${bill.order_number}`,
+            detail: (bill) =>
+              `Finalized bill value ${money(
+                Number(bill.grand_total ?? 0),
+              )}. Review the source transaction; this flag does not establish fraud or an accounting error.`,
+            recordId: (bill) => bill.id,
+          },
+        ] satisfies ExceptionRule<SalesRow>[],
+      ),
+    [rows, unusualBillIds],
+  );
 
   const columns: ReportColumn<SalesRow>[] = [
     { key: "order", header: "Bill", value: (o) => o.order_number },
@@ -146,12 +393,14 @@ function ReportsPage() {
         title="POS Reports"
         description="Figures come only from finalised bills. Open orders are deliberately excluded so nothing is counted before it is real."
         actions={
+          orders.isSuccess ? (
           <ReportExportButton
             rows={rows}
             columns={columns}
             onScreenTotals={{ total: revenue }}
             filename={`pos-sales-${from}-to-${to}.csv`}
           />
+          ) : null
         }
       />
 
@@ -167,6 +416,37 @@ function ReportsPage() {
         <ReportPeriodNote period={period} previous={previous} />
       </div>
 
+      <div className="mb-6">
+        <PosFullPeriodFinancialCard from={from} to={to} />
+<PosFinanceReconciliationCard from={from} to={to} />
+        <div className="mt-4">
+          <TeamPosPerformanceCard from={from} to={to} />
+        </div>
+        <div className="mt-4">
+          <PosCollectionEvidenceCard from={from} to={to} />
+
+          {/* Production handoff recovery and investigation */}
+          <PosHandoffRecoveryCard
+            callRpc={neoHandoffRpc}
+          />
+        <div className="mt-6">
+          <PosConsumptionExceptionCard />
+        </div>
+        </div>
+      </div>
+
+      {!orders.isSuccess && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border p-4 text-sm"
+        >
+          {orders.isError
+            ? "The complete reporting period could not be retrieved. Figures and exports must not be treated as complete. Please retry or choose a shorter period."
+            : "Retrieving all authorized POS orders for the selected and comparison periods. Totals will appear after the complete query finishes."}
+        </div>
+      )}
+
+      {orders.isSuccess && (
       <ReportKpiGrid
         className="mb-6"
         kpis={[
@@ -179,7 +459,7 @@ function ReportsPage() {
           },
           {
             id: "revenue",
-            label: "Revenue",
+            label: "Finalized bill value",
             value: money(revenue),
             comparison: compare(revenue, priorRevenue),
           },
@@ -197,7 +477,9 @@ function ReportsPage() {
           },
         ]}
       />
+      )}
 
+      {orders.isSuccess && (
       <SectionCard
         title="Exceptions"
         description="Listed individually so nothing hides inside an average. Each one opens its source bill."
@@ -208,7 +490,9 @@ function ReportsPage() {
           onOpenRecord={(id) => void navigate({ to: "/pos/orders/$id", params: { id } })}
         />
       </SectionCard>
+      )}
 
+      {orders.isSuccess && (
       <SectionCard
         title="Sales by order type"
         description="Dine-in, takeaway, room service, delivery and catering."
@@ -230,7 +514,7 @@ function ReportsPage() {
                 <TableRow>
                   <TableHead>Order type</TableHead>
                   <TableHead>Bills</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="text-right">Finalized bill value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,11 +530,12 @@ function ReportsPage() {
           </TableScroll>
         </QueryState>
       </SectionCard>
+      )}
 
       <SectionCard
         className="mt-6"
         title="Source bills"
-        description="The exact records the figures above are built from — open any of them to verify."
+        description="The exact records the figures above are built from â€” open any of them to verify."
       >
         <QueryState
           isLoading={orders.isLoading}
@@ -270,7 +555,10 @@ function ReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.slice(0, 100).map((o) => (
+                {rows.slice(
+                   safeSourcePage * sourcePageSize,
+                   (safeSourcePage + 1) * sourcePageSize,
+                 ).map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">{o.order_number}</TableCell>
                     <TableCell>{titleCase(o.order_type)}</TableCell>
@@ -290,6 +578,50 @@ function ReportsPage() {
               </TableBody>
             </Table>
           </TableScroll>
+
+          {orders.isSuccess && rows.length > sourcePageSize && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Showing{" "}
+                {safeSourcePage * sourcePageSize + 1}
+                {" - "}
+                {Math.min(
+                  (safeSourcePage + 1) * sourcePageSize,
+                  rows.length,
+                )}
+                {" of "}
+                {rows.length} finalized bills
+              </p>
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={safeSourcePage === 0}
+                  onClick={() =>
+                    setSourcePage((page) =>
+                      Math.max(0, page - 1),
+                    )
+                  }
+                >
+                  Previous
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    safeSourcePage + 1 >= sourcePageCount
+                  }
+                  onClick={() =>
+                    setSourcePage((page) => page + 1)
+                  }
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </QueryState>
       </SectionCard>
     </div>

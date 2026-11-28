@@ -83,6 +83,6 @@ describe("truthful states", () => {
 
 describe("shell stability", () => {
   it("reserves the scrollbar gutter on the inner scroll column", () => {
-    expect(styles).toContain("[data-shell-scroll] {\n  scrollbar-gutter: stable;");
+    expect(styles).toMatch(/\[data-shell-scroll\]\s*\{\s*scrollbar-gutter: stable;/);
   });
 });

@@ -1,3 +1,6 @@
+import { DeleteIncorrectEmployeeButton } from "@/components/hr/DeleteIncorrectEmployeeButton";
+import { EmployeePosActivityCard } from "@/components/hr/EmployeePosActivityCard";
+import { EmployeeHousekeepingActivityCard } from "@/components/hr/EmployeeHousekeepingActivityCard";
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, CalendarPlus } from "lucide-react";
@@ -203,6 +206,7 @@ function EmployeeProfile() {
               ].join(" · ")}
               actions={
                 <div className="flex flex-wrap items-center gap-2">
+                  <DeleteIncorrectEmployeeButton id={id} number={String(e["employee_number"])} name={String(e["full_name"])} linkedProfile={Boolean(e["profile_id"])} />
                   <HrBadge
                     value={labelFor(EMPLOYMENT_STATUSES, e["employment_status"])}
                     tone={toneFor(EMPLOYMENT_STATUSES, e["employment_status"])}
@@ -216,6 +220,26 @@ function EmployeeProfile() {
                 </div>
               }
             />
+
+            {can("pos", "reports.view") ? (
+              <EmployeePosActivityCard
+                profileId={
+                  typeof e["profile_id"] === "string"
+                    ? e["profile_id"]
+                    : null
+                }
+              />
+            ) : null}
+
+            {can("housekeeping", "view") ? (
+              <EmployeeHousekeepingActivityCard
+                profileId={
+                  typeof e["profile_id"] === "string"
+                    ? e["profile_id"]
+                    : null
+                }
+              />
+            ) : null}
 
             <Tabs defaultValue="overview">
               <TabsList className="flex flex-wrap">

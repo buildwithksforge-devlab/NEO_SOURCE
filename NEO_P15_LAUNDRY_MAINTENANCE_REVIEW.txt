@@ -1,0 +1,295 @@
+﻿
+========================================
+FILE: supabase/migrations/20261025130000_o06_linen_numeric_discrepancy.sql
+========================================
+   1: -- O06: Correct numeric linen discrepancy posting.
+   2: -- Preserve the existing laundry return and linen incident workflow.
+   3: -- No historical linen or guest laundry records modified.
+   4: 
+   5: CREATE OR REPLACE FUNCTION public.neo_laundry_batch_return(_batch uuid DEFAULT NULL, _lines jsonb DEFAULT '[]'::jsonb)
+   6: RETURNS jsonb
+   7: LANGUAGE plpgsql
+   8: SECURITY DEFINER
+   9: SET search_path = public
+  10: AS $$
+  11: DECLARE
+  12:   v_org uuid := current_org_id();
+  13:   b record; l jsonb; li record;
+  14:   v_returned numeric; v_damaged numeric; v_missing numeric;
+  15:   v_incidents int := 0; v_guest_notes text := '';
+  16: BEGIN
+  17:   SELECT * INTO b FROM laundry_batches WHERE id = _batch AND organization_id = v_org FOR UPDATE;
+  18:   IF b IS NULL THEN RAISE EXCEPTION 'Unknown laundry batch'; END IF;
+  19:   IF NOT (has_exact_permission('laundry','batches','edit')
+  20:           OR is_org_admin()
+  21:           OR (b.attendant_id = auth.uid() AND has_exact_permission('laundry','my-work','edit'))) THEN
+  22:     RAISE EXCEPTION 'Not permitted to hand this batch back';
+  23:   END IF;
+  24: 
+  25:   FOR l IN SELECT * FROM jsonb_array_elements(COALESCE(_lines,'[]'::jsonb)) LOOP
+  26:     SELECT * INTO li FROM laundry_batch_items
+  27:       WHERE id = (l->>'id')::uuid AND batch_id = _batch AND organization_id = v_org FOR UPDATE;
+  28:     CONTINUE WHEN li IS NULL;
+  29: 
+  30:     v_returned := COALESCE((l->>'returned_quantity')::numeric, li.quantity);
+  31:     v_damaged := COALESCE((l->>'damaged_quantity')::numeric, 0);
+  32:     v_missing := GREATEST(li.quantity - v_returned - v_damaged, 0);
+  33: 
+  34:     IF v_returned + v_damaged > li.quantity THEN
+  35:       RAISE EXCEPTION 'More items returned than were handed over on this line';
+  36:     END IF;
+  37: 
+  38:     UPDATE laundry_batch_items
+  39:        SET returned_quantity = v_returned,
+  40:            damaged_quantity = v_damaged,
+  41:            missing_quantity = v_missing
+  42:      WHERE id = li.id;
+  43: 
+  44:     IF li.item_kind = 'guest' OR li.linen_item_id IS NULL THEN
+  45:       -- Guest garments never touch hotel linen stock; discrepancies belong to the guest order.
+  46:       IF li.guest_laundry_item_id IS NOT NULL THEN
+  47:         UPDATE guest_laundry_items
+  48:            SET counted_quantity = v_returned,
+  49:                condition_notes = COALESCE(NULLIF(l->>'notes',''), condition_notes)
+  50:          WHERE id = li.guest_laundry_item_id AND organization_id = v_org;
+  51:       END IF;
+  52:       IF (v_damaged + v_missing) > 0 THEN
+  53:         v_guest_notes := v_guest_notes || COALESCE(li.description,'Garment')
+  54:           || ': ' || v_damaged::text || ' damaged, ' || v_missing::text || ' missing. ';
+  55:         v_incidents := v_incidents + 1;
+  56:       END IF;
+  57:       CONTINUE;
+  58:     END IF;
+  59: 
+  60:     INSERT INTO linen_movements (
+  61:       organization_id, branch_id, linen_item_id, from_state, to_state,
+  62:       from_department_id, to_department_id, batch_id, quantity, received_quantity,
+  63:       discrepancy, performed_by, confirmed_by, confirmed_at
+  64:     ) VALUES (
+  65:       v_org, b.branch_id, li.linen_item_id, 'in-laundry', 'clean',
+  66:       NULL, b.source_department_id, _batch, li.quantity, v_returned,
+  67:       (v_damaged + v_missing), auth.uid(), auth.uid(), now()
+  68:     );
+  69: 
+  70:     IF v_damaged > 0 THEN
+  71:       INSERT INTO linen_incidents (
+  72:         organization_id, branch_id, linen_item_id, quantity, department_id,
+  73:         reason, condition, responsible_process, reported_by, status
+  74:       ) VALUES (
+  75:         v_org, b.branch_id, li.linen_item_id, v_damaged, b.source_department_id,
+  76:         COALESCE(l->>'notes','Damaged during laundry processing'), 'damaged', 'laundry', auth.uid(), 'reported'
+  77:       );
+  78:       v_incidents := v_incidents + 1;
+  79:     END IF;
+  80: 
+  81:     IF v_missing > 0 THEN
+  82:       INSERT INTO linen_incidents (
+  83:         organization_id, branch_id, linen_item_id, quantity, department_id,
+  84:         reason, condition, responsible_process, reported_by, status
+  85:       ) VALUES (
+  86:         v_org, b.branch_id, li.linen_item_id, v_missing, b.source_department_id,
+  87:         COALESCE(l->>'notes','Not returned from laundry'), 'missing', 'laundry', auth.uid(), 'reported'
+  88:       );
+  89:       v_incidents := v_incidents + 1;
+  90:     END IF;
+  91:   END LOOP;
+  92: 
+  93:   IF v_guest_notes <> '' AND b.guest_order_id IS NOT NULL THEN
+  94:     UPDATE guest_laundry_orders
+  95:        SET discrepancy_notes = concat_ws(' ', NULLIF(discrepancy_notes,''), v_guest_notes)
+  96:      WHERE id = b.guest_order_id AND organization_id = v_org;
+  97:   END IF;
+  98: 
+  99:   UPDATE laundry_batches
+ 100:      SET status = 'completed', completed_at = now()
+ 101:    WHERE id = _batch;
+ 102: 
+ 103:   RETURN jsonb_build_object('ok', true, 'incidents', v_incidents);
+ 104: END;
+ 105: $$;
+
+========================================
+FILE: supabase/migrations/20261025140000_o07_maintenance_verification_closure.sql
+========================================
+   1: -- O07: Require independent maintenance verification at closure.
+   2: -- Preserve existing work-order transitions and maintenance integration.
+   3: -- No historical work orders modified.
+   4: 
+   5: CREATE OR REPLACE FUNCTION public.neo_maint_job_advance(
+   6:   _work_order uuid,
+   7:   _status text,
+   8:   _note text DEFAULT '',
+   9:   _diagnosis text DEFAULT ''
+  10: )
+  11: RETURNS public.maintenance_work_orders
+  12: LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+  13: DECLARE
+  14:   v_row public.maintenance_work_orders;
+  15:   v_before text;
+  16:   v_is_supervisor boolean;
+  17:   v_allowed text[];
+  18: BEGIN
+  19:   SELECT * INTO v_row FROM public.maintenance_work_orders
+  20:    WHERE id = _work_order AND organization_id = current_org_id() FOR UPDATE;
+  21:   IF v_row.id IS NULL THEN RAISE EXCEPTION 'Work order not found'; END IF;
+  22: 
+  23:   v_before := v_row.status;
+  24:   v_is_supervisor := has_permission('maintenance', 'overview', 'approve') OR is_org_admin();
+  25: 
+  26:   IF v_row.assigned_to IS DISTINCT FROM auth.uid() AND NOT v_is_supervisor THEN
+  27:     RAISE EXCEPTION 'Only the assigned technician or a supervisor can update this job';
+  28:   END IF;
+  29: 
+  30:   IF _status NOT IN (
+  31:     'accepted','diagnosis','in-progress','waiting-parts','waiting-supplier',
+  32:     'completed','awaiting-verification','reopened','closed','cancelled'
+  33:   ) THEN
+  34:     RAISE EXCEPTION 'Unknown work order status %', _status;
+  35:   END IF;
+  36: 
+  37:   IF _status IN ('awaiting-verification','reopened','closed','cancelled') AND NOT v_is_supervisor THEN
+  38:     RAISE EXCEPTION 'Only a maintenance supervisor can move a job to %', _status;
+  39:   END IF;
+  40: 
+  41:   IF _status IN ('awaiting-verification','closed')
+  42:      AND v_row.assigned_to = auth.uid()
+  43:      AND NOT is_org_admin() THEN
+  44:     RAISE EXCEPTION 'You cannot verify your own work';
+  45:   END IF;
+  46: 
+  47:   v_allowed := CASE v_before
+  48:     WHEN 'new' THEN ARRAY['assigned','accepted','cancelled']
+  49:     WHEN 'assigned' THEN ARRAY['accepted','cancelled']
+  50:     WHEN 'accepted' THEN ARRAY['diagnosis','in-progress','waiting-parts','waiting-supplier','cancelled']
+  51:     WHEN 'diagnosis' THEN ARRAY['in-progress','waiting-parts','waiting-supplier','cancelled']
+  52:     WHEN 'in-progress' THEN ARRAY['waiting-parts','waiting-supplier','completed','cancelled']
+  53:     WHEN 'waiting-parts' THEN ARRAY['in-progress','waiting-supplier','cancelled']
+  54:     WHEN 'waiting-supplier' THEN ARRAY['in-progress','waiting-parts','cancelled']
+  55:     WHEN 'completed' THEN ARRAY['awaiting-verification','reopened']
+  56:     WHEN 'awaiting-verification' THEN ARRAY['closed','reopened']
+  57:     WHEN 'reopened' THEN ARRAY['accepted','diagnosis','in-progress','waiting-parts','waiting-supplier','cancelled']
+  58:     ELSE ARRAY[]::text[]
+  59:   END;
+  60: 
+  61:   IF _status <> v_before AND NOT (_status = ANY(v_allowed)) THEN
+  62:     RAISE EXCEPTION 'Cannot move work order from % to %', v_before, _status;
+  63:   END IF;
+  64:   -- O07: Verification is confirmed at closure, not when review begins.
+  65:   IF _status = 'closed' THEN
+  66:     IF nullif(btrim(coalesce(_note,'')), '') IS NULL THEN
+  67:       RAISE EXCEPTION 'A verification note is required before closing this work order'
+  68:         USING ERRCODE = '23514';
+  69:     END IF;
+  70: 
+  71:     IF v_row.completed_at IS NULL THEN
+  72:       RAISE EXCEPTION 'The repair must be completed before verification'
+  73:         USING ERRCODE = '23514';
+  74:     END IF;
+  75: 
+  76:     IF v_row.assigned_to = auth.uid() THEN
+  77:       RAISE EXCEPTION 'The assigned technician cannot verify their own repair'
+  78:         USING ERRCODE = '42501';
+  79:     END IF;
+  80:   END IF;
+  81:   IF _status = v_before THEN RETURN v_row; END IF;
+  82: 
+  83:   UPDATE public.maintenance_work_orders SET
+  84:     status = _status,
+  85:     diagnosis = coalesce(nullif(btrim(_diagnosis), ''), diagnosis),
+  86:     completion_notes = CASE WHEN _status IN ('completed','awaiting-verification','closed')
+  87:                             THEN coalesce(nullif(btrim(_note), ''), completion_notes)
+  88:                             ELSE completion_notes END,
+  89:     accepted_at = CASE WHEN _status = 'accepted' AND accepted_at IS NULL THEN now() ELSE accepted_at END,
+  90:     completed_at = CASE WHEN _status = 'completed' THEN now()
+  91:                         WHEN _status = 'reopened' THEN NULL ELSE completed_at END,
+  92:     verified_by = CASE WHEN _status = 'closed' THEN auth.uid()
+  93:                        WHEN _status IN ('reopened','awaiting-verification') THEN NULL ELSE verified_by END,
+  94:     verified_at = CASE WHEN _status = 'closed' THEN now()
+  95:                        WHEN _status IN ('reopened','awaiting-verification') THEN NULL ELSE verified_at END,
+  96:     closed_at = CASE WHEN _status = 'closed' THEN now()
+  97:                      WHEN _status = 'reopened' THEN NULL ELSE closed_at END,
+  98:     updated_at = now()
+  99:   WHERE id = _work_order
+ 100:   RETURNING * INTO v_row;
+ 101: 
+ 102:   INSERT INTO public.work_order_status_history
+ 103:     (organization_id, work_order_id, previous_status, new_status, reason, changed_by)
+ 104:   VALUES
+ 105:     (v_row.organization_id, _work_order, v_before, _status, nullif(btrim(_note), ''), auth.uid());
+ 106: 
+ 107:   RETURN v_row;
+ 108: END; $$;
+
+========================================
+FILE: supabase/migrations/20260924160000_laundry_retry_preflight_guard.sql
+========================================
+   1: -- NEÃ˜ certification hardening: laundry retry must validate guest-billing context
+   2: -- before attempting Finance posting. This keeps the posting invariant and the
+   3: -- recovery RPC aligned.
+   4: 
+   5: CREATE OR REPLACE FUNCTION public.neo_laundry_retry_posting(_order uuid)
+   6: RETURNS jsonb
+   7: LANGUAGE plpgsql
+   8: SECURITY DEFINER
+   9: SET search_path TO 'public'
+  10: AS $function$
+  11: DECLARE
+  12:   _org uuid := public.current_org_id();
+  13:   _row public.guest_laundry_orders;
+  14:   _res jsonb;
+  15:   _ok boolean;
+  16: BEGIN
+  17:   IF NOT (public.has_permission('laundry','orders','edit')
+  18:           OR public.has_permission('laundry','orders','approve')
+  19:           OR public.has_permission('pms','folios','post_charge')
+  20:           OR public.has_permission('finance','postings','edit')
+  21:           OR public.is_org_admin()) THEN
+  22:     RAISE EXCEPTION 'Not permitted to re-post laundry charges';
+  23:   END IF;
+  24: 
+  25:   SELECT * INTO _row
+  26:   FROM public.guest_laundry_orders
+  27:   WHERE id=_order AND organization_id=_org
+  28:   FOR UPDATE;
+  29: 
+  30:   IF _row.id IS NULL THEN RAISE EXCEPTION 'Unknown laundry order'; END IF;
+  31: 
+  32:   -- The canonical laundry posting invariant requires a real guest folio charge
+  33:   -- before the order may become posted. Never create Finance revenue first and
+  34:   -- discover missing guest context afterwards.
+  35:   IF _row.folio_id IS NULL OR _row.folio_line_id IS NULL THEN
+  36:     UPDATE public.guest_laundry_orders
+  37:        SET posting_status='blocked',
+  38:            discrepancy_notes=concat_ws(' ',
+  39:              NULLIF(discrepancy_notes,''),
+  40:              'Posting blocked: laundry order is not linked to a valid guest folio charge.'),
+  41:            updated_at=now()
+  42:      WHERE id=_order;
+  43: 
+  44:     RETURN jsonb_build_object(
+  45:       'ok',false,
+  46:       'reason','missing_folio_charge',
+  47:       'detail','Laundry posting requires a valid folio and folio charge line before Finance posting.',
+  48:       'folio_id',_row.folio_id,
+  49:       'folio_line_id',_row.folio_line_id
+  50:     );
+  51:   END IF;
+  52: 
+  53:   _res:=public.neo_finance_post_source('laundry',_order,true);
+  54:   _ok:=COALESCE((_res->>'ok')::boolean,false);
+  55: 
+  56:   IF _ok THEN
+  57:     UPDATE public.guest_laundry_orders
+  58:        SET posting_status='posted',posted_at=COALESCE(posted_at,now()),updated_at=now()
+  59:      WHERE id=_order AND COALESCE(posting_status,'unposted')<>'posted';
+  60:     RETURN _res || jsonb_build_object('folio_charged',true);
+  61:   END IF;
+  62: 
+  63:   UPDATE public.guest_laundry_orders
+  64:      SET posting_status='blocked',
+  65:          discrepancy_notes=COALESCE(_res->>'detail',_res->>'reason',discrepancy_notes),
+  66:          updated_at=now()
+  67:    WHERE id=_order AND COALESCE(posting_status,'unposted')<>'posted';
+  68:   RETURN _res;
+  69: END
+  70: $function$;

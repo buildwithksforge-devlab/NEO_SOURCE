@@ -1,0 +1,38 @@
+{
+  "diagnostic_version": "anonymous-published-menu-inspection-v1",
+  "counts": {
+    "delivery": 25,
+    "pickup": 27,
+    "room-service": 27
+  },
+  "uniquePublishedItems": 28,
+  "candidates": [
+    {
+      "id": "e8ad3125-9201-4415-b419-c38601e3e6ee",
+      "name": "NEO QA Egg Plate Sep27",
+      "description": null,
+      "base_price": 100,
+      "tax_rate": 16,
+      "image_url": null,
+      "prep_minutes": 15,
+      "category_id": "c64f761a-4b55-547e-994a-317918575f11",
+      "category_name": "Breakfast",
+      "availability": "available",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c"
+    },
+    {
+      "id": "5244d491-670e-4323-8eb1-3c9cc8f72e35",
+      "name": "NEO-UAT-20261022 Beef & Vegetable Plate TEST",
+      "description": "NEO-UAT-20261022 synthetic meal only; no physical preparation. Recipe-controlled beef 150g, tomato 60g, onion 30g per portion.",
+      "base_price": 750,
+      "tax_rate": 16,
+      "image_url": null,
+      "prep_minutes": 5,
+      "category_id": "43e93672-8cac-5cb4-9695-e92be492fe1d",
+      "category_name": "Main Courses",
+      "availability": "available",
+      "branch_id": "2addbd01-c643-406a-bd7d-fac1aa76b23c"
+    }
+  ],
+  "scope": "Read-only public storefront menu RPC for Savannah Nairobi; anonymous public key only. Candidate names are evidence for review, not instructions to remove products. No rows changed."
+}

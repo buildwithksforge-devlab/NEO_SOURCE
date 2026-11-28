@@ -133,7 +133,7 @@ describe("the screens read the contract and nothing else", () => {
 
   it("offers the granted create action without requiring the operator to type first", () => {
     // The defect: the affordance existed but only appeared after a search.
-    expect(picker).toContain("const canCreate =\n    Boolean(onCreate)");
+    expect(picker).toMatch(/const canCreate\s*=\s*Boolean\(onCreate\)/);
   });
 
   it("writes nothing until an explicit confirmation", () => {

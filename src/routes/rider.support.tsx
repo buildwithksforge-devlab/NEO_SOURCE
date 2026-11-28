@@ -11,7 +11,8 @@ import { brandFallback } from "@/lib/public-apps";
 import { useCustomerSession } from "@/lib/public-session";
 import { guardPreview } from "@/lib/preview-mode";
 import { PreviewBanner } from "@/components/public/PreviewBanner";
-import { RiderTabBar } from "@/components/public/RiderTabBar";
+import { RiderTabBar, useRiderBrand } from "@/components/public/RiderTabBar";
+import { useMyRiderProfile } from "@/lib/delivery-data";
 import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateSystem";
 import { Button } from "@/components/ui/button";
 
@@ -77,6 +78,8 @@ function useMyRiderTasks(userId?: string) {
 function RiderSupportPage() {
   const navigate = useNavigate();
   const { user, loading } = useCustomerSession();
+  const rider = useMyRiderProfile();
+  const brand = useRiderBrand((rider.data?.["branch_id"] as string | null) ?? null, user?.id);
   const qc = useQueryClient();
   const supply = useMySupplyRequests();
   const tasks = useMyRiderTasks(user?.id);
@@ -165,7 +168,7 @@ function RiderSupportPage() {
   const card = "neo-rider-card p-5";
 
   return (
-    <div className="neo-rider-page">
+    <div className="neo-rider-page" style={brand.style}>
       <PreviewBanner experience="Rider" />
       <header className="px-5 py-4">
         <div className="mx-auto flex w-full max-w-md items-center gap-3">

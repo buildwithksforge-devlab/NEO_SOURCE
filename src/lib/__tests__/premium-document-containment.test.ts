@@ -14,9 +14,9 @@ describe("premium document engine", () => {
   });
 
   it("puts the mark and trading name top-left and document metadata top-right", () => {
-    expect(renderer).toContain("Client brand leads");
-    expect(renderer).toContain("Document metadata block (top right)");
-    expect(renderer).toContain('["Document no.", documentNumber]');
+    expect(renderer).toContain("propertyName.toUpperCase()");
+    expect(renderer).toContain("metaRight - font.widthOfTextAtSize");
+    expect(renderer).toContain("clip(), endPath()");
   });
 
   it("states the amount owed once, on the brown total band", () => {
@@ -29,7 +29,7 @@ describe("premium document engine", () => {
 
   it("keeps a summary panel, terms area and property footer", () => {
     expect(renderer).toContain("PAYMENT INFORMATION, TERMS & DETAIL");
-    expect(renderer).toContain("footerContact");
+    expect(renderer).toContain('[["Phone",text(property["phone"])],["Mail",text(property["email"])],["Address",addressParts]]');
   });
 
   it("still reads the canonical payload and never recomputes money", () => {

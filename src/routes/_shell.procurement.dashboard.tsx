@@ -1,3 +1,6 @@
+import { SupplierLpoResponseRegister } from "@/components/procurement/SupplierLpoResponseRegister";
+import { SupplierInvoiceSubmissionRegister } from "@/components/procurement/SupplierInvoiceSubmissionRegister";
+import { ProcurementOperationalWorkspace } from "@/components/common/ProcurementOperationalWorkspace";
 /**
  * Procurement dashboard.
  *
@@ -111,6 +114,9 @@ function ProcurementDashboardPage() {
         title="Procurement dashboard"
         description="Orders still awaiting delivery, what has been received, what is still owed and the follow-ups attached."
       />
+      <ProcurementOperationalWorkspace />
+      <SupplierLpoResponseRegister />
+      <SupplierInvoiceSubmissionRegister />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

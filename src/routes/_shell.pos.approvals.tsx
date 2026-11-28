@@ -1,3 +1,4 @@
+import {RecordElectronicRefundButton} from "@/components/finance/RecordElectronicRefundButton";
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { PageHeader, SectionCard, StatusPill, TableScroll } from "@/components/common/DataDisplay";
@@ -50,7 +51,7 @@ function tone(status: string) {
 }
 
 function ApprovalsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const voids = useVoidRequests();
   const refunds = useRefundRequests();
   const decideVoid = useDecideVoid();
@@ -111,13 +112,14 @@ function ApprovalsPage() {
                     <TableCell className="max-w-64 truncate">{r.reason}</TableCell>
                     <TableCell>{money(r.amount)}</TableCell>
                     <TableCell>
-                      <StatusPill tone={tone(r.status)}>{titleCase(r.status)}</StatusPill>
+                      <StatusPill tone={tone(r.status)}>{r.status === "approved" ? "Authorised — awaiting payout" : titleCase(r.status)}</StatusPill>
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.status === "pending" && canDecideVoid ? (
+                      {r.status === "pending" && canDecideVoid && r.requested_by !== user?.id ? (
                         <span className="flex justify-end gap-2">
                           <Button
                             size="sm"
+                            disabled={decideVoid.isPending}
                             onClick={() => decideVoid.mutate({ id: r.id, approve: true })}
                           >
                             Approve
@@ -125,6 +127,7 @@ function ApprovalsPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={decideVoid.isPending}
                             onClick={() => decideVoid.mutate({ id: r.id, approve: false })}
                           >
                             Reject
@@ -149,7 +152,7 @@ function ApprovalsPage() {
       <SectionCard
         className="mt-6"
         title="Refund requests"
-        description="Refunds can never exceed the original payment."
+        description="A refund is authorised first, then paid from the original tender. Processed means its separate refund receipt and journal are saved."
       >
         <QueryState
           isLoading={refunds.isLoading}
@@ -191,10 +194,11 @@ function ApprovalsPage() {
                       <StatusPill tone={tone(r.status)}>{titleCase(r.status)}</StatusPill>
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.status === "pending" && canDecideRefund ? (
+                      {r.status === "approved" && r.pos_payments?.method !== "cash" ? <RecordElectronicRefundButton requestId={r.id} branchId={r.branch_id} originalAccountId={(r.pos_payments as {destination_account_id?:string|null}|null)?.destination_account_id??null}/> : r.status === "approved" ? <span className="text-xs text-muted-foreground">Awaiting cashier payout under Finance → Till → Cash refunds</span> : r.status === "pending" && canDecideRefund && r.requested_by !== user?.id ? (
                         <span className="flex justify-end gap-2">
                           <Button
                             size="sm"
+                            disabled={decideRefund.isPending}
                             onClick={() => decideRefund.mutate({ id: r.id, approve: true })}
                           >
                             Approve
@@ -202,6 +206,7 @@ function ApprovalsPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={decideRefund.isPending}
                             onClick={() => decideRefund.mutate({ id: r.id, approve: false })}
                           >
                             Reject

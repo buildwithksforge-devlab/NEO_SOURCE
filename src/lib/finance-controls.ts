@@ -29,6 +29,22 @@ async function callRpc<T>(fn: string, args: Record<string, unknown>): Promise<T>
   return data as T;
 }
 
+/** A declined payment command is not a successful settlement. */
+async function callCollectionRpc(fn: string, args: Record<string, unknown>): Promise<unknown> {
+  const result = await callRpc<unknown>(fn, args);
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const value = result as Record<string, unknown>;
+    if (value['ok'] === false) {
+      throw new Error(
+        (typeof value['detail'] === "string" && value['detail'].trim()) ||
+        (typeof value['reason'] === "string" && value['reason'].trim()) ||
+        "Collection was not saved."
+      );
+    }
+  }
+  return result;
+}
+
 function useInvalidate(keys: string[]) {
   const qc = useQueryClient();
   return () => keys.forEach((k) => void qc.invalidateQueries({ queryKey: [k] }));
@@ -94,7 +110,7 @@ export function useSettleCollection() {
     mutationFn: async (input: SettleInput) => {
       const intent = input.intent_key ?? null;
       if (input.source === "front-office") {
-        return callRpc("pms_record_payment", {
+        return callCollectionRpc("pms_record_payment", {
           _folio: input.source_id,
           _amount: input.amount,
           _method: input.method,
@@ -103,7 +119,7 @@ export function useSettleCollection() {
         });
       }
       if (input.source === "restaurant") {
-        return callRpc("pos_record_payment_attempt", {
+        return callCollectionRpc("pos_record_payment_attempt", {
           _order_id: input.source_id,
           _amount: input.amount,
           _method: input.method,
@@ -114,17 +130,31 @@ export function useSettleCollection() {
         });
       }
       if (input.source === "events") {
-        return callRpc("neo_event_billing_record_payment", {
+        return callCollectionRpc("neo_event_billing_record_payment", {
           _booking: input.source_id,
           _amount: input.amount,
+          _entry_type: "payment",
           _method: input.method,
           _reference: input.reference || null,
+          _reason: null,
+          _account: null,
+          _intent_key: intent,
         });
       }
       throw new Error("Delivery orders are settled by the rider on delivery or by the payment provider.");
     },
-    onSuccess: () => {
-      toast.success("Payment recorded and posted to the guest ledger");
+    onSuccess: (result, input) => {
+      const row = result && typeof result === "object" && !Array.isArray(result)
+        ? result as Record<string, unknown> : null;
+      const status = typeof row?.['status'] === "string" ? row['status'].toLowerCase() : "";
+      const pendingPms = input.source === "front-office" &&
+        !["cash", "corporate-credit"].includes(input.method.toLowerCase());
+      const pending = ["pending", "initiated", "awaiting-provider", "unverified"].includes(status);
+      if (pendingPms || pending) {
+        toast.info("Payment attempt saved; verification and reconciliation are still required.");
+      } else {
+        toast.success("Collection recorded. Verify its receipt and Finance posting status.");
+      }
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),

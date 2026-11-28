@@ -8,7 +8,7 @@
  * database, so the cashbook and the reconciliation panel show the same receipt
  * without a second entry anywhere.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FormDialog, RecordForm, type FieldSpec } from "@/components/finance/FinanceShared";
 import { useRecordCustomerReceipt } from "@/lib/finance-data";
@@ -35,13 +35,17 @@ export function RecordReceiptDialog({
 }) {
   const { can, isAdmin } = useAuth();
   const record = useRecordCustomerReceipt();
-  const accounts = useReceivingAccounts();
+  const branchId = typeof invoice["branch_id"] === "string" ? invoice["branch_id"] : undefined;
+  const accounts = useReceivingAccounts(branchId);
   const [open, setOpen] = useState(false);
+  const attempt = useRef<{ draft: string; key: string } | null>(null);
 
   const allowed = isAdmin || can("finance", "ar", "allocate_receipt");
   if (!allowed) return null;
 
   const currency = String(invoice["currency"] ?? "KES");
+  const receivingAccounts = (accounts.data ?? []).filter((account) =>
+    !account.currency || account.currency.toUpperCase() === currency.toUpperCase());
   const balance = Number(num(invoice["balance"]).toFixed(2));
   const invoiceNumber = String(invoice["invoice_number"] ?? "");
   if (balance <= 0) return null;
@@ -50,13 +54,13 @@ export function RecordReceiptDialog({
     { name: "amount", label: `Amount received (${currency})`, type: "number", required: true },
     { name: "method", label: "How it was received", type: "select", required: true, options: METHODS },
     // How it was paid and where it landed are two different facts.
-    ...((accounts.data ?? []).length > 0
+    ...(receivingAccounts.length > 0
       ? ([
           {
             name: "destination_account_id",
             label: "Money received into",
             type: "select",
-            options: (accounts.data ?? []).map((a) => ({
+            options: receivingAccounts.map((a) => ({
               value: a.id,
               label: `${a.name}${a.currency ? ` · ${a.currency}` : ""}`,
             })),
@@ -101,14 +105,15 @@ export function RecordReceiptDialog({
           validate={(v) => {
             const amount = Number(v["amount"] ?? 0);
             if (!Number.isFinite(amount) || amount <= 0) return "Enter how much money was received.";
+            if (Number(amount.toFixed(2)) !== amount) return "Use at most two decimal places.";
             if (amount - balance > 0.009)
               return `That is more than the ${money(balance, currency)} still outstanding on this invoice.`;
             if (!v["method"]) return "Choose how the money was received.";
             return null;
           }}
           onSubmit={(v) => {
-            record.mutate(
-              {
+            if (record.isPending) return;
+            const receipt = {
                 invoiceId: String(invoice["id"]),
                 amount: Number(v["amount"]),
                 method: String(v["method"] ?? "cash"),
@@ -118,9 +123,14 @@ export function RecordReceiptDialog({
                 campaignId: (String(v["campaign_id"] ?? "").trim() || undefined) as string | undefined,
                 destinationAccountId:
                   String(v["destination_account_id"] ?? "").trim() || null,
-              },
-              { onSuccess: () => close() },
-            );
+            };
+            const draft = JSON.stringify(receipt);
+            if (attempt.current?.draft !== draft) {
+              attempt.current = { draft, key: `ar:receipt:${receipt.invoiceId}:${crypto.randomUUID()}` };
+            }
+            record.mutate({ ...receipt, intentKey: attempt.current.key }, {
+              onSuccess: () => { attempt.current = null; close(); },
+            });
           }}
         />
       )}

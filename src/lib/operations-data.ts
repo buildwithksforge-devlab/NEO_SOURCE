@@ -10,6 +10,7 @@
 import { stableIdempotencyKey } from "@/lib/transaction-scope";
 import { useScopedRealtime } from "@/lib/realtime-scope";
 import { guardedRpc } from "@/lib/rpc-guard";
+import { requireSavedRecord, requireLaundryPostingResult } from "@/lib/durable-command-result";
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,7 +52,9 @@ export function useOpsMetrics(branch?: string | null) {
     queryKey: ["ops", "metrics", organizationId, scopedBranch ?? null, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(db, "ops_metrics", { _branch: scopedBranch ?? null });
+      const { data, error } = await guardedRpc(db, "ops_metrics", {
+        _branch: scopedBranch ?? null,
+      });
       if (error) throw error;
       return (data ?? {}) as Record<string, number>;
     },
@@ -76,7 +79,9 @@ export function useRoomState(branch?: string | null) {
     queryKey: ["ops", "room-state", organizationId, scopedBranch ?? null, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(db, "ops_room_state", { _branch: scopedBranch ?? null });
+      const { data, error } = await guardedRpc(db, "ops_room_state", {
+        _branch: scopedBranch ?? null,
+      });
       if (error) throw error;
       // Legacy field aliases so existing consumers keep working unchanged.
       return ((data ?? []) as Row[]).map((r) => ({
@@ -96,13 +101,22 @@ export const useRoomBoard = useRoomState;
  * Availability for a requested interval, derived from the same room state plus
  * reservations, assignments, blocks, holds and out-of-order periods.
  */
-export function useRoomAvailabilityWindow(branch: string | null, from: string, to: string, enabled = true) {
+export function useRoomAvailabilityWindow(
+  branch: string | null,
+  from: string,
+  to: string,
+  enabled = true,
+) {
   const { organizationId } = useCtx();
   return useQuery({
     queryKey: ["ops", "room-availability", organizationId, branch, from, to],
     enabled: Boolean(organizationId) && enabled,
     queryFn: async () => {
-      const { data, error } = await guardedRpc(db, "ops_room_availability", { _branch: branch, _from: from, _to: to });
+      const { data, error } = await guardedRpc(db, "ops_room_availability", {
+        _branch: branch,
+        _from: from,
+        _to: to,
+      });
       if (error) throw error;
       return rows(data);
     },
@@ -122,13 +136,14 @@ export function useRoomStateReconciliation(branch?: string | null) {
     queryKey: ["ops", "room-reconciliation", organizationId, scopedBranch ?? null, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await guardedRpc(db, "ops_room_state_reconciliation", { _branch: scopedBranch ?? null });
+      const { data, error } = await guardedRpc(db, "ops_room_state_reconciliation", {
+        _branch: scopedBranch ?? null,
+      });
       if (error) throw error;
       return rows(data);
     },
   });
 }
-
 
 export function useTodayMovements() {
   const { applyTo, filterKey } = useActivePropertyFilter();
@@ -138,14 +153,19 @@ export function useTodayMovements() {
     queryKey: ["ops", "movements", organizationId, today, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("reservations").select("id, confirmation_number, room_id, arrival_date, departure_date, status, eta, is_vip, adults, children"), "reservations")
-        .or(`arrival_date.eq.${today},departure_date.eq.${today}`);
+      const { data, error } = await applyTo(
+        db
+          .from("reservations")
+          .select(
+            "id, confirmation_number, room_id, arrival_date, departure_date, status, eta, is_vip, adults, children",
+          ),
+        "reservations",
+      ).or(`arrival_date.eq.${today},departure_date.eq.${today}`);
       if (error) throw error;
       return rows(data);
     },
   });
 }
-
 
 /* ---------------------------- housekeeping ------------------------------ */
 
@@ -153,7 +173,14 @@ export function useHousekeepingJobs(filters?: { status?: string; assignee?: stri
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useCtx();
   return useQuery({
-    queryKey: ["ops", "hk-jobs", organizationId, filterKey, filters?.status ?? null, filters?.assignee ?? null],
+    queryKey: [
+      "ops",
+      "hk-jobs",
+      organizationId,
+      filterKey,
+      filters?.status ?? null,
+      filters?.assignee ?? null,
+    ],
     enabled: Boolean(organizationId),
     queryFn: async () => {
       let q = applyTo(
@@ -245,7 +272,6 @@ export function useCompletedHousekeepingJobs(range?: { from?: string; to?: strin
   });
 }
 
-
 /**
  * Immutable supersession evidence for a single cleaning job.
  *
@@ -261,7 +287,9 @@ export function useHousekeepingSupersedeAudit(jobId: string | null) {
     queryFn: async () => {
       const { data, error } = await db
         .from("audit_logs")
-        .select("id, action, module, record_id, user_id, user_name, reason, previous_value, new_value, created_at")
+        .select(
+          "id, action, module, record_id, user_id, user_name, reason, previous_value, new_value, created_at",
+        )
         .eq("module", "housekeeping")
         .eq("action", "housekeeping.job.superseded")
         .eq("record_id", String(jobId))
@@ -274,7 +302,6 @@ export function useHousekeepingSupersedeAudit(jobId: string | null) {
   });
 }
 
-
 export function useChecklistTemplates() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useCtx();
@@ -282,8 +309,14 @@ export function useChecklistTemplates() {
     queryKey: ["ops", "hk-templates", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("housekeeping_checklist_templates").select("id, name, description, cleaning_type, area_scope, requires_inspection, active, branch_id, room_type_id, version, updated_at"), "housekeeping_checklist_templates")
-        .order("name");
+      const { data, error } = await applyTo(
+        db
+          .from("housekeeping_checklist_templates")
+          .select(
+            "id, name, description, cleaning_type, area_scope, requires_inspection, active, branch_id, room_type_id, version, updated_at",
+          ),
+        "housekeeping_checklist_templates",
+      ).order("name");
       if (error) throw error;
       return rows(data);
     },
@@ -327,7 +360,9 @@ export function useSaveChecklistTemplate() {
       const { data, error } = await query.select("id").maybeSingle();
       if (error) throw error;
       await logAudit({
-        action: id ? "housekeeping.checklist-template.updated" : "housekeeping.checklist-template.created",
+        action: id
+          ? "housekeeping.checklist-template.updated"
+          : "housekeeping.checklist-template.created",
         module: "housekeeping",
         recordId: String(id ?? (data as Row | null)?.["id"] ?? ""),
         newValue: values,
@@ -387,7 +422,14 @@ export function useRoomInspections() {
     queryKey: ["ops", "inspections", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("room_inspections").select("id, inspection_type, result, notes, rework_required, inspected_at, released_at, room_id, rooms(room_number)"), "room_inspections")
+      const { data, error } = await applyTo(
+        db
+          .from("room_inspections")
+          .select(
+            "id, inspection_type, result, notes, rework_required, inspected_at, released_at, room_id, rooms(room_number)",
+          ),
+        "room_inspections",
+      )
         .order("inspected_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -425,8 +467,14 @@ export function useDeepCleanSchedules() {
     queryKey: ["ops", "deep-clean", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("deep_cleaning_schedules").select("id, schedule_type, frequency, after_stays, last_done_on, next_due_on, active, notes, room_id, rooms(room_number)"), "deep_cleaning_schedules")
-        .order("next_due_on", { nullsFirst: false });
+      const { data, error } = await applyTo(
+        db
+          .from("deep_cleaning_schedules")
+          .select(
+            "id, schedule_type, frequency, after_stays, last_done_on, next_due_on, active, notes, room_id, rooms(room_number)",
+          ),
+        "deep_cleaning_schedules",
+      ).order("next_due_on", { nullsFirst: false });
       if (error) throw error;
       return rows(data);
     },
@@ -466,8 +514,16 @@ export function useCreateJob() {
       });
       if (error) throw error;
       const result = data as Row;
-      if (!result?.["ok"] || !result["job_id"] || !result["task_id"] || !result["workflow_event_id"] || !result["audit_event_id"]) {
-        throw new Error("The backend did not confirm the complete housekeeping workflow. Nothing is reported as complete.");
+      if (
+        !result?.["ok"] ||
+        !result["job_id"] ||
+        !result["task_id"] ||
+        !result["workflow_event_id"] ||
+        !result["audit_event_id"]
+      ) {
+        throw new Error(
+          "The backend did not confirm the complete housekeeping workflow. Nothing is reported as complete.",
+        );
       }
       return result;
     },
@@ -487,7 +543,15 @@ export function useCreateJob() {
 export function useAssignJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, assignee, reason }: { id: string; assignee: string; reason?: string }) => {
+    mutationFn: async ({
+      id,
+      assignee,
+      reason,
+    }: {
+      id: string;
+      assignee: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(db, "hk_assign_job", {
         _job: id,
         _assignee: assignee,
@@ -502,19 +566,23 @@ export function useAssignJob() {
       if (result["confirmed_assignee_id"] && result["confirmed_assignee_id"] !== assignee) {
         throw new Error("The backend did not confirm the selected attendant on the cleaning job.");
       }
-      if (result["confirmed_task_assignee_id"] && result["confirmed_task_assignee_id"] !== assignee) {
+      if (
+        result["confirmed_task_assignee_id"] &&
+        result["confirmed_task_assignee_id"] !== assignee
+      ) {
         throw new Error("The backend did not confirm the selected attendant on the linked task.");
       }
       return result;
     },
     onSuccess: (result) => {
-      toast.success(result?.["idempotent"] ? "Already assigned to this attendant" : "Task assigned");
+      toast.success(
+        result?.["idempotent"] ? "Already assigned to this attendant" : "Task assigned",
+      );
       void qc.invalidateQueries({ queryKey: ["ops"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 export function useStartJob() {
   const qc = useQueryClient();
@@ -562,7 +630,9 @@ export function useCompleteJob() {
       return result;
     },
     onSuccess: (data) => {
-      toast.success(data?.["inspection_required"] ? "Sent for supervisor inspection" : "Cleaning completed");
+      toast.success(
+        data?.["inspection_required"] ? "Sent for supervisor inspection" : "Cleaning completed",
+      );
       void qc.invalidateQueries({ queryKey: ["ops"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -572,7 +642,13 @@ export function useCompleteJob() {
 export function useRecordInspection() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { job: string; result: string; notes?: string; type?: string; defects?: Row[] }) => {
+    mutationFn: async (input: {
+      job: string;
+      result: string;
+      notes?: string;
+      type?: string;
+      defects?: Row[];
+    }) => {
       const { data, error } = await guardedRpc(db, "hk_record_inspection", {
         _job: input.job,
         _result: input.result,
@@ -583,7 +659,12 @@ export function useRecordInspection() {
       });
       if (error) throw error;
       const result = data as Row;
-      if (!result?.["ok"] || !result["inspection_id"] || !result["workflow_event_id"] || !result["audit_event_id"]) {
+      if (
+        !result?.["ok"] ||
+        !result["inspection_id"] ||
+        !result["workflow_event_id"] ||
+        !result["audit_event_id"]
+      ) {
         throw new Error("The backend did not confirm the inspection outcome.");
       }
       return result;
@@ -642,8 +723,6 @@ export function useLostFoundHistory(itemId: string | null) {
   });
 }
 
-
-
 export function useSaveLostFound() {
   const qc = useQueryClient();
   const ctx = useCtx();
@@ -681,8 +760,14 @@ export function useLaundryPrices() {
     queryKey: ["ops", "laundry-prices", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("laundry_price_items").select("id, name, service_type, normal_price, express_price, turnaround_hours, tax_rate, active"), "laundry_price_items")
-        .order("name");
+      const { data, error } = await applyTo(
+        db
+          .from("laundry_price_items")
+          .select(
+            "id, name, service_type, normal_price, express_price, turnaround_hours, tax_rate, active",
+          ),
+        "laundry_price_items",
+      ).order("name");
       if (error) throw error;
       return rows(data);
     },
@@ -712,52 +797,50 @@ export function useCreateLaundryOrder() {
   const qc = useQueryClient();
   const ctx = useCtx();
   return useMutation({
-    mutationFn: async (input: { order: Row; items: Row[] }) => {
-      const subtotal = input.items.reduce((s, i) => s + Number(i["quantity"] ?? 0) * Number(i["unit_price"] ?? 0), 0);
-      const tax = input.items.reduce(
-        (s, i) => s + Number(i["quantity"] ?? 0) * Number(i["unit_price"] ?? 0) * (Number(i["tax_rate"] ?? 0) / 100),
-        0,
-      );
-      const { data, error } = await db
-        .from("guest_laundry_orders")
-        .insert({
-          ...input.order,
-          organization_id: ctx.organization_id,
-          branch_id: ctx.branch_id,
-          created_by: ctx.userId,
-          subtotal,
-          tax_amount: tax,
-          total: subtotal + tax + Number(input.order["express_charge"] ?? 0),
-        })
-        .select("id")
-        .single();
+    mutationFn: async (input: {
+      roomId: string;
+      express: boolean;
+      intentKey: string;
+      items: { price_item_id: string; quantity: number }[];
+    }) => {
+      if (!ctx.branch_id) throw new Error("Select the property before creating a laundry order.");
+      const { data, error } = await guardedRpc(db, "neo_laundry_order_create", {
+        _branch: ctx.branch_id,
+        _room: input.roomId,
+        _items: input.items,
+        _idempotency_key: input.intentKey,
+        _express: input.express,
+        _instructions: null,
+      });
       if (error) throw error;
-      const orderId = (data as Row)["id"];
-      if (input.items.length) {
-        const { error: iErr } = await db.from("guest_laundry_items").insert(
-          input.items.map((i) => ({
-            ...i,
-            organization_id: ctx.organization_id,
-            order_id: orderId,
-            line_total: Number(i["quantity"] ?? 0) * Number(i["unit_price"] ?? 0),
-          })),
-        );
-        if (iErr) throw iErr;
-      }
-      return orderId as string;
+      const result = requireSavedRecord(
+        data,
+        ["order_id", "laundry_number", "folio_id", "reservation_id"],
+        "The laundry order was not saved with its guest billing links.",
+      );
+      if (result["ok"] !== true) throw new Error("The laundry intake was not confirmed.");
+      return result;
     },
-    onSuccess: () => {
-      toast.success("Guest laundry order created");
+    onSuccess: (data) => {
+      toast.success(`Laundry ${data["laundry_number"]} saved`);
       void qc.invalidateQueries({ queryKey: ["ops"] });
+      void qc.invalidateQueries({ queryKey: ["laundry-department"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 export function useAdvanceLaundryOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, note }: { id: string; status: string; note?: string | null }) => {
+    mutationFn: async ({
+      id,
+      status,
+      note,
+    }: {
+      id: string;
+      status: string;
+      note?: string | null;
+    }) => {
       const { data, error } = await guardedRpc(db, "neo_laundry_order_advance", {
         _order: id,
         _status: status,
@@ -766,19 +849,24 @@ export function useAdvanceLaundryOrder() {
       if (error) throw error;
       const result = (data ?? {}) as Row;
       if (result["ok"] === false) {
-        throw new Error(String(result["detail"] ?? result["reason"] ?? "Laundry could not advance"));
+        throw new Error(
+          String(result["detail"] ?? result["reason"] ?? "Laundry could not advance"),
+        );
       }
-      return result;
+      if (result["ok"] !== true) throw new Error("The laundry status was not confirmed.");
+      return requireSavedRecord(result, ["status"], "The saved laundry status was not returned.");
     },
     onSuccess: (data) => {
       const posting = String(data["posting_status"] ?? "");
-      toast.success(
-        posting === "blocked"
-          ? "Laundry updated — Finance posting still needs attention"
-          : "Laundry status updated",
-      );
+      if (posting === "blocked") {
+        toast.warning("Guest handover recorded — the folio posting still needs attention");
+      } else {
+        toast.success("Laundry status updated");
+      }
       void qc.invalidateQueries({ queryKey: ["ops"] });
       void qc.invalidateQueries({ queryKey: ["laundry-department"] });
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+      void qc.invalidateQueries({ queryKey: ["finance"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -814,35 +902,21 @@ export function usePostLaundryCharge() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (orderId: string) => {
-      // Routed through the retry RPC so a posting that cannot reach a folio
-      // leaves the order marked 'blocked' rather than silently 'unposted'.
-      const { data, error } = await guardedRpc(db, "neo_laundry_retry_posting", { _order: orderId });
+      const { data, error } = await guardedRpc(db, "neo_laundry_retry_posting", {
+        _order: orderId,
+      });
       if (error) throw error;
-      const result = data as Row;
-      if (result && result["ok"] === false) {
-        throw new Error(
-          String(result["detail"] ?? result["reason"] ?? "The laundry charge could not be posted."),
-        );
-      }
-      return result;
+      return requireLaundryPostingResult(data);
     },
-
-    onSuccess: (data) => {
-      // The message states where the charge actually landed: a guest folio, or
-      // the books only when no folio was open for this order.
-      const onFolio = data?.["folio_charged"] === true;
-      toast.success(
-        onFolio
-          ? "Charge posted to the guest folio"
-          : "Charge recorded in the books — no open guest folio was attached to this order",
-      );
+    onSuccess: () => {
+      toast.success("Charge posted to the guest folio");
       void qc.invalidateQueries({ queryKey: ["ops"] });
+      void qc.invalidateQueries({ queryKey: ["pms"] });
+      void qc.invalidateQueries({ queryKey: ["finance"] });
     },
-
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 export function useLinenItems() {
   const { applyTo, filterKey } = useActivePropertyFilter();
   const { organizationId } = useCtx();
@@ -850,8 +924,12 @@ export function useLinenItems() {
     queryKey: ["ops", "linen-items", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("linen_items").select("id, name, category, unit, par_level, replacement_cost, active"), "linen_items")
-        .order("name");
+      const { data, error } = await applyTo(
+        db
+          .from("linen_items")
+          .select("id, name, category, unit, par_level, replacement_cost, active"),
+        "linen_items",
+      ).order("name");
       if (error) throw error;
       return rows(data);
     },
@@ -884,7 +962,14 @@ export function useLinenIncidents() {
     queryKey: ["ops", "linen-incidents", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("linen_incidents").select("id, quantity, reason, condition, cost, status, replacement_recommended, final_action, created_at, linen_items(name)"), "linen_incidents")
+      const { data, error } = await applyTo(
+        db
+          .from("linen_incidents")
+          .select(
+            "id, quantity, reason, condition, cost, status, replacement_recommended, final_action, created_at, linen_items(name)",
+          ),
+        "linen_incidents",
+      )
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -977,35 +1062,60 @@ export function useSaveWorkOrder() {
     mutationFn: async (input: Row) => {
       await assertRoomWordingMatches(input);
       if (input["id"]) {
-        const { id, ...patch } = input;
-        const nextStatus = patch["status"] ? String(patch["status"]) : null;
-        // Verification and closure are accountable acts: they carry a named
-        // checker and a time, and the officer who did the work is never that
-        // person. Without this a job could be closed silently by its own doer.
-        if (nextStatus === "awaiting-verification" || nextStatus === "closed") {
-          const { data: current, error: readError } = await db
-            .from("maintenance_work_orders")
-            .select("assigned_to, status, verified_by, verified_at")
-            .eq("id", id)
-            .maybeSingle();
-          if (readError) throw readError;
-          if (!current) throw new Error("That work order could not be found.");
-          if (current["assigned_to"] && ctx.userId && current["assigned_to"] === ctx.userId) {
-            throw new Error(
-              "The officer who carried out the work cannot verify or close it. A supervisor must check it first.",
-            );
+        const { id, note, ...patch } = input;
+                if (Object.hasOwn(patch, "assigned_to")) {
+          const unexpected = Object.keys(patch).filter(
+            (key) => key !== "assigned_to" && key !== "status",
+          );
+          if (unexpected.length > 0) {
+            throw new Error("Save other work-order edits separately from technician assignment.");
           }
-          if (nextStatus === "closed" && String(current["status"]) === "in-progress") {
-            throw new Error(
-              "This job is still in progress. It must be completed and checked before it can be closed.",
-            );
+          if (patch["status"] !== undefined && patch["status"] !== "assigned") {
+            throw new Error("Technician assignment cannot perform another status transition.");
           }
-          const now = new Date().toISOString();
-          if (!current["verified_by"]) {
-            patch["verified_by"] = ctx.userId;
-            patch["verified_at"] = now;
+          if (typeof patch["assigned_to"] !== "string" || !patch["assigned_to"].trim()) {
+            throw new Error("Select an eligible technician.");
           }
-          if (nextStatus === "closed") patch["closed_at"] = now;
+
+          const { data, error } = await guardedRpc(db, "neo_maint_assign_technician", {
+            _work_order: String(id),
+            _technician: patch["assigned_to"],
+          });
+          if (error) throw error;
+
+          const saved = requireSavedRecord(
+            data,
+            ["id", "assigned_to", "status"],
+            "The technician assignment was not saved.",
+          );
+          if (
+            saved["id"] !== id ||
+            saved["assigned_to"] !== patch["assigned_to"] ||
+            saved["status"] !== "assigned"
+          ) {
+            throw new Error("Saved technician assignment does not match the request.");
+          }
+          return saved as Row;
+        }
+        if (Object.hasOwn(patch, "status")) {
+          const {data,error}=await guardedRpc(db,"neo_maint_job_advance",{
+            _work_order:id,_status:patch["status"],_note:note??patch["completion_notes"]??"",_diagnosis:patch["diagnosis"]??"",
+          });
+          if(error)throw error;
+          const saved=requireSavedRecord(data,["id","status"],"No saved maintenance status was returned.");
+          if(saved["id"]!==id || saved["status"]!==patch["status"])throw new Error("The requested maintenance transition was not saved.");
+          return saved as Row;
+        }
+        const protectedFields = [
+          "assigned_to",
+          "accepted_at",
+          "completed_at",
+          "closed_at",
+          "verified_at",
+          "verified_by",
+        ];
+        if (protectedFields.some((key) => Object.hasOwn(patch, key))) {
+          throw new Error("Maintenance lifecycle fields require a protected workflow.");
         }
         // Read the row back so "saved" means the canonical record actually changed.
         const { data, error } = await db
@@ -1015,7 +1125,7 @@ export function useSaveWorkOrder() {
           .select("id, work_order_number")
           .maybeSingle();
         if (error) throw error;
-        if (!data) throw new Error("The work order could not be updated — nothing was saved.");
+        requireSavedRecord(data,["id"],"The work order could not be updated — nothing was saved.");
         return data as Row;
       }
       if (!ctx.branch_id) throw new Error("Select a property before creating a work order.");
@@ -1051,6 +1161,7 @@ export function useSaveWorkOrder() {
       const ref = data?.["work_order_number"];
       toast.success(ref ? `Work order ${String(ref)} saved` : "Work order saved");
       void qc.invalidateQueries({ queryKey: ["ops"] });
+      void qc.invalidateQueries({queryKey:["maintenance-dept"]});
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1059,7 +1170,12 @@ export function useSaveWorkOrder() {
 export function useSetRoomBlock() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { workOrder: string; block: boolean; severity?: string; reason?: string }) => {
+    mutationFn: async (input: {
+      workOrder: string;
+      block: boolean;
+      severity?: string;
+      reason?: string;
+    }) => {
       const { data, error } = await guardedRpc(db, "wo_set_block", {
         _work_order: input.workOrder,
         _block: input.block,
@@ -1067,11 +1183,16 @@ export function useSetRoomBlock() {
         _reason: input.reason ?? null,
       });
       if (error) throw error;
-      return data as Row;
+      const saved=requireSavedRecord(data,["work_order_id","room_id"],"No saved maintenance room-hold result was returned.");
+      if(saved["ok"]!==true || saved["work_order_id"]!==input.workOrder || saved["blocked"]!==input.block || typeof saved["room_released"]!=="boolean")throw new Error("The maintenance room hold was not confirmed.");
+      return saved as Row;
     },
     onSuccess: (data) => {
-      toast.success(data?.["blocked"] ? "Room blocked from sale" : "Room released to housekeeping");
+      if(data["blocked"]===false && data["room_released"]!==true)toast.warning("This repair hold was removed; another maintenance hold still blocks the room.");
+      else toast.success(data["blocked"] ? "Room blocked from sale" : "Room released to housekeeping");
       void qc.invalidateQueries({ queryKey: ["ops"] });
+      void qc.invalidateQueries({queryKey:["pms"]});
+      void qc.invalidateQueries({queryKey:["maintenance-dept"]});
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1133,7 +1254,11 @@ export function useGeneratePreventive() {
       return Number(data ?? 0);
     },
     onSuccess: (count) => {
-      toast.success(count ? `${count} preventive work order(s) generated` : "Nothing due — no duplicates created");
+      toast.success(
+        count
+          ? `${count} preventive work order(s) generated`
+          : "Nothing due — no duplicates created",
+      );
       void qc.invalidateQueries({ queryKey: ["ops"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1325,7 +1450,9 @@ export function useAssetServiceHistory(assetId?: string | null) {
     queryFn: async () => {
       const { data, error } = await db
         .from("asset_service_history")
-        .select("id, service_date, service_type, description, cost, condition_after, next_service_date")
+        .select(
+          "id, service_date, service_type, description, cost, condition_after, next_service_date",
+        )
         .eq("asset_id", assetId)
         .order("service_date", { ascending: false });
       if (error) throw error;
@@ -1448,7 +1575,9 @@ export function useSetAssetStatus() {
       // The same rule the dialog uses, re-checked here: a register that can be
       // walked backwards out of disposal is not a register.
       if (!isAssetStatusTransitionAllowed(previous, input.status)) {
-        throw new Error(`An asset that is ${previous.replace(/-/g, " ")} cannot be moved back to ${input.status.replace(/-/g, " ")}.`);
+        throw new Error(
+          `An asset that is ${previous.replace(/-/g, " ")} cannot be moved back to ${input.status.replace(/-/g, " ")}.`,
+        );
       }
       const { error } = await db
         .from("assets")
@@ -1501,7 +1630,14 @@ export function useRequisitions(scope: "mine" | "department" | "stores" | "all" 
         .limit(200);
       if (scope === "mine" && userId) q = q.eq("requested_by", userId);
       if (scope === "department" && department_id) q = q.eq("department_id", department_id);
-      if (scope === "stores") q = q.in("status", ["awaiting-stores", "approved", "partially-approved", "ready-for-issue", "partially-issued"]);
+      if (scope === "stores")
+        q = q.in("status", [
+          "awaiting-stores",
+          "approved",
+          "partially-approved",
+          "ready-for-issue",
+          "partially-issued",
+        ]);
       const { data, error } = await q;
       if (error) throw error;
       return rows(data);
@@ -1514,7 +1650,9 @@ export function useCreateRequisition() {
   const ctx = useCtx();
   return useMutation({
     mutationFn: async (input: { header: Row; lines: Row[] }) => {
-      const { data: seq } = await guardedRpc(db, "next_document_number", { _doc_type: "requisition" });
+      const { data: seq } = await guardedRpc(db, "next_document_number", {
+        _doc_type: "requisition",
+      });
       const { data, error } = await db
         .from("internal_requisitions")
         .insert({
@@ -1530,9 +1668,15 @@ export function useCreateRequisition() {
       if (error) throw error;
       const reqId = (data as Row)["id"];
       if (input.lines.length) {
-        const { error: lErr } = await db.from("internal_requisition_lines").insert(
-          input.lines.map((l) => ({ ...l, organization_id: ctx.organization_id, requisition_id: reqId })),
-        );
+        const { error: lErr } = await db
+          .from("internal_requisition_lines")
+          .insert(
+            input.lines.map((l) => ({
+              ...l,
+              organization_id: ctx.organization_id,
+              requisition_id: reqId,
+            })),
+          );
         if (lErr) throw lErr;
       }
       return reqId as string;
@@ -1550,6 +1694,7 @@ export function useRequisitionAction() {
   return useMutation({
     mutationFn: async (input: {
       action: "submit" | "approve" | "issue" | "receive";
+      attemptId?: string;
       id: string;
       lines?: Row[];
       stage?: "supervisor" | "stores";
@@ -1569,13 +1714,25 @@ export function useRequisitionAction() {
         return "Requisition approved";
       }
       if (input.action === "issue") {
-        const { error } = await guardedRpc(db, "req_issue", { _requisition: input.id, _lines: input.lines ?? [] });
+        if (!input.attemptId) {
+          throw new Error("Issue attempt ID is required");
+        }
+        const { error } = await guardedRpc(db, "neo_req_issue_safe", {
+          _requisition: input.id,
+          _lines: input.lines ?? [],
+          _attempt: input.attemptId,
+        });
         if (error) throw error;
         return "Stock issued and posted to the ledger";
       }
-      const { data, error } = await guardedRpc(db, "req_confirm_receipt", { _requisition: input.id, _lines: input.lines ?? [] });
+      const { data, error } = await guardedRpc(db, "req_confirm_receipt", {
+        _requisition: input.id,
+        _lines: input.lines ?? [],
+      });
       if (error) throw error;
-      return (data as Row)?.["discrepancy"] ? "Receipt recorded with a discrepancy — kept open" : "Receipt confirmed";
+      return (data as Row)?.["discrepancy"]
+        ? "Receipt recorded with a discrepancy — kept open"
+        : "Receipt confirmed";
     },
     onSuccess: (message) => {
       toast.success(message);
@@ -1590,7 +1747,9 @@ export function useRaiseShortagePurchase() {
   const ctx = useCtx();
   return useMutation({
     mutationFn: async (input: { requisition: Row; notes: string }) => {
-      const { data: seq } = await guardedRpc(db, "next_document_number", { _doc_type: "purchase-request" });
+      const { data: seq } = await guardedRpc(db, "next_document_number", {
+        _doc_type: "purchase-request",
+      });
       const { data, error } = await db
         .from("purchase_requests")
         .insert({
@@ -1629,7 +1788,14 @@ export function useDepartmentConsumption() {
     queryKey: ["ops", "consumption", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("department_consumption").select("id, quantity, unit, value, reason, consumed_on, departments(name), stock_items(name), stock_locations(name)"), "department_consumption")
+      const { data, error } = await applyTo(
+        db
+          .from("department_consumption")
+          .select(
+            "id, quantity, unit, value, reason, consumed_on, departments(name), stock_items(name), stock_locations(name)",
+          ),
+        "department_consumption",
+      )
         .order("consumed_on", { ascending: false })
         .limit(300);
       if (error) throw error;
@@ -1641,7 +1807,13 @@ export function useDepartmentConsumption() {
 export function useRecordConsumption() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { location: string; item: string; quantity: number; unit?: string; reason?: string }) => {
+    mutationFn: async (input: {
+      location: string;
+      item: string;
+      quantity: number;
+      unit?: string;
+      reason?: string;
+    }) => {
       const { error } = await guardedRpc(db, "req_record_consumption", {
         _location: input.location,
         _item: input.item,
@@ -1670,7 +1842,12 @@ export function useStockLocationsLite() {
     queryKey: ["ops", "locations", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("stock_locations").select("id, name, code, location_type, is_main, is_mini_store, department_id, active"), "stock_locations")
+      const { data, error } = await applyTo(
+        db
+          .from("stock_locations")
+          .select("id, name, code, location_type, is_main, is_mini_store, department_id, active"),
+        "stock_locations",
+      )
         .eq("active", true)
         .order("name");
       if (error) throw error;
@@ -1686,7 +1863,10 @@ export function useStockItemsLite() {
     queryKey: ["ops", "items", organizationId, filterKey],
     enabled: Boolean(organizationId),
     queryFn: async () => {
-      const { data, error } = await applyTo(db.from("stock_items").select("id, name, base_unit, average_cost, active"), "stock_items")
+      const { data, error } = await applyTo(
+        db.from("stock_items").select("id, name, base_unit, average_cost, active"),
+        "stock_items",
+      )
         .eq("active", true)
         .order("name")
         .limit(500);
@@ -1832,7 +2012,6 @@ export function useResolveStaleCleaningTask() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
-
 
 /**
  * Closes those stale tasks against their evidence. Nothing without evidence is

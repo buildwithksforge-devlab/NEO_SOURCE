@@ -70,7 +70,7 @@ const MATRIX: Certification[] = [
       "/procurement/orders",
       "/finance/journals",
       "/finance/eod",
-      "/administration/audit-logs",
+      "/audit-logs",
     ],
     holds: [
       ["finance", "journals", "approve"],

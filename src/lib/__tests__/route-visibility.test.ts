@@ -84,6 +84,6 @@ describe("sitemap", () => {
   });
 
   it("lists nothing for a hotel that has not published a public page", () => {
-    expect(sitemapPaths([])).toEqual(["/"]);
+    expect(sitemapPaths([])).toEqual(["/", "/privacy", "/terms"]);
   });
 });

@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-09",
+  "batches": [
+    20,
+    21
+  ],
+  "passed": 4141,
+  "failed": 0,
+  "skipped": 155,
+  "comparisons": [
+    {
+      "name": "original",
+      "previousUniquePasses": 3667,
+      "retained": 3667,
+      "regressions": []
+    },
+    {
+      "name": "deployedBatch19",
+      "previousUniquePasses": 4055,
+      "retained": 4055,
+      "regressions": []
+    }
+  ],
+  "success": true
+}

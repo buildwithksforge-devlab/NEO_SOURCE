@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { DEFAULT_SCOPE, useMyDashboards, type DashboardScope } from "@/lib/dashboard-data";
 import { dashboardSpec } from "@/lib/dashboards";
 import { greetingFor } from "./_shell.workspace";
-import { LoadingState, NotAuthorisedState } from "@/components/common/StateSystem";
+import { ErrorState, LoadingState, NotAuthorisedState } from "@/components/common/StateSystem";
 
 export const Route = createFileRoute("/_shell/dashboards/$key")({
   head: () => ({
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_shell/dashboards/$key")({
 function RoleDashboard() {
   const { key } = useParams({ from: "/_shell/dashboards/$key" });
   const { profile, organizationId, user } = useAuth();
-  const dashboards = useMyDashboards(Boolean(organizationId));
+  const dashboards = useMyDashboards(organizationId, user?.id ?? null);
   const [scope, setScope] = useState<DashboardScope>(DEFAULT_SCOPE);
 
   const list = dashboards.data ?? [];
@@ -42,6 +42,11 @@ function RoleDashboard() {
 
   if (dashboards.isLoading) {
     return <LoadingState rows={5} />;
+  }
+
+  if (dashboards.isError) {
+    return <ErrorState title="Dashboard access could not be checked" error={dashboards.error}
+      onRetry={() => void dashboards.refetch()} />;
   }
 
   if (!allowed) {

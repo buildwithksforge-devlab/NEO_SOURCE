@@ -1,3 +1,4 @@
+import { isOperationallyEnabled } from "@/lib/operational-record-eligibility";
 /**
  * Recipe master data: recipes (menu-item and batch/sub-recipe), their
  * components, and the link between a menu item and its recipe.
@@ -7,6 +8,9 @@
  * canonical ledger path (`inventory_consume_order_item_core`).
  */
 import { guardedRpc } from "@/lib/rpc-guard";
+import { recipeCommandError } from "@/lib/recipe-command-error";
+import { recipeStockMappingIssue } from "@/lib/recipe-stock-mapping";
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +22,7 @@ import type { RecipeIngredient, RecipeRecord } from "@/lib/recipe-engine";
 type Row = Record<string, unknown>;
 
 const RECIPE_SELECT =
-  "id, name, recipe_code, recipe_type, status, version, menu_item_id, station_id, output_stock_item_id, branch_id, yield_quantity, yield_unit, prep_target_minutes, preparation_steps, waste_allowance, menu_items(name), operational_stations(name), output_stock_item:stock_items!recipes_output_stock_item_id_fkey(id, name, sku, base_unit, container_type, container_volume_ml, stock_locations:stock_locations!stock_items_default_location_id_fkey(name)), recipe_ingredients!recipe_ingredients_recipe_id_fkey(id, component_type, ingredient_name, stock_item_id, sub_recipe_id, quantity, unit, waste_allowance)";
+  "id, organization_id, name, recipe_code, recipe_type, status, version, menu_item_id, station_id, output_stock_item_id, branch_id, yield_quantity, yield_unit, prep_target_minutes, preparation_steps, waste_allowance, menu_items(id, name, organization_id, branch_id, consumption_mode, stock_item_id, stock_quantity_per_sale, stock_unit, mapped_stock_item:stock_items!menu_items_stock_item_id_fkey(id, organization_id, branch_id)), operational_stations(name), output_stock_item:stock_items!recipes_output_stock_item_id_fkey(id, organization_id, branch_id, name, sku, base_unit, container_type, container_volume_ml, stock_locations:stock_locations!stock_items_default_location_id_fkey(name)), recipe_ingredients!recipe_ingredients_recipe_id_fkey(id, component_type, ingredient_name, stock_item_id, sub_recipe_id, quantity, unit, waste_allowance)";
 
 /**
  * A direct-sale mapping is a complete configuration with no ingredient rows:
@@ -39,6 +43,7 @@ export type DirectStockMapping = {
 export function directStockMapping(row: Row | null | undefined): DirectStockMapping | null {
   if (!row) return null;
   if (String(row["recipe_type"] ?? "") !== "direct_sale") return null;
+  if (recipeStockMappingIssue(row)) return null;
   const item = row["output_stock_item"] as Row | null;
   if (!item) return null;
   const location = item["stock_locations"] as Row | null;
@@ -48,8 +53,9 @@ export function directStockMapping(row: Row | null | undefined): DirectStockMapp
     sku: (item["sku"] as string | null) ?? null,
     unit: String(row["yield_unit"] ?? item["base_unit"] ?? "unit"),
     containerType: (item["container_type"] as string | null) ?? null,
-    containerVolumeMl: item["container_volume_ml"] == null ? null : Number(item["container_volume_ml"]),
-    perSale: Number(row["yield_quantity"] ?? 1) || 1,
+    containerVolumeMl:
+      item["container_volume_ml"] == null ? null : Number(item["container_volume_ml"]),
+    perSale: Number(row["yield_quantity"]),
     storeName: (location?.["name"] as string | null) ?? null,
   };
 }
@@ -77,9 +83,8 @@ export function toRecipeRecord(row: Row): RecipeRecord {
   const ingredients = ((row["recipe_ingredients"] as Row[] | null) ?? []).map(
     (i): RecipeIngredient => ({
       id: String(i["id"]),
-      component_type: (String(i["component_type"] ?? "stock_item") === "sub_recipe"
-        ? "sub_recipe"
-        : "stock_item"),
+      component_type:
+        String(i["component_type"] ?? "stock_item") === "sub_recipe" ? "sub_recipe" : "stock_item",
       ingredient_name: (i["ingredient_name"] as string | null) ?? null,
       stock_item_id: (i["stock_item_id"] as string | null) ?? null,
       sub_recipe_id: (i["sub_recipe_id"] as string | null) ?? null,
@@ -92,7 +97,8 @@ export function toRecipeRecord(row: Row): RecipeRecord {
     id: String(row["id"]),
     name: (row["name"] as string | null) ?? null,
     recipe_code: (row["recipe_code"] as string | null) ?? null,
-    recipe_type: String(row["recipe_type"] ?? "menu_item") === "sub_recipe" ? "sub_recipe" : "menu_item",
+    recipe_type:
+      String(row["recipe_type"] ?? "menu_item") === "sub_recipe" ? "sub_recipe" : "menu_item",
     status: String(row["status"] ?? "draft"),
     yield_quantity: Number(row["yield_quantity"] ?? 0),
     yield_unit: String(row["yield_unit"] ?? ""),
@@ -134,26 +140,33 @@ export type RecipeSaveInput = {
   prepTargetMinutes?: number | null;
   preparationSteps?: string | null;
   status?: string;
+  components?: Omit<ComponentSaveInput, "recipeId">[];
+  newMenuItem?: { categoryId: string; price: number };
+  imported?: boolean;
+  branchId?: string | null;
 };
 
 export function useSaveRecipeMaster() {
-  const { organizationId, user } = useAuth();
+  const { organizationId } = useAuth();
   const branchId = useWriteBranchId();
   const invalidate = useRecipeInvalidate();
+  const attempts = useRef(new Map<string, string>());
   return useMutation({
     mutationFn: async (input: RecipeSaveInput) => {
       if (!input.name.trim()) throw new Error("A recipe name is required.");
-      if (!(input.yieldQuantity > 0)) throw new Error("Yield quantity must be greater than zero.");
+      if (!Number.isFinite(input.yieldQuantity) || !(input.yieldQuantity > 0))
+        throw new Error("Yield quantity must be finite and greater than zero.");
       if (!input.yieldUnit.trim()) throw new Error("A yield unit is required.");
-      if (input.recipeType !== "sub_recipe" && !input.menuItemId) {
+      if (input.recipeType !== "sub_recipe" && !input.menuItemId && !input.newMenuItem) {
         throw new Error("A menu-item or direct-sale recipe must be linked to a menu item.");
       }
       if (input.recipeType === "direct_sale" && !input.outputStockItemId) {
         throw new Error("A direct-sale product must point at the stock item it sells.");
       }
       const payload = {
+        id: input.id ?? null,
         organization_id: organizationId as string,
-        branch_id: branchId,
+        branch_id: input.branchId !== undefined ? input.branchId : branchId,
         name: input.name.trim(),
         recipe_code: input.recipeCode?.trim() || null,
         recipe_type: input.recipeType,
@@ -164,28 +177,23 @@ export function useSaveRecipeMaster() {
         yield_unit: input.yieldUnit.trim(),
         prep_target_minutes: input.prepTargetMinutes ?? null,
         preparation_steps: input.preparationSteps ?? null,
-        status: input.status ?? "draft",
-        created_by: user?.id ?? null,
+        new_menu_item: input.newMenuItem
+          ? { category_id: input.newMenuItem.categoryId, price: input.newMenuItem.price }
+          : null,
       };
-
-      if (input.id) {
-        const { error } = await supabase.from("recipes").update(payload as never).eq("id", input.id);
-        if (error) throw new Error(error.message);
-        if (input.menuItemId) {
-          await bindMenuItemConsumption(input.menuItemId, input.recipeType, input.outputStockItemId);
-        }
-        return input.id;
-      }
-      const { data, error } = await supabase
-        .from("recipes")
-        .insert(payload as never)
-        .select("id")
-        .single();
-      if (error) throw new Error(error.message);
-      if (input.menuItemId) {
-        await bindMenuItemConsumption(input.menuItemId, input.recipeType, input.outputStockItemId);
-      }
-      return String((data as unknown as Row)["id"]);
+      const components = input.components?.map(componentPayload) ?? null;
+      const request = JSON.stringify({ payload, components });
+      if (!attempts.current.has(request)) attempts.current.set(request, crypto.randomUUID());
+      const { data, error } = await guardedRpc(supabase, "neo_recipe_sheet_save", {
+        _recipe: payload,
+        _components: components,
+        _attempt: input.imported ? null : attempts.current.get(request)!,
+      });
+      if (error) throw recipeCommandError(error);
+      const id = (data as { recipe_id?: string } | null)?.recipe_id;
+      if (!id) throw new Error("The complete recipe save was not confirmed.");
+      attempts.current.delete(request);
+      return id;
     },
     onSuccess: () => {
       toast.success("Recipe saved.");
@@ -205,6 +213,18 @@ export type ComponentSaveInput = {
   unit: string;
   wasteAllowance?: number;
 };
+
+function componentPayload(row: Omit<ComponentSaveInput, "recipeId">) {
+  return {
+    component_type: row.componentType,
+    stock_item_id: row.componentType === "stock_item" ? row.stockItemId : null,
+    sub_recipe_id: row.componentType === "sub_recipe" ? row.subRecipeId : null,
+    ingredient_name: row.name,
+    quantity: row.quantity,
+    unit: row.unit.trim(),
+    waste_allowance: row.wasteAllowance ?? 0,
+  };
+}
 
 export function useSaveRecipeComponent() {
   const { organizationId } = useAuth();
@@ -237,7 +257,7 @@ export function useSaveRecipeComponent() {
         unit: input.unit.trim(),
         waste_allowance: input.wasteAllowance ?? 0,
       } as never);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
     },
     onSuccess: () => {
       toast.success("Component added.");
@@ -252,7 +272,7 @@ export function useRemoveRecipeComponent() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("recipe_ingredients").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
     },
     onSuccess: () => {
       toast.success("Component removed.");
@@ -279,10 +299,16 @@ export async function bindMenuItemConsumption(
   if (!menuItemId || recipeType === "sub_recipe") return;
   const patch: Record<string, unknown> =
     recipeType === "direct_sale"
-      ? { consumption_mode: "direct_stock", ...(outputStockItemId ? { stock_item_id: outputStockItemId } : {}) }
+      ? {
+          consumption_mode: "direct_stock",
+          ...(outputStockItemId ? { stock_item_id: outputStockItemId } : {}),
+        }
       : { consumption_mode: "recipe" };
-  const { error } = await supabase.from("menu_items").update(patch as never).eq("id", menuItemId);
-  if (error) throw new Error(error.message);
+  const { error } = await supabase
+    .from("menu_items")
+    .update(patch as never)
+    .eq("id", menuItemId);
+  if (error) throw recipeCommandError(error);
 }
 
 /** Attach an existing menu-item recipe to a menu item from the menu form. */
@@ -290,12 +316,57 @@ export function useAttachRecipeToMenuItem() {
   const invalidate = useRecipeInvalidate();
   return useMutation({
     mutationFn: async ({ recipeId, menuItemId }: { recipeId: string; menuItemId: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("recipes")
-        .update({ menu_item_id: menuItemId, recipe_type: "menu_item" } as never)
-        .eq("id", recipeId);
-      if (error) throw new Error(error.message);
-      await bindMenuItemConsumption(menuItemId, "menu_item");
+        .select(RECIPE_SELECT)
+        .eq("id", recipeId)
+        .maybeSingle();
+      if (error) throw recipeCommandError(error);
+      const original = data as unknown as Row | null;
+      if (!original || !isOperationallyEnabled(original) || original["recipe_type"] !== "menu_item")
+        throw new Error("Choose an existing menu-item recipe.");
+      if (original["menu_item_id"] === menuItemId) return recipeId;
+      const { data: menu, error: menuError } = await supabase
+        .from("menu_items")
+        .select("id,branch_id,station_id")
+        .eq("id", menuItemId)
+        .maybeSingle();
+      if (menuError || !menu)
+        throw new Error(menuError?.message ?? "Menu item not available in your property access.");
+      // Sharing means a reviewed copy, never moving the old active version out
+      // of another menu item's consumption history.
+      const components = toRecipeRecord(original).ingredients.map((i) => ({
+        component_type: i.component_type,
+        stock_item_id: i.stock_item_id ?? null,
+        sub_recipe_id: i.sub_recipe_id ?? null,
+        ingredient_name: i.ingredient_name,
+        quantity: i.quantity,
+        unit: i.unit,
+        waste_allowance: i.waste_allowance ?? 0,
+      }));
+      const { data: saved, error: saveError } = await guardedRpc(
+        supabase,
+        "neo_recipe_sheet_save",
+        {
+          _recipe: {
+            name: original["name"],
+            recipe_type: "menu_item",
+            menu_item_id: menuItemId,
+            branch_id: menu.branch_id,
+            station_id: menu.station_id,
+            yield_quantity: original["yield_quantity"],
+            yield_unit: original["yield_unit"],
+            preparation_steps: original["preparation_steps"],
+          },
+          _components: components,
+          _attempt: null,
+        },
+      );
+      if (saveError) throw new Error(saveError.message);
+      if (!(saved as { recipe_id?: string } | null)?.recipe_id)
+        throw new Error("Recipe copy was not confirmed.");
+      toast.info("Recipe draft copied. Approve it before this item consumes through the recipe.");
+      return (saved as { recipe_id: string }).recipe_id;
     },
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
@@ -306,7 +377,10 @@ export function useAttachRecipeToMenuItem() {
 export function useMenuRecipeOptions() {
   const catalogue = useRecipeCatalogue();
   const options = ((catalogue.data ?? []) as Row[])
-    .filter((r) => String(r["recipe_type"] ?? "menu_item") === "menu_item" && String(r["status"]) === "active")
+    .filter(
+      (r) =>
+        String(r["recipe_type"] ?? "menu_item") === "menu_item" && String(r["status"]) === "active",
+    )
     .map((r) => ({
       value: String(r["id"]),
       menuItemId: (r["menu_item_id"] as string | null) ?? null,
@@ -326,8 +400,8 @@ export function useMenuRecipeOptions() {
  * a draft that deducts nothing, never a half-saved one.
  */
 export function useSaveRecipeComponents() {
-  const { organizationId } = useAuth();
   const invalidate = useRecipeInvalidate();
+  const attempts = useRef(new Map<string, string>());
   return useMutation({
     mutationFn: async ({
       recipeId,
@@ -353,20 +427,17 @@ export function useSaveRecipeComponents() {
           throw new Error(`${at}: a recipe cannot contain itself.`);
         }
       });
-      const { error } = await supabase.from("recipe_ingredients").insert(
-        rows.map((row) => ({
-          organization_id: organizationId as string,
-          recipe_id: recipeId,
-          component_type: row.componentType,
-          stock_item_id: row.componentType === "stock_item" ? row.stockItemId : null,
-          sub_recipe_id: row.componentType === "sub_recipe" ? row.subRecipeId : null,
-          ingredient_name: row.name,
-          quantity: row.quantity,
-          unit: row.unit.trim(),
-          waste_allowance: row.wasteAllowance ?? 0,
-        })) as never,
-      );
-      if (error) throw new Error(error.message);
+      const request = JSON.stringify({ recipeId, rows });
+      if (!attempts.current.has(request)) attempts.current.set(request, crypto.randomUUID());
+      const { data, error } = await guardedRpc(supabase, "neo_recipe_sheet_save", {
+        _recipe: { id: recipeId, operation: "append_components" },
+        _components: rows.map(componentPayload),
+        _attempt: attempts.current.get(request)!,
+      });
+      if (error) throw recipeCommandError(error);
+      if (!(data as { recipe_id?: string } | null)?.recipe_id)
+        throw new Error("The ingredient sheet save was not confirmed.");
+      attempts.current.delete(request);
       return rows.length;
     },
     onSuccess: (count) => {
@@ -394,7 +465,7 @@ export function useStationConsumptionReadiness() {
       const { data, error } = await guardedRpc(supabase, "neo_recipe_location_readiness", {
         _branch: branchId ?? null,
       } as never);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return (data ?? []) as unknown as Row[];
     },
   });
@@ -409,7 +480,7 @@ export function useSetStationConsumptionLocation() {
         .from("stock_locations")
         .update({ station_id: input.stationId } as never)
         .eq("id", input.locationId);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return input.locationId;
     },
     onSuccess: () => {
@@ -438,7 +509,7 @@ export function useSetRecipeStation() {
         .from("recipes")
         .update({ station_id: input.stationId } as never)
         .eq("id", input.recipeId);
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return input.recipeId;
     },
     onSuccess: () => {
@@ -485,7 +556,7 @@ export function useCreateMenuItemForRecipe() {
         } as never)
         .select("id")
         .single();
-      if (error) throw new Error(error.message);
+      if (error) throw recipeCommandError(error);
       return String((data as unknown as Row)["id"]);
     },
     onError: (e: Error) => toast.error(e.message),

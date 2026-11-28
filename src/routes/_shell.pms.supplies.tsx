@@ -35,9 +35,9 @@ import { isOpenStockNeed } from "@/lib/stock-needs";
 import { titleCase } from "@/lib/pms";
 import {
   FO_PRIORITIES,
-  FO_SUPPLY_SUGGESTIONS,
   num,
   str,
+  useFrontOfficeStockCatalogue,
   useFrontOfficeStockNeeds,
   useReportStockNeed,
   useReviewStockNeed,
@@ -90,7 +90,10 @@ function FrontDeskSuppliesPage() {
   const [needOpen, setNeedOpen] = useState(false);
   const [item, setItem] = useState("");
   const [quantity, setQuantity] = useState("1");
-  const [unit, setUnit] = useState("unit");
+  const catalogue = useFrontOfficeStockCatalogue();
+  const [legacyItems, setLegacyItems] = useState<Record<string, string>>({});
+  const items = catalogue.data ?? [];
+  const selectedItem = items.find((row) => row.id === item);
   const [priority, setPriority] = useState("normal");
   const [notes, setNotes] = useState("");
 
@@ -101,7 +104,7 @@ function FrontDeskSuppliesPage() {
 
   const submitNeed = () =>
     report.mutate(
-      { item, quantity: Number(quantity) || 0, unit, priority, notes },
+      { itemId: item, quantity: Number(quantity), priority, notes },
       {
         onSuccess: () => {
           setNeedOpen(false);
@@ -181,7 +184,8 @@ function FrontDeskSuppliesPage() {
                 {rows.map((r) => {
                   const id = String(r["id"]);
                   const status = String(r["status"] ?? "pending");
-                  const openState = status === "pending" || status === "acknowledged";
+                  const openState = isOpenStockNeed(status);
+                  const itemId = str(r["stock_item_id"], "") || legacyItems[id] || "";
                   return (
                     <TableRow key={id}>
                       <TableCell className="font-medium">
@@ -207,13 +211,23 @@ function FrontDeskSuppliesPage() {
                       <TableCell className="space-x-2 text-right">
                         {mayReview && openState ? (
                           <>
+                            {!r["stock_item_id"] && (
+                              <Select value={itemId} onValueChange={(value) => setLegacyItems((current) => ({ ...current, [id]: value }))}>
+                                <SelectTrigger aria-label={`Catalogue match for ${str(r["item"])}`}>
+                                  <SelectValue placeholder="Link existing stock item" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {items.map((row) => <SelectItem key={row.id} value={row.id}>{row.name} · {row.base_unit}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
-                              disabled={review.isPending}
-                              onClick={() => review.mutate({ needId: id, decision: "requisition" })}
+                              disabled={review.isPending || !itemId}
+                              onClick={() => review.mutate({ needId: id, decision: "requisition", itemId })}
                             >
-                              Requisitioned
+                              Approve and send to Stores
                             </Button>
                             <Button
                               size="sm"
@@ -240,25 +254,21 @@ function FrontDeskSuppliesPage() {
           <DialogHeader>
             <DialogTitle>Report a stock need</DialogTitle>
             <DialogDescription>
-              This goes to the Front Office Manager, who raises the Stores requisition. It never
+              An assigned Front Office Manager reviews this need. If no manager is assigned, it goes directly to Stores. It never
               changes a stock balance.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="fo-need-item">Item</Label>
-              <Input
-                id="fo-need-item"
-                value={item}
-                onChange={(e) => setItem(e.target.value)}
-                placeholder="e.g. Guest registration cards"
-                list="fo-supply-suggestions"
-              />
-              <datalist id="fo-supply-suggestions">
-                {FO_SUPPLY_SUGGESTIONS.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
+              <Label htmlFor="fo-need-item">Inventory item</Label>
+              <Select value={item} onValueChange={setItem}>
+                <SelectTrigger id="fo-need-item"><SelectValue placeholder="Select an existing catalogue item" /></SelectTrigger>
+                <SelectContent>
+                  {items.map((row) => <SelectItem key={row.id} value={row.id}>{row.name} · {row.base_unit}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {catalogue.isError && <p role="alert">The inventory catalogue could not be loaded.</p>}
+              <p className="mt-1 text-xs text-muted-foreground">For a new item, ask Inventory to add it to the catalogue first.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
@@ -273,7 +283,7 @@ function FrontDeskSuppliesPage() {
               </div>
               <div>
                 <Label htmlFor="fo-need-unit">Unit</Label>
-                <Input id="fo-need-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+                <Input id="fo-need-unit" value={selectedItem?.base_unit ?? ""} readOnly />
               </div>
               <div>
                 <Label>Priority</Label>

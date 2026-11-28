@@ -25,14 +25,12 @@ export const askNeo = createServerFn({ method: "POST" })
       branchId?: string | null;
       from?: string | null;
       to?: string | null;
-      propertyLabel?: string | null;
       compare?: boolean;
     }) => ({
       question: String(input?.question ?? "").slice(0, 400).trim(),
       branchId: input?.branchId ?? null,
       from: input?.from ?? null,
       to: input?.to ?? null,
-      propertyLabel: input?.propertyLabel ?? "Your permitted properties",
       compare: input?.compare !== false,
     }),
   )
@@ -51,21 +49,38 @@ export const askNeo = createServerFn({ method: "POST" })
     const current = (payload ?? { authorised: false }) as IntelligencePayload;
 
     let prior: IntelligencePayload | undefined;
-    if (data.compare && current.period?.from && current.period?.to) {
+    if (data.compare && current.authorised === true && current.period?.from && current.period?.to) {
       const window = priorPeriod(current.period.from, current.period.to);
       const { data: priorPayload } = await client.rpc("neo_intelligence", {
         _branch: data.branchId,
         _from: window.from,
         _to: window.to,
       });
-      prior = (priorPayload ?? undefined) as IntelligencePayload | undefined;
+      if ((priorPayload as IntelligencePayload | null)?.authorised === true) {
+        prior = priorPayload as IntelligencePayload;
+      }
+    }
+
+    // The browser's display label is presentation input, not evidence of which
+    // property's records the database actually selected. Resolve it as the
+    // signed-in user only after the scoped RPC confirms access.
+    let propertyLabel = data.branchId ? "Selected property" : "All permitted properties";
+    if (current.authorised === true && data.branchId) {
+      const { data: property } = await client
+        .from("branches")
+        .select("name")
+        .eq("id", data.branchId)
+        .maybeSingle();
+      if (typeof property?.name === "string" && property.name.trim()) {
+        propertyLabel = property.name.trim();
+      }
     }
 
     const answer = answerQuestion(data.question, {
       payload: current,
       prior,
       scope: {
-        propertyLabel: data.propertyLabel ?? "Your permitted properties",
+        propertyLabel,
         from: current.period?.from ?? String(data.from ?? "—"),
         to: current.period?.to ?? String(data.to ?? "—"),
         freshness: current.generated_at,

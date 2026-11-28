@@ -1,3 +1,4 @@
+import { SupplierAvailabilityHistory } from "@/components/procurement/SupplierAvailabilityHistory";
 import { useMemo, useState } from "react";
 import { NeoDatePicker } from "@/components/common/DatePicker";
 import { createFileRoute } from "@tanstack/react-router";
@@ -75,7 +76,8 @@ function QuotationsPage() {
   const selectQuote = useSelectQuotation();
 
   const [supplierId, setSupplierId] = useState("");
-  const [amount, setAmount] = useState("");
+  const [linePrices, setLinePrices] = useState<Record<string, string>>({});
+  const [lineTaxes, setLineTaxes] = useState<Record<string, string>>({});
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
@@ -91,7 +93,7 @@ function QuotationsPage() {
 
   // Three comparable quotations is the policy. A single-source award is still
   // possible, but only as a deliberate, recorded exception.
-  const enoughQuotes = rows.length >= 3;
+  const enoughQuotes = new Set(rows.filter((row) => !row["valid_until"] || String(row["valid_until"]) >= new Date().toISOString().slice(0, 10)).map((row) => String(row["supplier_id"]))).size >= 3;
   const [singleSource, setSingleSource] = useState(false);
   const mayRecommend = enoughQuotes || singleSource;
 
@@ -103,7 +105,7 @@ function QuotationsPage() {
   const requestStatus = str(selectedRequest?.["status"], "");
   const requestLines = (selectedRequest?.["purchase_request_lines"] ?? []) as ProcRow[];
   // A cancelled, rejected or still-draft request is not a sourcing instruction.
-  const sourceable = !["draft", "rejected", "cancelled"].includes(requestStatus);
+  const sourceable = requestStatus === "approved";
 
   return (
     <div className="space-y-6">
@@ -188,7 +190,7 @@ function QuotationsPage() {
             {!sourceable ? (
               <p className="text-sm text-destructive">
                 This request is {requestStatus.replace(/_/g, " ")}, so it cannot be sourced. Sourcing
-                is available once Stores has submitted it.
+                is available once the purchase request has been approved.
               </p>
             ) : null}
           </div>
@@ -201,7 +203,7 @@ function QuotationsPage() {
       {mayManage && requestId && sourceable ? (
         <SectionCard
           title="Record a quotation"
-          description="Enter each supplier's quoted total as it arrives."
+          description="Record the supplier's price per requested unit; the quoted total is calculated from the item lines."
         >
           <div className="grid gap-3 md:grid-cols-4">
             <div className="space-y-1.5 md:col-span-2">
@@ -220,15 +222,29 @@ function QuotationsPage() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="q-amount">Quoted total</Label>
-              <Input
-                id="q-amount"
-                type="number"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+            <div className="space-y-2 md:col-span-4">
+              <Label>Quoted item prices ({String(((suppliers.data ?? []) as ProcRow[]).find((s) => String(s["id"]) === supplierId)?.["currency"] ?? "supplier currency")} per requested unit)</Label>
+              {requestLines.map((line) => {
+                const id = String(line["id"]);
+                const item = line["stock_items"] as { name?: string } | null;
+                return (
+                  <div key={id} className="grid items-center gap-2 rounded-md border p-2 sm:grid-cols-[1fr_9rem_7rem]">
+                    <span className="text-sm">{item?.name ?? str(line["description"], "Item")} · {num(line["quantity"])} {str(line["unit"], "")}</span>
+                    <Input aria-label={`${item?.name ?? str(line["description"], "Item")} quoted unit price`}
+                      type="number" min="0" step="0.01" placeholder="Unit price"
+                      value={linePrices[id] ?? ""}
+                      onChange={(e) => setLinePrices((prev) => ({ ...prev, [id]: e.target.value }))} />
+                    <Input aria-label={`${item?.name ?? str(line["description"], "Item")} tax rate`}
+                      type="number" min="0" max="100" step="0.01" placeholder="Tax %"
+                      value={lineTaxes[id] ?? ""}
+                      onChange={(e) => setLineTaxes((prev) => ({ ...prev, [id]: e.target.value }))} />
+                  </div>
+                );
+              })}
+              <p className="text-sm text-muted-foreground">Calculated total: {money(requestLines.reduce((sum, line) => {
+                const id = String(line["id"]);
+                return sum + num(line["quantity"]) * Number(linePrices[id] || 0) * (1 + Number(lineTaxes[id] || 0) / 100);
+              }, 0))}</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="q-valid">Valid until</Label>
@@ -247,14 +263,24 @@ function QuotationsPage() {
             <div className="flex items-end">
               <Button
                 className="w-full"
-                disabled={!supplierId || !amount || recordQuote.isPending}
+                disabled={!supplierId || requestLines.length === 0 || requestLines.some((line) => {
+                  const id = String(line["id"]);
+                  return linePrices[id] === undefined || linePrices[id] === "" || !Number.isFinite(Number(linePrices[id])) ||
+                    Number(linePrices[id]) < 0 || !Number.isFinite(Number(lineTaxes[id] || 0)) ||
+                    Number(lineTaxes[id] || 0) < 0 || Number(lineTaxes[id] || 0) > 100;
+                }) || recordQuote.isPending}
                 onClick={() =>
                   recordQuote.mutate(
-                    { requestId, supplierId, totalAmount: Number(amount), validUntil, notes },
+                    { requestId, supplierId, lines: requestLines.map((line) => ({
+                      request_line_id: String(line["id"]),
+                      unit_price: Number(linePrices[String(line["id"])]),
+                      tax_rate: Number(lineTaxes[String(line["id"])] || 0),
+                    })), validUntil, notes },
                     {
                       onSuccess: () => {
                         setSupplierId("");
-                        setAmount("");
+                        setLinePrices({});
+                        setLineTaxes({});
                         setNotes("");
                       },
                     },
@@ -341,7 +367,7 @@ function QuotationsPage() {
                             <Star className="mr-1 inline size-3" />
                             Recommended
                           </StatusPill>
-                        ) : mayManage ? (
+                        ) : mayManage && requestId && sourceable && row["status"] === "received" ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -352,9 +378,8 @@ function QuotationsPage() {
                                 requestId:
                                   requestId ||
                                   (row["request_id"] ? String(row["request_id"]) : null),
-                                reason: singleSource
-                                  ? `Single-source award (fewer than three quotations): ${reason}`
-                                  : reason,
+                                reason,
+                                singleSource,
                               })
                             }
                           >
@@ -414,8 +439,8 @@ function QuotationsPage() {
 /**
  * Request for quotation.
  *
- * Suppliers hold no accounts in NEØ, so an invitation is only ever "prepared"
- * until a person despatches it. Nothing here claims a message was sent.
+ * Invitations are prepared first. A buyer confirms manual dispatch before
+ * the supplier can see the RFQ in their private portal.
  */
 /** Channels an RFQ invitation can actually travel on. */
 const RFQ_CHANNELS = ["email", "whatsapp"];
@@ -428,6 +453,7 @@ function RfqPanel({ requestId, mayManage }: { requestId: string; mayManage: bool
   const providers = useProviderConnections();
   const [invited, setInvited] = useState<string[]>([]);
   const [closesAt, setClosesAt] = useState("");
+  const [dispatchChannels, setDispatchChannels] = useState<Record<string, string>>({});
 
   const toggle = (id: string) =>
     setInvited((current) => (current.includes(id) ? current.filter((s) => s !== id) : [...current, id]));
@@ -557,29 +583,27 @@ function RfqPanel({ requestId, mayManage }: { requestId: string; mayManage: bool
                             <TableCell className="text-right">
                               {mayManage ? (
                                 <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={recordDispatch.isPending}
-                                    onClick={() =>
-                                      recordDispatch.mutate({
-                                        inviteId: String(invite["id"]),
-                                        state: "downloaded",
-                                        channel: "download",
-                                      })
-                                    }
+                                  <select
+                                    aria-label={`Dispatch channel for ${str(supplier["name"])}`}
+                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                    value={dispatchChannels[String(invite["id"])] ?? ""}
+                                    disabled={state === "marked-sent" || state === "sent"}
+                                    onChange={(e) => setDispatchChannels((current) => ({ ...current, [String(invite["id"])]: e.target.value }))}
                                   >
-                                    Downloaded
-                                  </Button>
+                                    <option value="">Select channel</option>
+                                    <option value="email">Email</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="hand-delivered">Hand delivered</option>
+                                  </select>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    disabled={recordDispatch.isPending}
+                                    disabled={!dispatchChannels[String(invite["id"])] || recordDispatch.isPending || state === "marked-sent" || state === "sent"}
                                     onClick={() =>
                                       recordDispatch.mutate({
                                         inviteId: String(invite["id"]),
                                         state: "marked-sent",
-                                        channel: str(supplier["whatsapp"], "") ? "whatsapp" : "email",
+                                        channel: dispatchChannels[String(invite["id"])] ?? "",
                                       })
                                     }
                                   >
@@ -593,6 +617,10 @@ function RfqPanel({ requestId, mayManage }: { requestId: string; mayManage: bool
                       })}
                     </TableBody>
                   </Table>
+                  <SupplierAvailabilityHistory
+                    rfqId={String(rfq["id"])}
+                    invites={invites}
+                  />
                 </div>
               );
             })}

@@ -73,9 +73,11 @@ describe("layout stability", () => {
 
 describe("accessibility", () => {
   it("keeps the guest tab bar above the minimum touch target", () => {
-    const shell = read("src/components/public/GuestScreen.tsx");
+    const shell = read("src/components/public/GuestNavigation.tsx");
     expect(shell).toContain("min-h-11");
-    expect(shell).toContain('aria-current={isActive ? "page" : undefined}');
+    expect(shell).toContain('aria-current={key === active ? "page" : undefined}');
+    expect(read("src/components/public/GuestScreen.tsx")).toContain("<GuestNavigation");
+    expect(read("src/components/public/PublicAppShell.tsx")).toContain("<GuestNavigation");
   });
 
   it("uses a muted text colour that clears WCAG AA on white", () => {

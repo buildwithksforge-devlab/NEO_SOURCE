@@ -1,0 +1,439 @@
+﻿
+===== 20260819060507_e373a5f1-0b69-4f2b-a0a9-f138f65a5cf1.sql =====
+  35:   ('cancel_item','edit'),('cancel_request','edit'),('mark_no_show','edit'),('customize','edit'),
+  36:   ('configure','edit'),('prioritize','edit'),('release','edit'),('reinstate','edit'),('upgrade','edit'),
+  37:   ('correct','edit'),('close','edit'),('close_shift','edit'),('convert','edit'),('post_charge','edit'),
+  38:   ('inspect','edit'),('review','edit'),('process','edit'),('complete','edit'),('transfer','edit'),
+  39:   ('assignment.view','view'),('assignment.accept','create'),('assignment.reject','create')
+  40: ON CONFLICT (action_suffix) DO NOTHING;
+  41: 
+  42: CREATE OR REPLACE FUNCTION public.permission_action_class(_action text)
+  43: RETURNS text LANGUAGE sql STABLE
+  44: SET search_path TO 'public'
+  45: AS $$
+  46:   SELECT COALESCE((SELECT c.action_class FROM public.permission_action_classes c WHERE c.action_suffix = _action), _action);
+  47: $$;
+  48: REVOKE EXECUTE ON FUNCTION public.permission_action_class(text) FROM PUBLIC;
+  49: GRANT EXECUTE ON FUNCTION public.permission_action_class(text) TO authenticated, service_role;
+  50: 
+  51: CREATE OR REPLACE FUNCTION public.has_permission(_module text, _feature text, _action text)
+  52: RETURNS boolean
+  53: LANGUAGE sql STABLE SECURITY DEFINER
+  54: SET search_path TO 'public'
+  55: AS $$
+  56:   WITH want AS (
+  57:     SELECT c.module, c.feature, c.action, public.permission_action_class(c.action) AS action_class
+  58:     FROM public.canonical_permission(_module, _feature, _action) c
+  59:   ),
+  60:   held AS (
+  61:     SELECT c.module, c.feature, c.action, public.permission_action_class(c.action) AS action_class, 'deny'::text AS effect
+  62:     FROM public.user_permissions up
+  63:     JOIN public.permissions p ON p.id = up.permission_id
+  64:     , LATERAL public.canonical_permission(p.module, p.feature, p.action) c
+  65:     WHERE up.user_id = auth.uid() AND up.effect = 'deny'
+  66:       AND up.organization_id = public.current_org_id()
+  67:     UNION ALL
+  68:     SELECT c.module, c.feature, c.action, public.permission_action_class(c.action), 'grant'
+  69:     FROM public.user_roles ur
+  70:     JOIN public.roles r ON r.id = ur.role_id AND r.active
+
+===== 20261112160000_atomic_blind_receiving_review.sql =====
+ 127: CREATE OR REPLACE FUNCTION public.neo_post_approved_blind_receiving(_count_id uuid)
+ 128:  RETURNS jsonb
+ 129:  LANGUAGE plpgsql
+ 130:  SECURITY DEFINER
+ 131:  SET search_path TO 'public', 'pg_temp'
+ 132: AS $function$
+ 133: DECLARE
+ 134:     v_org uuid := public.current_org_id();
+ 135:     v_count record;
+ 136:     v_po record;
+ 137:     v_line record;
+ 138:     v_lines jsonb := '[]'::jsonb;
+ 139:     v_result jsonb;
+ 140:     v_grn_id uuid;
+ 141:     v_outstanding numeric;
+ 142:     v_accepted numeric;
+ 143:     v_line_count integer := 0;
+ 144: BEGIN
+ 145:     IF auth.uid() IS NULL OR v_org IS NULL THEN
+ 146:         RAISE EXCEPTION 'Authentication and organization required'
+ 147:             USING ERRCODE = '42501';
+ 148:     END IF;
+ 149: 
+ 150:     IF NOT (public.is_org_admin() OR public.has_permission('procurement', 'receiving.manage')) THEN
+ 151:         RAISE EXCEPTION 'Authorized inventory posting required'
+ 152:             USING ERRCODE = '42501';
+ 153:     END IF;
+ 154: 
+ 155:     SELECT *
+ 156:     INTO v_count
+ 157:     FROM public.neo_blind_receiving_counts
+ 158:     WHERE id = _count_id
+ 159:       AND organization_id = v_org
+ 160:     FOR UPDATE;
+ 161: 
+ 162:     IF NOT FOUND THEN
+ 163:         RAISE EXCEPTION 'Blind receiving count not found'
+ 164:             USING ERRCODE = '22023';
+ 165:     END IF;
+ 166: 
+ 167:     IF NOT public.neo_branch_in_scope(v_count.branch_id) THEN
+ 168:         RAISE EXCEPTION 'Receiving count outside authorized branch'
+ 169:             USING ERRCODE = '42501';
+ 170:     END IF;
+ 171: 
+ 172:     IF v_count.submitted_by = auth.uid() THEN
+ 173:         RAISE EXCEPTION 'You cannot post your own receiving count'
+ 174:             USING ERRCODE = '42501';
+ 175:     END IF;
+ 176: 
+ 177:     IF v_count.status = 'posted' OR v_count.posted_grn_id IS NOT NULL THEN
+ 178:         RETURN jsonb_build_object(
+ 179:             'ok', true,
+ 180:             'replayed', true,
+ 181:             'count_id', v_count.id,
+ 182:             'grn_id', v_count.posted_grn_id,
+ 183:             'status', v_count.status
+ 184:         );
+ 185:     END IF;
+ 186: 
+ 187:     IF lower(concat_ws(
+ 188:         ' ',
+ 189:         v_count.supplier_delivery_note,
+ 190:         v_count.remarks,
+ 191:         v_count.review_notes
+ 192:     )) LIKE ANY (ARRAY[
+ 193:         '%virtual test only%',
+ 194:         '%no actual goods%',
+ 195:         '%no real goods%',
+ 196:         '%no physical goods%',
+ 197:         '%simulation only%',
+ 198:         '%no supplier commitment%'
+ 199:     ]) THEN
+ 200:         RAISE EXCEPTION
+ 201:             'This count is marked as virtual/test-only; inventory posting is prohibited'
+ 202:             USING ERRCODE = '22023';
+ 203:     END IF;
+ 204: 
+ 205:     IF v_count.status <> 'approved' THEN
+ 206:         RAISE EXCEPTION 'Only independently approved counts may be posted'
+ 207:             USING ERRCODE = '22023';
+ 208:     END IF;
+ 209: 
+ 210:     IF v_count.reviewed_by IS NULL OR v_count.reviewed_at IS NULL THEN
+ 211:         RAISE EXCEPTION 'Independent review record is incomplete'
+ 212:             USING ERRCODE = '22023';
+ 213:     END IF;
+ 214: 
+ 215:     IF v_count.submitted_by = v_count.reviewed_by THEN
+ 216:         RAISE EXCEPTION 'Receiving Clerk cannot approve their own count'
+ 217:             USING ERRCODE = '42501';
+ 218:     END IF;
+ 219: 
+ 220:     SELECT *
+ 221:     INTO v_po
+ 222:     FROM public.purchase_orders
+ 223:     WHERE id = v_count.purchase_order_id
+ 224:       AND organization_id = v_org
+ 225:       AND branch_id = v_count.branch_id
+ 226:     FOR UPDATE;
+ 227: 
+ 228:     IF NOT FOUND THEN
+ 229:         RAISE EXCEPTION 'Linked purchase order is invalid'
+ 230:             USING ERRCODE = '22023';
+ 231:     END IF;
+ 232: 
+ 233:     IF v_po.status NOT IN (
+ 234:         'approved',
+ 235:         'pending-delivery',
+ 236:         'sent',
+ 237:         'partially-received',
+ 238:         'partially_received'
+ 239:     ) THEN
+ 240:         RAISE EXCEPTION 'Purchase order is no longer eligible for receiving'
+ 241:             USING ERRCODE = '22023';
+ 242:     END IF;
+ 243: 
+ 244:     IF NOT EXISTS (
+ 245:         SELECT 1
+ 246:         FROM public.stock_locations sl
+ 247:         WHERE sl.id = v_count.receiving_location_id
+ 248:           AND sl.organization_id = v_org
+ 249:           AND sl.active = true
+ 250:           AND (sl.branch_id = v_count.branch_id OR sl.branch_id IS NULL)
+ 251:     ) THEN
+ 252:         RAISE EXCEPTION 'Approved receiving location is no longer valid'
+ 253:             USING ERRCODE = '22023';
+ 254:     END IF;
+ 255: 
+ 256:     FOR v_line IN
+ 257:         SELECT
+ 258:             cl.purchase_order_line_id,
+ 259:             cl.quantity_delivered,
+ 260:             cl.quantity_rejected,
+ 261:             cl.rejection_reason,
+ 262:             cl.batch_number,
+ 263:             cl.expiry_date,
+ 264:             pl.quantity AS ordered_quantity,
+ 265:             pl.received_quantity,
+ 266:             pl.accepted_quantity,
+ 267:             pl.cancelled_quantity,
+ 268:             pl.stock_item_id
+ 269:         FROM public.neo_blind_receiving_count_lines cl
+ 270:         JOIN public.purchase_order_lines pl
+ 271:           ON pl.id = cl.purchase_order_line_id
+ 272:          AND pl.order_id = v_count.purchase_order_id
+ 273:         WHERE cl.count_id = _count_id
+ 274:         ORDER BY cl.id
+ 275:     LOOP
+ 276:         v_line_count := v_line_count + 1;
+ 277:         v_accepted := v_line.quantity_delivered - v_line.quantity_rejected;
+ 278:         v_outstanding := GREATEST(
+ 279:             COALESCE(v_line.ordered_quantity, 0)
+ 280:             - COALESCE(v_line.accepted_quantity, 0)
+ 281:             - COALESCE(v_line.cancelled_quantity, 0),
+ 282:             0
+ 283:         );
+ 284: 
+ 285:         IF v_accepted < 0 THEN
+ 286:             RAISE EXCEPTION 'Invalid accepted quantity in original physical count'
+ 287:                 USING ERRCODE = '22023';
+ 288:         END IF;
+ 289: 
+ 290:         IF v_accepted > v_outstanding THEN
+ 291:             RAISE EXCEPTION 'Approved accepted quantity exceeds current outstanding PO quantity'
+ 292:                 USING ERRCODE = '22023';
+ 293:         END IF;
+ 294: 
+ 295:         IF v_line.stock_item_id IS NULL THEN
+ 296:             RAISE EXCEPTION 'Purchase order line is not linked to a stock item'
+ 297:                 USING ERRCODE = '22023';
+ 298:         END IF;
+ 299: 
+ 300:         IF v_line.quantity_delivered > 0 THEN
+ 301:             v_lines := v_lines || jsonb_build_array(
+ 302:                 jsonb_build_object(
+ 303:                     'order_line_id', v_line.purchase_order_line_id,
+ 304:                     'quantity_received', v_line.quantity_delivered,
+ 305:                     'quantity_rejected', v_line.quantity_rejected,
+ 306:                     'rejection_reason', v_line.rejection_reason,
+ 307:                     'batch_number', v_line.batch_number,
+ 308:                     'expiry_date', v_line.expiry_date
+ 309:                 )
+ 310:             );
+ 311:         END IF;
+ 312:     END LOOP;
+ 313: 
+ 314:     IF v_line_count = 0 OR jsonb_array_length(v_lines) = 0 THEN
+ 315:         RAISE EXCEPTION 'No physical delivery quantities available to post'
+ 316:             USING ERRCODE = '22023';
+ 317:     END IF;
+ 318: 
+ 319:     v_result := public.neo_stores_receive_goods(
+ 320:         v_count.purchase_order_id,
+ 321:         v_count.receiving_location_id,
+ 322:         v_lines,
+ 323:         v_count.id,
+ 324:         CONCAT(
+ 325:             'Blind receiving count: ',
+ 326:             v_count.id::text,
+ 327:             CASE WHEN v_count.remarks IS NOT NULL THEN ' | ' || v_count.remarks ELSE '' END
+ 328:         ),
+ 329:         NULL,
+ 330:         v_count.supplier_delivery_note,
+ 331:         NULL
+ 332:     );
+ 333: 
+ 334:     v_grn_id := COALESCE(
+ 335:         NULLIF(v_result->>'grn_id', ''),
+ 336:         NULLIF(v_result->>'receipt_id', ''),
+ 337:         NULLIF(v_result->>'goods_receipt_id', ''),
+ 338:         NULLIF(v_result->>'goods_receipt', '')
+ 339:     )::uuid;
+ 340: 
+ 341:     IF v_grn_id IS NULL THEN
+ 342:         RAISE EXCEPTION 'Receiving lifecycle did not return a GRN identifier'
+ 343:             USING ERRCODE = '22023';
+ 344:     END IF;
+ 345: 
+ 346:     IF NOT EXISTS (
+ 347:         SELECT 1
+ 348:         FROM public.goods_receipts gr
+ 349:         WHERE gr.id = v_grn_id
+ 350:           AND gr.organization_id = v_org
+ 351:           AND gr.order_id = v_count.purchase_order_id
+ 352:     ) THEN
+ 353:         RAISE EXCEPTION 'Generated GRN does not match the approved count'
+ 354:             USING ERRCODE = '22023';
+ 355:     END IF;
+ 356: 
+ 357:     UPDATE public.neo_blind_receiving_counts
+ 358:     SET status = 'posted', posted_grn_id = v_grn_id
+ 359:     WHERE id = _count_id;
+ 360: 
+ 361:     RETURN jsonb_build_object(
+ 362:         'ok', true,
+ 363:         'count_id', _count_id,
+ 364:         'grn_id', v_grn_id,
+ 365:         'status', 'posted',
+ 366:         'replayed', false,
+ 367:         'lifecycle_result', v_result
+ 368:     );
+ 369: END;
+ 370: $function$;
+ 371: 
+ 372: CREATE OR REPLACE FUNCTION public.neo_blind_receiving_decide(
+ 373:     _count_id uuid,
+ 374:     _decision text,
+ 375:     _notes text
+ 376: )
+ 377:  RETURNS jsonb
+ 378:  LANGUAGE plpgsql
+ 379:  SECURITY DEFINER
+ 380:  SET search_path TO 'public', 'pg_temp'
+ 381: AS $function$
+ 382: DECLARE
+ 383:     v_org uuid := public.current_org_id();
+ 384:     v_count record;
+ 385:     v_excess integer;
+ 386:     v_lines integer;
+ 387:     v_decision text := lower(btrim(_decision));
+ 388:     v_notes text := NULLIF(btrim(_notes), '');
+ 389:     v_posting jsonb;
+ 390: BEGIN
+ 391:     IF auth.uid() IS NULL OR v_org IS NULL THEN
+ 392:         RAISE EXCEPTION 'Authentication and organization required'
+ 393:             USING ERRCODE = '42501';
+ 394:     END IF;
+ 395: 
+ 396:     IF NOT (public.is_org_admin() OR public.has_permission('procurement', 'receiving.manage')) THEN
+ 397:         RAISE EXCEPTION 'Independent review authorization required'
+ 398:             USING ERRCODE = '42501';
+ 399:     END IF;
+ 400: 
+ 401:     IF v_decision NOT IN ('approved', 'rejected') THEN
+ 402:         RAISE EXCEPTION 'Decision must be approved or rejected'
+ 403:             USING ERRCODE = '22023';
+ 404:     END IF;
+ 405: 
+ 406:     IF v_notes IS NULL THEN
+ 407:         RAISE EXCEPTION 'A review reason is required'
+ 408:             USING ERRCODE = '22023';
+ 409:     END IF;
+ 410: 
+ 411:     SELECT c.*
+ 412:     INTO v_count
+ 413:     FROM public.neo_blind_receiving_counts c
+ 414:     WHERE c.id = _count_id
+ 415:       AND c.organization_id = v_org
+ 416:     FOR UPDATE;
+ 417: 
+ 418:     IF NOT FOUND THEN
+ 419:         RAISE EXCEPTION 'Blind receiving count not found'
+ 420:             USING ERRCODE = '22023';
+ 421:     END IF;
+ 422: 
+ 423:     IF NOT public.neo_branch_in_scope(v_count.branch_id) THEN
+ 424:         RAISE EXCEPTION 'Count is outside authorized branch'
+ 425:             USING ERRCODE = '42501';
+ 426:     END IF;
+ 427: 
+ 428:     IF v_count.submitted_by = auth.uid() THEN
+ 429:         RAISE EXCEPTION 'You cannot review your own receiving count'
+ 430:             USING ERRCODE = '42501';
+ 431:     END IF;
+ 432: 
+ 433:     IF v_count.status NOT IN ('submitted', 'under_review') THEN
+ 434:         RAISE EXCEPTION 'This count has already been decided'
+ 435:             USING ERRCODE = '22023';
+ 436:     END IF;
+ 437: 
+ 438:     SELECT
+ 439:         count(*),
+ 440:         count(*) FILTER (
+ 441:             WHERE (cl.quantity_delivered - cl.quantity_rejected) >
+ 442:                 GREATEST(
+ 443:                     COALESCE(pl.quantity, 0)
+ 444:                     - COALESCE(pl.accepted_quantity, 0)
+ 445:                     - COALESCE(pl.cancelled_quantity, 0),
+ 446:                     0
+ 447:                 )
+ 448:         )
+ 449:     INTO v_lines, v_excess
+ 450:     FROM public.neo_blind_receiving_count_lines cl
+ 451:     JOIN public.purchase_order_lines pl
+ 452:       ON pl.id = cl.purchase_order_line_id
+ 453:      AND pl.order_id = v_count.purchase_order_id
+ 454:     WHERE cl.count_id = _count_id;
+ 455: 
+ 456:     IF v_lines = 0 THEN
+ 457:         RAISE EXCEPTION 'Cannot review a count without lines'
+ 458:             USING ERRCODE = '22023';
+ 459:     END IF;
+ 460: 
+ 461:     IF v_decision = 'approved' AND v_excess > 0 THEN
+ 462:         RAISE EXCEPTION
+ 463:             'Excess accepted quantities require separate exception authorization; approval blocked'
+ 464:             USING ERRCODE = '22023';
+ 465:     END IF;
+ 466: 
+ 467:     UPDATE public.neo_blind_receiving_counts
+ 468:     SET
+ 469:         status = v_decision,
+ 470:         reviewed_by = auth.uid(),
+ 471:         reviewed_at = now(),
+ 472:         review_notes = v_notes
+ 473:     WHERE id = _count_id;
+ 474: 
+ 475:     IF v_decision = 'approved' THEN
+ 476:         v_posting := public.neo_post_approved_blind_receiving(_count_id);
+ 477: 
+ 478:         IF COALESCE((v_posting->>'ok')::boolean, false) IS NOT TRUE
+ 479:            OR NULLIF(v_posting->>'grn_id', '') IS NULL THEN
+ 480:             RAISE EXCEPTION
+ 481:                 'Approved count did not produce a verified GRN and stock posting'
+ 482:                 USING ERRCODE = '22023';
+ 483:         END IF;
+ 484: 
+ 485:         RETURN jsonb_build_object(
+ 486:             'ok', true,
+ 487:             'count_id', _count_id,
+ 488:             'status', 'posted',
+ 489:             'reviewed_by', auth.uid(),
+ 490:             'grn_id', v_posting->>'grn_id',
+ 491:             'stock_posted', true,
+ 492:             'posting_result', v_posting
+ 493:         );
+ 494:     END IF;
+ 495: 
+ 496:     RETURN jsonb_build_object(
+ 497:         'ok', true,
+ 498:         'count_id', _count_id,
+ 499:         'status', 'rejected',
+ 500:         'reviewed_by', auth.uid(),
+ 501:         'stock_posted', false,
+ 502:         'finance_posted', false
+ 503:     );
+ 504: END;
+ 505: $function$;
+ 506: 
+ 507: REVOKE DELETE ON
+ 508:     public.purchase_orders,
+ 509:     public.purchase_order_lines,
+ 510:     public.goods_receipts,
+ 511:     public.goods_receipt_lines
+ 512: FROM authenticated;
+ 513: 
+ 514: -- BEGIN REVIEWED CORE RECEIVING REPAIR
+ 515: -- Preserve physical receipt/rejection history; accepted goods fulfil the order.
+ 516: -- Refuse unknown installed code instead of overwriting unrelated backend work.
+ 517: DO $guard$
+ 518: DECLARE current_body text;
+ 519: BEGIN
+ 520:   SELECT prosrc INTO current_body FROM pg_proc
+ 521:    WHERE oid=to_regprocedure('public.neo_stores_receive_goods(uuid,uuid,jsonb,uuid,text,text,text,text)');
+ 522:   IF current_body IS NULL OR md5(replace(current_body,E'\r\n',E'\n')) NOT IN ('0e3af29582b038212986e00de790b47a','802705cada2b16fd183e4e7e5d9f1ad4') THEN
+ 523:     RAISE EXCEPTION 'Receiving engine differs from reviewed source; inspect before installation';
+ 524:   END IF;
+ 525: END $guard$;

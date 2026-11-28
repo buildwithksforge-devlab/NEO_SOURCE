@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  canCheckInReservationStatus,
+  CHECK_IN_ELIGIBLE_RESERVATION_STATUSES,
   CHECK_IN_EFFECTS,
   RECONCILIATION_ISSUES,
   REVERT_CAPABILITIES,
@@ -15,6 +17,19 @@ const SQL = readFileSync(
   join(process.cwd(), "src/lib/__tests__/fixtures/pms-checkin-lifecycle.sql"),
   "utf8",
 );
+
+describe("check-in status eligibility", () => {
+  it.each(CHECK_IN_ELIGIBLE_RESERVATION_STATUSES)("allows %s reservations", (status) => {
+    expect(canCheckInReservationStatus(status)).toBe(true);
+  });
+
+  it.each(["checked-in", "checked-out", "cancelled", "no-show", "closed", "enquiry", "on-hold"])(
+    "does not offer check-in for %s reservations",
+    (status) => {
+      expect(canCheckInReservationStatus(status)).toBe(false);
+    },
+  );
+});
 
 describe("check-in reversal contract", () => {
   it("touches every record the arrival created", () => {

@@ -66,7 +66,7 @@ export function useStockItemOptions() {
     enabled: Boolean(organizationId),
     queryFn: async () => {
       const { data, error } = await applyTo(
-        db.from("stock_items").select("id, name, base_unit, category_id").order("name"),
+        db.from("stock_items").select("id, name, base_unit, category_id").eq("active", true).order("name"),
         "stock_items",
       ).limit(500);
       if (!error) return (data ?? []) as StockItemOptions;
@@ -78,7 +78,7 @@ export function useStockItemOptions() {
       // minimum every stock item is guaranteed to carry so staff can still
       // pick an item (unit typed by hand) instead of hitting a page error.
       const fallback = await applyTo(
-        db.from("stock_items").select("id, name").order("name"),
+        db.from("stock_items").select("id, name").eq("active", true).order("name"),
         "stock_items",
       ).limit(500);
       if (fallback.error) {

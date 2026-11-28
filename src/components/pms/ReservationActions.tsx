@@ -18,6 +18,8 @@ import { useAuth } from "@/lib/auth";
 import { depositGate, useDepositPosition } from "@/lib/deposits";
 import { DepositPanel } from "@/components/pms/DepositPanel";
 import { useActivePropertyFilter } from "@/lib/branch-filter";
+import { useCheckoutPosition } from "@/lib/checkout-position";
+import { PermittedLink } from "@/components/common/PermittedLink";
 import { useMyOpenShift } from "@/lib/pos-data";
 import { useOpenCashShift } from "@/lib/frontdesk-ops";
 import {
@@ -28,12 +30,14 @@ import {
 import { PaymentMethodPicker } from "@/components/payments/PaymentMethodPicker";
 
 import {
-  FOLIO_CATEGORIES,
+  MANUAL_FOLIO_CATEGORIES,
   PAYMENT_METHODS,
   money,
+  moneyWithCode,
   titleCase,
   today,
 } from "@/lib/pms";
+import { canCheckInReservationStatus } from "@/lib/checkin-lifecycle";
 import {
   useAssignRoom,
   useAvailability,
@@ -48,6 +52,7 @@ import {
 type Reservation = {
   id: string;
   confirmation_number: string;
+  status: string;
   room_id: string | null;
   room_type_id: string | null;
   arrival_date: string;
@@ -78,8 +83,9 @@ function ActionDialog({
   open: boolean;
   setOpen: (v: boolean) => void;
 }) {
+  const [failure, setFailure] = useState<string | null>(null);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => { setFailure(null); setOpen(next); }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -87,6 +93,7 @@ function ActionDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">{children}</div>
+        {failure ? <p role="alert" className="text-sm text-destructive">{failure}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
@@ -94,8 +101,13 @@ function ActionDialog({
           <Button
             disabled={disabled}
             onClick={async () => {
-              await onConfirm();
-              setOpen(false);
+              setFailure(null);
+              try {
+                const result = await onConfirm();
+                if (result !== false) setOpen(false);
+              } catch (error) {
+                setFailure(error instanceof Error ? error.message : "The action could not be completed. Review its details before retrying.");
+              }
             }}
           >
             {confirmLabel}
@@ -249,7 +261,7 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
   const deposit = useDepositPosition(reservation.id, open);
   const gate = depositGate(deposit.data);
 
-  if (!can("pms", "arrivals.edit")) return null;
+  if (!can("pms", "arrivals.edit") || !canCheckInReservationStatus(reservation.status)) return null;
 
   return (
     <ActionDialog
@@ -259,7 +271,14 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
       title={`Check in ${reservation.confirmation_number}`}
       description="Opens the guest folio, marks the room occupied and notifies housekeeping."
       confirmLabel="Complete check-in"
-      disabled={!reservation.room_id || !idVerified || gate.blocked || deposit.isLoading}
+      disabled={
+        !reservation.room_id ||
+        !idVerified ||
+        gate.blocked ||
+        deposit.isLoading ||
+        deposit.isError ||
+        reservation.arrival_date > operationalToday()
+      }
       onConfirm={() => checkIn.mutateAsync({ reservation: reservation.id, keys, notes })}
     >
       {!reservation.room_id ? (
@@ -275,7 +294,15 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
           </p>
         </div>
       ) : null}
-      <DepositPanel reservationId={reservation.id} />
+      {reservation.arrival_date > operationalToday() ? (
+        <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          Early check-in is not permitted. The reservation begins on{" "}
+          {reservation.arrival_date}.
+          Amend the arrival date through the authorised reservation workflow
+          if the guest needs to arrive earlier.
+        </p>
+      ) : null}
+      <DepositPanel reservationId={reservation.id} branchId={reservation.branch_id} />
       <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
         <div>
           <p className="text-sm font-medium">Identity document sighted</p>
@@ -297,37 +324,53 @@ export function CheckInDialog({ reservation }: { reservation: Reservation }) {
 
 export function CheckOutDialog({
   reservation,
-  balance,
 }: {
   reservation: Reservation;
-  balance: number;
 }) {
   const { can, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [force, setForce] = useState(false);
   const [notes, setNotes] = useState("");
   const checkOut = useCheckOut();
+  const position = useCheckoutPosition(reservation.id, open);
 
   if (!can("pms", "departures.edit")) return null;
-  const outstanding = balance > 0.009;
+  const outstanding = (position.data?.amountDue ?? 0) > 0;
+  const hasCredit = (position.data?.creditDue ?? 0) > 0;
+  const canOverride = isAdmin || can("pms", "folio.override");
 
   return (
     <ActionDialog
       open={open}
-      setOpen={setOpen}
+      setOpen={(next) => { setForce(false); setNotes(""); setOpen(next); }}
       trigger={<Button size="sm">Check out</Button>}
       title={`Check out ${reservation.confirmation_number}`}
-      description="Settles the stay, releases the room for cleaning and closes the folio."
+      description="Review every guest, corporate and group folio for this stay before releasing the room for cleaning."
       confirmLabel="Complete check-out"
-      disabled={outstanding && !force}
+      disabled={!position.isSuccess || position.isFetching || checkOut.isPending || position.data?.mixedCurrency
+        || hasCredit || (outstanding && (!force || !canOverride || !notes.trim()))}
       onConfirm={() => checkOut.mutateAsync({ reservation: reservation.id, force, notes })}
     >
-      <div className="rounded-lg border border-border/70 p-3 text-sm">
-        <span className="text-muted-foreground">Folio balance</span>
-        <p className={outstanding ? "text-lg font-semibold text-destructive" : "text-lg font-semibold text-success"}>
-          {money(balance)}
-        </p>
-      </div>
+      {position.isPending ? <p className="text-sm text-muted-foreground">Reading all folio balances...</p> : null}
+      {position.isError ? <p role="alert" className="text-sm text-destructive">{position.error.message}</p> : null}
+      {position.data ? <div className="space-y-3">
+        <div className="flex justify-between gap-3 text-sm">
+          <p>{position.data.folios.length} folio(s) for this stay</p>
+          <Button size="sm" variant="outline" disabled={position.isFetching || checkOut.isPending} onClick={() => void position.refetch()}>Refresh balances</Button>
+        </div>
+        {position.data.folios.map((folio) => <div key={folio.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+          <div>
+            <PermittedLink to="/pms/folios/$id" params={{ id: folio.id }} className="font-medium underline">{folio.number}</PermittedLink>
+            <p className="text-xs text-muted-foreground">{titleCase(folio.type)} · {folio.currency}</p>
+          </div>
+          <p className={folio.outstanding === 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
+            {folio.outstanding < 0 ? "Credit / refund due: " : "Amount due: "}{moneyWithCode(Math.abs(folio.outstanding), folio.currency)}
+          </p>
+          {folio.outstanding > 0 ? <RecordPaymentDialog folioId={folio.id} balance={folio.outstanding} /> : null}
+        </div>)}
+        {position.data.mixedCurrency ? <p role="alert" className="text-sm text-destructive">Reconcile mixed currencies before checkout.</p> : null}
+        {hasCredit ? <p role="alert" className="text-sm text-destructive">Resolve each credit through a verified refund or transfer. It cannot cancel another folio's unpaid balance.</p> : null}
+      </div> : null}
       {outstanding ? (
         <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3">
           <div>
@@ -336,12 +379,12 @@ export function CheckOutDialog({
               {isAdmin ? "Requires an authorised override and is written to the audit trail." : "Only authorised staff may override."}
             </p>
           </div>
-          <Switch checked={force} onCheckedChange={setForce} disabled={!isAdmin} />
+          <Switch aria-label="Authorize checkout with an outstanding balance" checked={force} onCheckedChange={setForce} disabled={!canOverride} />
         </div>
       ) : null}
       <div className="space-y-2">
-        <Label>Check-out notes</Label>
-        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        <Label htmlFor={`checkout-notes-${reservation.id}`}>Check-out notes</Label>
+        <Textarea id={`checkout-notes-${reservation.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
       </div>
     </ActionDialog>
   );
@@ -355,6 +398,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
   const [quantity, setQuantity] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
   const [tax, setTax] = useState(0);
+  const [chargeIntent, setChargeIntent] = useState(() => crypto.randomUUID());
   const post = usePostCharge();
 
   if (!can("pms", "folios.create")) return null;
@@ -369,12 +413,14 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
         </Button>
       }
       title="Post a charge"
-      description="Charges are posted once — a duplicate submission is ignored by the posting service."
+      description="Post a service or incidental charge. Use POS or Minibar for stock sales so the sale and stock movements stay linked."
       confirmLabel="Post charge"
-      disabled={!description.trim() || unitPrice <= 0}
-      onConfirm={() =>
-        post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax })
-      }
+      disabled={post.isPending || !description.trim() || !Number.isFinite(unitPrice) || unitPrice <= 0
+        || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(tax) || tax < 0}
+      onConfirm={async () => {
+        await post.mutateAsync({ folio: folioId, category, description, quantity, unitPrice, tax, chargeIntent });
+        setChargeIntent(crypto.randomUUID());
+      }}
     >
       <div className="space-y-2">
         <Label>Category</Label>
@@ -383,7 +429,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {FOLIO_CATEGORIES.map((c) => (
+            {MANUAL_FOLIO_CATEGORIES.map((c) => (
               <SelectItem key={c} value={c}>
                 {titleCase(c)}
               </SelectItem>
@@ -416,7 +462,7 @@ export function PostChargeDialog({ folioId }: { folioId: string }) {
   );
 }
 
-export function RecordPaymentDialog({ folioId, balance }: { folioId: string; balance: number }) {
+export function RecordPaymentDialog({ folioId, balance, balanceLabel = "Outstanding balance" }: { folioId: string; balance: number; balanceLabel?: string }) {
   const { can } = useAuth();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(balance > 0 ? balance : 0);
@@ -427,9 +473,10 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
   const [account, setAccount] = useState<string>("");
   const pay = useRecordPayment();
   const accounts = useReceivingAccounts();
-  // One collection intent per opening of this dialog: retries settle the same
-  // receipt, while a genuine second payment of the same amount still goes through.
+  // Keep the same key after an uncertain result, including closing and reopening.
+  // Rotate only after the server returns evidence of a saved collection.
   const [intentKey, setIntentKey] = useState(() => crypto.randomUUID());
+  const [freshCollection, setFreshCollection] = useState(true);
   const myShift = useMyOpenShift();
   const openShift = useOpenCashShift();
   const { branchId } = useActivePropertyFilter();
@@ -453,7 +500,7 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
     <ActionDialog
       open={open}
       setOpen={(next) => {
-        if (next) setIntentKey(crypto.randomUUID());
+        if (next && freshCollection) setAmount(balance > 0 ? balance : 0);
         setOpen(next);
       }}
       trigger={<Button size="sm">Record payment</Button>}
@@ -463,28 +510,29 @@ export function RecordPaymentDialog({ folioId, balance }: { folioId: string; bal
           ? selfService
             ? "Confirms cash physically received into your own till and produces a numbered receipt."
             : "Routes the cash to an authorised cashier, who confirms the money was physically received."
-          : "Produces a numbered receipt and reduces the folio balance."
+          : "Records a payment for confirmation. Only confirmed money reduces the folio balance."
       }
       confirmLabel={isCash ? (selfService ? "Confirm cash received" : "Send to cashier") : "Record payment"}
-      disabled={amount <= 0 || !selected || noTill || requestCash.isPending || pay.isPending}
-      onConfirm={() =>
-        isCash
-          ? requestCash.mutateAsync({ folio: folioId, amount, reference, notes })
-          : pay.mutateAsync({
-              folio: folioId,
-              amount,
-              method,
-              reference,
-              notes,
-              intentKey,
-              account: account || null,
-            })
-      }
+      disabled={!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001 || !selected || noTill || requestCash.isPending || pay.isPending}
+      onConfirm={async () => {
+        setFreshCollection(false);
+        const collectionKey = 'pms-collection:' + folioId + ':' + intentKey;
+        if (isCash) {
+          const result = await requestCash.mutateAsync({ folio: folioId, amount, reference, notes, idempotencyKey: collectionKey });
+          if (result.status !== 'pending' && result.status !== 'confirmed') throw new Error(result.message ?? 'The cash collection was not saved. Review the drawer before retrying.');
+          if (!result.request_id) throw new Error('The saved cash request could not be verified. Refresh before retrying.');
+        } else {
+          const saved = await pay.mutateAsync({ folio: folioId, amount, method, reference, notes, intentKey: collectionKey, account: account || null });
+          if (typeof saved !== 'string' || !saved) throw new Error('The saved payment could not be verified. Refresh before retrying.');
+        }
+        setIntentKey(crypto.randomUUID());
+        setFreshCollection(true);
+      }}
     >
       <div className="space-y-2">
         <Label>Amount</Label>
         <Input type="number" min={0} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-        <p className="text-xs text-muted-foreground">Outstanding balance {money(balance)}</p>
+        <p className="text-xs text-muted-foreground">{balanceLabel}: {money(balance)}</p>
       </div>
       {isCash && !selfService && routedTill ? (
         <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
