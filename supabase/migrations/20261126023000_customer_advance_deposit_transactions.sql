@@ -5804,3 +5804,435 @@ public.neo_allocate_reservation_deposit_to_charge(uuid)
 FROM PUBLIC,anon,authenticated;
 
 NOTIFY pgrst,'reload schema';
+
+
+-- NEO_PROGRESSIVE_ACCOMMODATION_CONNECTION_V1
+--
+-- Progressive accommodation lifecycle connection.
+-- Production execution remains disabled.
+-- Existing reservations retain their original accounting.
+
+CREATE OR REPLACE FUNCTION
+public.neo_connect_accommodation_deposit(
+    _charge uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog,public
+AS $function$
+DECLARE
+
+    charge public.folio_lines;
+    v_policy text;
+    v_post jsonb;
+    v_result jsonb;
+
+BEGIN
+
+    SELECT *
+    INTO charge
+
+    FROM public.folio_lines
+
+    WHERE id = _charge;
+
+    IF charge.id IS NULL
+       OR charge.category IS DISTINCT FROM 'accommodation'
+       OR charge.line_type IS DISTINCT FROM 'charge'
+       OR charge.status IS DISTINCT FROM 'posted'
+    THEN
+
+        RAISE EXCEPTION
+          'Valid posted accommodation charge required';
+
+    END IF;
+
+    v_policy := public.neo_reservation_deposit_policy(
+        charge.organization_id,
+        charge.branch_id,
+        charge.reservation_id
+    );
+
+    IF v_policy = 'legacy-full-application' THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'reason','legacy_policy'
+        );
+
+    END IF;
+
+    IF public.neo_progressive_deposit_execution_enabled()
+       IS NOT TRUE
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive accommodation accounting is disabled';
+
+    END IF;
+
+    IF public.current_org_id()
+       IS DISTINCT FROM charge.organization_id
+
+       OR public.neo_branch_in_scope(charge.branch_id)
+          IS NOT TRUE
+
+    THEN
+
+        RAISE EXCEPTION
+          'Progressive accommodation requires verified property context'
+          USING ERRCODE='42501';
+
+    END IF;
+
+    IF charge.net_amount IS NULL
+       OR charge.net_amount < 0
+       OR charge.net_amount::text IN (
+           'NaN','Infinity','-Infinity'
+       )
+       OR charge.net_amount <> round(charge.net_amount,2)
+    THEN
+
+        RAISE EXCEPTION
+          'Invalid accommodation charge amount';
+
+    END IF;
+
+    IF charge.net_amount = 0 THEN
+
+        RETURN jsonb_build_object(
+            'ok',true,
+            'allocated',0,
+            'reason','zero_charge'
+        );
+
+    END IF;
+
+    -- Recognise revenue once, using the canonical
+    -- accommodation financial posting command.
+
+    v_post := public.neo_finance_post_txn(
+        'folio_charge',
+        charge.id,
+        true
+    );
+
+    IF v_post->>'ok' IS DISTINCT FROM 'true'
+       OR nullif(v_post->>'journal_id','') IS NULL
+    THEN
+
+        RAISE EXCEPTION
+          'Accommodation revenue posting failed: %',
+          coalesce(
+              v_post->>'detail',
+              v_post->>'reason',
+              'Unknown posting failure'
+          );
+
+    END IF;
+
+    v_result :=
+        public.neo_allocate_reservation_deposit_to_charge(
+            charge.id
+        );
+
+    IF v_result->>'ok' IS DISTINCT FROM 'true' THEN
+
+        RAISE EXCEPTION
+          'Progressive deposit allocation failed';
+
+    END IF;
+
+    RETURN v_result;
+
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION
+public.neo_connect_accommodation_deposit(uuid)
+FROM PUBLIC,anon,authenticated;
+
+
+-- Allow progressive folios to be opened without
+-- transferring the entire original deposit.
+-- Keep the production activation lock enforced.
+
+DO $progressive_folio_creation$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.pms_apply_deposits_to_folio()'
+        ::regprocedure
+    );
+
+    anchor := $old$
+      RAISE EXCEPTION
+        'Progressive deposit execution requires its verified allocation engine';
+$old$;
+
+    IF strpos(d,anchor)=0 THEN
+
+        RAISE EXCEPTION
+          'Progressive folio creation boundary differs';
+
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+      IF public.neo_progressive_deposit_execution_enabled()
+         IS NOT TRUE
+      THEN
+
+          RAISE EXCEPTION
+            'Progressive deposit execution is disabled';
+
+      END IF;
+
+      -- Deposit remains a liability until accommodation
+      -- has been earned and posted.
+
+      RETURN NEW;
+
+$replacement$
+    );
+
+    EXECUTE d;
+
+END;
+$progressive_folio_creation$;
+
+
+-- Connect first-night and manual nightly posting
+-- after the accommodation charge and package allocation.
+
+DO $connect_accommodation$
+DECLARE
+
+    d text;
+    signature regprocedure;
+    anchor text;
+
+BEGIN
+
+    FOREACH signature IN ARRAY ARRAY[
+
+        'public.pms_check_in(uuid,integer,text)'::regprocedure,
+
+        'public.pms_post_accommodation_scoped(uuid,date)'::regprocedure
+
+    ]
+
+    LOOP
+
+        d := pg_get_functiondef(signature);
+
+        IF strpos(
+            d,'neo_progressive_accommodation_connection_v1'
+        ) > 0 THEN
+
+            CONTINUE;
+
+        END IF;
+
+        IF signature =
+           'public.pms_check_in(uuid,integer,text)'::regprocedure
+        THEN
+
+            anchor :=
+              'PERFORM public.pkg_allocate_folio_line(_line, ''check-in'');';
+
+        ELSE
+
+            anchor :=
+              'PERFORM public.pkg_allocate_folio_line(_line, ''night-audit'');';
+
+        END IF;
+
+        IF strpos(d,anchor)=0 THEN
+
+            RAISE EXCEPTION
+              'Accommodation connection boundary differs: %',
+              signature;
+
+        END IF;
+
+        d := replace(
+
+            d,
+
+            anchor,
+
+            anchor || chr(10) ||
+
+            $connection$
+
+      -- neo_progressive_accommodation_connection_v1
+
+      PERFORM public.neo_connect_accommodation_deposit(
+          _line
+      );
+
+$connection$
+
+        );
+
+        EXECUTE d;
+
+    END LOOP;
+
+END;
+$connect_accommodation$;
+
+
+-- Do not allow progressive reservations into scheduled
+-- accommodation posting until service context is verified.
+
+DO $scheduled_progressive_boundary$
+DECLARE
+
+    d text;
+    anchor text;
+
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_pms_post_accommodation_job(uuid,uuid,date)'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_scheduled_progressive_boundary_v1'
+    ) > 0 THEN
+
+        RETURN;
+
+    END IF;
+
+    anchor :=
+      '    IF _r.tax_treatment = ''exclusive'' THEN';
+
+    IF strpos(d,anchor)=0 THEN
+
+        RAISE EXCEPTION
+          'Scheduled accommodation boundary differs';
+
+    END IF;
+
+    d := replace(
+
+        d,
+
+        anchor,
+
+        $guard$
+
+    -- neo_scheduled_progressive_boundary_v1
+
+    IF public.neo_reservation_deposit_policy(
+        _org,
+        _r.branch_id,
+        _r.reservation_id
+    ) = 'progressive-accommodation' THEN
+
+        RAISE EXCEPTION
+          'Progressive scheduled accommodation requires verified service context';
+
+    END IF;
+
+$guard$ || anchor
+
+    );
+
+    EXECUTE d;
+
+END;
+$scheduled_progressive_boundary$;
+
+
+-- Guard the legacy refund settlement path against
+-- progressive deposits until partial refund integration.
+
+DO $progressive_refund_boundary$
+DECLARE
+
+    d text;
+    anchor text;
+
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_refund_settle_internal(uuid,boolean,text,uuid)'
+        ::regprocedure
+    );
+
+    IF strpos(
+        d,'neo_progressive_refund_boundary_v1'
+    ) > 0 THEN
+
+        RETURN;
+
+    END IF;
+
+    anchor := ' method:=p->>''method'';';
+
+    IF strpos(d,anchor)=0 THEN
+
+        RAISE EXCEPTION
+          'Canonical refund settlement boundary differs';
+
+    END IF;
+
+    d := overlay(
+
+        d placing
+
+        $guard$
+
+ -- neo_progressive_refund_boundary_v1
+
+ IF EXISTS (
+
+     SELECT 1
+
+     FROM public.reservation_deposits rd
+
+     JOIN public.neo_reservation_deposit_policies policy
+       ON policy.reservation_id = rd.reservation_id
+      AND policy.organization_id = rd.organization_id
+      AND policy.branch_id = rd.branch_id
+
+     WHERE rd.organization_id = org
+
+       AND rd.id = nullif(p->>'deposit_id','')::uuid
+
+       AND policy.accounting_policy =
+           'progressive-accommodation'
+
+ ) THEN
+
+     RAISE EXCEPTION
+       'Progressive deposit refunds require allocation-aware settlement';
+
+ END IF;
+
+$guard$ || anchor
+
+        from strpos(d,anchor)
+
+        for length(anchor)
+
+    );
+
+    EXECUTE d;
+
+END;
+$progressive_refund_boundary$;
+
+NOTIFY pgrst,'reload schema';
