@@ -4282,3 +4282,314 @@ $guard$ || anchor
 
 END;
 $business_day_scope$;
+
+
+-- NEO_ACCOMMODATION_EXECUTION_INTEGRITY_V1
+-- Preserve original room rates, package allocations and existing
+-- accommodation history.
+
+DO $accommodation_integrity$
+DECLARE
+    d text;
+    signature regprocedure;
+    anchor text;
+BEGIN
+
+    FOREACH signature IN ARRAY ARRAY[
+        'public.pms_post_accommodation_scoped(uuid,date)'::regprocedure,
+        'public.neo_pms_post_accommodation_job(uuid,uuid,date)'::regprocedure
+    ]
+    LOOP
+
+        d := pg_get_functiondef(signature);
+
+        IF strpos(d,'neo_accommodation_execution_integrity_v1')>0 THEN
+            CONTINUE;
+        END IF;
+
+        anchor := '    IF _r.tax_treatment = ''exclusive'' THEN';
+
+        IF strpos(d,anchor)=0 THEN
+            RAISE EXCEPTION
+              'Accommodation rate calculation boundary differs: %',
+              signature;
+        END IF;
+
+        d := replace(
+            d,
+            anchor,
+            $guard$
+
+    -- neo_accommodation_execution_integrity_v1
+
+    IF _r.nightly_rate IS NULL
+       OR _r.nightly_rate < 0
+       OR _r.nightly_rate::text IN ('NaN','Infinity','-Infinity')
+       OR _r.tax_rate IS NULL
+       OR _r.tax_rate < 0
+       OR _r.tax_rate::text IN ('NaN','Infinity','-Infinity')
+       OR _r.service_charge_rate IS NULL
+       OR _r.service_charge_rate < 0
+       OR _r.service_charge_rate::text IN ('NaN','Infinity','-Infinity')
+       OR _r.tax_treatment IS NULL
+       OR _r.tax_treatment NOT IN ('inclusive','exclusive')
+    THEN
+        RAISE EXCEPTION
+          'Invalid accommodation rate evidence for reservation %',
+          _r.reservation_id
+          USING ERRCODE='23514';
+    END IF;
+
+    -- Skip only an existing, active accommodation charge for this
+    -- reservation and operational date.
+
+    IF EXISTS (
+        SELECT 1
+        FROM public.folio_lines l
+        WHERE l.organization_id = _org
+          AND l.branch_id = _r.branch_id
+          AND l.reservation_id = _r.reservation_id
+          AND l.operational_date = _operational_date
+          AND l.category = 'accommodation'
+          AND l.line_type = 'charge'
+          AND coalesce(l.status,'posted') NOT IN (
+              'void','voided','cancelled','reversed'
+          )
+    ) THEN
+        CONTINUE;
+    END IF;
+
+$guard$ || anchor
+        );
+
+        anchor := $old$
+    EXCEPTION WHEN unique_violation THEN
+      NULL;
+$old$;
+
+        IF strpos(d,anchor)=0 THEN
+            RAISE EXCEPTION
+              'Accommodation duplicate handling differs: %',
+              signature;
+        END IF;
+
+        d := replace(
+            d,
+            anchor,
+            $replacement$
+
+    EXCEPTION WHEN unique_violation THEN
+      -- Do not conceal a failed package allocation or any
+      -- other unexpected uniqueness violation.
+      RAISE;
+
+$replacement$
+        );
+
+        EXECUTE d;
+
+    END LOOP;
+
+END;
+$accommodation_integrity$;
+
+
+-- Route the legacy organization-wide command through the
+-- existing authorized property-specific implementation.
+
+CREATE OR REPLACE FUNCTION public.pms_post_accommodation(
+    _operational_date date DEFAULT CURRENT_DATE
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $function$
+DECLARE
+    v_org uuid := public.current_org_id();
+    v_branch record;
+    v_count integer := 0;
+BEGIN
+
+    IF auth.uid() IS NULL
+       OR v_org IS NULL
+       OR public.has_permission(
+           'pms','folios.post_charge'
+       ) IS NOT TRUE
+    THEN
+        RAISE EXCEPTION
+          'Not permitted to post accommodation'
+          USING ERRCODE='42501';
+    END IF;
+
+    IF _operational_date IS NULL THEN
+        RAISE EXCEPTION
+          'Operational date is required'
+          USING ERRCODE='22023';
+    END IF;
+
+    FOR v_branch IN
+
+        SELECT b.id
+        FROM public.branches b
+
+        JOIN public.business_days bd
+          ON bd.branch_id = b.id
+         AND bd.organization_id = b.organization_id
+
+        WHERE b.organization_id = v_org
+          AND bd.business_date = _operational_date
+          AND bd.status = 'open'
+          AND public.neo_branch_in_scope(b.id) IS TRUE
+
+        ORDER BY b.id
+
+    LOOP
+
+        v_count := v_count +
+          public.pms_post_accommodation_scoped(
+              v_branch.id,
+              _operational_date
+          );
+
+    END LOOP;
+
+    RETURN v_count;
+
+END;
+$function$;
+
+
+-- Coordinate financial day closure with scheduled and manual
+-- accommodation posting.
+
+DO $business_day_serialization$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_close_business_day(uuid,date,text)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_business_day_serialization_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      ' IF EXISTS(SELECT 1 FROM public.business_days';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION
+          'Business-day serialization boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+ -- neo_business_day_serialization_v1
+
+ PERFORM pg_advisory_xact_lock(
+     hashtextextended(
+         'business-day:' || org::text || ':' || _branch::text,
+         0
+     )
+ );
+
+$guard$ || anchor
+    );
+
+    EXECUTE d;
+
+END;
+$business_day_serialization$;
+
+
+-- Protect check-in against cross-property room assignment
+-- and invalid arrival/departure dates.
+
+DO $checkin_integrity$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.pms_check_in(uuid,integer,text)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_checkin_property_integrity_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor := '  _key := ''checkin:'' || _reservation::text;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Check-in reservation boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $guard$
+
+  -- neo_checkin_property_integrity_v1
+
+  IF auth.uid() IS NULL
+     OR _org IS NULL
+     OR public.neo_branch_in_scope(_res.branch_id) IS NOT TRUE
+  THEN
+      RAISE EXCEPTION
+        'Reservation is outside the authorized property'
+        USING ERRCODE='42501';
+  END IF;
+
+  IF _res.arrival_date IS NULL
+     OR _res.departure_date IS NULL
+     OR _res.departure_date <= _res.arrival_date
+  THEN
+      RAISE EXCEPTION
+        'Reservation arrival and departure dates are invalid'
+        USING ERRCODE='23514';
+  END IF;
+
+$guard$ || anchor
+    );
+
+    anchor :=
+      '  SELECT * INTO _room FROM public.rooms WHERE id=_res.room_id FOR UPDATE;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Check-in room selection differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+  SELECT * INTO _room
+  FROM public.rooms
+  WHERE id=_res.room_id
+    AND organization_id=_org
+    AND branch_id=_res.branch_id
+  FOR UPDATE;
+
+  IF _room.id IS NULL THEN
+      RAISE EXCEPTION
+        'Assigned room belongs to a different property or is unavailable'
+        USING ERRCODE='23514';
+  END IF;
+
+$replacement$
+    );
+
+    EXECUTE d;
+
+END;
+$checkin_integrity$;
