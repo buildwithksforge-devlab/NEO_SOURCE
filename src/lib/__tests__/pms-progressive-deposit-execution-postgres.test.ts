@@ -375,6 +375,121 @@ describe("actual progressive deposit PostgreSQL execution", () => {
       settlementSql.slice(0,connectionBoundary)
     );
 
+    const connectionSql = section(
+      "-- NEO_PROGRESSIVE_ACCOMMODATION_CONNECTION_V1",
+      "-- NEO_PROGRESSIVE_DEPOSIT_FINANCIAL_POSITION_V1"
+    );
+
+    const connectionEnd = connectionSql.indexOf(
+      "DO $progressive_folio_creation$"
+    );
+
+    if (connectionEnd < 0) {
+      throw new Error(
+        "Accommodation connection SQL boundary missing"
+      );
+    }
+
+    await db.exec(`
+      CREATE TABLE public.test_accommodation_finance_control (
+        reject_posting boolean NOT NULL DEFAULT false
+      );
+
+      INSERT INTO public.test_accommodation_finance_control
+      VALUES(false);
+
+      CREATE FUNCTION public.neo_finance_post_txn(
+        _source_type text,
+        _source_id uuid,
+        _silent boolean DEFAULT false
+      )
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $finance$
+      DECLARE
+        l public.folio_lines;
+        j uuid;
+      BEGIN
+
+        IF _source_type <> 'folio_charge' THEN
+          RAISE EXCEPTION 'Unexpected financial source';
+        END IF;
+
+        IF (
+          SELECT reject_posting
+          FROM public.test_accommodation_finance_control
+        ) THEN
+          RETURN jsonb_build_object(
+            'ok',false,
+            'reason','simulated_finance_rejection'
+          );
+        END IF;
+
+        SELECT *
+        INTO l
+        FROM public.folio_lines
+        WHERE id=_source_id
+          AND organization_id=public.current_org_id();
+
+        IF l.id IS NULL THEN
+          RETURN jsonb_build_object(
+            'ok',false,
+            'reason','missing_charge'
+          );
+        END IF;
+
+        SELECT id
+        INTO j
+        FROM public.journal_entries
+        WHERE organization_id=l.organization_id
+          AND branch_id=l.branch_id
+          AND source_document_id=l.id
+          AND source_document_type='folio_charge:revenue'
+          AND status='posted'
+          AND reversed_by_journal_id IS NULL;
+
+        IF j IS NULL THEN
+          RETURN public.neo_gl_post(
+            l.organization_id,
+            l.branch_id,
+            'pms',
+            'folio_charge',
+            l.id,
+            'revenue',
+            l.operational_date,
+            'KES',
+            l.description,
+            jsonb_build_array(
+              jsonb_build_object(
+                'code','1060',
+                'debit',l.net_amount,
+                'credit',0
+              ),
+              jsonb_build_object(
+                'code','4010',
+                'debit',0,
+                'credit',l.net_amount
+              )
+            ),
+            l.customer_id,
+            NULL
+          );
+        END IF;
+
+        RETURN jsonb_build_object(
+          'ok',true,
+          'journal_id',j,
+          'duplicate_prevented',true
+        );
+
+      END;
+      $finance$;
+    `);
+
+    await db.exec(
+      connectionSql.slice(0,connectionEnd)
+    );
+
     // Confirm the production migration defaults to disabled.
     const enabled = await db.query<{ enabled: boolean }>(
       `SELECT public.neo_progressive_deposit_execution_enabled()
@@ -1136,6 +1251,210 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
 
     expect(await remaining()).toBe(0);
+  });
+
+  async function connectedAccommodationCharge(
+    charge: string
+  ) {
+    const result = await db.query<{
+      result: {
+        ok: boolean;
+        allocated?: number;
+        reason?: string;
+      };
+    }>(
+      `SELECT public.neo_connect_accommodation_deposit($1)
+       AS result`,
+      [charge]
+    );
+
+    return result.rows[0]!.result;
+  }
+
+  async function removeFixtureRevenueJournal(
+    charge: string
+  ) {
+    await db.query(
+      `DELETE FROM public.journal_entry_lines
+       WHERE journal_id IN (
+         SELECT id
+         FROM public.journal_entries
+         WHERE source_document_id=$1
+           AND source_document_type='folio_charge:revenue'
+       )`,
+      [charge]
+    );
+
+    await db.query(
+      `DELETE FROM public.journal_entries
+       WHERE source_document_id=$1
+         AND source_document_type='folio_charge:revenue'`,
+      [charge]
+    );
+  }
+
+  it("connects accommodation revenue posting to deposit allocation", async () => {
+    const charge = await addNight(1);
+
+    await removeFixtureRevenueJournal(charge);
+
+    expect(
+      await connectedAccommodationCharge(charge)
+    ).toMatchObject({
+      ok:true,
+      allocated:19000
+    });
+
+    expect(await remaining()).toBe(31000);
+
+    expect(await position()).toEqual({
+      balance:0,
+      payments:19000
+    });
+
+    const journals = await db.query<{
+      count: number;
+    }>(
+      `SELECT count(*)::integer AS count
+       FROM public.journal_entries
+       WHERE source_document_id=$1
+         AND source_document_type='folio_charge:revenue'
+         AND status='posted'`,
+      [charge]
+    );
+
+    expect(journals.rows[0]!.count).toBe(1);
+  });
+
+  it("reconciles three nights through the accommodation connection", async () => {
+    const first = await addNight(1);
+
+    await removeFixtureRevenueJournal(first);
+
+    expect(
+      (await connectedAccommodationCharge(first)).allocated
+    ).toBe(19000);
+
+    expect(await remaining()).toBe(31000);
+
+    const second = await addNight(2);
+
+    await removeFixtureRevenueJournal(second);
+
+    expect(
+      (await connectedAccommodationCharge(second)).allocated
+    ).toBe(19000);
+
+    expect(await remaining()).toBe(12000);
+
+    const third = await addNight(3);
+
+    await removeFixtureRevenueJournal(third);
+
+    expect(
+      (await connectedAccommodationCharge(third)).allocated
+    ).toBe(12000);
+
+    expect(await remaining()).toBe(0);
+
+    expect(await position()).toEqual({
+      balance:7000,
+      payments:50000
+    });
+  });
+
+  it("prevents duplicate revenue and allocation through the connected command", async () => {
+    const charge = await addNight(1);
+
+    await removeFixtureRevenueJournal(charge);
+
+    await connectedAccommodationCharge(charge);
+
+    await connectedAccommodationCharge(charge);
+
+    const journals = await db.query<{
+      count: number;
+    }>(
+      `SELECT count(*)::integer AS count
+       FROM public.journal_entries
+       WHERE source_document_id=$1
+         AND source_document_type='folio_charge:revenue'
+         AND status='posted'`,
+      [charge]
+    );
+
+    expect(journals.rows[0]!.count).toBe(1);
+
+    expect(await remaining()).toBe(31000);
+
+    expect(await position()).toEqual({
+      balance:0,
+      payments:19000
+    });
+  });
+
+  it("does not release guest deposit liability when accommodation Finance posting fails", async () => {
+    const charge = await addNight(1);
+
+    await removeFixtureRevenueJournal(charge);
+
+    await db.exec(`
+      UPDATE public.test_accommodation_finance_control
+      SET reject_posting=true
+    `);
+
+    try {
+      await expect(
+        connectedAccommodationCharge(charge)
+      ).rejects.toThrow(
+        /Accommodation revenue posting failed/i
+      );
+
+      expect(await remaining()).toBe(50000);
+
+      expect(await position()).toEqual({
+        balance:19000,
+        payments:0
+      });
+    } finally {
+      await db.exec(`
+        UPDATE public.test_accommodation_finance_control
+        SET reject_posting=false
+      `);
+    }
+  });
+
+  it("does not allocate unused deposits against restaurant charges", async () => {
+    const charge = await addNight(1);
+
+    await db.query(
+      `UPDATE public.folio_lines
+       SET category='restaurant'
+       WHERE id=$1`,
+      [charge]
+    );
+
+    await expect(
+      connectedAccommodationCharge(charge)
+    ).rejects.toThrow(
+      /Valid posted accommodation charge required/i
+    );
+
+    expect(await remaining()).toBe(50000);
+  });
+
+  it("leaves zero accommodation charges without deposit allocations", async () => {
+    const charge = await addNight(1,0);
+
+    expect(
+      await connectedAccommodationCharge(charge)
+    ).toMatchObject({
+      ok:true,
+      allocated:0,
+      reason:"zero_charge"
+    });
+
+    expect(await remaining()).toBe(50000);
   });
 
   it("rejects allocation when execution is disabled", async () => {
