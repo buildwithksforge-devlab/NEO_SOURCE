@@ -2721,6 +2721,378 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
   });
 
+
+  // CANONICAL_SCHEDULED_JOB_EXECUTION_V1
+
+  async function installAutomaticAllocationJob() {
+
+    const rollout = readFileSync(
+      "supabase/migrations/20261126023000_customer_advance_deposit_transactions.sql",
+      "utf8"
+    );
+
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION auth.uid()
+      RETURNS uuid
+      LANGUAGE sql STABLE
+      AS $$
+        SELECT NULL::uuid
+      $$;
+
+      CREATE TABLE IF NOT EXISTS
+      public.neo_pms_accommodation_job_runs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        business_date date NOT NULL,
+        status text NOT NULL,
+        posted_count integer DEFAULT 0,
+        error_message text,
+        started_at timestamptz DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS
+      public.neo_pms_accommodation_automation_settings (
+        organization_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        enabled boolean DEFAULT false,
+        activation_date date,
+        PRIMARY KEY(organization_id,branch_id)
+      );
+
+      INSERT INTO
+        public.neo_pms_accommodation_automation_settings
+        (
+          organization_id,
+          branch_id,
+          enabled,
+          activation_date
+        )
+      SELECT DISTINCT
+        organization_id,
+        branch_id,
+        true,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date-1
+      FROM public.reservations;
+
+      INSERT INTO
+        public.neo_pms_accommodation_job_runs
+        (
+          organization_id,
+          branch_id,
+          business_date,
+          status
+        )
+      SELECT DISTINCT
+        organization_id,
+        branch_id,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date,
+        'running'
+      FROM public.reservations;
+
+      SELECT set_config(
+        'neo.pms_accommodation_job_run_id',
+        (
+          SELECT id::text
+          FROM public.neo_pms_accommodation_job_runs
+          LIMIT 1
+        ),
+        true
+      );
+
+      SELECT set_config(
+        'neo.system_posting',
+        'on',
+        true
+      );
+    `);
+
+    const propertyGuard = rollout.match(
+      /CREATE OR REPLACE FUNCTION\s+public\.neo_progressive_accounting_property_allowed\([\s\S]*?\$function\$;/
+    )?.[0];
+
+    if (!propertyGuard) {
+      throw new Error(
+        "Production scheduler property authorization helper missing"
+      );
+    }
+
+    await db.exec(propertyGuard);
+
+    const boundaries = [
+      "scheduled_progressive_boundary",
+      "automatic_progressive_allocation"
+    ];
+
+    for (const boundary of boundaries) {
+
+      const tag = "$" + boundary + "$";
+
+      const start = rollout.indexOf("DO " + tag);
+
+      const end = rollout.indexOf(
+        tag + ";",
+        start + ("DO " + tag).length
+      );
+
+      if (start < 0 || end < 0) {
+        throw new Error(
+          "Missing scheduler boundary: " + boundary
+        );
+      }
+
+      await db.exec(
+        rollout.slice(
+          start,
+          end + tag.length + 1
+        )
+      );
+    }
+
+    const result = await db.query<{
+      definition: string;
+    }>(`
+      SELECT pg_get_functiondef(
+        'public.neo_pms_post_accommodation_job(uuid,uuid,date)'
+        ::regprocedure
+      ) AS definition
+    `);
+
+    const definition = result.rows[0]!.definition;
+
+    expect(definition).toContain(
+      "neo_accommodation_execution_integrity_v1"
+    );
+
+    expect(definition).toContain(
+      "neo_automatic_progressive_allocation_v1"
+    );
+
+    expect(definition).toContain(
+      "Invalid accommodation rate evidence"
+    );
+
+    expect(definition).toContain(
+      "Skip only an existing, active accommodation charge"
+    );
+  }
+
+  async function executeScheduledAccommodationJob() {
+
+    const result = await db.query<{
+      posted: number;
+    }>(`
+      SELECT public.neo_pms_post_accommodation_job(
+        r.organization_id,
+        r.branch_id,
+        (now() AT TIME ZONE 'Africa/Nairobi')::date
+      ) AS posted
+      FROM public.reservations r
+      LIMIT 1
+    `);
+
+    return result.rows[0]!.posted;
+  }
+
+  it("executes actual scheduled accommodation with canonical progressive accounting", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+
+      await installAccommodationLifecycle();
+
+      await installAutomaticAllocationJob();
+
+      expect(
+        await executeScheduledAccommodationJob()
+      ).toBe(1);
+
+      expect(await remaining()).toBe(31000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:19000
+      });
+
+      expect(
+        await integratedAccountBalance("2020")
+      ).toBe(-31000);
+
+      expect(
+        await integratedAccountBalance("1060")
+      ).toBe(0);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+
+      const attribution = await db.query<{
+        posted_by: string | null;
+      }>(`
+        SELECT posted_by
+        FROM public.folio_lines
+        WHERE category='accommodation'
+          AND line_type='charge'
+      `);
+
+      expect(attribution.rows).toHaveLength(1);
+
+      expect(
+        attribution.rows[0]!.posted_by
+      ).toBeNull();
+    });
+  });
+
+  it("preserves nightly replay protection after automatic allocation is installed", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+
+      await installAccommodationLifecycle();
+
+      await installAutomaticAllocationJob();
+
+      expect(
+        await executeScheduledAccommodationJob()
+      ).toBe(1);
+
+      expect(
+        await executeScheduledAccommodationJob()
+      ).toBe(0);
+
+      expect(await remaining()).toBe(31000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:19000
+      });
+
+      const evidence = await db.query<{
+        charges: number;
+        allocations: number;
+        journals: number;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM public.folio_lines
+            WHERE category='accommodation'
+              AND line_type='charge'
+          ) AS charges,
+          (
+            SELECT count(*)::int
+            FROM public.neo_reservation_deposit_allocations
+          ) AS allocations,
+          (
+            SELECT count(*)::int
+            FROM public.journal_entries
+            WHERE source_document_type='folio_charge:revenue'
+              AND status='posted'
+          ) AS journals
+      `);
+
+      expect(evidence.rows[0]).toEqual({
+        charges:1,
+        allocations:1,
+        journals:1
+      });
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(-19000);
+    });
+  });
+
+  it("rejects scheduled progressive posting without an active job run", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+
+      await installAccommodationLifecycle();
+
+      await installAutomaticAllocationJob();
+
+      await db.exec(`
+        SELECT set_config(
+          'neo.pms_accommodation_job_run_id',
+          '',
+          true
+        )
+      `);
+
+      await db.exec("SAVEPOINT scheduled_rejection");
+
+      try {
+
+        await expect(
+          executeScheduledAccommodationJob()
+        ).rejects.toThrow(
+          /context unavailable/i
+        );
+
+      } finally {
+
+        await db.exec(
+          "ROLLBACK TO SAVEPOINT scheduled_rejection"
+        );
+      }
+
+      expect(await remaining()).toBe(50000);
+
+      expect(await position()).toEqual({
+        balance:0,
+        payments:0
+      });
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(0);
+    });
+  });
+
+  it("rejects invalid accommodation rates after automatic allocation installation", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCanonicalFinanceTransaction();
+
+      await installAccommodationLifecycle();
+
+      await installAutomaticAllocationJob();
+
+      await db.exec(`
+        UPDATE public.reservations
+        SET nightly_rate=-19000
+      `);
+
+      await db.exec("SAVEPOINT invalid_rate");
+
+      try {
+
+        await expect(
+          executeScheduledAccommodationJob()
+        ).rejects.toThrow(
+          /Invalid accommodation rate evidence/i
+        );
+
+      } finally {
+
+        await db.exec(
+          "ROLLBACK TO SAVEPOINT invalid_rate"
+        );
+      }
+
+      expect(await remaining()).toBe(50000);
+
+      expect(
+        await integratedAccountBalance("4010")
+      ).toBe(0);
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 

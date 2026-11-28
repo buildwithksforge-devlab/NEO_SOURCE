@@ -7611,6 +7611,39 @@ $connection$
 
     );
 
+    -- neo_automatic_integrity_preservation_v1
+    --
+    -- Never install an automatic allocation transformation
+    -- that has removed the existing accommodation guard.
+
+    IF strpos(
+        d,'neo_accommodation_execution_integrity_v1'
+    )=0 THEN
+        RAISE EXCEPTION
+          'Automatic allocation requires preserved accommodation execution integrity';
+    END IF;
+
+    IF strpos(
+        d,'Invalid accommodation rate evidence for reservation'
+    )=0 THEN
+        RAISE EXCEPTION
+          'Automatic allocation removed accommodation rate validation';
+    END IF;
+
+    IF strpos(
+        d,'Skip only an existing, active accommodation charge'
+    )=0 THEN
+        RAISE EXCEPTION
+          'Automatic allocation removed nightly replay protection';
+    END IF;
+
+    IF strpos(
+        d,'Do not conceal a failed package allocation'
+    )=0 THEN
+        RAISE EXCEPTION
+          'Automatic allocation removed uniqueness failure protection';
+    END IF;
+
     EXECUTE d;
 
 END;
