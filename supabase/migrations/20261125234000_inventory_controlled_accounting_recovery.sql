@@ -1262,3 +1262,105 @@ BEGIN
 
 END;
 $function$;
+
+
+-- NEO_DEPARTMENT_MENU_AVAILABILITY_V1
+--
+-- Align menu availability with departmental inventory
+-- and prepared-batch allocation.
+-- No historical inventory is changed.
+
+DO $department_availability$
+DECLARE
+    d text;
+    anchor text;
+BEGIN
+
+    d := pg_get_functiondef(
+        'public.neo_department_menu_stock(uuid,uuid,text,uuid,numeric)'
+        ::regprocedure
+    );
+
+    IF strpos(d,'neo_department_menu_availability_v1')>0 THEN
+        RETURN;
+    END IF;
+
+    anchor :=
+      'allow_negative:=public.neo_inventory_allows_negative(org,_branch);';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Department stock initialization differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+   -- neo_department_menu_availability_v1
+
+   IF _quantity IS NULL
+      OR _quantity <= 0
+      OR _quantity::text IN ('NaN','Infinity','-Infinity')
+   THEN
+       RAISE EXCEPTION
+         'Requested menu quantity must be finite and positive'
+         USING ERRCODE='22023';
+   END IF;
+
+$replacement$ || anchor
+    );
+
+    anchor := 'IF prepared<portions THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Prepared availability comparison differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        $replacement$
+
+     IF portions IS NULL
+        OR portions <= 0
+        OR portions::text IN ('NaN','Infinity','-Infinity')
+        OR prepared IS NULL
+        OR prepared::text IN ('NaN','Infinity','-Infinity')
+     THEN
+         RAISE data_exception
+           USING MESSAGE='Prepared batch quantity is invalid';
+     END IF;
+
+     IF prepared<portions THEN
+
+$replacement$
+    );
+
+    anchor :=
+      'IF missing IS NOT NULL THEN reason:=missing; RETURN NEXT; END IF;';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Department stock success boundary differs';
+    END IF;
+
+    d := replace(
+        d,
+        anchor,
+        anchor || chr(10) ||
+        $replacement$
+
+   -- All inventory and preparation checks passed.
+
+   available := true;
+   reason := NULL;
+
+   RETURN NEXT;
+
+$replacement$
+    );
+
+    EXECUTE d;
+
+END;
+$department_availability$;
