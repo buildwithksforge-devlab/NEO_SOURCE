@@ -3589,3 +3589,127 @@ $route$
 END;
 
 $closure$;
+
+-- NEO_CORE_PAYMENT_AMOUNT_RECEIPT_V1
+-- Preserve the existing payment and collection infrastructure.
+-- Validate monetary inputs before any payment mutation.
+
+DO $core_payment$
+DECLARE
+    d text;
+    signature regprocedure;
+    anchor text;
+    replacement text;
+BEGIN
+
+    signature := to_regprocedure(
+        'public.pos_record_payment_attempt(uuid,numeric,text,numeric,text,uuid,text,boolean,text,uuid)'
+    );
+
+    IF signature IS NULL THEN
+        RAISE EXCEPTION 'Canonical POS payment function missing';
+    END IF;
+
+    d := pg_get_functiondef(signature);
+
+    anchor := '  IF _key IS NULL THEN';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Canonical POS payment identity anchor differs';
+    END IF;
+
+    replacement := $patch$
+  -- neo_core_payment_amount_guard_v1
+  IF _amount IS NULL
+     OR _amount::text IN ('NaN','Infinity','-Infinity')
+     OR _amount <= 0
+     OR _amount <> round(_amount,2)
+  THEN
+    RAISE EXCEPTION 'Payment amount must be finite, positive and expressed in currency cents'
+      USING ERRCODE='22023';
+  END IF;
+
+  IF _tendered IS NOT NULL
+     AND (
+         _tendered::text IN ('NaN','Infinity','-Infinity')
+         OR _tendered < 0
+         OR _tendered <> round(_tendered,2)
+     )
+  THEN
+    RAISE EXCEPTION 'Invalid tendered amount'
+      USING ERRCODE='22023';
+  END IF;
+
+  IF _method='cash'
+     AND _tendered IS NOT NULL
+     AND _tendered < _amount
+  THEN
+    RAISE EXCEPTION 'Cash tendered is below the payment amount'
+      USING ERRCODE='22023';
+  END IF;
+
+$patch$;
+
+    IF strpos(d,'neo_core_payment_amount_guard_v1')=0 THEN
+        d := replace(d,anchor,replacement || anchor);
+        EXECUTE d;
+    END IF;
+
+END;
+$core_payment$;
+
+
+DO $core_receipt$
+DECLARE
+    d text;
+    signature regprocedure;
+    anchor text;
+    replacement text;
+BEGIN
+
+    signature := to_regprocedure(
+        'public.pos_confirm_manual_payment(uuid,text)'
+    );
+
+    IF signature IS NULL THEN
+        RAISE EXCEPTION 'Canonical manual payment function missing';
+    END IF;
+
+    d := pg_get_functiondef(signature);
+
+    anchor := 'verified_by = auth.uid(), verification_note = btrim(_note)';
+
+    IF strpos(d,anchor)=0 THEN
+        RAISE EXCEPTION 'Manual confirmation update anchor differs';
+    END IF;
+
+    replacement := $patch$
+verified_by = auth.uid(), verification_note = btrim(_note),
+         receipt_number = coalesce(
+           nullif(btrim(receipt_number),''),
+           public.next_document_number('receipt')
+         )
+$patch$;
+
+    IF strpos(d,'neo_core_manual_receipt_identity_v1')=0 THEN
+
+        d := replace(
+            d,
+            anchor,
+            replacement
+        );
+
+        d := replace(
+            d,
+            '  UPDATE public.pos_payments',
+            '  -- neo_core_manual_receipt_identity_v1'
+              || chr(10)
+              || '  UPDATE public.pos_payments'
+        );
+
+        EXECUTE d;
+
+    END IF;
+
+END;
+$core_receipt$;

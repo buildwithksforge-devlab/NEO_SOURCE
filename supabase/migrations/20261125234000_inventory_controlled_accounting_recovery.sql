@@ -515,3 +515,96 @@ END;
 $migration$;
 
 COMMIT;
+
+-- NEO_CORE_INVENTORY_EXECUTION_V1
+
+DO $core_inventory$
+DECLARE
+    d text;
+    signature regprocedure;
+    anchor text;
+BEGIN
+
+    signature := to_regprocedure(
+        'public.inventory_order_consumption_trigger()'
+    );
+
+    IF signature IS NULL THEN
+        RAISE EXCEPTION 'Order consumption trigger missing';
+    END IF;
+
+    d := pg_get_functiondef(signature);
+
+    anchor := 'COALESCE(status,'''') <> ''voided''';
+
+    IF strpos(d,anchor)>0 THEN
+
+        d := replace(
+            d,
+            anchor,
+            'COALESCE(status,'''') NOT IN (''voided'',''cancelled'',''draft'',''cancel-pending'')'
+        );
+
+        EXECUTE d;
+
+    ELSIF strpos(
+        d,
+        'COALESCE(status,'''') NOT IN (''voided'',''cancelled'',''draft'',''cancel-pending'')'
+    )=0 THEN
+
+        RAISE EXCEPTION 'Order consumption lifecycle filter differs';
+
+    END IF;
+
+END;
+$core_inventory$;
+
+
+DO $inventory_context$
+DECLARE
+    d text;
+    signature regprocedure;
+BEGIN
+
+    signature := to_regprocedure(
+        'public.inventory_consume_order_item(uuid)'
+    );
+
+    IF signature IS NULL THEN
+        RAISE EXCEPTION 'Canonical inventory wrapper missing';
+    END IF;
+
+    d := pg_get_functiondef(signature);
+
+    IF strpos(d,'neo_preserve_inventory_context_v1')=0 THEN
+
+        IF strpos(d,'DECLARE v_result jsonb;')=0
+           OR strpos(d,'PERFORM set_config(''neo.system_posting'', ''0'', true);')=0
+        THEN
+            RAISE EXCEPTION 'Inventory execution context anchor differs';
+        END IF;
+
+        d := replace(
+            d,
+            'DECLARE v_result jsonb;',
+            $patch$
+DECLARE
+  v_result jsonb;
+  v_prior_posting text :=
+    coalesce(current_setting('neo.system_posting',true),'');
+  -- neo_preserve_inventory_context_v1
+$patch$
+        );
+
+        d := replace(
+            d,
+            'PERFORM set_config(''neo.system_posting'', ''0'', true);',
+            'PERFORM set_config(''neo.system_posting'', v_prior_posting, true);'
+        );
+
+        EXECUTE d;
+
+    END IF;
+
+END;
+$inventory_context$;
