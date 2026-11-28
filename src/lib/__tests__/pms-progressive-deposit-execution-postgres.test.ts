@@ -3093,6 +3093,608 @@ describe("actual progressive deposit PostgreSQL execution", () => {
     });
   });
 
+
+  // CANONICAL_SCHEDULER_ORCHESTRATION_V1
+
+  async function installCompleteScheduler() {
+
+    await installCanonicalFinanceTransaction();
+
+    await installAccommodationLifecycle();
+
+    await installAutomaticAllocationJob();
+
+    const rollout = readFileSync(
+      "supabase/migrations/20261126023000_customer_advance_deposit_transactions.sql",
+      "utf8"
+    );
+
+    // Remove manually manufactured job context.
+    // The actual scheduler must establish it.
+
+    await db.exec(`
+      DELETE FROM public.neo_pms_accommodation_job_runs;
+
+      SELECT set_config(
+        'neo.pms_accommodation_job_run_id',
+        '',
+        true
+      );
+
+      SELECT set_config(
+        'neo.system_posting',
+        'off',
+        true
+      );
+
+      SELECT set_config(
+        'neo.system_org',
+        '',
+        true
+      );
+
+      SELECT set_config(
+        'neo.ctx.org',
+        '',
+        true
+      );
+
+      SELECT set_config(
+        'neo.ctx.scope',
+        '',
+        true
+      );
+
+      SELECT set_config(
+        'neo.ctx.branches',
+        '',
+        true
+      );
+    `);
+
+    const canonicalSQL = Buffer.from(
+      "Q1JFQVRFIE9SIFJFUExBQ0UgRlVOQ1RJT04gcHVibGljLm5lb19wbXNfcG9zdF9hY2NvbW1vZGF0aW9uX3NjaGVkdWxlZChfZXhlY3V0ZSBib29sZWFuIERFRkFVTFQgZmFsc2UpCiBSRVRVUk5TIGpzb25iCiBMQU5HVUFHRSBwbHBnc3FsCiBTRUNVUklUWSBERUZJTkVSCiBTRVQgc2VhcmNoX3BhdGggVE8gJ3B1YmxpYycKQVMgJGZ1bmN0aW9uJApERUNMQVJFCiAgICBwcm9wZXJ0eV9kYXkgcmVjb3JkOwogICAgcnVuX2lkIHV1aWQ7CiAgICBwb3N0ZWQgaW50ZWdlcjsKCiAgICBjb21wbGV0ZWQgaW50ZWdlciA6PSAwOwogICAgZmFpbGVkIGludGVnZXIgOj0gMDsKICAgIHRvdGFsX3Bvc3RlZCBpbnRlZ2VyIDo9IDA7CiAgICBlbGlnaWJsZSBpbnRlZ2VyIDo9IDA7CgogICAgbG9jYWxfZGF0ZSBkYXRlIDo9CiAgICAgIChub3coKSBBVCBUSU1FIFpPTkUgJ0FmcmljYS9OYWlyb2JpJyk6OmRhdGU7CgogICAgZmFpbHVyZV90ZXh0IHRleHQ7CkJFR0lOCgogICAgLS0gT25seSBvcHRlZC1pbiBwcm9wZXJ0aWVzIGNhbiBxdWFsaWZ5LgogICAgLS0gTmV2ZXIgYXV0b21hdGljYWxseSBwb3N0IGFuIGFyYml0cmFyeSBoaXN0b3JpY2FsIGJ1c2luZXNzIGRheS4KCiAgICBTRUxFQ1QgQ09VTlQoKik6OmludGVnZXIKICAgIElOVE8gZWxpZ2libGUKICAgIEZST00gcHVibGljLmJ1c2luZXNzX2RheXMgYmQKICAgIEpPSU4gcHVibGljLmJyYW5jaGVzIGIKICAgICAgT04gYi5pZCA9IGJkLmJyYW5jaF9pZAogICAgIEFORCBiLm9yZ2FuaXphdGlvbl9pZCA9IGJkLm9yZ2FuaXphdGlvbl9pZAogICAgSk9JTiBwdWJsaWMubmVvX3Btc19hY2NvbW1vZGF0aW9uX2F1dG9tYXRpb25fc2V0dGluZ3MgY2ZnCiAgICAgIE9OIGNmZy5vcmdhbml6YXRpb25faWQgPSBiZC5vcmdhbml6YXRpb25faWQKICAgICBBTkQgY2ZnLmJyYW5jaF9pZCA9IGJkLmJyYW5jaF9pZAogICAgV0hFUkUgY2ZnLmVuYWJsZWQgSVMgVFJVRQogICAgICBBTkQgY2ZnLmFjdGl2YXRpb25fZGF0ZSBJUyBOT1QgTlVMTAogICAgICBBTkQgYmQuc3RhdHVzID0gJ29wZW4nCiAgICAgIEFORCBiZC5idXNpbmVzc19kYXRlID49IGNmZy5hY3RpdmF0aW9uX2RhdGUKICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGUgQkVUV0VFTgogICAgICAgICAgbG9jYWxfZGF0ZSAtIDEgQU5EIGxvY2FsX2RhdGU7CgogICAgSUYgX2V4ZWN1dGUgSVMgTk9UIFRSVUUgVEhFTgogICAgICAgIFJFVFVSTiBqc29uYl9idWlsZF9vYmplY3QoCiAgICAgICAgICAgICdzdGF0dXMnLCAnZHJ5X3J1bicsCiAgICAgICAgICAgICdlbGlnaWJsZV9wcm9wZXJ0eV9kYXlzJywgZWxpZ2libGUsCiAgICAgICAgICAgICdjb21wbGV0ZWQnLCAwLAogICAgICAgICAgICAnZmFpbGVkJywgMCwKICAgICAgICAgICAgJ3Bvc3RlZCcsIDAKICAgICAgICApOwogICAgRU5EIElGOwoKICAgIEZPUiBwcm9wZXJ0eV9kYXkgSU4KICAgICAgICBTRUxFQ1QKICAgICAgICAgICAgYmQub3JnYW5pemF0aW9uX2lkLAogICAgICAgICAgICBiZC5icmFuY2hfaWQsCiAgICAgICAgICAgIGJkLmJ1c2luZXNzX2RhdGUKICAgICAgICBGUk9NIHB1YmxpYy5idXNpbmVzc19kYXlzIGJkCiAgICAgICAgSk9JTiBwdWJsaWMuYnJhbmNoZXMgYgogICAgICAgICAgT04gYi5pZCA9IGJkLmJyYW5jaF9pZAogICAgICAgICBBTkQgYi5vcmdhbml6YXRpb25faWQgPSBiZC5vcmdhbml6YXRpb25faWQKICAgICAgICBKT0lOIHB1YmxpYy5uZW9fcG1zX2FjY29tbW9kYXRpb25fYXV0b21hdGlvbl9zZXR0aW5ncyBjZmcKICAgICAgICAgIE9OIGNmZy5vcmdhbml6YXRpb25faWQgPSBiZC5vcmdhbml6YXRpb25faWQKICAgICAgICAgQU5EIGNmZy5icmFuY2hfaWQgPSBiZC5icmFuY2hfaWQKICAgICAgICBXSEVSRSBjZmcuZW5hYmxlZCBJUyBUUlVFCiAgICAgICAgICBBTkQgY2ZnLmFjdGl2YXRpb25fZGF0ZSBJUyBOT1QgTlVMTAogICAgICAgICAgQU5EIGJkLnN0YXR1cyA9ICdvcGVuJwogICAgICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGUgPj0gY2ZnLmFjdGl2YXRpb25fZGF0ZQogICAgICAgICAgQU5EIGJkLmJ1c2luZXNzX2RhdGUgQkVUV0VFTgogICAgICAgICAgICAgIGxvY2FsX2RhdGUgLSAxIEFORCBsb2NhbF9kYXRlCiAgICAgICAgT1JERVIgQlkKICAgICAgICAgICAgYmQub3JnYW5pemF0aW9uX2lkLAogICAgICAgICAgICBiZC5icmFuY2hfaWQsCiAgICAgICAgICAgIGJkLmJ1c2luZXNzX2RhdGUKCiAgICBMT09QCiAgICAgICAgQkVHSU4KICAgICAgICAgICAgLS0gVGhlIHJ1biBpcyBjcmVhdGVkIGJlZm9yZSBmaW5hbmNpYWwgcG9zdGluZy4KICAgICAgICAgICAgLS0gRmFpbHVyZSByb2xscyBiYWNrIHRoZSBydW4gYW5kIGl0cyBwYXJ0aWFsIGNoYXJnZXMuCgogICAgICAgICAgICBJTlNFUlQgSU5UTyBwdWJsaWMubmVvX3Btc19hY2NvbW1vZGF0aW9uX2pvYl9ydW5zKAogICAgICAgICAgICAgICAgb3JnYW5pemF0aW9uX2lkLAogICAgICAgICAgICAgICAgYnJhbmNoX2lkLAogICAgICAgICAgICAgICAgYnVzaW5lc3NfZGF0ZSwKICAgICAgICAgICAgICAgIHN0YXR1cwogICAgICAgICAgICApCiAgICAgICAgICAgIFZBTFVFUyAoCiAgICAgICAgICAgICAgICBwcm9wZXJ0eV9kYXkub3JnYW5pemF0aW9uX2lkLAogICAgICAgICAgICAgICAgcHJvcGVydHlfZGF5LmJyYW5jaF9pZCwKICAgICAgICAgICAgICAgIHByb3BlcnR5X2RheS5idXNpbmVzc19kYXRlLAogICAgICAgICAgICAgICAgJ3J1bm5pbmcnCiAgICAgICAgICAgICkKICAgICAgICAgICAgUkVUVVJOSU5HIGlkIElOVE8gcnVuX2lkOwoKICAgICAgICAgICAgLS0gT25seSBhY2NvbW1vZGF0aW9uIGxpbmVzIGluc2VydGVkIGR1cmluZyB0aGlzCiAgICAgICAgICAgIC0tIHRyYW5zYWN0aW9uIHJlY2VpdmUgdGhlIGFjdGl2ZSBydW4gaWRlbnRpZmllci4KCiAgICAgICAgICAgIFBFUkZPUk0gc2V0X2NvbmZpZygKICAgICAgICAgICAgICAgICduZW8ucG1zX2FjY29tbW9kYXRpb25fam9iX3J1bl9pZCcsCiAgICAgICAgICAgICAgICBydW5faWQ6OnRleHQsCiAgICAgICAgICAgICAgICB0cnVlCiAgICAgICAgICAgICk7CgogICAgICAgICAgICBwb3N0ZWQgOj0KICAgICAgICAgICAgICBwdWJsaWMubmVvX3Btc19wb3N0X2FjY29tbW9kYXRpb25fam9iKAogICAgICAgICAgICAgICAgcHJvcGVydHlfZGF5Lm9yZ2FuaXphdGlvbl9pZCwKICAgICAgICAgICAgICAgIHByb3BlcnR5X2RheS5icmFuY2hfaWQsCiAgICAgICAgICAgICAgICBwcm9wZXJ0eV9kYXkuYnVzaW5lc3NfZGF0ZQogICAgICAgICAgICAgICk7CgogICAgICAgICAgICBQRVJGT1JNIHNldF9jb25maWcoCiAgICAgICAgICAgICAgICAnbmVvLnBtc19hY2NvbW1vZGF0aW9uX2pvYl9ydW5faWQnLAogICAgICAgICAgICAgICAgJycsCiAgICAgICAgICAgICAgICB0cnVlCiAgICAgICAgICAgICk7CgogICAgICAgICAgICBVUERBVEUgcHVibGljLm5lb19wbXNfYWNjb21tb2RhdGlvbl9qb2JfcnVucwogICAgICAgICAgICBTRVQKICAgICAgICAgICAgICAgIHN0YXR1cyA9ICdjb21wbGV0ZWQnLAogICAgICAgICAgICAgICAgcG9zdGVkX2NvdW50ID0gcG9zdGVkCiAgICAgICAgICAgIFdIRVJFIGlkID0gcnVuX2lkOwoKICAgICAgICAgICAgY29tcGxldGVkIDo9IGNvbXBsZXRlZCArIDE7CiAgICAgICAgICAgIHRvdGFsX3Bvc3RlZCA6PSB0b3RhbF9wb3N0ZWQgKyBwb3N0ZWQ7CgogICAgICAgIEVYQ0VQVElPTiBXSEVOIE9USEVSUyBUSEVOCgogICAgICAgICAgICAtLSBQb3N0Z3JlU1FMIHJvbGxzIGJhY2sgdGhlIGZhaWxlZCBwcm9wZXJ0eSdzCiAgICAgICAgICAgIC0tIGZpbmFuY2lhbCBvcGVyYXRpb25zIHdpdGhpbiB0aGlzIGV4Y2VwdGlvbiBibG9jay4KCiAgICAgICAgICAgIGZhaWx1cmVfdGV4dCA6PSBTUUxFUlJNOwoKICAgICAgICAgICAgUEVSRk9STSBzZXRfY29uZmlnKAogICAgICAgICAgICAgICAgJ25lby5wbXNfYWNjb21tb2RhdGlvbl9qb2JfcnVuX2lkJywKICAgICAgICAgICAgICAgICcnLAogICAgICAgICAgICAgICAgdHJ1ZQogICAgICAgICAgICApOwoKICAgICAgICAgICAgSU5TRVJUIElOVE8gcHVibGljLm5lb19wbXNfYWNjb21tb2RhdGlvbl9qb2JfcnVucygKICAgICAgICAgICAgICAgIG9yZ2FuaXphdGlvbl9pZCwKICAgICAgICAgICAgICAgIGJyYW5jaF9pZCwKICAgICAgICAgICAgICAgIGJ1c2luZXNzX2RhdGUsCiAgICAgICAgICAgICAgICBwb3N0ZWRfY291bnQsCiAgICAgICAgICAgICAgICBzdGF0dXMsCiAgICAgICAgICAgICAgICBlcnJvcl9tZXNzYWdlCiAgICAgICAgICAgICkKICAgICAgICAgICAgVkFMVUVTICgKICAgICAgICAgICAgICAgIHByb3BlcnR5X2RheS5vcmdhbml6YXRpb25faWQsCiAgICAgICAgICAgICAgICBwcm9wZXJ0eV9kYXkuYnJhbmNoX2lkLAogICAgICAgICAgICAgICAgcHJvcGVydHlfZGF5LmJ1c2luZXNzX2RhdGUsCiAgICAgICAgICAgICAgICAwLAogICAgICAgICAgICAgICAgJ2ZhaWxlZCcsCiAgICAgICAgICAgICAgICBmYWlsdXJlX3RleHQKICAgICAgICAgICAgKTsKCiAgICAgICAgICAgIGZhaWxlZCA6PSBmYWlsZWQgKyAxOwogICAgICAgIEVORDsKICAgIEVORCBMT09QOwoKICAgIFJFVFVSTiBqc29uYl9idWlsZF9vYmplY3QoCiAgICAgICAgJ3N0YXR1cycsCiAgICAgICAgICBDQVNFCiAgICAgICAgICAgIFdIRU4gZmFpbGVkID0gMCBUSEVOICdjb21wbGV0ZWQnCiAgICAgICAgICAgIEVMU0UgJ2V4Y2VwdGlvbnMnCiAgICAgICAgICBFTkQsCiAgICAgICAgJ2VsaWdpYmxlX3Byb3BlcnR5X2RheXMnLCBlbGlnaWJsZSwKICAgICAgICAnY29tcGxldGVkJywgY29tcGxldGVkLAogICAgICAgICdmYWlsZWQnLCBmYWlsZWQsCiAgICAgICAgJ3Bvc3RlZCcsIHRvdGFsX3Bvc3RlZAogICAgKTsKRU5EOwokZnVuY3Rpb24kOwpDUkVBVEUgT1IgUkVQTEFDRSBGVU5DVElPTiBwdWJsaWMubmVvX2N0eF90YWcoKQogUkVUVVJOUyB0ZXh0CiBMQU5HVUFHRSBzcWwKIFNUQUJMRQogU0VUIHNlYXJjaF9wYXRoIFRPICdwdWJsaWMnCkFTICRmdW5jdGlvbiQKICBTRUxFQ1QgY29hbGVzY2UoYXV0aC51aWQoKTo6dGV4dCwnYW5vbicpCiAgICAgIHx8ICc6JyB8fCBjb2FsZXNjZShudWxsaWYoY3VycmVudF9zZXR0aW5nKCduZW8uc3lzdGVtX29yZycsIHRydWUpLCcnKSwnLScpCiAgICAgIHx8ICc6JyB8fCBjb2FsZXNjZShudWxsaWYoY3VycmVudF9zZXR0aW5nKCduZW8uY3R4LmdlbicsIHRydWUpLCcnKSwnMCcpCiRmdW5jdGlvbiQ7CkNSRUFURSBPUiBSRVBMQUNFIEZVTkNUSU9OIHB1YmxpYy5uZW9fY3R4X3JlYWQoX2tleSB0ZXh0KQogUkVUVVJOUyB0ZXh0CiBMQU5HVUFHRSBwbHBnc3FsCiBTVEFCTEUKIFNFVCBzZWFyY2hfcGF0aCBUTyAncHVibGljJwpBUyAkZnVuY3Rpb24kCmRlY2xhcmUgcmF3IHRleHQ7IHRhZyB0ZXh0OwpiZWdpbgogIHJhdyA6PSBjdXJyZW50X3NldHRpbmcoJ25lby5jdHguJ3x8X2tleSwgdHJ1ZSk7CiAgaWYgcmF3IGlzIG51bGwgb3IgcmF3ID0gJycgdGhlbiByZXR1cm4gbnVsbDsgZW5kIGlmOwogIHRhZyA6PSBwdWJsaWMubmVvX2N0eF90YWcoKTsKICBpZiBsZWZ0KHJhdywgbGVuZ3RoKHRhZykrMSkgPD4gdGFnfHwnfCcgdGhlbiByZXR1cm4gbnVsbDsgZW5kIGlmOwogIHJldHVybiBzdWJzdHIocmF3LCBsZW5ndGgodGFnKSsyKTsKZW5kICRmdW5jdGlvbiQ7CkNSRUFURSBPUiBSRVBMQUNFIEZVTkNUSU9OIHB1YmxpYy5uZW9fY3R4X3dyaXRlKF9rZXkgdGV4dCwgX3BheWxvYWQgdGV4dCkKIFJFVFVSTlMgdm9pZAogTEFOR1VBR0UgcGxwZ3NxbAogU1RBQkxFCiBTRVQgc2VhcmNoX3BhdGggVE8gJ3B1YmxpYycKQVMgJGZ1bmN0aW9uJApiZWdpbgogIHBlcmZvcm0gc2V0X2NvbmZpZygnbmVvLmN0eC4nfHxfa2V5LCBwdWJsaWMubmVvX2N0eF90YWcoKXx8J3wnfHxfcGF5bG9hZCwgdHJ1ZSk7CmV4Y2VwdGlvbiB3aGVuIG90aGVycyB0aGVuCiAgbnVsbDsKZW5kICRmdW5jdGlvbiQ7CkNSRUFURSBPUiBSRVBMQUNFIEZVTkNUSU9OIHB1YmxpYy5uZW9fYnJhbmNoX2luX3Njb3BlKF9icmFuY2ggdXVpZCkKIFJFVFVSTlMgYm9vbGVhbgogTEFOR1VBR0Ugc3FsCiBTVEFCTEUgU0VDVVJJVFkgREVGSU5FUgogU0VUIHNlYXJjaF9wYXRoIFRPICdwdWJsaWMnCkFTICRmdW5jdGlvbiQKICBTRUxFQ1QgQ0FTRQogICAgV0hFTiBwdWJsaWMuY3VycmVudF9hY2Nlc3Nfc2NvcGUoKSBJTiAoJ29yZ2FuaXNhdGlvbicsJ3RlY2huaWNhbCcpIFRIRU4gdHJ1ZQogICAgRUxTRSBfYnJhbmNoIElTIE5VTEwgT1IgX2JyYW5jaCA9IEFOWSAocHVibGljLmN1cnJlbnRfYnJhbmNoX2lkcygpKQogIEVORDsKJGZ1bmN0aW9uJDs=",
+      "base64"
+    ).toString("utf8");
+
+    // SCHEDULER_AUTHORIZATION_DEPENDENCY_V2
+    //
+    // SQL-language authorization functions validate
+    // dependencies when created.
+    //
+    // Install the canonical context helpers first,
+    // then the identity resolvers, and finally the
+    // canonical branch authorization function.
+
+    const branchBoundary =
+      "CREATE OR REPLACE FUNCTION public.neo_branch_in_scope(";
+
+    const branchStart =
+      canonicalSQL.indexOf(branchBoundary);
+
+    if (branchStart < 0) {
+      throw new Error(
+        "Canonical branch authorization definition missing"
+      );
+    }
+
+    if (
+      canonicalSQL.indexOf(
+        branchBoundary,
+        branchStart + branchBoundary.length
+      ) >= 0
+    ) {
+      throw new Error(
+        "Canonical branch authorization definition is ambiguous"
+      );
+    }
+
+    const contextSQL =
+      canonicalSQL.slice(0,branchStart);
+
+    const branchSQL =
+      canonicalSQL.slice(branchStart);
+
+    await db.exec(contextSQL);
+
+    // Isolated substitutes for employee identity
+    // tables. Unattended execution has no employee
+    // organization or property permissions.
+
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION
+      public.current_org_id()
+      RETURNS uuid LANGUAGE plpgsql STABLE AS $$
+      DECLARE
+        cached text;
+        resolved uuid;
+      BEGIN
+
+        cached := public.neo_ctx_read('org');
+
+        IF cached IS NOT NULL THEN
+          RETURN nullif(substr(cached,2),'')::uuid;
+        END IF;
+
+        IF auth.uid() IS NULL THEN
+          resolved := nullif(
+            current_setting('neo.system_org',true),
+            ''
+          )::uuid;
+        ELSE
+
+          SELECT organization_id INTO resolved
+          FROM public.reservations
+          LIMIT 1;
+
+        END IF;
+
+        PERFORM public.neo_ctx_write(
+          'org',
+          'v'||coalesce(resolved::text,'')
+        );
+
+        RETURN resolved;
+
+      END;
+      $$;
+
+      CREATE OR REPLACE FUNCTION
+      public.current_access_scope()
+      RETURNS text LANGUAGE plpgsql STABLE AS $$
+      DECLARE
+        cached text;
+      BEGIN
+
+        cached := public.neo_ctx_read('scope');
+
+        IF cached IS NOT NULL THEN
+          RETURN substr(cached,2);
+        END IF;
+
+        RETURN 'self';
+
+      END;
+      $$;
+
+      CREATE OR REPLACE FUNCTION
+      public.current_branch_ids()
+      RETURNS uuid[] LANGUAGE plpgsql STABLE AS $$
+      DECLARE
+        cached text;
+      BEGIN
+
+        cached := public.neo_ctx_read('branches');
+
+        IF cached IS NOT NULL THEN
+          RETURN substr(cached,2)::uuid[];
+        END IF;
+
+        RETURN ARRAY[]::uuid[];
+
+      END;
+      $$;
+    `);
+
+    // Both current_access_scope() and
+    // current_branch_ids() now exist.
+
+    await db.exec(branchSQL);
+
+    const authorization = await db.query<{
+      branch_ids: boolean;
+      access_scope: boolean;
+      branch_authorization: boolean;
+    }>(`
+      SELECT
+        to_regprocedure(
+          'public.current_branch_ids()'
+        ) IS NOT NULL AS branch_ids,
+
+        to_regprocedure(
+          'public.current_access_scope()'
+        ) IS NOT NULL AS access_scope,
+
+        to_regprocedure(
+          'public.neo_branch_in_scope(uuid)'
+        ) IS NOT NULL AS branch_authorization
+    `);
+
+    expect(authorization.rows[0]).toEqual({
+      branch_ids:true,
+      access_scope:true,
+      branch_authorization:true
+    });
+
+    const wrapper = rollout.match(
+      /CREATE OR REPLACE FUNCTION\s+public\.neo_run_accommodation_accounting_context\([\s\S]*?\$function\$;/
+    )?.[0];
+
+    if (!wrapper) {
+      throw new Error(
+        "Production accounting context wrapper missing"
+      );
+    }
+
+    await db.exec(wrapper);
+
+    const connection = rollout.match(
+      /DO \$scheduled_accounting_context\$[\s\S]*?\$scheduled_accounting_context\$;/
+    )?.[0];
+
+    if (!connection) {
+      throw new Error(
+        "Production scheduler context migration missing"
+      );
+    }
+
+    await db.exec(connection);
+
+    await db.exec(`
+      REVOKE ALL ON FUNCTION
+        public.neo_pms_post_accommodation_scheduled(boolean)
+        FROM PUBLIC,anon,authenticated;
+
+      REVOKE ALL ON FUNCTION
+        public.neo_pms_post_accommodation_job(uuid,uuid,date)
+        FROM PUBLIC,anon,authenticated;
+
+      REVOKE ALL ON FUNCTION
+        public.neo_run_accommodation_accounting_context(uuid,uuid,date)
+        FROM PUBLIC,anon,authenticated;
+    `);
+  }
+
+  async function runCompleteScheduler(execute: boolean) {
+
+    const result = await db.query<{
+      result: {
+        status: string;
+        eligible_property_days: number;
+        completed: number;
+        failed: number;
+        posted: number;
+      }
+    }>(
+      `SELECT
+         public.neo_pms_post_accommodation_scheduled($1)
+         AS result`,
+      [execute]
+    );
+
+    return result.rows[0]!.result;
+  }
+
+  async function schedulerAccountingEvidence() {
+
+    const result = await db.query<{
+      charges: number;
+      allocations: number;
+      revenue: number;
+      liability: number;
+      balance: number;
+      payments: number;
+    }>(`
+      SELECT
+
+        (
+          SELECT count(*)::int
+          FROM public.folio_lines
+          WHERE category='accommodation'
+            AND line_type='charge'
+        ) AS charges,
+
+        (
+          SELECT count(*)::int
+          FROM public.neo_reservation_deposit_allocations
+        ) AS allocations,
+
+        (
+          SELECT coalesce(
+            sum(l.credit-l.debit),0
+          )::float8
+          FROM public.journal_entry_lines l
+          JOIN public.chart_of_accounts a
+            ON a.id=l.account_id
+          JOIN public.journal_entries j
+            ON j.id=l.journal_id
+          WHERE a.code='4010'
+            AND j.status='posted'
+        ) AS revenue,
+
+        (
+          SELECT coalesce(
+            sum(l.credit-l.debit),0
+          )::float8
+          FROM public.journal_entry_lines l
+          JOIN public.chart_of_accounts a
+            ON a.id=l.account_id
+          JOIN public.journal_entries j
+            ON j.id=l.journal_id
+          WHERE a.code='2020'
+            AND j.status='posted'
+        ) AS liability,
+
+        (
+          SELECT balance::float8
+          FROM public.folios
+          LIMIT 1
+        ) AS balance,
+
+        (
+          SELECT total_payments::float8
+          FROM public.folios
+          LIMIT 1
+        ) AS payments
+    `);
+
+    return result.rows[0]!;
+  }
+
+  async function schedulerContextEvidence() {
+
+    const result = await db.query<{
+      organization: string | null;
+      system_posting: boolean;
+      scope: string;
+      branches: string[];
+      run_id: string;
+    }>(`
+      SELECT
+        public.current_org_id() AS organization,
+        public.neo_system_posting() AS system_posting,
+        public.current_access_scope() AS scope,
+        public.current_branch_ids() AS branches,
+        coalesce(
+          current_setting(
+            'neo.pms_accommodation_job_run_id',
+            true
+          ),
+          ''
+        ) AS run_id
+    `);
+
+    return result.rows[0]!;
+  }
+
+  it("runs complete canonical scheduler orchestration without an employee session", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual({
+        organization:null,
+        system_posting:false,
+        scope:"self",
+        branches:[],
+        run_id:""
+      });
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"completed",
+        completed:1,
+        failed:0,
+        posted:1
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual({
+        organization:null,
+        system_posting:false,
+        scope:"self",
+        branches:[],
+        run_id:""
+      });
+
+      const runs = await db.query<{
+        status: string;
+        posted_count: number;
+      }>(`
+        SELECT status,posted_count
+        FROM public.neo_pms_accommodation_job_runs
+      `);
+
+      expect(runs.rows).toEqual([
+        {
+          status:"completed",
+          posted_count:1
+        }
+      ]);
+    });
+  });
+
+  it("keeps complete canonical scheduler dry runs financially read only", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      const before =
+        await schedulerAccountingEvidence();
+
+      expect(
+        await runCompleteScheduler(false)
+      ).toMatchObject({
+        status:"dry_run",
+        eligible_property_days:1,
+        completed:0,
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual(before);
+
+      const runs = await db.query<{n:number}>(`
+        SELECT count(*)::int AS n
+        FROM public.neo_pms_accommodation_job_runs
+      `);
+
+      expect(runs.rows[0]!.n).toBe(0);
+    });
+  });
+
+  it("prevents duplicate posting through complete canonical scheduler replay", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        failed:0,
+        posted:1
+      });
+
+      const before =
+        await schedulerAccountingEvidence();
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual(before);
+
+      expect(before).toEqual({
+        charges:1,
+        allocations:1,
+        revenue:19000,
+        liability:31000,
+        balance:0,
+        payments:19000
+      });
+    });
+  });
+
+  it("records canonical scheduler Finance failures and rolls back all partial accounting", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE public.accounting_periods
+        SET status='closed'
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        status:"exceptions",
+        completed:0,
+        failed:1,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+
+      const failures = await db.query<{
+        status: string;
+        posted_count: number;
+        error_message: string;
+      }>(`
+        SELECT
+          status,
+          posted_count,
+          error_message
+        FROM public.neo_pms_accommodation_job_runs
+      `);
+
+      expect(failures.rows).toHaveLength(1);
+
+      expect(
+        failures.rows[0]!.status
+      ).toBe("failed");
+
+      expect(
+        failures.rows[0]!.posted_count
+      ).toBe(0);
+
+      expect(
+        failures.rows[0]!.error_message
+      ).toMatch(
+        /accounting period.*closed/i
+      );
+
+      expect(
+        await schedulerContextEvidence()
+      ).toEqual({
+        organization:null,
+        system_posting:false,
+        scope:"self",
+        branches:[],
+        run_id:""
+      });
+    });
+  });
+
+  it("excludes disabled properties from complete canonical scheduler execution", async () => {
+
+    await withCanonicalFinance(async () => {
+
+      await installCompleteScheduler();
+
+      await db.exec(`
+        UPDATE
+          public.neo_pms_accommodation_automation_settings
+        SET enabled=false
+      `);
+
+      expect(
+        await runCompleteScheduler(true)
+      ).toMatchObject({
+        eligible_property_days:0,
+        completed:0,
+        failed:0,
+        posted:0
+      });
+
+      expect(
+        await schedulerAccountingEvidence()
+      ).toEqual({
+        charges:0,
+        allocations:0,
+        revenue:0,
+        liability:50000,
+        balance:0,
+        payments:0
+      });
+    });
+  });
+
   it("rejects allocation when execution is disabled", async () => {
     const charge = await addNight(1);
 
